@@ -11,9 +11,10 @@ import Dyzury from './components/Dyzury';
 import KreatorSzkoly from './components/KreatorSzkoly';
 import Wydruki from './components/Wydruki';
 import Statystyki from './components/Statystyki';
+import OProgramie from './components/OProgramie';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2
+  Maximize2, Minimize2, HelpCircle
 } from 'lucide-react';
 
 function sortAppState(resolved: AppState): AppState {
@@ -103,7 +104,7 @@ export default function App() {
     return [];
   });
 
-  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki'>('kreator');
+  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie'>('kreator');
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
 
   const handleUpdateAppState = (newState: AppState | ((prev: AppState) => AppState)) => {
@@ -399,6 +400,7 @@ export default function App() {
               {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-400" /> Etap 3: Dyżury</>}
               {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-400" /> 🖨️ Wydruki</>}
               {currentTab === 'statystyki' && <><BarChart2 size={13} className="text-rose-400" /> 📊 Statystyki</>}
+              {currentTab === 'o_programie' && <><HelpCircle size={13} className="text-sky-400 font-bold" /> ℹ️ O programie & regulamin</>}
             </span>
           </button>
 
@@ -505,6 +507,23 @@ export default function App() {
                     <div>
                       <span className="text-xs font-black block">📊 Statystyki i Diagnoza</span>
                       <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Okienka, limity, obciążenia</span>
+                    </div>
+                  </button>
+
+                  <div className="border-t border-slate-800/60 my-1 pb-1" />
+
+                  <button
+                    onClick={() => { setCurrentTab('o_programie'); setHamburgerOpen(false); }}
+                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                      currentTab === 'o_programie'
+                        ? 'bg-sky-600/10 border-l-4 border-sky-500 text-white font-extrabold pl-2'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <HelpCircle size={15} className={`shrink-0 mt-0.5 ${currentTab === 'o_programie' ? 'text-sky-400' : 'text-slate-500'}`} />
+                    <div>
+                      <span className="text-xs font-black block">ℹ️ O programie & regulamin</span>
+                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opis, licencja i warunki</span>
                     </div>
                   </button>
                 </div>
@@ -619,6 +638,9 @@ export default function App() {
             appState={appState} 
             schedData={schedData}
           />
+        )}
+        {currentTab === 'o_programie' && (
+          <OProgramie />
         )}
       </div>
 
