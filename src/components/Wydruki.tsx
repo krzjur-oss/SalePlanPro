@@ -30,6 +30,295 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
   const pl = appState.planLekcji;
 
+  // --- Map and parse yearLabel to auto-preset start/end dates of the school year ---
+  const defaultDates = useMemo(() => {
+    const label = appState.yearLabel || '';
+    const match = label.match(/(\d{4})/);
+    let startYear = new Date().getFullYear();
+    let endYear = startYear + 1;
+    if (match) {
+      startYear = parseInt(match[1], 10);
+      const match2 = label.match(/\d{4}.*?(\d{4})/);
+      if (match2) {
+        endYear = parseInt(match2[1], 10);
+      } else {
+        endYear = startYear + 1;
+      }
+    }
+    return {
+      start: `${startYear}-09-01`,
+      end: `${endYear}-06-25`
+    };
+  }, [appState.yearLabel]);
+
+  const [startDateInput, setStartDateInput] = useState(defaultDates.start);
+  const [endDateInput, setEndDateInput] = useState(defaultDates.end);
+  const [nameFormat, setNameFormat] = useState('[Przedmiot] - [Klasa] [Sala]');
+
+  // Keep date values in sync with state in case the school year changes in the parent component
+  useEffect(() => {
+    setStartDateInput(defaultDates.start);
+    setEndDateInput(defaultDates.end);
+  }, [defaultDates]);
+
+  // Help calculate the first date corresponding to dayIdx (0 = Monday, ..., 4 = Friday) on or after startDateInput
+  const getFirstOccurrence = (startDateStr: string, dayIdx: number) => {
+    const start = new Date(startDateStr);
+    const targetDay = dayIdx + 1; // 1 = Monday, 5 = Friday
+    const currentDay = start.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    let diff = targetDay - currentDay;
+    if (diff < 0) {
+      diff += 7;
+    }
+    
+    const result = new Date(start);
+    result.setDate(start.getDate() + diff);
+    return result;
+  };
+
+  const formatIcsDateTime = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    const ss = String(date.getSeconds()).padStart(2, '0');
+    return `${yyyy}${mm}${dd}T${hh}${min}${ss}`;
+  };
+
+  const formatIcsUntil = (date: Date) => {
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}${mm}${dd}T235959Z`;
+  };
+
+  const escapeIcsText = (str: string) => {
+    if (!str) return '';
+    return str
+      .replace(/\\/g, '\\\\')
+      .replace(/,/g, '\\,')
+      .replace(/;/g, '\\;')
+      .replace(/\n/g, '\\n')
+      .trim();
+  };
+
+  const RRULE_DAYS = ['MO', 'TU', 'WE', 'TH', 'FR'];
+
+  // Safe builder for teacher's current assigned lessons list
+  const getTeacherLessonsList = (teacher: Teacher) => {
+    const lessons: Array<{
+      dayIdx: number;
+      hourNum: number;
+      start: string;
+      end: string;
+      subject: string;
+      className: string;
+      roomName?: string;
+    }> = [];
+
+    for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+      hoursList.forEach((hour, hIdx) => {
+        const hourKeyStr = String(hour.num);
+        let items: Array<{ subject: string; className: string; roomName?: string }> = [];
+
+        if (scheduleVersion === 'etap1') {
+          Object.entries(pl.lessons).forEach(([key, lesson]) => {
+            const parts = key.split('|');
+            const classId = parts[0];
+            const dIdx = parseInt(parts[1], 10);
+            const hrIndex = parseInt(parts[2], 10);
+
+            if (dIdx === dayIdx && hrIndex === hIdx) {
+              const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+              if (asg && asg.teacherId === teacher.id) {
+                const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
+                const clsName = classesMap.get(classId)?.name || 'Inna';
+                const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
+                items.push({
+                  subject,
+                  className: clsName,
+                  roomName: room?.name
+                });
+              }
+            }
+          });
+        } else {
+          // Etap 2 schedules
+          const tSched = etap2Schedule.teachers[teacher.id] || {};
+          const daySchedules = tSched[dayIdx] || {};
+          const hourCells = daySchedules[hourKeyStr] || [];
+          
+          hourCells.forEach(cell => {
+            items.push({
+              subject: cell.subject,
+              className: cell.className || cell.classes?.join('+') || 'Klasa',
+              roomName: cell.note
+            });
+          });
+        }
+
+        items.forEach(it => {
+          lessons.push({
+            dayIdx,
+            hourNum: hour.num,
+            start: hour.start,
+            end: hour.end,
+            subject: it.subject,
+            className: it.className,
+            roomName: it.roomName
+          });
+        });
+      });
+    }
+
+    return lessons;
+  };
+
+  const handleExportTeacherIcs = (teacher: Teacher) => {
+    const lessons = getTeacherLessonsList(teacher);
+    if (lessons.length === 0) {
+      alert(`Nauczyciel ${teacher.last} ${teacher.first} nie ma przypisanych żadnych lekcji w wybranym planie.`);
+      return;
+    }
+
+    let ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//SalePlan Pro//NONSGML v1.0//PL',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH'
+    ];
+
+    lessons.forEach((lesson) => {
+      const firstOccur = getFirstOccurrence(startDateInput, lesson.dayIdx);
+      const [startH, startM] = lesson.start.split(':').map(Number);
+      const [endH, endM] = lesson.end.split(':').map(Number);
+
+      const eventStart = new Date(firstOccur);
+      eventStart.setHours(startH, startM, 0, 0);
+
+      const eventEnd = new Date(firstOccur);
+      eventEnd.setHours(endH, endM, 0, 0);
+
+      const summary = nameFormat
+        .replace('[Przedmiot]', lesson.subject)
+        .replace('[Klasa]', lesson.className)
+        .replace('[Sala]', lesson.roomName ? `s. ${lesson.roomName}` : '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const description = `Lekcja: ${lesson.hourNum} (${lesson.start}-${lesson.end})\\n` +
+        `Nauczyciel: ${teacher.last} ${teacher.first} (${teacher.abbr})\\n` +
+        `Klasa: ${lesson.className}\\n` +
+        (lesson.roomName ? `Sala: ${lesson.roomName}\\n` : '') +
+        `Wygenerowano automatycznie z SalePlan Pro`;
+
+      const location = lesson.roomName ? `Sala ${lesson.roomName}` : '';
+      const eventUid = `asg-${teacher.id}-${lesson.dayIdx}-${lesson.hourNum}-${lesson.className.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}@saleplan.pro`;
+      const untilDate = new Date(endDateInput);
+
+      ics.push('BEGIN:VEVENT');
+      ics.push(`UID:${eventUid}`);
+      ics.push(`DTSTAMP:${formatIcsDateTime(new Date())}Z`);
+      ics.push(`DTSTART:${formatIcsDateTime(eventStart)}`);
+      ics.push(`DTEND:${formatIcsDateTime(eventEnd)}`);
+      ics.push(`RRULE:FREQ=WEEKLY;UNTIL=${formatIcsUntil(untilDate)};BYDAY=${RRULE_DAYS[lesson.dayIdx]}`);
+      ics.push(`SUMMARY:${escapeIcsText(summary)}`);
+      ics.push(`LOCATION:${escapeIcsText(location)}`);
+      ics.push(`DESCRIPTION:${escapeIcsText(description)}`);
+      ics.push('END:VEVENT');
+    });
+
+    ics.push('END:VCALENDAR');
+
+    const icsContent = ics.join('\r\n');
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `plan_${teacher.last}_${teacher.first}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportAllTeachersIcs = () => {
+    let ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//SalePlan Pro//NONSGML v1.0//PL',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH'
+    ];
+
+    let totalLessonsCount = 0;
+
+    pl.teachers.forEach((teacher) => {
+      const lessons = getTeacherLessonsList(teacher);
+      lessons.forEach((lesson) => {
+        totalLessonsCount++;
+        const firstOccur = getFirstOccurrence(startDateInput, lesson.dayIdx);
+        const [startH, startM] = lesson.start.split(':').map(Number);
+        const [endH, endM] = lesson.end.split(':').map(Number);
+
+        const eventStart = new Date(firstOccur);
+        eventStart.setHours(startH, startM, 0, 0);
+
+        const eventEnd = new Date(firstOccur);
+        eventEnd.setHours(endH, endM, 0, 0);
+
+        const summary = `[${teacher.abbr}] ` + nameFormat
+          .replace('[Przedmiot]', lesson.subject)
+          .replace('[Klasa]', lesson.className)
+          .replace('[Sala]', lesson.roomName ? `s. ${lesson.roomName}` : '')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        const description = `Nauczyciel: ${teacher.last} ${teacher.first} (${teacher.abbr})\\n` +
+          `Lekcja: ${lesson.hourNum} (${lesson.start}-${lesson.end})\\n` +
+          `Klasa: ${lesson.className}\\n` +
+          (lesson.roomName ? `Sala: ${lesson.roomName}\\n` : '') +
+          `Wygenerowano automatycznie z SalePlan Pro`;
+
+        const location = lesson.roomName ? `Sala ${lesson.roomName}` : '';
+        const eventUid = `asg-all-${teacher.id}-${lesson.dayIdx}-${lesson.hourNum}-${lesson.className.replace(/[^a-zA-Z0-9]/g, '')}-${Date.now()}-${totalLessonsCount}@saleplan.pro`;
+        const untilDate = new Date(endDateInput);
+
+        ics.push('BEGIN:VEVENT');
+        ics.push(`UID:${eventUid}`);
+        ics.push(`DTSTAMP:${formatIcsDateTime(new Date())}Z`);
+        ics.push(`DTSTART:${formatIcsDateTime(eventStart)}`);
+        ics.push(`DTEND:${formatIcsDateTime(eventEnd)}`);
+        ics.push(`RRULE:FREQ=WEEKLY;UNTIL=${formatIcsUntil(untilDate)};BYDAY=${RRULE_DAYS[lesson.dayIdx]}`);
+        ics.push(`SUMMARY:${escapeIcsText(summary)}`);
+        ics.push(`LOCATION:${escapeIcsText(location)}`);
+        ics.push(`DESCRIPTION:${escapeIcsText(description)}`);
+        ics.push('END:VEVENT');
+      });
+    });
+
+    if (totalLessonsCount === 0) {
+      alert(`Brak przypisanych lekcji w całym planie lekcji.`);
+      return;
+    }
+
+    ics.push('END:VCALENDAR');
+
+    const icsContent = ics.join('\r\n');
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `plan_wszyscy_nauczyciele.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   // --- Helpers to resolve names ---
   const classesMap = useMemo(() => new Map(pl.classes.map(c => [c.id, c])), [pl.classes]);
   const teachersMap = useMemo(() => new Map(pl.teachers.map(t => [t.id, t])), [pl.teachers]);
@@ -658,6 +947,79 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             </div>
           )}
         </div>
+
+        {/* --- DEDYKOWANY PODPANEL EKSPORTU DO KALENDARZA (UKRYTY NA WYDRUKU) --- */}
+        {printType === 'teachers' && (
+          <div className="mt-5 pt-5 border-t border-slate-100 space-y-4 text-left">
+            <div className="bg-gradient-to-tr from-indigo-50/70 to-blue-50/30 border border-indigo-100 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="p-1 px-1.5 bg-indigo-100 text-indigo-700 rounded-md font-extrabold text-xs">📅</span>
+                <span className="text-xs font-black uppercase text-indigo-900 tracking-wide">Eksport tygodniowego planu zajęć do kalendarza (.ics / Google Calendar)</span>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="space-y-1">
+                  <label className="text-[9px] text-slate-500 font-bold uppercase block">Początek okresu (Pierwszy dzień lekcji)</label>
+                  <input
+                    type="date"
+                    value={startDateInput}
+                    onChange={(e) => setStartDateInput(e.target.value)}
+                    className="w-full h-[36px] px-3 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] text-slate-500 font-bold uppercase block">Koniec okresu (Ostatni dzień lekcji)</label>
+                  <input
+                    type="date"
+                    value={endDateInput}
+                    onChange={(e) => setEndDateInput(e.target.value)}
+                    className="w-full h-[36px] px-3 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:border-indigo-500 outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[9px] text-slate-500 font-bold uppercase block">Format tytułu wydarzenia w kalendarzu</label>
+                  <select
+                    value={nameFormat}
+                    onChange={(e) => setNameFormat(e.target.value)}
+                    className="w-full h-[36px] px-3 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 focus:border-indigo-500 outline-none"
+                  >
+                    <option value="[Przedmiot] - [Klasa] [Sala]">[Przedmiot] - [Klasa] [Sala]</option>
+                    <option value="[Klasa] - [Przedmiot] [Sala]">[Klasa] - [Przedmiot] [Sala]</option>
+                    <option value="[Przedmiot] ([Klasa]) (Sala: [Sala])">[Przedmiot] ([Klasa]) ([Sala])</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-indigo-100/50 flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+                <div className="text-[10px] text-slate-500 leading-relaxed max-w-xl">
+                  💡 <strong>Wskazówka:</strong> Kliknij przycisk <span className="bg-white border text-indigo-700 px-1 py-0.5 rounded font-black text-[9px]">Pobierz kalendarz (.ics)</span> przy konkretnym nauczycielu na liście poniżej, albo pobierz zbiorczy arkusz z kadrą za pomocą poniższych przycisków szybkiego pobierania.
+                </div>
+                
+                <div className="flex gap-2 flex-wrap w-full lg:w-auto">
+                  {selectedTeacherId !== 'all' && (
+                    <button
+                      onClick={() => {
+                        const tObj = pl.teachers.find(t => t.id === selectedTeacherId);
+                        if (tObj) handleExportTeacherIcs(tObj);
+                      }}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer border border-indigo-600 border-solid"
+                    >
+                      <Calendar size={13} /> Pobierz dla {pl.teachers.find(t => t.id === selectedTeacherId)?.abbr}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleExportAllTeachersIcs}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-black rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer border border-slate-800 border-solid"
+                  >
+                    <Layers size={13} /> Wspólny plik dla KADRY
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* --- PRINT AREA --- */}
@@ -771,8 +1133,17 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   <h2 className="text-xl font-extrabold text-slate-900">PLAN LEKCJI NAUCZYCIELA: {teacher.last} {teacher.first} ({teacher.abbr})</h2>
                   <p className="text-xs text-slate-500 font-semibold uppercase">{appState.school.name} ({appState.yearLabel})</p>
                 </div>
-                <div className="text-right text-[10px] text-slate-400 font-bold uppercase font-mono">
-                  Generowane przez SalePlan Pro · {scheduleVersion === 'etap1' ? 'Wersja Plan Klas' : 'Wersja Plan Sal'}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <button
+                    onClick={() => handleExportTeacherIcs(teacher)}
+                    className="no-print px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-lg text-[10px] font-black tracking-tight leading-none transition flex items-center gap-1.5 cursor-pointer select-none border-solid"
+                    title="Pobierz plik kalendarza (.ics) dla tego nauczyciela"
+                  >
+                    <Calendar size={11} /> Pobierz kalendarz (.ics)
+                  </button>
+                  <div className="text-right text-[9px] text-slate-400 font-bold uppercase font-mono">
+                    Generowane przez SalePlan Pro · {scheduleVersion === 'etap1' ? 'Wersja Plan Klas' : 'Wersja Plan Sal'}
+                  </div>
                 </div>
               </div>
 
