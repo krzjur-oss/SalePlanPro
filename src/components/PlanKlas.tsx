@@ -2,10 +2,28 @@ import React, { useState, useMemo } from 'react';
 import { 
   AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment 
 } from '../types';
-import { esc, hexRgba, uid } from '../utils';
+import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
-  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw 
+  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter 
 } from 'lucide-react';
+
+const PALETTE_COLORS = [
+  '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
+  '#16a34a', '#15803d', '#10b981', '#34d399', // Greens / Teals
+  '#d97706', '#b45309', '#f59e0b', '#fbbf24', // Ambers / Yellows
+  '#dc2626', '#b91c1c', '#f87171', '#ef4444', // Reds
+  '#e11d48', '#be123c', '#fb7185', '#fda4af', // Roses
+  '#7c3aed', '#6d28d9', '#8b5cf6', '#a78bfa', // Purples
+  '#db2777', '#c026d3', '#ec4899', '#f472b6', // Pinks
+  '#0d9488', '#0f766e', '#14b8a6', '#2dd4bf', // Teals
+  '#0891b2', '#06b6d4', '#22d3ee', '#0097a7', // Cyans / Turquoises
+  '#ea580c', '#d35400', '#f97316', '#fb923c', // Oranges
+  '#4f46e5', '#3949ab', '#6366f1', '#818cf8', // Indigos
+  '#65a30d', '#4d7c0f', '#84cc16', '#a3e635', // Limes
+  '#0284c7', '#0369a1', '#38bdf8', '#075985', // Sky blues
+  '#5b21b6', '#311b92', '#701a75', '#4a148c', // Deep rich shades
+  '#475569', '#334155', '#64748b', '#4b5563'  // Slate / Dark Grays
+];
 
 interface PlanKlasProps {
   appState: AppState;
@@ -28,8 +46,18 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
   const [newTeacherFirst, setNewTeacherFirst] = useState('');
   const [newTeacherLast, setNewTeacherLast] = useState('');
   const [newTeacherAbbr, setNewTeacherAbbr] = useState('');
+  const [isTeacherAbbrManual, setIsTeacherAbbrManual] = useState(false);
+  const [newTeacherMaxHours, setNewTeacherMaxHours] = useState(18);
+  const [newTeacherOvertimeHours, setNewTeacherOvertimeHours] = useState(0);
+  const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
+  const [newTeacherAvailability, setNewTeacherAvailability] = useState<string[]>([]);
+  const [newTeacherColor, setNewTeacherColor] = useState('#3b82f6');
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectShort, setNewSubjectShort] = useState('');
+  const [isSubjectShortManual, setIsSubjectShortManual] = useState(false);
+  const [newSubjectColor, setNewSubjectColor] = useState('#3b82f6');
+  const [newSubjectPattern, setNewSubjectPattern] = useState('');
+  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
   const [newRoomName, setNewRoomName] = useState('');
 
   // Assignments States
@@ -39,6 +67,25 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
   const [assignRoom, setAssignRoom] = useState('');
   const [assignHours, setAssignHours] = useState(2);
   const [assignPreferredBlockSize, setAssignPreferredBlockSize] = useState<number>(1); // default single 1h
+  const [assignGroup, setAssignGroup] = useState('');
+
+  const autoSelectGroupForAssignTab = (clsId: string, subjId: string) => {
+    if (!clsId || !subjId) {
+      setAssignGroup('');
+      return;
+    }
+    const selectedSubj = pl.subjects.find(s => s.id === subjId);
+    if (selectedSubj && selectedSubj.defaultGroupPattern) {
+      const pattern = selectedSubj.defaultGroupPattern.toLowerCase();
+      const classGrps = pl.schoolGroups.filter(g => g.classId === clsId);
+      const foundGrp = classGrps.find(g => g.name.toLowerCase().includes(pattern));
+      if (foundGrp) {
+        setAssignGroup(foundGrp.id);
+        return;
+      }
+    }
+    setAssignGroup('');
+  };
 
   // Special (NI / Rewa / Wsp) States
   const [specFirstName, setSpecFirstName] = useState('');
@@ -81,8 +128,89 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
   // Current class assignments
   const classAssignments = useMemo(() => {
     if (!activeClassId) return [];
-    return pl.assignments.filter(a => a.classId === activeClassId);
+    return pl.assignments.filter(a => a.classId === activeClassId || (a.linkedClassIds && a.linkedClassIds.includes(activeClassId)));
   }, [activeClassId, pl.assignments]);
+
+  // ── FILTER STATES FOR CLASSES ──
+  const [selectedGradeFilters, setSelectedGradeFilters] = useState<string[]>([]);
+  const [onlyWithUnassignedOnDay, setOnlyWithUnassignedOnDay] = useState<boolean>(false);
+  const [unassignedDayFilter, setUnassignedDayFilter] = useState<number>(0);
+
+  // Helper to extract the grade level (rocznik) from a class name
+  const getRocznik = (name: string) => {
+    const match = name.trim().match(/^(\d+)/);
+    return match ? match[1] : name.trim().charAt(0) || '';
+  };
+
+  // Generate unique sorted grade list
+  const availableRoczniki = useMemo(() => {
+    const rSet = new Set<string>();
+    pl.classes.forEach(c => {
+      const r = getRocznik(c.name);
+      if (r) rSet.add(r);
+    });
+    return Array.from(rSet).sort((a, b) => {
+      const numA = parseInt(a);
+      const numB = parseInt(b);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return numA - numB;
+      }
+      return a.localeCompare(b, 'pl');
+    });
+  }, [pl.classes]);
+
+  // Helper to check if a class has unplaced assignments on a specific day
+  const classHasUnplacedOnDay = (classId: string, dayIndex: number) => {
+    const classAsgs = pl.assignments.filter(a => a.classId === classId);
+    if (classAsgs.length === 0) return false;
+
+    // Has any assignment that is not fully placed?
+    const hasAnyUnplacedWeekly = classAsgs.some(a => {
+      const placed = placedHours[a.id] || 0;
+      return placed < a.hoursPerWeek;
+    });
+
+    // Check if there is an empty slot on this day
+    const hours = pl.hours && pl.hours.length > 0 ? pl.hours : [];
+    const hasEmptySlot = hours.some((_, hourIndex) => {
+      const key = `${classId}|${dayIndex}|${hourIndex}`;
+      return !pl.lessons[key];
+    });
+
+    // Check if there are scheduled blocks on this day with NO teacher or NO room
+    const hasIncompleteScheduled = hours.some((_, hourIndex) => {
+      const key = `${classId}|${dayIndex}|${hourIndex}`;
+      const lesson = pl.lessons[key];
+      if (!lesson) return false;
+      const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+      if (!asg) return false;
+      return !asg.teacherId || !asg.roomId;
+    });
+
+    return (hasAnyUnplacedWeekly && hasEmptySlot) || hasIncompleteScheduled;
+  };
+
+  // Memoized filtered classes list
+  const filteredClasses = useMemo(() => {
+    return pl.classes.filter(c => {
+      // 1. Grade (Rocznik) filter
+      if (selectedGradeFilters.length > 0) {
+        const rocznik = getRocznik(c.name);
+        if (!selectedGradeFilters.includes(rocznik)) {
+          return false;
+        }
+      }
+
+      // 2. Unassigned lessons on day filter
+      if (onlyWithUnassignedOnDay) {
+        if (!classHasUnplacedOnDay(c.id, unassignedDayFilter)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [pl.classes, selectedGradeFilters, onlyWithUnassignedOnDay, unassignedDayFilter, pl.assignments, pl.hours, pl.lessons, placedHours]);
 
   // Conflicts checking
   const conflicts = useMemo(() => {
@@ -103,6 +231,39 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       if (!asg) return;
 
       const slotKey = `${day}|${hour}`;
+
+      // Check availability of teacher
+      if (asg.teacherId) {
+        const teacher = teachersMap.get(asg.teacherId);
+        if (teacher && teacher.availability) {
+          const checkCode = `${day}-${hour}`;
+          if (!teacher.availability.includes(checkCode)) {
+            const desc = `⚠️ Niedostępność nauczyciela: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
+            const existing = detected.get(key) || [];
+            if (!existing.includes(desc)) {
+              existing.push(desc);
+              detected.set(key, existing);
+            }
+          }
+        }
+      }
+
+      // Check availability of support teacher
+      if (lesson.supportTeacherId) {
+        const supportTeacher = teachersMap.get(lesson.supportTeacherId);
+        if (supportTeacher && supportTeacher.availability) {
+          const checkCode = `${day}-${hour}`;
+          if (!supportTeacher.availability.includes(checkCode)) {
+            const desc = `⚠️ Niedostępność nauczyciela wsp.: ${supportTeacher.first} ${supportTeacher.last} (${supportTeacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
+            const existing = detected.get(key) || [];
+            if (!existing.includes(desc)) {
+              existing.push(desc);
+              detected.set(key, existing);
+            }
+          }
+        }
+      }
+
       if (asg.teacherId) {
         const tKey = `${asg.teacherId}|${slotKey}`;
         const existing = teacherSlots.get(tKey) || [];
@@ -134,7 +295,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
 
         list.forEach((item) => {
           // Find other lessons at this slot
-          const otherItems = list.filter(x => x.key !== item.key);
+          const otherItems = list.filter(x => {
+            if (x.key === item.key) return false;
+            const itemL = pl.lessons[item.key];
+            const xL = pl.lessons[x.key];
+            if (itemL && xL && itemL.assignmentId === xL.assignmentId) {
+              return false; // same joint lesson assignment - NOT a teacher conflict!
+            }
+            return true;
+          });
           if (otherItems.length > 0) {
             const descriptions = otherItems.map(oi => {
               const otherClassName = classesMap.get(oi.classId)?.name || 'Inna klasa';
@@ -160,7 +329,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
 
         list.forEach((item) => {
           const otherClasses = list
-            .filter(x => x.classId !== item.classId)
+            .filter(x => {
+              if (x.classId === item.classId) return false;
+              const itemL = pl.lessons[item.key];
+              const xL = pl.lessons[x.key];
+              if (itemL && xL && itemL.assignmentId === xL.assignmentId) {
+                return false; // same joint lesson assignment - NOT a room conflict!
+              }
+              return true;
+            })
             .map(x => classesMap.get(x.classId)?.name || 'Inna klasa');
           
           const uniqueOtherClasses = Array.from(new Set(otherClasses));
@@ -233,61 +410,253 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     }
   };
 
+  const updateTeacherAbbrAuto = (f: string, l: string) => {
+    if (!isTeacherAbbrManual) {
+      setNewTeacherAbbr(genAbbr(f, l));
+    }
+  };
+
+  const handleStartEditTeacher = (t: Teacher) => {
+    setEditingTeacherId(t.id);
+    setNewTeacherFirst(t.first);
+    setNewTeacherLast(t.last);
+    setNewTeacherAbbr(t.abbr);
+    setIsTeacherAbbrManual(true);
+    setNewTeacherMaxHours(t.maxHours || 18);
+    setNewTeacherOvertimeHours(t.overtimeHours || 0);
+    setNewTeacherColor(t.color || '#3b82f6');
+
+    // Load or generate list of available slots
+    if (t.availability) {
+      setNewTeacherAvailability(t.availability);
+    } else {
+      const defaultAvail: string[] = [];
+      const hList = pl.hours && pl.hours.length > 0 ? pl.hours : [];
+      for (let day = 0; day < 5; day++) {
+        hList.forEach(h => {
+          defaultAvail.push(`${day}-${h.num}`);
+        });
+      }
+      setNewTeacherAvailability(defaultAvail);
+    }
+  };
+
+  const handleCancelEditTeacher = () => {
+    setEditingTeacherId(null);
+    setNewTeacherFirst('');
+    setNewTeacherLast('');
+    setNewTeacherAbbr('');
+    setIsTeacherAbbrManual(false);
+    setNewTeacherMaxHours(18);
+    setNewTeacherOvertimeHours(0);
+    setNewTeacherAvailability([]);
+    setNewTeacherColor(PALETTE_COLORS[pl.teachers?.length % PALETTE_COLORS.length] || '#3b82f6');
+  };
+
+  const setAllTeacherAvailability = (active: boolean) => {
+    if (active) {
+      const list: string[] = [];
+      const hList = pl.hours && pl.hours.length > 0 ? pl.hours : [];
+      for (let d = 0; d < 5; d++) {
+        hList.forEach(h => {
+          list.push(`${d}-${h.num}`);
+        });
+      }
+      setNewTeacherAvailability(list);
+    } else {
+      setNewTeacherAvailability([]);
+    }
+  };
+
   const handleAddTeacher = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTeacherLast.trim()) return;
+    if (!newTeacherLast.trim() || !newTeacherAbbr.trim()) return;
 
-    const initials = newTeacherFirst ? newTeacherFirst[0].toUpperCase() : '';
-    const defAbbr = (initials + newTeacherLast.slice(0, 3).toUpperCase()).substring(0, 5);
+    const formattedAbbr = newTeacherAbbr.trim().toUpperCase();
 
-    const newTeacher: Teacher = {
-      id: uid(),
-      first: newTeacherFirst.trim(),
-      last: newTeacherLast.trim(),
-      abbr: newTeacherAbbr.trim().toUpperCase() || defAbbr
-    };
+    // Check for unique abbr
+    if (pl.teachers.some(t => t.id !== editingTeacherId && t.abbr.toUpperCase() === formattedAbbr)) {
+      alert('Ten skrót nauczyciela jest już zajęty!');
+      return;
+    }
 
+    if (editingTeacherId) {
+      // Edycja nauczyciela
+      const nextT = pl.teachers.map(t => {
+        if (t.id === editingTeacherId) {
+          return {
+            ...t,
+            first: newTeacherFirst.trim(),
+            last: newTeacherLast.trim(),
+            abbr: formattedAbbr,
+            color: newTeacherColor,
+            maxHours: Number(newTeacherMaxHours),
+            overtimeHours: Number(newTeacherOvertimeHours) || undefined,
+            availability: newTeacherAvailability
+          };
+        }
+        return t;
+      });
+
+      const updatedPL = {
+        ...pl,
+        teachers: nextT
+      };
+
+      onChangeAppState({
+        ...appState,
+        teachers: nextT,
+        planLekcji: updatedPL
+      });
+
+      setEditingTeacherId(null);
+      setNewTeacherFirst('');
+      setNewTeacherLast('');
+      setNewTeacherAbbr('');
+      setIsTeacherAbbrManual(false);
+      setNewTeacherMaxHours(18);
+      setNewTeacherOvertimeHours(0);
+      setNewTeacherAvailability([]);
+      setNewTeacherColor(PALETTE_COLORS[(nextT?.length || 0) % PALETTE_COLORS.length] || '#3b82f6');
+    } else {
+      // Nowy nauczyciel
+      const newTeacher: Teacher = {
+        id: uid(),
+        first: newTeacherFirst.trim(),
+        last: newTeacherLast.trim(),
+        abbr: formattedAbbr,
+        color: newTeacherColor,
+        maxHours: Number(newTeacherMaxHours),
+        overtimeHours: Number(newTeacherOvertimeHours) || undefined
+      };
+
+      const nextT = [...pl.teachers, newTeacher];
+      const updatedPL = {
+        ...pl,
+        teachers: nextT
+      };
+
+      onChangeAppState({
+        ...appState,
+        teachers: nextT,
+        planLekcji: updatedPL
+      });
+
+      setNewTeacherFirst('');
+      setNewTeacherLast('');
+      setNewTeacherAbbr('');
+      setIsTeacherAbbrManual(false);
+      setNewTeacherMaxHours(18);
+      setNewTeacherOvertimeHours(0);
+      setNewTeacherColor(PALETTE_COLORS[(nextT?.length || 0) % PALETTE_COLORS.length] || '#3b82f6');
+    }
+  };
+
+  const handleRemoveTeacher = (id: string) => {
+    if (!confirm('Czy na pewno chcesz usunąć tego nauczyciela? Usunie to również jego przydziały lekcyjne.')) {
+      return;
+    }
+
+    const nextT = pl.teachers.filter(t => t.id !== id);
     const updatedPL = {
       ...pl,
-      teachers: [...pl.teachers, newTeacher]
+      teachers: nextT,
+      assignments: pl.assignments.filter(a => a.teacherId !== id)
     };
 
     onChangeAppState({
       ...appState,
-      teachers: [...appState.teachers, newTeacher],
+      teachers: nextT,
       planLekcji: updatedPL
     });
 
-    setNewTeacherFirst('');
-    setNewTeacherLast('');
-    setNewTeacherAbbr('');
+    if (editingTeacherId === id) {
+      handleCancelEditTeacher();
+    }
   };
 
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubjectName.trim()) return;
 
-    const defAbbr = newSubjectShort.trim().toUpperCase() || newSubjectName.slice(0, 3).toUpperCase();
-    const newSubj: Subject = {
-      id: uid(),
-      name: newSubjectName.trim(),
-      short: defAbbr,
-      color: COLORS[pl.subjects.length % COLORS.length]
-    };
+    if (editingSubjectId) {
+      // Edycja przedmiotu
+      const nextSubjs = pl.subjects.map(s => {
+        if (s.id === editingSubjectId) {
+          return {
+            ...s,
+            name: newSubjectName.trim(),
+            short: newSubjectShort.trim().toUpperCase() || s.short,
+            color: newSubjectColor,
+            defaultGroupPattern: newSubjectPattern.trim() || undefined
+          };
+        }
+        return s;
+      });
 
-    const updatedPL = {
-      ...pl,
-      subjects: [...pl.subjects, newSubj]
-    };
+      const updatedPL = {
+        ...pl,
+        subjects: nextSubjs
+      };
 
-    onChangeAppState({
-      ...appState,
-      subjects: [...appState.subjects, newSubj],
-      planLekcji: updatedPL
-    });
+      onChangeAppState({
+        ...appState,
+        subjects: nextSubjs,
+        planLekcji: updatedPL
+      });
 
+      setEditingSubjectId(null);
+      setNewSubjectName('');
+      setNewSubjectShort('');
+      setIsSubjectShortManual(false);
+      setNewSubjectPattern('');
+      setNewSubjectColor('#3b82f6');
+    } else {
+      // Dodawanie nowego przedmiotu
+      const defAbbr = newSubjectShort.trim().toUpperCase() || newSubjectName.slice(0, 3).toUpperCase();
+      const newSubj: Subject = {
+        id: uid(),
+        name: newSubjectName.trim(),
+        short: defAbbr,
+        color: newSubjectColor || COLORS[pl.subjects.length % COLORS.length],
+        defaultGroupPattern: newSubjectPattern.trim() || undefined
+      };
+
+      const updatedPL = {
+        ...pl,
+        subjects: [...pl.subjects, newSubj]
+      };
+
+      onChangeAppState({
+        ...appState,
+        subjects: [...appState.subjects, newSubj],
+        planLekcji: updatedPL
+      });
+
+      setNewSubjectName('');
+      setNewSubjectShort('');
+      setIsSubjectShortManual(false);
+      setNewSubjectPattern('');
+      setNewSubjectColor('#3b82f6');
+    }
+  };
+
+  const handleStartEditSubject = (sub: Subject) => {
+    setEditingSubjectId(sub.id);
+    setNewSubjectName(sub.name);
+    setNewSubjectShort(sub.short);
+    setIsSubjectShortManual(true);
+    setNewSubjectColor(sub.color || '#3b82f6');
+    setNewSubjectPattern(sub.defaultGroupPattern || '');
+  };
+
+  const handleCancelEditSubject = () => {
+    setEditingSubjectId(null);
     setNewSubjectName('');
     setNewSubjectShort('');
+    setIsSubjectShortManual(false);
+    setNewSubjectPattern('');
+    setNewSubjectColor('#3b82f6');
   };
 
   const handleAddRoom = (e: React.FormEvent) => {
@@ -323,7 +692,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       teacherId: assignTeacher || null,
       roomId: assignRoom || null,
       hoursPerWeek: Number(assignHours),
-      groupId: null,
+      groupId: assignGroup || null,
       preferredBlockSize: assignPreferredBlockSize
     };
 
@@ -342,6 +711,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     setAssignRoom('');
     setAssignHours(2);
     setAssignPreferredBlockSize(1);
+    setAssignGroup('');
   };
 
   const handleRemoveAssignment = (id: string) => {
@@ -369,7 +739,6 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
   const handleDropOnCell = (day: number, hour: number) => {
     if (!draggedAssignId || !activeClassId) return;
 
-    const key = `${activeClassId}|${day}|${hour}`;
     const updatedLessons = { ...pl.lessons };
     
     // Check hours limits
@@ -395,11 +764,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       }
     }
 
-    updatedLessons[key] = {
-      assignmentId: draggedAssignId,
-      locked: false,
-      supportTeacherId: defaultSupportTeacherId
-    };
+    const allInvolved = asg ? [asg.classId, ...(asg.linkedClassIds || [])] : [activeClassId];
+    allInvolved.forEach(clsId => {
+      const lessonKey = `${clsId}|${day}|${hour}`;
+      updatedLessons[lessonKey] = {
+        assignmentId: draggedAssignId,
+        locked: false,
+        supportTeacherId: defaultSupportTeacherId
+      };
+    });
 
     const updatedPL = {
       ...pl,
@@ -416,7 +789,26 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
 
   const handleRemoveLesson = (key: string) => {
     const updatedLessons = { ...pl.lessons };
-    delete updatedLessons[key];
+    const lessonToRemove = updatedLessons[key];
+    if (lessonToRemove) {
+      const asg = pl.assignments.find(a => a.id === lessonToRemove.assignmentId);
+      if (asg && asg.linkedClassIds && asg.linkedClassIds.length > 0) {
+        const parts = key.split('|');
+        if (parts.length >= 3) {
+          const day = parts[1];
+          const hour = parts[2];
+          const allInvolved = [asg.classId, ...asg.linkedClassIds];
+          allInvolved.forEach(clsId => {
+            const k = `${clsId}|${day}|${hour}`;
+            delete updatedLessons[k];
+          });
+        }
+      } else {
+        delete updatedLessons[key];
+      }
+    } else {
+      delete updatedLessons[key];
+    }
 
     onChangeAppState({
       ...appState,
@@ -544,43 +936,134 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
             </button>
           </form>
 
-          <div className="space-y-1">
-            {pl.classes.map(c => {
-              const count = Object.keys(pl.lessons).filter(k => k.startsWith(c.id + '|')).length;
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => { setActiveClassId(c.id); setActiveTab('plan'); }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between group cursor-pointer ${
-                    activeClassId === c.id && activeTab === 'plan'
-                      ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600'
-                      : 'text-slate-600 hover:bg-slate-50'
-                  }`}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      setActiveClassId(c.id);
-                      setActiveTab('plan');
-                    }
+          {/* Panel Filtrów */}
+          <div className="mt-4 pt-3 border-t border-slate-100 space-y-3 pb-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
+                <Filter size={11} className="text-slate-400" /> Filtry Listy Klas
+              </span>
+              {(selectedGradeFilters.length > 0 || onlyWithUnassignedOnDay) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedGradeFilters([]);
+                    setOnlyWithUnassignedOnDay(false);
                   }}
+                  className="text-[9px] text-rose-600 hover:text-rose-800 font-bold transition flex items-center gap-0.5"
                 >
-                  <div className="flex items-center gap-2 overflow-hidden truncate">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || '#cbd5e1' }} />
-                    <span className="truncate">{c.name} {c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] bg-slate-100 text-slate-500 group-hover:bg-slate-200 px-1.5 py-0.5 rounded font-mono">{count}h</span>
-                    <button 
-                      onClick={(e) => handleRemoveClass(c.id, e)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-0.5"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                  <X size={10} /> Wyczyść
+                </button>
+              )}
+            </div>
+
+            {/* Roczniki Pills */}
+            {availableRoczniki.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 block select-none">Roczniki (Poziomy):</label>
+                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
+                  {availableRoczniki.map(r => {
+                    const isActive = selectedGradeFilters.includes(r);
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => {
+                          if (isActive) {
+                            setSelectedGradeFilters(selectedGradeFilters.filter(item => item !== r));
+                          } else {
+                            setSelectedGradeFilters([...selectedGradeFilters, r]);
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                          isActive
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {isNaN(parseInt(r)) ? r : `Klasa ${r}`}
+                      </button>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            )}
+
+            {/* Lekcje do przypisania w danym dniu */}
+            <div className="space-y-1.5 pt-1">
+              <label className="flex items-start gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer h-3 w-3"
+                  checked={onlyWithUnassignedOnDay}
+                  onChange={(e) => setOnlyWithUnassignedOnDay(e.target.checked)}
+                />
+                <span className="text-[10px] font-bold text-slate-600 leading-tight select-none">
+                  Lekcje do przypisania w dniu:
+                </span>
+              </label>
+
+              {onlyWithUnassignedOnDay && (
+                <div className="pl-4.5">
+                  <select
+                    className="w-full px-2 py-1 border border-slate-200 bg-white rounded-md text-[10px] outline-none font-bold text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    value={unassignedDayFilter}
+                    onChange={(e) => setUnassignedDayFilter(Number(e.target.value))}
+                  >
+                    {DAYS.map((dayName, idx) => (
+                      <option key={idx} value={idx}>
+                        {dayName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1 mt-2">
+            {filteredClasses.length > 0 ? (
+              filteredClasses.map(c => {
+                const count = Object.keys(pl.lessons).filter(k => k.startsWith(c.id + '|')).length;
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => { setActiveClassId(c.id); setActiveTab('plan'); }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between group cursor-pointer ${
+                      activeClassId === c.id && activeTab === 'plan'
+                        ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setActiveClassId(c.id);
+                        setActiveTab('plan');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden truncate">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || '#cbd5e1' }} />
+                      <span className="truncate">{c.name} {c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] bg-slate-100 text-slate-500 group-hover:bg-slate-200 px-1.5 py-0.5 rounded font-mono">{count}h</span>
+                      <button 
+                        type="button"
+                        onClick={(e) => handleRemoveClass(c.id, e)}
+                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-0.5"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-3 text-center text-[10px] text-slate-400 font-medium border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
+                Brak klas spełniających kryteria filtrów
+              </div>
+            )}
           </div>
         </div>
 
@@ -714,6 +1197,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                                         </div>
                                       )}
 
+                                      {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
+                                        <div className="text-[9px] text-indigo-850 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1 font-bold truncate flex items-center gap-0.5" title="Zajęcia łączone (grupa międzyoddziałowa)">
+                                          🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== currentClass?.name).join(' + ')}
+                                        </div>
+                                      )}
+
                                       {/* Specjalni uczniowie */}
                                       {specStudentsInThisClassAndSubj.length > 0 && (
                                         <div className="mt-1.5 flex flex-wrap gap-1">
@@ -807,13 +1296,17 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
           <div className="space-y-6">
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
               <h2 className="text-sm font-bold text-slate-900 mb-4 select-none">📌 Dodaj nowe przypisanie (Kto, Czego, Ile, Gdzie)</h2>
-              <form onSubmit={handleAddAssignment} className="grid grid-cols-1 md:grid-cols-5 gap-3">
+              <form onSubmit={handleAddAssignment} className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Klasa</label>
                   <select 
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
                     value={assignClass}
-                    onChange={(e) => setAssignClass(e.target.value)}
+                    onChange={(e) => {
+                      const clsId = e.target.value;
+                      setAssignClass(clsId);
+                      autoSelectGroupForAssignTab(clsId, assignSubject);
+                    }}
                   >
                     <option value="">Wybierz klasę</option>
                     {pl.classes.map(c => (
@@ -826,7 +1319,11 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                   <select 
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
                     value={assignSubject}
-                    onChange={(e) => setAssignSubject(e.target.value)}
+                    onChange={(e) => {
+                      const subjId = e.target.value;
+                      setAssignSubject(subjId);
+                      autoSelectGroupForAssignTab(assignClass, subjId);
+                    }}
                   >
                     <option value="">Wybierz przedmiot</option>
                     {pl.subjects.map(s => (
@@ -834,6 +1331,23 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                     ))}
                   </select>
                 </div>
+
+                {assignClass && pl.schoolGroups.filter(g => g.classId === assignClass).length > 0 && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">Podgrupa (Wybór auto)</label>
+                    <select 
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-indigo-50/50 border-indigo-200 text-indigo-700 font-bold outline-none"
+                      value={assignGroup}
+                      onChange={(e) => setAssignGroup(e.target.value)}
+                    >
+                      <option value="">Cała klasa</option>
+                      {pl.schoolGroups.filter(g => g.classId === assignClass).map(g => (
+                        <option key={g.id} value={g.id}>Grupa: {g.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Główny Nauczyciel</label>
                   <select 
@@ -921,7 +1435,17 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                     return (
                       <tr key={a.id} className="hover:bg-slate-50/50">
                         <td className="p-3 text-xs font-bold text-slate-700 border-b border-slate-200">
-                          {c ? `${c.name} ${c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}` : '?'}
+                          <div>
+                            {c ? `Oddział ${c.name}` : '?'}
+                          </div>
+                          {a.groupId && (() => {
+                            const grp = pl.schoolGroups.find(g => g.id === a.groupId);
+                            return grp ? (
+                              <div className="text-[9.5px] text-indigo-600 font-bold mt-0.5">
+                                👥 Grupa: {grp.name}
+                              </div>
+                            ) : null;
+                          })()}
                         </td>
                         <td className="p-3 text-xs border-b border-slate-200" style={{ color: s?.color }}>{s?.name}</td>
                         <td className="p-3 text-xs text-slate-600 border-b border-slate-200">
@@ -990,7 +1514,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
             {/* Lista i dodawanie nauczycieli */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <User size={14} /> 👨‍🏫 Nauczyciele
+                <User size={14} /> 👨‍🏫 {editingTeacherId ? 'Edytuj Nauczyciela' : 'Dodaj Nauczyciela'}
               </h3>
               <form onSubmit={handleAddTeacher} className="flex flex-col gap-2">
                 <input 
@@ -998,7 +1522,11 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                   placeholder="Imię" 
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50"
                   value={newTeacherFirst}
-                  onChange={(e) => setNewTeacherFirst(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewTeacherFirst(val);
+                    updateTeacherAbbrAuto(val, newTeacherLast);
+                  }}
                 />
                 <input 
                   type="text" 
@@ -1006,25 +1534,97 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                   required
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50"
                   value={newTeacherLast}
-                  onChange={(e) => setNewTeacherLast(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewTeacherLast(val);
+                    updateTeacherAbbrAuto(newTeacherFirst, val);
+                  }}
                 />
                 <input 
                   type="text" 
-                  placeholder="Skrót (np. JKOW)" 
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50"
+                  placeholder="Skrót (np. JKOW) *" 
+                  required
+                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50 font-bold"
                   value={newTeacherAbbr}
-                  onChange={(e) => setNewTeacherAbbr(e.target.value)}
+                  onChange={(e) => {
+                    setNewTeacherAbbr(e.target.value.toUpperCase());
+                    setIsTeacherAbbrManual(true);
+                  }}
                 />
-                <button type="submit" className="w-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs">
-                  Dodaj Nauczyciela
-                </button>
+                <div className="grid grid-cols-2 gap-2 my-1">
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-0.5">Pensum (godz.)</label>
+                    <input 
+                      type="number" 
+                      required
+                      min={1}
+                      max={40}
+                      placeholder="18"
+                      className="w-full px-3 py-1 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-semibold text-slate-800"
+                      value={newTeacherMaxHours}
+                      onChange={(e) => setNewTeacherMaxHours(parseInt(e.target.value) || 18)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-indigo-500 font-bold block mb-0.5">Nadgodziny</label>
+                    <input 
+                      type="number" 
+                      required
+                      min={0}
+                      max={40}
+                      placeholder="0"
+                      className="w-full px-3 py-1 border border-indigo-150 rounded-lg text-xs outline-none bg-indigo-50/20 font-semibold text-indigo-800"
+                      value={newTeacherOvertimeHours}
+                      onChange={(e) => setNewTeacherOvertimeHours(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button type="submit" className="flex-1 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm">
+                    {editingTeacherId ? 'Zapisz zmiany Nick' : 'Dodaj Nauczyciela'}
+                  </button>
+                  {editingTeacherId && (
+                    <button 
+                      type="button" 
+                      onClick={handleCancelEditTeacher}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs border border-slate-200"
+                    >
+                      Anuluj
+                    </button>
+                  )}
+                </div>
               </form>
 
               <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
                 {pl.teachers.map(t => (
-                  <div key={t.id} className="py-2 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-700">{t.first} {t.last}</span>
-                    <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[11px] text-slate-500">{t.abbr}</span>
+                  <div key={t.id} className="py-2.5 flex items-center justify-between text-xs gap-1.5 group">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-slate-700 truncate">{t.first} {t.last}</span>
+                        <span className="bg-slate-100 px-1.5 py-0.2 rounded font-mono text-[10px] font-black text-slate-500">{t.abbr}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        Pensum: {t.maxHours || 18}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditTeacher(t)}
+                        className="text-slate-400 hover:text-blue-600 p-1"
+                        title="Edytuj dane"
+                      >
+                        <Edit3 size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTeacher(t.id)}
+                        className="text-slate-400 hover:text-red-500 p-1"
+                        title="Usuń nauczyciela"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1033,7 +1633,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
             {/* Słownik przedmiotów */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                <BookOpen size={14} /> 📚 Przedmioty szkolne
+                <BookOpen size={14} /> {editingSubjectId ? '📝 Edytuj przedmiot' : '📚 Przedmioty szkolne'}
               </h3>
               <form onSubmit={handleAddSubject} className="flex flex-col gap-2">
                 <input 
@@ -1042,28 +1642,89 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                   required
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50"
                   value={newSubjectName}
-                  onChange={(e) => setNewSubjectName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewSubjectName(val);
+                    if (!isSubjectShortManual) {
+                      setNewSubjectShort(subjectAbbr(val));
+                    }
+                  }}
                 />
                 <input 
                   type="text" 
                   placeholder="Skrót (np. MAT, POL)" 
                   className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50"
                   value={newSubjectShort}
-                  onChange={(e) => setNewSubjectShort(e.target.value)}
+                  onChange={(e) => {
+                    setNewSubjectShort(e.target.value);
+                    setIsSubjectShortManual(true);
+                  }}
                 />
-                <button type="submit" className="w-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs">
-                  Dodaj Przedmiot
-                </button>
+
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase">Słowo kluczowe podgrupy (opcjonalnie)</label>
+                  <input 
+                    type="text" 
+                    placeholder="np. religia, ang, niem, wf" 
+                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50 font-bold text-indigo-600"
+                    value={newSubjectPattern}
+                    onChange={(e) => setNewSubjectPattern(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 py-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Kolor kafelka:</label>
+                  <div className="flex items-center gap-1.5">
+                    <input 
+                      type="color" 
+                      className="w-7 h-7 border border-slate-200 rounded cursor-pointer p-0 bg-transparent"
+                      value={newSubjectColor}
+                      onChange={(e) => setNewSubjectColor(e.target.value)}
+                    />
+                    <span className="text-[10px] font-mono text-slate-500 uppercase">{newSubjectColor}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button type="submit" className="grow py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs cursor-pointer transition">
+                    {editingSubjectId ? 'Zapisz zmiany' : 'Dodaj Przedmiot'}
+                  </button>
+                  {editingSubjectId && (
+                    <button 
+                      type="button" 
+                      onClick={handleCancelEditSubject}
+                      className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg cursor-pointer transition"
+                    >
+                      Anuluj
+                    </button>
+                  )}
+                </div>
               </form>
 
-              <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+              <div className="divide-y divide-slate-100 max-h-90 overflow-y-auto">
                 {pl.subjects.map(s => (
-                  <div key={s.id} className="py-2 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
+                  <div key={s.id} className="py-2 flex items-center justify-between text-xs hover:bg-slate-50/50 rounded px-1 transition duration-150">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
-                      <span className="font-semibold text-slate-700">{s.name}</span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-700 truncate">{s.name}</p>
+                        {s.defaultGroupPattern && (
+                          <span className="text-[8px] bg-indigo-50 border border-indigo-100 text-indigo-700 font-bold px-1 rounded uppercase tracking-wide inline-block mt-0.5">
+                            Wzorzec gr: {s.defaultGroupPattern}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <span className="font-bold font-mono text-[10px]" style={{ color: s.color }}>{s.short}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-bold font-mono text-[10px]" style={{ color: s.color }}>{s.short}</span>
+                      <button 
+                        onClick={() => handleStartEditSubject(s)}
+                        className="p-1 text-slate-400 hover:text-indigo-600 cursor-pointer select-none"
+                        title="Edytuj przedmiot"
+                      >
+                        <Edit3 size={11} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1097,6 +1758,237 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                 ))}
               </div>
             </div>
+
+            {/* 🧑‍🏫 Teacher Edit Modal Overlay over Planner */}
+            {editingTeacherId !== null && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                  {/* Modal Header */}
+                  <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">🧑‍🏫</span>
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Edycja Profilu Nauczyciela</h3>
+                        <p className="text-[11px] text-slate-500 font-medium">Identyfikator: <span className="font-mono text-slate-600">{editingTeacherId}</span></p>
+                      </div>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={handleCancelEditTeacher}
+                      className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                      
+                      {/* Left Column: Form Details */}
+                      <div className="lg:col-span-5 space-y-4">
+                        <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                          👤 Informacje podstawowe
+                        </h4>
+                        
+                        <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-500 font-bold col-span-2">Imię</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="np. Jan"
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 font-medium"
+                              value={newTeacherFirst}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewTeacherFirst(val);
+                                updateTeacherAbbrAuto(val, newTeacherLast);
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-500 font-bold col-span-2">Nazwisko</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="np. Kowalski"
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 font-medium"
+                              value={newTeacherLast}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewTeacherLast(val);
+                                updateTeacherAbbrAuto(newTeacherFirst, val);
+                              }}
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-500 font-bold col-span-2">Inicjały (Skrót na planie)</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="np. JKOW"
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-slate-800 uppercase focus:border-blue-500"
+                              value={newTeacherAbbr}
+                              onChange={(e) => {
+                                setNewTeacherAbbr(e.target.value.toUpperCase());
+                                setIsTeacherAbbrManual(true);
+                              }}
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-bold col-span-2">Pensum (godz.)</label>
+                              <input 
+                                type="number" 
+                                required
+                                min={1}
+                                max={40}
+                                placeholder="18"
+                                className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-semibold text-slate-800 focus:border-blue-500"
+                                value={newTeacherMaxHours}
+                                onChange={(e) => setNewTeacherMaxHours(parseInt(e.target.value) || 18)}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-indigo-600 font-bold col-span-2">Nadgodziny</label>
+                              <input 
+                                type="number" 
+                                required
+                                min={0}
+                                max={40}
+                                placeholder="0"
+                                className="w-full px-3 py-1.5 border border-indigo-150 bg-indigo-50/20 rounded-lg text-xs outline-none font-semibold text-indigo-800 focus:border-indigo-500"
+                                value={newTeacherOvertimeHours}
+                                onChange={(e) => setNewTeacherOvertimeHours(parseInt(e.target.value) || 0)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 col-span-2">
+                            <label className="text-[10px] text-slate-500 font-bold block col-span-2">Kolor profilu</label>
+                            <div className="grid grid-cols-8 gap-0.5 p-1.5 border border-slate-200 bg-white rounded-lg max-h-24 overflow-y-auto">
+                              {PALETTE_COLORS.map(c => (
+                                <button
+                                  type="button"
+                                  key={c}
+                                  onClick={() => setNewTeacherColor(c)}
+                                  className={`w-4.5 h-4.5 rounded-full border shrink-0 transition ${
+                                    newTeacherColor === c ? 'ring-2 ring-blue-500 scale-110 shadow-sm' : 'border-slate-100 hover:scale-110'
+                                  }`}
+                                  style={{ backgroundColor: c }}
+                                  title={c}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Weekly Availability Grid */}
+                      <div className="lg:col-span-7 space-y-3 flex flex-col font-sans">
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                            📅 Godziny Dostępności Nauczyciela
+                          </h4>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setAllTeacherAvailability(true)}
+                              className="text-[9px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-0.5 rounded font-bold border border-emerald-200 transition"
+                            >
+                              Zaznacz wszystkie
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAllTeacherAvailability(false)}
+                              className="text-[9px] bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-0.5 rounded font-bold border border-slate-300 transition"
+                            >
+                              Odznacz wszystkie
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Kliknij na poszczególne godziny na planie, aby przełączać status dostępności nauczyciela we wskazanych porach. Zielone komórki oznaczają gotowość do prowadzenia zajęć.
+                        </p>
+
+                        <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white flex-1 min-h-[250px] overflow-y-auto max-h-[300px]">
+                          <table className="w-full border-collapse text-left text-xs">
+                            <thead className="sticky top-0 bg-white z-[10]">
+                              <tr className="bg-slate-50 border-b border-slate-200">
+                                <th className="p-2 font-bold text-slate-500 uppercase text-[9px] w-14 border-r border-slate-150 text-center">Lekcja</th>
+                                {['Pn', 'Wt', 'Śr', 'Cz', 'Pt'].map((dayName, dayIndex) => (
+                                  <th key={dayIndex} className="p-2 font-bold text-slate-750 text-center uppercase tracking-wider text-[9px] border-r border-slate-100 last:border-r-0">
+                                    {dayName}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-150">
+                              {(pl.hours && pl.hours.length > 0 ? pl.hours : []).map((h) => (
+                                <tr key={h.num} className="hover:bg-slate-55">
+                                  <td className="p-1 border-r border-slate-150 bg-slate-50 font-bold text-slate-600 text-center">
+                                    <div className="text-[9px]">Lekcja {h.num}</div>
+                                    <div className="text-[8px] text-slate-400 font-normal leading-none">{h.start}-{h.end}</div>
+                                  </td>
+                                  {[0, 1, 2, 3, 4].map((dayIndex) => {
+                                    const code = `${dayIndex}-${h.num}`;
+                                    const isAvailable = newTeacherAvailability.includes(code);
+                                    return (
+                                      <td 
+                                        key={dayIndex} 
+                                        onClick={() => {
+                                          if (newTeacherAvailability.includes(code)) {
+                                            setNewTeacherAvailability(newTeacherAvailability.filter(x => x !== code));
+                                          } else {
+                                            setNewTeacherAvailability([...newTeacherAvailability, code]);
+                                          }
+                                        }}
+                                        className={`p-1.5 text-center cursor-pointer select-none transition-all border-r last:border-r-0 border-slate-100 ${
+                                          isAvailable 
+                                            ? 'bg-emerald-50 text-emerald-800' 
+                                            : 'bg-rose-50 text-rose-500/80 line-through decoration-rose-300'
+                                        }`}
+                                      >
+                                        <div className="font-extrabold uppercase text-[8px] tracking-wider">
+                                          {isAvailable ? '✓ Dostępny' : '✗ Zajęty'}
+                                        </div>
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                    <button 
+                      type="button" 
+                      onClick={handleCancelEditTeacher}
+                      className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-sm transition"
+                    >
+                      Anuluj
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={handleAddTeacher}
+                      className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
+                    >
+                      Zapisz zmiany profilu
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
         )}

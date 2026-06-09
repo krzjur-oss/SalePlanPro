@@ -24,6 +24,7 @@ export interface Subject {
   name: string;
   short: string;
   color: string;
+  defaultGroupPattern?: string;
 }
 
 export interface Teacher {
@@ -33,6 +34,8 @@ export interface Teacher {
   abbr: string;
   maxHours?: number;
   color?: string;
+  overtimeHours?: number;
+  availability?: string[]; // format: "dayIndex-hourNum" (np. "0-1")
 }
 
 export interface SchoolGroup {
@@ -51,6 +54,7 @@ export interface Assignment {
   hoursPerWeek: number;
   groupId: string | null;
   linkedGroupIds?: string[];
+  linkedClassIds?: string[];
   preferredBlockSize?: number;
 }
 
@@ -259,6 +263,20 @@ export interface ArchiveEntry {
   label: string;
   savedAt: string;
   config: AppState;
+}
+
+export interface SnapshotEntry {
+  id: string;
+  name: string;
+  createdAt: string;
+  appState: AppState;
+  schedData: SchedData;
+  comment?: string;
+  stats?: {
+    assignedLessonsCount: number;
+    classesCount: number;
+    teachersCount: number;
+  };
 }
 
 export interface UndoEntry {

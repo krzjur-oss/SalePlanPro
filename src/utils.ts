@@ -87,16 +87,47 @@ export function mergeClassNames(classes: string[]): string[] {
 export function subjectAbbr(subject: string): string {
   if (!subject) return '';
   const s = subject.trim();
-  if (s.length <= 4) return s;
-  const IGNORE = new Set(['i', 'w', 'z', 'na', 'dla', 'ze', 'lub', 'a', 'o', 'do', 'po', 'od', 'as']);
+  const lower = s.toLowerCase().replace(/\s+/g, ' ');
+
+  // Wyjątki podane przez użytkownika
+  if (lower === 'język polski' || lower === 'jezyk polski') return 'Pol';
+  if (lower === 'język angielski' || lower === 'jezyk angielski') return 'Ang';
+
+  const CONJUNCTIONS = new Set([
+    'i', 'w', 'z', 'na', 'o', 'do', 'za', 'po', 'od', 'u', 'we', 'ze', 'dla', 'lub', 'lecz', 'pod', 'nad', 'przed', 'a', 'o', 'z', 'w'
+  ]);
+
   const words = s.split(/\s+/).filter(w => w.length > 0);
+  if (words.length === 0) return '';
+
+  // Jeżeli nazwa jest jednoczłonowa (jednowyrazowa)
   if (words.length === 1) {
-    return s.charAt(0).toUpperCase() + s.slice(1, 4).toLowerCase();
+    const singleWord = words[0];
+    if (singleWord.length <= 3) {
+      return singleWord.toUpperCase();
+    }
+    return singleWord.charAt(0).toUpperCase() + singleWord.slice(1, 3).toLowerCase();
   }
-  const initials = words
-    .filter(w => !IGNORE.has(w.toLowerCase()))
-    .map(w => w.charAt(0).toUpperCase());
-  return initials.join('');
+
+  // Jeżeli nazwa przedmiotu jest wieloczłonowa
+  const mainWords = words.filter(w => !CONJUNCTIONS.has(w.toLowerCase()));
+  
+  if (mainWords.length === 0) {
+    // Jeśli zostały tylko spójniki, weźmy pierwszy słowo i skróćmy do 3 znaków
+    const firstWord = words[0];
+    return firstWord.slice(0, 3).toUpperCase();
+  }
+
+  if (mainWords.length === 1) {
+    const singleMain = mainWords[0];
+    if (singleMain.length <= 3) {
+      return singleMain.toUpperCase();
+    }
+    return singleMain.charAt(0).toUpperCase() + singleMain.slice(1, 3).toLowerCase();
+  }
+
+  // Pierwsze litery obydwu/wszystkich członów głównych
+  return mainWords.map(w => w.charAt(0).toUpperCase()).join('');
 }
 
 export function genAbbr(first: string, last: string): string {
@@ -108,11 +139,15 @@ export function genAbbr(first: string, last: string): string {
   const parts = l.split(/[-\s]+/).filter(Boolean);
   let lPart = '';
   if (parts.length >= 2) {
-    lPart = (parts[0].slice(0, 2) + parts[1][0]).toUpperCase();
+    // Nazwisko dwuczłonowe: dwie pierwsze litery każdego członu
+    const p1 = parts[0].slice(0, 2);
+    const p2 = parts[1].slice(0, 2);
+    lPart = p1 + p2;
   } else if (parts.length === 1) {
-    lPart = parts[0].slice(0, 3).toUpperCase();
+    // Nazwisko jednoczłonowe: trzy pierwsze litery nazwiska
+    lPart = parts[0].slice(0, 3);
   }
-  return fLetter + lPart;
+  return (fLetter + lPart).toUpperCase();
 }
 
 export function ensureUniqueAbbr(abbr: string, existing: string[]): string {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom } from '../types';
-import { colKey, flattenColumns, esc, hexRgba } from '../utils';
+import { colKey, flattenColumns, esc, hexRgba, mergeClassNames } from '../utils';
 import { 
   Building2, MapPin, Grid, AlertTriangle, UserCheck, RefreshCw, Trash2, Edit, Grab, Sparkles, Filter, ChevronLeft, ChevronRight
 } from 'lucide-react';
@@ -54,6 +54,66 @@ export default function PlanSal({
   const [cellSupportTeacher, setCellSupportTeacher] = useState<string>('');
   const [cellSubject, setCellSubject] = useState<string>('');
   const [cellNote, setCellNote] = useState<string>('');
+
+  // Homeroom / Custodians edit states
+  const [editingHomeroom, setEditingHomeroom] = useState<{ colKey: string; roomNum: string; sub?: string } | null>(null);
+  const [hrClassName, setHrClassName] = useState<string>('');
+  const [hrTeacherAbbr, setHrTeacherAbbr] = useState<string>('');
+  const [hrClassName2, setHrClassName2] = useState<string>('');
+  const [hrTeacherAbbr2, setHrTeacherAbbr2] = useState<string>('');
+
+  const sortedClasses = useMemo(() => {
+    return [...appState.classes].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+  }, [appState.classes]);
+
+  const sortedTeachers = useMemo(() => {
+    return [...appState.teachers].sort((a, b) => {
+      const aName = `${a.last || ''} ${a.first || ''}`.trim() || a.abbr || '';
+      const bName = `${b.last || ''} ${b.first || ''}`.trim() || b.abbr || '';
+      return aName.localeCompare(bName, 'pl');
+    });
+  }, [appState.teachers]);
+
+  const handleEditHomeroom = (col: any, cKey: string) => {
+    const hr = appState.homerooms?.[cKey] || { className: '', teacherAbbr: '', className2: '', teacherAbbr2: '' };
+    setHrClassName(hr.className || '');
+    setHrTeacherAbbr(hr.teacherAbbr || '');
+    setHrClassName2(hr.className2 || '');
+    setHrTeacherAbbr2(hr.teacherAbbr2 || '');
+    setEditingHomeroom({ colKey: cKey, roomNum: col.room.num, sub: col.room.sub });
+  };
+
+  const handleSaveHomeroom = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingHomeroom) return;
+
+    const { colKey: cKey } = editingHomeroom;
+    const currentHomerooms = { ...(appState.homerooms || {}) };
+
+    const cName = hrClassName.trim();
+    const tAbbr = hrTeacherAbbr.trim();
+    const cName2 = hrClassName2.trim();
+    const tAbbr2 = hrTeacherAbbr2.trim();
+
+    if (!cName && !tAbbr && !cName2 && !tAbbr2) {
+      delete currentHomerooms[cKey];
+    } else {
+      currentHomerooms[cKey] = {
+        className: cName || '',
+        teacherAbbr: tAbbr || undefined,
+        className2: cName2 || undefined,
+        teacherAbbr2: tAbbr2 || undefined,
+      };
+    }
+
+    onChangeAppState({
+      ...appState,
+      homerooms: currentHomerooms
+    });
+
+    setEditingHomeroom(null);
+    notify('Zapisano opiekuna/gospodarza sali', 'ok');
+  };
 
   const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
@@ -272,6 +332,14 @@ export default function PlanSal({
 
   // Collision Checking (School-wide checked)
   const collisions = useMemo(() => {
+    // Map teacher abbreviations to Teacher objects for availability checks
+    const teachersByAbbr = new Map<string, typeof appState.planLekcji.teachers[0]>();
+    (appState.planLekcji.teachers || []).forEach(t => {
+      if (t.abbr) {
+        teachersByAbbr.set(t.abbr.toUpperCase().trim(), t);
+      }
+    });
+
     // teacherLocations: "teacherAbbr|hour" -> list of { colKey, slotIdx, isSupport?: boolean }
     const teacherLocations = new Map<string, { colKey: string; slotIdx?: number; isSupport?: boolean }[]>();
     // classLocations: "classAbbr|hour" -> list of { colKey, slotIdx }
@@ -305,18 +373,70 @@ export default function PlanSal({
 
           // Register teacher
           if (slot.teacherAbbr) {
-            const tKey = `${slot.teacherAbbr.toUpperCase()}|${h}`;
+            const tAbbrUpper = slot.teacherAbbr.toUpperCase().trim();
+            const tKey = `${tAbbrUpper}|${h}`;
             const list = teacherLocations.get(tKey) || [];
             list.push({ colKey: cKey, slotIdx: isSport ? slIdx : undefined });
             teacherLocations.set(tKey, list);
+
+            // Check availability of teacher
+            const teacher = teachersByAbbr.get(tAbbrUpper);
+            if (teacher && teacher.availability) {
+              const hIdx = appState.planLekcji.hours.findIndex(hourObj => String(hourObj.num) === h);
+              if (hIdx !== -1) {
+                const checkCode = `${activeDay}-${hIdx}`;
+                if (!teacher.availability.includes(checkCode)) {
+                  const desc = `⚠️ Niedostępność: Nauczyciel: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
+                  const keyInCol = `${h}|${cKey}`;
+                  const existing = detected.get(keyInCol) || [];
+                  if (!existing.includes(desc)) {
+                    existing.push(desc);
+                    detected.set(keyInCol, existing);
+                  }
+                  
+                  const sKey = `${h}|${cKey}|${slIdx}`;
+                  const sExisting = slotConflicts.get(sKey) || [];
+                  if (!sExisting.includes(desc)) {
+                    sExisting.push(desc);
+                    slotConflicts.set(sKey, sExisting);
+                  }
+                }
+              }
+            }
           }
 
           // Register support teacher
           if (slot.supportTeacherAbbr) {
-            const tKey = `${slot.supportTeacherAbbr.toUpperCase()}|${h}`;
+            const tAbbrUpper = slot.supportTeacherAbbr.toUpperCase().trim();
+            const tKey = `${tAbbrUpper}|${h}`;
             const list = teacherLocations.get(tKey) || [];
             list.push({ colKey: cKey, slotIdx: isSport ? slIdx : undefined, isSupport: true });
             teacherLocations.set(tKey, list);
+
+            // Check availability of support teacher
+            const teacher = teachersByAbbr.get(tAbbrUpper);
+            if (teacher && teacher.availability) {
+              const hIdx = appState.planLekcji.hours.findIndex(hourObj => String(hourObj.num) === h);
+              if (hIdx !== -1) {
+                const checkCode = `${activeDay}-${hIdx}`;
+                if (!teacher.availability.includes(checkCode)) {
+                  const desc = `⚠️ Niedostępność nauczyciela wsp.: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
+                  const keyInCol = `${h}|${cKey}`;
+                  const existing = detected.get(keyInCol) || [];
+                  if (!existing.includes(desc)) {
+                    existing.push(desc);
+                    detected.set(keyInCol, existing);
+                  }
+                  
+                  const sKey = `${h}|${cKey}|${slIdx}`;
+                  const sExisting = slotConflicts.get(sKey) || [];
+                  if (!sExisting.includes(desc)) {
+                    sExisting.push(desc);
+                    slotConflicts.set(sKey, sExisting);
+                  }
+                }
+              }
+            }
           }
 
           // Register classes (including split entries to detect split group conflicts)
@@ -1060,21 +1180,60 @@ export default function PlanSal({
                       ))}
                     </tr>
                     <tr>
-                      {cols.map((col, idx) => (
-                        <th 
-                          key={`room-${idx}`} 
-                          className="border-b border-r last:border-r-0 border-slate-200 p-2 text-center select-none bg-slate-50/10"
-                        >
-                          <div className="font-mono text-xs font-black text-slate-900 bg-slate-100 border border-slate-200/80 rounded px-1.5 py-0.5 inline-block">
-                            🚪 {col.room.num}
-                          </div>
-                          {col.room.sub && (
-                            <div className="text-[9px] text-slate-400 font-medium normal-case mt-0.5 leading-none">
-                              ({col.room.sub})
+                      {cols.map((col, idx) => {
+                        const cKey = colKey(col);
+                        const homeroom = appState.homerooms?.[cKey];
+                        return (
+                          <th 
+                            key={`room-${idx}`} 
+                            className="border-b border-r last:border-r-0 border-slate-200 p-2 text-center select-none bg-slate-50/10 relative group overflow-visible"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleEditHomeroom(col, cKey)}
+                              title="Zarządzaj opiekunem/gospodarzem sali"
+                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 hover:text-blue-700 hover:bg-slate-100 p-1.5 rounded-md transition-all cursor-pointer text-slate-400 z-10"
+                            >
+                              <UserCheck size={12} />
+                            </button>
+
+                            <div className="font-mono text-xs font-black text-slate-900 bg-slate-100 border border-slate-200/80 rounded px-1.5 py-0.5 inline-block">
+                              🚪 {col.room.num}
                             </div>
-                          )}
-                        </th>
-                      ))}
+                            {col.room.sub && (
+                              <div className="text-[9px] text-slate-400 font-medium normal-case mt-0.5 leading-none">
+                                ({col.room.sub})
+                              </div>
+                            )}
+
+                            {homeroom && (homeroom.className || homeroom.teacherAbbr || homeroom.className2 || homeroom.teacherAbbr2) ? (
+                              <div className="mt-1.5 text-[9px] text-blue-800 bg-blue-50/80 border border-blue-105/80 rounded-lg p-1 leading-tight flex flex-col items-center gap-0.5 max-w-[130px] mx-auto select-none shadow-xs">
+                                <span className="font-extrabold flex items-center gap-0.5 text-[8px] uppercase tracking-wider text-blue-600 justify-center">
+                                  👑 GOSPODARZ
+                                </span>
+                                <div className="font-black text-slate-800 break-words text-center leading-normal">
+                                  {[
+                                    homeroom.className,
+                                    homeroom.teacherAbbr ? `(${homeroom.teacherAbbr})` : ''
+                                  ].filter(Boolean).join(' ')}
+                                </div>
+                                {(homeroom.className2 || homeroom.teacherAbbr2) && (
+                                  <div className="font-normal text-slate-650 break-words text-[8.5px] text-center border-t border-blue-150/50 mt-1 pt-0.5 leading-normal w-full">
+                                    {[
+                                      homeroom.className2,
+                                      homeroom.teacherAbbr2 ? `(${homeroom.teacherAbbr2})` : ''
+                                    ].filter(Boolean).join(' ')}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="mt-1 text-[8.5px] text-slate-350 italic opacity-0 group-hover:opacity-100 transition-opacity">
+                                Brak gospodarza
+                              </div>
+                            )}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -1120,11 +1279,12 @@ export default function PlanSal({
                                   <div className="space-y-1.5 font-mono text-[11px] h-full min-h-[56px]">
                                     {isCellConf && (
                                       <div className="text-[9px] font-black text-red-700 bg-red-150 border border-red-200 rounded px-1.5 py-0.5 leading-none flex items-center gap-1 mb-1 shadow-xs animate-pulse select-none">
-                                        ⚠️ KOLIZJA
+                                        <AlertTriangle size={10} className="stroke-[3]" /> KOLIZJA
                                       </div>
                                     )}
                                     {slots.map((slot, slIdx) => {
-                                      const classes = slot.classes || (slot.className ? [slot.className] : []);
+                                      const rawClasses = slot.classes || (slot.className ? [slot.className] : []);
+                                      const classes = mergeClassNames(rawClasses);
                                       const slotKey = `${h}|${cKey}|${slIdx}`;
                                       const slotConfReasons = collisions.slotConflicts.get(slotKey) || [];
                                       const isSlotConf = slotConfReasons.length > 0;
@@ -1150,7 +1310,10 @@ export default function PlanSal({
                                             }`}
                                           >
                                             <div className="font-bold flex items-center justify-between">
-                                              <span className={`${isSlotConf ? 'text-red-700' : ''}`}>{classes.join(', ') || 'Wolny sport'}</span>
+                                              <span className={`flex items-center gap-1 ${isSlotConf ? 'text-red-700' : ''}`}>
+                                                {isSlotConf && <AlertTriangle size={11} className="text-red-600 animate-pulse shrink-0" />}
+                                                {classes.join(', ') || 'Wolny sport'}
+                                              </span>
                                               <div className="flex items-center gap-1 shrink-0">
                                                 <button 
                                                   type="button"
@@ -1176,8 +1339,9 @@ export default function PlanSal({
                                             </div>
                                             <div className="mt-0.5 text-slate-700">{slot.subject}</div>
                                             {slot.teacherAbbr && (
-                                              <div className={`text-[10px] mt-1 select-all font-bold ${isSlotConf ? 'text-red-600' : 'text-emerald-700'}`}>
-                                                👤 {slot.teacherAbbr}
+                                              <div className={`text-[10px] mt-1 select-all font-bold flex items-center gap-1 ${isSlotConf ? 'text-red-600' : 'text-emerald-700'}`}>
+                                                {isSlotConf && <AlertTriangle size={10} className="text-red-500 shrink-0" />}
+                                                <span>👤 {slot.teacherAbbr}</span>
                                               </div>
                                             )}
                                             {slot.supportTeacherAbbr && (
@@ -1186,8 +1350,9 @@ export default function PlanSal({
                                               </div>
                                             )}
                                             {isSlotConf && (
-                                              <div className="text-[9px] font-medium text-red-500 leading-tight mt-1 bg-white/70 p-1.5 rounded border border-red-200/40">
-                                                {slotConfReasons[0]}
+                                              <div className="text-[9px] font-medium text-red-500 leading-tight mt-1 bg-white/70 p-1.5 rounded border border-red-200/40 flex items-start gap-1">
+                                                <AlertTriangle size={10} className="text-red-500 mt-0.5 shrink-0" />
+                                                <span>{slotConfReasons[0]}</span>
                                               </div>
                                             )}
                                           </div>
@@ -1232,7 +1397,8 @@ export default function PlanSal({
                                       </div>
                                     )}
                                     {slots.map((slot, slIdx) => {
-                                      const classes = slot?.classes || (slot?.className ? [slot?.className] : []);
+                                      const rawClasses = slot?.classes || (slot?.className ? [slot?.className] : []);
+                                      const classes = mergeClassNames(rawClasses);
                                       const isSpecificConf = isConf;
                                       return (
                                         <DraggableItem
@@ -1259,14 +1425,25 @@ export default function PlanSal({
                                           >
                                             <div>
                                               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                                <span className={`${isSpecificConf ? 'text-red-700 font-extrabold' : ''}`}>{classes.join(', ') || '—'}</span>
-                                                {isSpecificConf && <span className="text-[8px] text-red-600 font-bold bg-white border border-red-200 px-1 py-0.5 rounded animate-pulse">KOLIZJA</span>}
+                                                <span className={`flex items-center gap-1 ${isSpecificConf ? 'text-red-700 font-extrabold' : ''}`}>
+                                                  {isSpecificConf && <AlertTriangle size={12} className="text-red-600 shrink-0" />}
+                                                  {classes.join(', ') || '—'}
+                                                </span>
+                                                {isSpecificConf && (
+                                                  <span className="text-[8px] text-red-600 font-bold bg-white border border-red-200 px-1 py-0.5 rounded flex items-center gap-0.5 animate-pulse">
+                                                    <AlertTriangle size={8} className="text-red-500" />
+                                                    KOLIZJA
+                                                  </span>
+                                                )}
                                               </div>
                                               <div className="text-[10px] text-slate-500 font-semibold mt-1">{slot.subject}</div>
                                             </div>
                                             <div className="flex flex-col gap-0.5 text-[10px] mt-2 font-medium">
                                               <div className="flex items-center justify-between">
-                                                <span className={isSpecificConf ? 'text-red-700 font-bold' : 'text-slate-600 font-semibold'}>👤 {slot.teacherAbbr || 'Wychowawca'}</span>
+                                                <span className={`flex items-center gap-1 ${isSpecificConf ? 'text-red-700 font-bold' : 'text-slate-600 font-semibold'}`}>
+                                                  {isSpecificConf && <AlertTriangle size={10} className="text-red-500 shrink-0" />}
+                                                  <span>👤 {slot.teacherAbbr || 'Wychowawca'}</span>
+                                                </span>
                                                 {slot.note && <span className="text-[9px] italic text-slate-400 truncate max-w-[80px]" title={slot.note}>{slot.note}</span>}
                                               </div>
                                               {slot.supportTeacherAbbr && (
@@ -1284,7 +1461,7 @@ export default function PlanSal({
                                       <div className="text-[9.5px] font-bold text-red-700 leading-normal bg-red-100/80 p-2 rounded border border-red-200 space-y-1 text-left">
                                         {confReasons.map((reason, rIdx) => (
                                           <div key={rIdx} className="flex items-start gap-1">
-                                            <span className="text-red-900 font-extrabold">•</span>
+                                            <AlertTriangle size={10} className="text-red-700 mt-0.5 shrink-0" />
                                             <span>{reason}</span>
                                           </div>
                                         ))}
@@ -1398,6 +1575,128 @@ export default function PlanSal({
                   <button 
                     type="button" 
                     onClick={() => setEditingCell(null)}
+                    className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200 cursor-pointer"
+                  >
+                    Anuluj
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer"
+                  >
+                    Zapisz
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ── MODAL EDYCJI GOSPODARZA SALI ── */}
+        {editingHomeroom && (
+          <div className="fixed inset-0 z-[2000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <form 
+              onSubmit={handleSaveHomeroom}
+              className="bg-white border border-slate-200 rounded-xl shadow-xl w-full max-w-sm overflow-hidden"
+            >
+              <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between select-none">
+                <h3 className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>👑 Gospodarze Sali {editingHomeroom.roomNum}</span>
+                  {editingHomeroom.sub && <span className="text-[10px] text-slate-400 font-normal">({editingHomeroom.sub})</span>}
+                </h3>
+                <button 
+                  type="button" 
+                  onClick={() => setEditingHomeroom(null)}
+                  className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-5 space-y-4 max-h-[460px] overflow-y-auto custom-scrollbar">
+                <div className="border bg-amber-50/50 border-amber-200 rounded-lg p-3 text-[11px] text-amber-900 leading-normal">
+                  Wskaż klasę oraz nauczyciela opiekującego się tą salą lekcyjną (gospodarza). Możesz także wyznaczyć drugiego współgospodarza.
+                </div>
+
+                <div className="border border-slate-100 rounded-lg p-3 space-y-3 bg-slate-50/35">
+                  <div className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">
+                    Główny Gospodarz (Klasa i Opiekun)
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Klasa</label>
+                    <select
+                      value={hrClassName}
+                      onChange={(e) => setHrClassName(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- brak klasy --</option>
+                      {sortedClasses.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nauczyciel Opiekun</label>
+                    <select
+                      value={hrTeacherAbbr}
+                      onChange={(e) => setHrTeacherAbbr(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- brak nauczyciela --</option>
+                      {sortedTeachers.map(t => (
+                        <option key={t.id} value={t.abbr}>{t.last} {t.first} ({t.abbr})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="border border-slate-100 rounded-lg p-3 space-y-3 bg-slate-50/35">
+                  <div className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider">
+                    Współgospodarz / Drugi opiekun (Opcjonalnie)
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Druga Klasa</label>
+                    <select
+                      value={hrClassName2}
+                      onChange={(e) => setHrClassName2(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- brak klasy --</option>
+                      {sortedClasses.map(c => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Drugi Opiekun</label>
+                    <select
+                      value={hrTeacherAbbr2}
+                      onChange={(e) => setHrTeacherAbbr2(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500"
+                    >
+                      <option value="">-- brak nauczyciela --</option>
+                      {sortedTeachers.map(t => (
+                        <option key={t.id} value={t.abbr}>{t.last} {t.first} ({t.abbr})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setHrClassName('');
+                    setHrTeacherAbbr('');
+                    setHrClassName2('');
+                    setHrTeacherAbbr2('');
+                  }}
+                  className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold border border-red-200 cursor-pointer"
+                >
+                  Wyczyść wszystko
+                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingHomeroom(null)}
                     className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200 cursor-pointer"
                   >
                     Anuluj

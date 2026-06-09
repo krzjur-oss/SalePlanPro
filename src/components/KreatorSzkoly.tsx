@@ -5,9 +5,9 @@ import {
 import { 
   Building as BuildingIcon, School as SchoolIcon, Users, BookOpen, GraduationCap, ShieldAlert, BadgePlus,
   Trash2, Landmark, CheckCircle, ArrowRight, ArrowLeft, Plus, Users2, HelpCircle, Eye, Shield, MapPin, Sparkles, Layers,
-  Edit3, RefreshCw
+  Edit3, RefreshCw, X, Calendar
 } from 'lucide-react';
-import { uid, genAbbr, ensureUniqueAbbr } from '../utils';
+import { uid, genAbbr, ensureUniqueAbbr, subjectAbbr } from '../utils';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -1189,35 +1189,95 @@ export default function KreatorSzkoly({
   // --- Step 5 States (Subjects) ---
   const [newSubjName, setNewSubjName] = useState('');
   const [newSubjShort, setNewSubjShort] = useState('');
+  const [isSubjShortManual, setIsSubjShortManual] = useState(false);
   const [newSubjColor, setNewSubjColor] = useState(() => PALETTE_COLORS[appState.subjects?.length % PALETTE_COLORS.length] || '#16a34a');
+  const [newSubjPattern, setNewSubjPattern] = useState('');
+  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
 
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubjName.trim() || !newSubjShort.trim()) return;
 
-    const newSubj: Subject = {
-      id: 'sub_' + uid(),
-      name: newSubjName.trim(),
-      short: newSubjShort.trim().toUpperCase(),
-      color: newSubjColor
-    };
+    if (editingSubjectId) {
+      // Edycja przedmiotu
+      const nextSubjs = appState.subjects.map(s => {
+        if (s.id === editingSubjectId) {
+          return {
+            ...s,
+            name: newSubjName.trim(),
+            short: newSubjShort.trim().toUpperCase(),
+            color: newSubjColor,
+            defaultGroupPattern: newSubjPattern.trim() || undefined
+          };
+        }
+        return s;
+      });
 
-    const nextSubjs = [...appState.subjects, newSubj];
+      onChangeAppState({
+        ...appState,
+        subjects: nextSubjs,
+        planLekcji: {
+          ...appState.planLekcji,
+          subjects: nextSubjs
+        }
+      });
 
-    onChangeAppState({
-      ...appState,
-      subjects: nextSubjs,
-      planLekcji: {
-        ...appState.planLekcji,
-        subjects: nextSubjs
-      }
-    });
+      setEditingSubjectId(null);
+      setNewSubjName('');
+      setNewSubjShort('');
+      setIsSubjShortManual(false);
+      setNewSubjPattern('');
+      const nextColor = PALETTE_COLORS[nextSubjs.length % PALETTE_COLORS.length] || '#16a34a';
+      setNewSubjColor(nextColor);
+      showNoti('Zaktualizowano dane przedmiotu');
+    } else {
+      // Dodawanie nowego przedmiotu
+      const newSubj: Subject = {
+        id: 'sub_' + uid(),
+        name: newSubjName.trim(),
+        short: newSubjShort.trim().toUpperCase(),
+        color: newSubjColor,
+        defaultGroupPattern: newSubjPattern.trim() || undefined
+      };
 
+      const nextSubjs = [...appState.subjects, newSubj];
+
+      onChangeAppState({
+        ...appState,
+        subjects: nextSubjs,
+        planLekcji: {
+          ...appState.planLekcji,
+          subjects: nextSubjs
+        }
+      });
+
+      setNewSubjName('');
+      setNewSubjShort('');
+      setIsSubjShortManual(false);
+      setNewSubjPattern('');
+      const nextColor = PALETTE_COLORS[nextSubjs.length % PALETTE_COLORS.length] || '#16a34a';
+      setNewSubjColor(nextColor);
+      showNoti(`Dodano przedmiot: ${newSubj.name}`);
+    }
+  };
+
+  const handleStartEditSubject = (sub: Subject) => {
+    setEditingSubjectId(sub.id);
+    setNewSubjName(sub.name);
+    setNewSubjShort(sub.short);
+    setIsSubjShortManual(true); // Treat existing as manual so it doesn't get auto-overwritten unless they want it to
+    setNewSubjColor(sub.color);
+    setNewSubjPattern(sub.defaultGroupPattern || '');
+  };
+
+  const handleCancelEditSubject = () => {
+    setEditingSubjectId(null);
     setNewSubjName('');
     setNewSubjShort('');
-    const nextColor = PALETTE_COLORS[nextSubjs.length % PALETTE_COLORS.length] || '#16a34a';
+    setIsSubjShortManual(false);
+    setNewSubjPattern('');
+    const nextColor = PALETTE_COLORS[appState.subjects.length % PALETTE_COLORS.length] || '#16a34a';
     setNewSubjColor(nextColor);
-    showNoti(`Dodano przedmiot: ${newSubj.name}`);
   };
 
   const handleRemoveSubject = (id: string) => {
@@ -1236,6 +1296,9 @@ export default function KreatorSzkoly({
             assignments: appState.planLekcji.assignments.filter(a => a.subjectId !== id)
           }
         });
+        if (editingSubjectId === id) {
+          handleCancelEditSubject();
+        }
         showNoti('Przedmiot został usunięty');
       }
     );
@@ -1246,14 +1309,72 @@ export default function KreatorSzkoly({
   const [newTLast, setNewTLast] = useState('');
   const [newTAbbr, setNewTAbbr] = useState('');
   const [newTMaxHours, setNewTMaxHours] = useState(18);
+  const [newTOvertimeHours, setNewTOvertimeHours] = useState(0);
+  const [isTAbbrManual, setIsTAbbrManual] = useState(false);
+  const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
   const [newTColor, setNewTColor] = useState(() => PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706');
+  const [newTAvailability, setNewTAvailability] = useState<string[]>([]);
 
   // Trigger auto abbr
-  const handleTeacherNameBlur = () => {
-    if (newTFirst && newTLast && !newTAbbr) {
-      const generated = genAbbr(newTFirst, newTLast);
-      const unique = ensureUniqueAbbr(generated, appState.teachers.map(t => t.abbr));
-      setNewTAbbr(unique);
+  const updateTAbbrAuto = (f: string, l: string) => {
+    if (!isTAbbrManual) {
+      const generated = genAbbr(f, l);
+      setNewTAbbr(generated);
+    }
+  };
+
+  const handleStartEditTeacher = (t: Teacher) => {
+    setEditingTeacherId(t.id);
+    setNewTFirst(t.first);
+    setNewTLast(t.last);
+    setNewTAbbr(t.abbr);
+    setIsTAbbrManual(true);
+    setNewTMaxHours(t.maxHours || 18);
+    setNewTOvertimeHours(t.overtimeHours || 0);
+    setNewTColor(t.color || '#d97706');
+
+    // Load or generate list of available slots
+    if (t.availability) {
+      setNewTAvailability(t.availability);
+    } else {
+      const defaultAvail: string[] = [];
+      const hList = appState.planLekcji.hours && appState.planLekcji.hours.length > 0 
+        ? appState.planLekcji.hours 
+        : (hoursList && hoursList.length > 0 ? hoursList : [{ num: 1, start: '08:00', end: '08:45' }]);
+      for (let day = 0; day < 5; day++) {
+        hList.forEach(h => {
+          defaultAvail.push(`${day}-${h.num}`);
+        });
+      }
+      setNewTAvailability(defaultAvail);
+    }
+  };
+
+  const handleCancelEditTeacher = () => {
+    setEditingTeacherId(null);
+    setNewTFirst('');
+    setNewTLast('');
+    setNewTAbbr('');
+    setIsTAbbrManual(false);
+    setNewTMaxHours(18);
+    setNewTOvertimeHours(0);
+    setNewTAvailability([]);
+    const nextColor = PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706';
+    setNewTColor(nextColor);
+  };
+
+  const setAllAvailability = (active: boolean) => {
+    if (active) {
+      const list: string[] = [];
+      const hList = appState.planLekcji.hours && appState.planLekcji.hours.length > 0 ? appState.planLekcji.hours : hoursList;
+      for (let d = 0; d < 5; d++) {
+        hList.forEach(h => {
+          list.push(`${d}-${h.num}`);
+        });
+      }
+      setNewTAvailability(list);
+    } else {
+      setNewTAvailability([]);
     }
   };
 
@@ -1261,39 +1382,84 @@ export default function KreatorSzkoly({
     e.preventDefault();
     if (!newTFirst.trim() || !newTLast.trim() || !newTAbbr.trim()) return;
 
+    const formattedAbbr = newTAbbr.trim().toUpperCase();
+
     // Check for unique abbr
-    if (appState.teachers.some(t => t.abbr.toUpperCase() === newTAbbr.trim().toUpperCase())) {
+    if (appState.teachers.some(t => t.id !== editingTeacherId && t.abbr.toUpperCase() === formattedAbbr)) {
       showNoti('Ten skrót nauczyciela jest już zajęty!', 'info');
       return;
     }
 
-    const newTeacher: Teacher = {
-      id: 't_' + uid(),
-      first: newTFirst.trim(),
-      last: newTLast.trim(),
-      abbr: newTAbbr.trim().toUpperCase(),
-      maxHours: newTMaxHours,
-      color: newTColor
-    };
+    if (editingTeacherId) {
+      // Edycja nauczyciela
+      const nextT = appState.teachers.map(t => {
+        if (t.id === editingTeacherId) {
+          return {
+            ...t,
+            first: newTFirst.trim(),
+            last: newTLast.trim(),
+            abbr: formattedAbbr,
+            maxHours: Number(newTMaxHours),
+            overtimeHours: Number(newTOvertimeHours) || undefined,
+            color: newTColor,
+            availability: newTAvailability
+          };
+        }
+        return t;
+      });
 
-    const nextT = [...appState.teachers, newTeacher];
+      onChangeAppState({
+        ...appState,
+        teachers: nextT,
+        planLekcji: {
+          ...appState.planLekcji,
+          teachers: nextT
+        }
+      });
 
-    onChangeAppState({
-      ...appState,
-      teachers: nextT,
-      planLekcji: {
-        ...appState.planLekcji,
-        teachers: nextT
-      }
-    });
+      setEditingTeacherId(null);
+      setNewTFirst('');
+      setNewTLast('');
+      setNewTAbbr('');
+      setIsTAbbrManual(false);
+      setNewTMaxHours(18);
+      setNewTOvertimeHours(0);
+      const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
+      setNewTColor(nextColor);
+      showNoti('Zaktualizowano dane nauczyciela');
+    } else {
+      // Dodawanie nowego nauczyciela
+      const newTeacher: Teacher = {
+        id: 't_' + uid(),
+        first: newTFirst.trim(),
+        last: newTLast.trim(),
+        abbr: formattedAbbr,
+        maxHours: Number(newTMaxHours),
+        overtimeHours: Number(newTOvertimeHours) || undefined,
+        color: newTColor
+      };
 
-    setNewTFirst('');
-    setNewTLast('');
-    setNewTAbbr('');
-    setNewTMaxHours(18);
-    const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
-    setNewTColor(nextColor);
-    showNoti(`Dodano nauczyciela: ${newTeacher.first} ${newTeacher.last}`);
+      const nextT = [...appState.teachers, newTeacher];
+
+      onChangeAppState({
+        ...appState,
+        teachers: nextT,
+        planLekcji: {
+          ...appState.planLekcji,
+          teachers: nextT
+        }
+      });
+
+      setNewTFirst('');
+      setNewTLast('');
+      setNewTAbbr('');
+      setIsTAbbrManual(false);
+      setNewTMaxHours(18);
+      setNewTOvertimeHours(0);
+      const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
+      setNewTColor(nextColor);
+      showNoti(`Dodano nauczyciela: ${newTeacher.first} ${newTeacher.last}`);
+    }
   };
 
   const handleRemoveTeacher = (id: string) => {
@@ -1312,6 +1478,9 @@ export default function KreatorSzkoly({
             assignments: appState.planLekcji.assignments.filter(a => a.teacherId !== id)
           }
         });
+        if (editingTeacherId === id) {
+          handleCancelEditTeacher();
+        }
         showNoti('Nauczyciel został usunięty');
       }
     );
@@ -1372,6 +1541,22 @@ export default function KreatorSzkoly({
   const [newAsgGroup, setNewAsgGroup] = useState('');
   const [newAsgHours, setNewAsgHours] = useState(2);
   const [newAsgBlockSize, setNewAsgBlockSize] = useState<number>(1); // default single 1h
+  const [newAsgLinkedClasses, setNewAsgLinkedClasses] = useState<string[]>([]);
+
+  const autoSelectGroupForAssignment = (clsId: string, subjId: string) => {
+    if (!clsId || !subjId) return;
+    const selectedSubj = appState.subjects.find(s => s.id === subjId);
+    if (selectedSubj && selectedSubj.defaultGroupPattern) {
+      const pattern = selectedSubj.defaultGroupPattern.toLowerCase();
+      const classGrps = appState.planLekcji.schoolGroups.filter(g => g.classId === clsId);
+      const foundGrp = classGrps.find(g => g.name.toLowerCase().includes(pattern));
+      if (foundGrp) {
+        setNewAsgGroup(foundGrp.id);
+        return;
+      }
+    }
+    setNewAsgGroup('');
+  };
 
   const handleAddAssignment = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1388,7 +1573,8 @@ export default function KreatorSzkoly({
       roomId: newAsgRoom || null,
       groupId: newAsgGroup || null,
       hoursPerWeek: newAsgHours,
-      preferredBlockSize: newAsgBlockSize
+      preferredBlockSize: newAsgBlockSize,
+      linkedClassIds: newAsgLinkedClasses.length > 0 ? newAsgLinkedClasses : undefined
     };
 
     onChangeAppState({
@@ -1402,6 +1588,7 @@ export default function KreatorSzkoly({
     setNewAsgRoom('');
     setNewAsgHours(2);
     setNewAsgBlockSize(1);
+    setNewAsgLinkedClasses([]);
     showNoti('Dodano przydział lekcyjny');
   };
 
@@ -2670,7 +2857,9 @@ export default function KreatorSzkoly({
                 
                 {/* Form column */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit">
-                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">Dodaj Przedmiot</h3>
+                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">
+                    {editingSubjectId ? '📝 Edytuj Przedmiot' : '➕ Dodaj Przedmiot'}
+                  </h3>
                   <form onSubmit={handleAddSubject} className="space-y-3">
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold">Pełna nazwa przedmiotu *</label>
@@ -2680,7 +2869,13 @@ export default function KreatorSzkoly({
                         placeholder="np. Język niemiecki"
                         className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                         value={newSubjName}
-                        onChange={(e) => setNewSubjName(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewSubjName(val);
+                          if (!isSubjShortManual) {
+                            setNewSubjShort(subjectAbbr(val));
+                          }
+                        }}
                       />
                     </div>
                     <div className="space-y-1">
@@ -2692,9 +2887,27 @@ export default function KreatorSzkoly({
                         placeholder="np. NIEM"
                         className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
                         value={newSubjShort}
-                        onChange={(e) => setNewSubjShort(e.target.value)}
+                        onChange={(e) => {
+                          setNewSubjShort(e.target.value);
+                          setIsSubjShortManual(true);
+                        }}
                       />
                     </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold block">Słowo kluczowe podgrupy (opcjonalne)</label>
+                      <input 
+                        type="text" 
+                        placeholder="np. religia, ang, niem, wf"
+                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-indigo-600 placeholder-slate-300"
+                        value={newSubjPattern}
+                        onChange={(e) => setNewSubjPattern(e.target.value)}
+                      />
+                      <p className="text-[9px] text-slate-400 leading-normal pt-1">
+                        Służy do automatycznego przypisywania podgrupy klasy (np. wpisanie <strong>religia</strong> sprawi, że zajęcia z religii domyślnie trafią do podgrupy "religia" w danej klasie).
+                      </p>
+                    </div>
+
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold block mb-1.5">Kolor kafelka przedmiotu (Wybierz spośród 60 kolorów)</label>
                       <div className="grid grid-cols-8 gap-1 max-h-24 overflow-y-auto p-1.5 border border-slate-200 bg-slate-50 rounded-lg">
@@ -2712,9 +2925,26 @@ export default function KreatorSzkoly({
                         ))}
                       </div>
                     </div>
-                    <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow mt-2">
-                      Zarejestruj przedmiot
-                    </button>
+
+                    <div className="flex gap-2">
+                      <button 
+                        type="submit" 
+                        className={`grow py-2 text-white font-bold text-xs rounded-lg shadow mt-2 transition cursor-pointer ${
+                          editingSubjectId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        {editingSubjectId ? 'Zaktualizuj dane' : 'Zarejestruj przedmiot'}
+                      </button>
+                      {editingSubjectId && (
+                        <button 
+                          type="button" 
+                          onClick={handleCancelEditSubject}
+                          className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg mt-2 cursor-pointer transition"
+                        >
+                          Anuluj
+                        </button>
+                      )}
+                    </div>
                   </form>
                 </div>
 
@@ -2724,7 +2954,7 @@ export default function KreatorSzkoly({
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Planowany kanon przedmiotowy</h3>
                     <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.subjects.length}</span>
                   </div>
-                  <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto">
+                  <div className="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
                     {appState.subjects.map((sub) => (
                       <div key={sub.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
                         <div className="flex items-center gap-3">
@@ -2732,16 +2962,33 @@ export default function KreatorSzkoly({
                             {sub.short}
                           </span>
                           <div>
-                            <span className="text-xs font-black text-slate-900 leading-none">{sub.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-slate-900 leading-none">{sub.name}</span>
+                              {sub.defaultGroupPattern && (
+                                <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[8.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                  Grupa: {sub.defaultGroupPattern}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Identyfikator planowy: {sub.id}</p>
                           </div>
                         </div>
-                        <button 
-                          onClick={() => handleRemoveSubject(sub.id)}
-                          className="p-1 px-2 text-slate-400 hover:text-red-500 rounded"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <div className="flex gap-1">
+                          <button 
+                            onClick={() => handleStartEditSubject(sub)}
+                            className="p-1 px-2 text-slate-400 hover:text-indigo-600 rounded select-none cursor-pointer"
+                            title="Edytuj przedmiot"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button 
+                            onClick={() => handleRemoveSubject(sub.id)}
+                            className="p-1 px-2 text-slate-400 hover:text-red-500 rounded select-none cursor-pointer"
+                            title="Usuń przedmiot"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {appState.subjects.length === 0 && (
@@ -2775,7 +3022,9 @@ export default function KreatorSzkoly({
                 
                 {/* Form column */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit">
-                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">Dodaj Nauczyciela</h3>
+                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">
+                    {editingTeacherId ? '📝 Edytuj dane nauczyciela' : '➕ Dodaj Nauczyciela'}
+                  </h3>
                   <form onSubmit={handleAddTeacher} className="space-y-3">
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold">Imię</label>
@@ -2785,8 +3034,11 @@ export default function KreatorSzkoly({
                         placeholder="np. Jan"
                         className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                         value={newTFirst}
-                        onChange={(e) => setNewTFirst(e.target.value)}
-                        onBlur={handleTeacherNameBlur}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewTFirst(val);
+                          updateTAbbrAuto(val, newTLast);
+                        }}
                       />
                     </div>
                     <div className="space-y-1">
@@ -2797,24 +3049,30 @@ export default function KreatorSzkoly({
                         placeholder="np. Kowalski"
                         className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                         value={newTLast}
-                        onChange={(e) => setNewTLast(e.target.value)}
-                        onBlur={handleTeacherNameBlur}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewTLast(val);
+                          updateTAbbrAuto(newTFirst, val);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold">Inicjały (Abbr)</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="np. JKOW"
+                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
+                        value={newTAbbr}
+                        onChange={(e) => {
+                          setNewTAbbr(e.target.value.toUpperCase());
+                          setIsTAbbrManual(true);
+                        }}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold">Inicjały (Abbr)</label>
-                        <input 
-                          type="text" 
-                          required
-                          placeholder="np. JKOW"
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
-                          value={newTAbbr}
-                          onChange={(e) => setNewTAbbr(e.target.value.toUpperCase())}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold">Pensum tygodn.</label>
+                        <label className="text-[10px] text-slate-400 font-bold">Pensum (godz.)</label>
                         <input 
                           type="number" 
                           required
@@ -2824,6 +3082,19 @@ export default function KreatorSzkoly({
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-semibold text-slate-800"
                           value={newTMaxHours}
                           onChange={(e) => setNewTMaxHours(parseInt(e.target.value) || 18)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-indigo-600 font-bold">Nadgodziny</label>
+                        <input 
+                          type="number" 
+                          required
+                          min={0}
+                          max={40}
+                          placeholder="0"
+                          className="w-full px-3 py-1.5 border border-indigo-100 bg-indigo-50/35 rounded-lg text-xs outline-none font-semibold text-indigo-800"
+                          value={newTOvertimeHours}
+                          onChange={(e) => setNewTOvertimeHours(parseInt(e.target.value) || 0)}
                         />
                       </div>
                     </div>
@@ -2846,9 +3117,23 @@ export default function KreatorSzkoly({
                       </div>
                     </div>
 
-                    <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow mt-2">
-                      Stwórz profil nauczyciela
-                    </button>
+                    <div className="flex gap-2 pt-2">
+                      <button 
+                        type="submit" 
+                        className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow"
+                      >
+                        {editingTeacherId ? 'Zapisz zmiany' : 'Stwórz profil nauczyciela'}
+                      </button>
+                      {editingTeacherId && (
+                        <button 
+                          type="button" 
+                          onClick={handleCancelEditTeacher}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg border border-slate-200"
+                        >
+                          Anuluj
+                        </button>
+                      )}
+                    </div>
                   </form>
                 </div>
 
@@ -2861,7 +3146,8 @@ export default function KreatorSzkoly({
                   <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
                     {appState.teachers.map((t) => {
                       const assignedHours = teacherTotalHoursMap[t.id] || 0;
-                      const exceed = assignedHours > (t.maxHours || 18);
+                      const limitSum = (t.maxHours || 18) + (t.overtimeHours || 0);
+                      const exceed = assignedHours > limitSum;
                       return (
                         <div key={t.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
                           <div className="flex items-center gap-3">
@@ -2870,22 +3156,34 @@ export default function KreatorSzkoly({
                             </span>
                             <div>
                               <span className="text-xs font-black text-slate-900 leading-none">{t.first} {t.last}</span>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] text-slate-400 font-semibold">Etat limit: {t.maxHours}h</span>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                                <span className="text-[10px] text-slate-400 font-semibold">
+                                  Pensum: {t.maxHours}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}
+                                </span>
                                 <span className={`text-[10px] px-1.5 py-0.2 rounded font-black ${
                                   exceed ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
                                 }`}>
-                                  Przydzielone: {assignedHours}h / {t.maxHours || 18}h
+                                  Przydział: {assignedHours}h / {limitSum}h
                                 </span>
                               </div>
                             </div>
                           </div>
-                          <button 
-                            onClick={() => handleRemoveTeacher(t.id)}
-                            className="p-1 px-2 text-slate-400 hover:text-red-500 rounded"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button 
+                              onClick={() => handleStartEditTeacher(t)}
+                              className="p-1 px-2 text-slate-400 hover:text-blue-600 rounded"
+                              title="Edytuj profil"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button 
+                              onClick={() => handleRemoveTeacher(t.id)}
+                              className="p-1 px-2 text-slate-400 hover:text-red-500 rounded"
+                              title="Usuń nauczyciela"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -2904,6 +3202,237 @@ export default function KreatorSzkoly({
                   Dalej: Korytarze i dyżury <ArrowRight size={14} />
                 </button>
               </div>
+
+              {/* 🧑‍🏫 Teacher Edit Modal Over Creator */}
+              {editingTeacherId !== null && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                  <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                    {/* Modal Header */}
+                    <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🧑‍🏫</span>
+                        <div>
+                          <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Edycja Profilu Nauczyciela</h3>
+                          <p className="text-[11px] text-slate-500 font-medium">Identyfikator: <span className="font-mono text-slate-600">{editingTeacherId}</span></p>
+                        </div>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={handleCancelEditTeacher}
+                        className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    {/* Modal Body */}
+                    <div className="p-6 overflow-y-auto space-y-6 flex-1">
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                        
+                        {/* Left Column: Form Details */}
+                        <div className="lg:col-span-5 space-y-4">
+                          <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                            👤 Informacje podstawowe
+                          </h4>
+                          
+                          <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-bold col-span-2">Imię</label>
+                              <input 
+                                type="text" 
+                                required
+                                placeholder="np. Jan"
+                                className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 font-medium"
+                                value={newTFirst}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setNewTFirst(val);
+                                  updateTAbbrAuto(val, newTLast);
+                                }}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-bold col-span-2">Nazwisko</label>
+                              <input 
+                                type="text" 
+                                required
+                                placeholder="np. Kowalski"
+                                className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 font-medium"
+                                value={newTLast}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setNewTLast(val);
+                                  updateTAbbrAuto(newTFirst, val);
+                                }}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-500 font-bold col-span-2">Inicjały (Skrót na planie)</label>
+                              <input 
+                                type="text" 
+                                required
+                                placeholder="np. JKOW"
+                                className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-slate-800 uppercase focus:border-blue-500"
+                                value={newTAbbr}
+                                onChange={(e) => {
+                                  setNewTAbbr(e.target.value.toUpperCase());
+                                  setIsTAbbrManual(true);
+                                }}
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[10px] text-slate-500 font-bold col-span-2">Pensum (godz.)</label>
+                                <input 
+                                  type="number" 
+                                  required
+                                  min={1}
+                                  max={40}
+                                  placeholder="18"
+                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-semibold text-slate-800 focus:border-blue-500"
+                                  value={newTMaxHours}
+                                  onChange={(e) => setNewTMaxHours(parseInt(e.target.value) || 18)}
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] text-indigo-600 font-bold col-span-2">Nadgodziny</label>
+                                <input 
+                                  type="number" 
+                                  required
+                                  min={0}
+                                  max={40}
+                                  placeholder="0"
+                                  className="w-full px-3 py-1.5 border border-indigo-150 bg-indigo-50/20 rounded-lg text-xs outline-none font-semibold text-indigo-800 focus:border-indigo-500"
+                                  value={newTOvertimeHours}
+                                  onChange={(e) => setNewTOvertimeHours(parseInt(e.target.value) || 0)}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5 col-span-2">
+                              <label className="text-[10px] text-slate-500 font-bold block col-span-2">Kolor profilu</label>
+                              <div className="grid grid-cols-8 gap-0.5 p-1.5 border border-slate-200 bg-white rounded-lg max-h-24 overflow-y-auto">
+                                {PALETTE_COLORS.map(c => (
+                                  <button
+                                    type="button"
+                                    key={c}
+                                    onClick={() => setNewTColor(c)}
+                                    className={`w-4.5 h-4.5 rounded-full border shrink-0 transition ${
+                                      newTColor === c ? 'ring-2 ring-blue-500 scale-110 shadow-sm' : 'border-slate-100 hover:scale-110'
+                                    }`}
+                                    style={{ backgroundColor: c }}
+                                    title={c}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right Column: Weekly Availability Grid */}
+                        <div className="lg:col-span-7 space-y-3 flex flex-col">
+                          <div className="flex justify-between items-center">
+                            <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                              📅 Godziny Dostępności Nauczyciela
+                            </h4>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setAllAvailability(true)}
+                                className="text-[9px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-0.5 rounded font-bold border border-emerald-200 transition"
+                              >
+                                Zaznacz wszystkie
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAllAvailability(false)}
+                                className="text-[9px] bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 py-0.5 rounded font-bold border border-slate-300 transition"
+                              >
+                                Odznacz wszystkie
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-[10px] text-slate-400 leading-normal">
+                            Kliknij na poszczególne godziny na planie, aby przełączać status dostępności nauczyciela we wskazanych porach. Zielone komórki oznaczają gotowość do prowadzenia zajęć.
+                          </p>
+
+                          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white flex-1 min-h-[250px] overflow-y-auto max-h-[300px]">
+                            <table className="w-full border-collapse text-left text-xs">
+                              <thead className="sticky top-0 bg-white z-[10]">
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                  <th className="p-2 font-bold text-slate-500 uppercase text-[9px] w-14 border-r border-slate-150 text-center">Lekcja</th>
+                                  {['Pn', 'Wt', 'Śr', 'Cz', 'Pt'].map((dayName, dayIndex) => (
+                                    <th key={dayIndex} className="p-2 font-bold text-slate-750 text-center uppercase tracking-wider text-[9px] border-r border-slate-100 last:border-r-0">
+                                      {dayName}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-150">
+                                {(appState.planLekcji.hours && appState.planLekcji.hours.length > 0 ? appState.planLekcji.hours : hoursList).map((h) => (
+                                  <tr key={h.num} className="hover:bg-slate-55">
+                                    <td className="p-1 border-r border-slate-150 bg-slate-50 font-bold text-slate-600 text-center">
+                                      <div className="text-[9px]">Lekcja {h.num}</div>
+                                      <div className="text-[8px] text-slate-400 font-normal leading-none">{h.start}-{h.end}</div>
+                                    </td>
+                                    {[0, 1, 2, 3, 4].map((dayIndex) => {
+                                      const code = `${dayIndex}-${h.num}`;
+                                      const isAvailable = newTAvailability.includes(code);
+                                      return (
+                                        <td 
+                                          key={dayIndex} 
+                                          onClick={() => {
+                                            if (newTAvailability.includes(code)) {
+                                              setNewTAvailability(newTAvailability.filter(x => x !== code));
+                                            } else {
+                                              setNewTAvailability([...newTAvailability, code]);
+                                            }
+                                          }}
+                                          className={`p-1.5 text-center cursor-pointer select-none transition-all border-r last:border-r-0 border-slate-100 ${
+                                            isAvailable 
+                                              ? 'bg-emerald-50 text-emerald-800' 
+                                              : 'bg-rose-50 text-rose-500/80 line-through decoration-rose-300'
+                                          }`}
+                                        >
+                                          <div className="font-extrabold uppercase text-[8px] tracking-wider">
+                                            {isAvailable ? '✓ Dostępny' : '✗ Zajęty'}
+                                          </div>
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+                      <button 
+                        type="button" 
+                        onClick={handleCancelEditTeacher}
+                        className="px-4 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-sm transition"
+                      >
+                        Anuluj
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={handleAddTeacher}
+                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
+                      >
+                        Zapisz zmiany profilu
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -3094,8 +3623,10 @@ export default function KreatorSzkoly({
                         className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                         value={newAsgClass}
                         onChange={(e) => {
-                          setNewAsgClass(e.target.value);
-                          setNewAsgGroup(''); // reset group
+                          const clsId = e.target.value;
+                          setNewAsgClass(clsId);
+                          setNewAsgGroup(''); // reset group first
+                          autoSelectGroupForAssignment(clsId, newAsgSubject);
                         }}
                       >
                         <option value="">Wybierz klasę...</option>
@@ -3142,7 +3673,11 @@ export default function KreatorSzkoly({
                           required
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                           value={newAsgSubject}
-                          onChange={(e) => setNewAsgSubject(e.target.value)}
+                          onChange={(e) => {
+                            const subjId = e.target.value;
+                            setNewAsgSubject(subjId);
+                            autoSelectGroupForAssignment(newAsgClass, subjId);
+                          }}
                         >
                           <option value="">Wybierz...</option>
                           {appState.subjects.map(s => (
@@ -3195,6 +3730,47 @@ export default function KreatorSzkoly({
                       </select>
                     </div>
 
+                    <div className="space-y-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1 select-none">
+                        👥 Łączenie oddziałów (Grupa międzyoddziałowa)
+                      </label>
+                      <p className="text-[9px] text-slate-400 leading-normal select-none">
+                        Chcesz połączyć te zajęcia w grupę międzyoddziałową (np. wspólny WF, religia, język)? Wybierz dodatkowe klasy biorące razem udział w tych lekcjach:
+                      </p>
+                      
+                      {newAsgClass ? (
+                        <div className="flex flex-wrap gap-1 mt-1 max-h-24 overflow-y-auto pr-1">
+                          {appState.classes
+                            .filter(c => c.id !== newAsgClass)
+                            .map(c => {
+                              const isLinked = newAsgLinkedClasses.includes(c.id);
+                              return (
+                                <button
+                                  type="button"
+                                  key={c.id}
+                                  onClick={() => {
+                                    if (isLinked) {
+                                      setNewAsgLinkedClasses(newAsgLinkedClasses.filter(id => id !== c.id));
+                                    } else {
+                                      setNewAsgLinkedClasses([...newAsgLinkedClasses, c.id]);
+                                    }
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                                    isLinked
+                                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {isLinked ? '✓ ' : ''}kl. {c.name}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <p className="text-[9px] text-slate-400 italic">Najpierw wybierz główną klasę powyżej.</p>
+                      )}
+                    </div>
+
                     <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow mt-3 flex items-center justify-center gap-1.5 transition">
                       <Plus size={14} /> Przypisz lekcję
                     </button>
@@ -3229,6 +3805,11 @@ export default function KreatorSzkoly({
                                 <span className="text-xs font-black text-slate-900">{s.name}</span>
                                 {grp && (
                                   <span className="bg-blue-100 text-blue-700 font-extrabold px-1.5 py-0.2 rounded text-[8px] uppercase">{grp.name}</span>
+                                )}
+                                {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
+                                  <span className="bg-indigo-55 bg-indigo-50 text-indigo-750 border border-indigo-150 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase flex items-center gap-0.5">
+                                    👥 Międzyoddziałowy: {[cls.name, ...asg.linkedClassIds.map(id => appState.classes.find(c => c.id === id)?.name)].filter(Boolean).join(' + ')}
+                                  </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-0.5 flex-wrap">

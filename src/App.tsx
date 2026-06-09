@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  AppState, SchedData, ArchiveEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom
+  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom
 } from './types';
 import { 
-  getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes 
+  getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
 } from './utils';
 import PlanKlas from './components/PlanKlas';
 import PlanSal from './components/PlanSal';
@@ -12,9 +12,10 @@ import KreatorSzkoly from './components/KreatorSzkoly';
 import Wydruki from './components/Wydruki';
 import Statystyki from './components/Statystyki';
 import OProgramie from './components/OProgramie';
+import SnapshotManager from './components/SnapshotManager';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search
 } from 'lucide-react';
 
 function sortAppState(resolved: AppState): AppState {
@@ -104,8 +105,17 @@ export default function App() {
     return [];
   });
 
+  const [snapshots, setSnapshots] = useState<SnapshotEntry[]>(() => {
+    const saved = localStorage.getItem('saleplan_v3_snapshots');
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { }
+    }
+    return [];
+  });
+
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie'>('kreator');
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const [showSnapshotManager, setShowSnapshotManager] = useState(false);
 
   const handleUpdateAppState = (newState: AppState | ((prev: AppState) => AppState)) => {
     setAppState(prev => {
@@ -123,6 +133,7 @@ export default function App() {
   const [redoStack, setRedoStack] = useState<SchedData[]>([]);
 
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -146,18 +157,69 @@ export default function App() {
     }
   };
 
-  // ── LOCALSTORAGE PERSISTENCE EFFECTS ──
-  useEffect(() => {
-    localStorage.setItem('saleplan_v3_app_state', JSON.stringify(appState));
-  }, [appState]);
+  // ── LOCALSTORAGE PERSISTENCE EFFECTS (DEBOUNCED) ──
+  const isInitialMount = React.useRef(true);
+  const stateRef = React.useRef({ appState, schedData });
 
+  // Update stateRef on edits to ensure the latest values are captured 
   useEffect(() => {
-    localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(schedData));
-  }, [schedData]);
+    stateRef.current = { appState, schedData };
+  }, [appState, schedData]);
 
+  // Unified debounced save effect for appState and schedData
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    setSaveStatus('dirty');
+
+    const handler = setTimeout(() => {
+      setSaveStatus('saving');
+      // Elegant micro-delay to allow visual status feedback
+      setTimeout(() => {
+        try {
+          localStorage.setItem('saleplan_v3_app_state', JSON.stringify(stateRef.current.appState));
+          localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(stateRef.current.schedData));
+          setSaveStatus('saved');
+        } catch (e) {
+          console.error('Błąd zapisu autozapisu', e);
+          setSaveStatus('saved');
+        }
+      }, 250);
+    }, 1000);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [appState, schedData]);
+
+  // Unload fallback to secure any unsaved drafts instantly
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        localStorage.setItem('saleplan_v3_app_state', JSON.stringify(stateRef.current.appState));
+        localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(stateRef.current.schedData));
+      } catch (e) {
+        console.error('Błąd zapisu przy opuszczeniu strony', e);
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
+  // Sync archive immediately (low frequency, separate key)
   useEffect(() => {
     localStorage.setItem('saleplan_v3_archive', JSON.stringify(archive));
   }, [archive]);
+
+  // Sync snapshots immediately
+  useEffect(() => {
+    localStorage.setItem('saleplan_v3_snapshots', JSON.stringify(snapshots));
+  }, [snapshots]);
 
   // ── UNDO / REDO STATE HANDLERS ──
   const pushToUndo = (stateToSave: SchedData) => {
@@ -227,6 +289,11 @@ export default function App() {
           const asg = assignmentsMap.get(lesson.assignmentId);
           if (!asg) return;
 
+          // Deduplicate inter-class shared lessons: only process them for the primary class
+          if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
+            return;
+          }
+
           const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
           const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
           const roomEtap1 = asg.roomId ? roomsMap.get(asg.roomId) : null;
@@ -275,11 +342,16 @@ export default function App() {
 
           if (assignedColKey) {
             const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
+            const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
+              ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
+              : [];
+            
+            const combinedClasses = [cls.name, ...extraClasses];
             const newCell: SchedCell = {
               teacherAbbr: teacher?.abbr || '?',
               supportTeacherAbbr: suppTeacher?.abbr || undefined,
-              classes: [cls.name],
-              className: cls.name,
+              classes: combinedClasses,
+              className: mergeClassNames(combinedClasses).join('+'),
               subject: subject,
               note: roomEtap1 ? `(sugestia: ${roomEtap1.name})` : undefined,
               _bridgeMeta: {
@@ -308,6 +380,15 @@ export default function App() {
 
     setSchedData(nextSchedData);
     notify(`Zsynchronizowano lekcje! Przeniesiono pomyślnie ${countTransfer} jednostek lekcyjnych.`, 'ok');
+  };
+
+  // ── SNAPSHOT ACTIONS ──
+  const handleRestoreSnapshotState = (restoredAppState: AppState, restoredSchedData: SchedData) => {
+    // Save active schedule into undo history so the user can easily revert a restore action if needed
+    pushToUndo(schedData);
+    handleUpdateAppState(restoredAppState);
+    setSchedData(restoredSchedData);
+    notify('Przywrócono stan planu do wybranego punktu przywracania', 'ok');
   };
 
   // ── JSON BACKUPS ACTIONS ──
@@ -563,6 +644,21 @@ export default function App() {
           </div>
 
           <button 
+            onClick={() => setShowSnapshotManager(true)}
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1.5 bg-slate-950 px-3 py-2 border border-slate-800/85 hover:border-violet-500/50 cursor-pointer"
+            title="Zarządzaj punktami przywracania planu (Snapshots)"
+          >
+            <History size={15} className="text-violet-400" />
+            <span className="hidden lg:inline leading-none">Punkty przywracania</span>
+            <span className="lg:hidden leading-none">Kopie planu</span>
+            {snapshots.length > 0 && (
+              <span className="bg-violet-600 font-extrabold text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center">
+                {snapshots.length}
+              </span>
+            )}
+          </button>
+
+          <button 
             onClick={handleExportBackup}
             className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1"
             title="Pobierz pełny plik konfiguracyjny (JSON)"
@@ -648,6 +744,24 @@ export default function App() {
       <footer className="bg-slate-900 border-t border-slate-950 text-slate-500 py-3 px-6 flex flex-col md:flex-row justify-between items-center gap-3.5 text-[10px] select-none shrink-0 font-medium">
         <div className="flex items-center gap-3">
           <span>Licencja: Apache-2.0 · Offline Client-side App</span>
+          <span className="text-slate-750 font-bold">|</span>
+          <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[9px]">
+            {saveStatus === 'saving' && (
+              <span className="text-amber-400 flex items-center gap-1 select-none">
+                <RefreshCw size={10} className="animate-spin text-amber-400" /> Zapamiętywanie...
+              </span>
+            )}
+            {saveStatus === 'dirty' && (
+              <span className="text-indigo-400 flex items-center gap-1 select-none">
+                ⌛ Oczekiwanie na zapis...
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="text-emerald-500 flex items-center gap-1 select-none">
+                ✓ Wszystkie zmiany zapisane w przeglądarce
+              </span>
+            )}
+          </div>
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
@@ -678,6 +792,16 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      <SnapshotManager
+        isOpen={showSnapshotManager}
+        onClose={() => setShowSnapshotManager(false)}
+        appState={appState}
+        schedData={schedData}
+        snapshots={snapshots}
+        onChangeSnapshots={setSnapshots}
+        onRestoreSnapshot={handleRestoreSnapshotState}
+      />
 
     </div>
   );
