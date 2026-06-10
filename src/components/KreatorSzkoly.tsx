@@ -1611,6 +1611,17 @@ export default function KreatorSzkoly({
   const [newStudType, setNewStudType] = useState<'ni' | 'rewa' | 'wsp'>('ni');
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
 
+  // Memoized current active student information for high performance
+  const activeStudent = useMemo(() => {
+    if (!activeStudentId) return null;
+    return (appState.planLekcji.specialStudents || []).find(s => s.id === activeStudentId) || null;
+  }, [activeStudentId, appState.planLekcji.specialStudents]);
+
+  const activeStudentAssignments = useMemo(() => {
+    if (!activeStudentId) return [];
+    return (appState.planLekcji.specialAssignments || []).filter(a => a.studentId === activeStudentId);
+  }, [activeStudentId, appState.planLekcji.specialAssignments]);
+
   // States for student edit modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
@@ -1834,6 +1845,13 @@ export default function KreatorSzkoly({
     showNoti('Dodano indywidualne zajęcie dla ucznia (w modalu)');
   };
 
+  // Memoized maps for optimized O(1) lookups
+  const classesMap = useMemo(() => new Map(appState.classes.map(c => [c.id, c])), [appState.classes]);
+  const teachersMap = useMemo(() => new Map(appState.teachers.map(t => [t.id, t])), [appState.teachers]);
+  const subjectsMap = useMemo(() => new Map(appState.subjects.map(s => [s.id, s])), [appState.subjects]);
+  const roomsMap = useMemo(() => new Map(appState.planLekcji.rooms.map(r => [r.id, r])), [appState.planLekcji.rooms]);
+  const groupsMap = useMemo(() => new Map(appState.planLekcji.schoolGroups.map(g => [g.id, g])), [appState.planLekcji.schoolGroups]);
+
   // --- Real-time statistics summaries for assignments ---
   const teacherTotalHoursMap = useMemo(() => {
     const hours: Record<string, number> = {};
@@ -1853,7 +1871,7 @@ export default function KreatorSzkoly({
     return hours;
   }, [appState.planLekcji.assignments]);
 
-  // General App Statistics for Summary Step 9
+  // General App Statistics for Summary Step 10 (Refined precise dependencies)
   const statsSummary = useMemo(() => {
     return {
       blds: appState.buildings.length,
@@ -1867,7 +1885,17 @@ export default function KreatorSzkoly({
       specialStudents: (appState.planLekcji.specialStudents || []).length,
       specialHours: (appState.planLekcji.specialAssignments || []).reduce((sum, a) => sum + a.hoursPerWeek, 0)
     };
-  }, [appState]);
+  }, [
+    appState.buildings,
+    appState.planLekcji.rooms,
+    appState.classes,
+    appState.teachers,
+    appState.subjects,
+    appState.dyzury.miejsca,
+    appState.planLekcji.assignments,
+    appState.planLekcji.specialStudents,
+    appState.planLekcji.specialAssignments
+  ]);
 
   return (
     <div className="flex-1 flex flex-col md:flex-row h-full overflow-hidden bg-slate-50 relative" id="wizard-view">
@@ -4020,11 +4048,11 @@ export default function KreatorSzkoly({
 
                   <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto flex-1">
                     {appState.planLekcji.assignments.map((asg) => {
-                      const cls = appState.classes.find(c => c.id === asg.classId);
-                      const t = appState.teachers.find(tch => tch.id === asg.teacherId);
-                      const s = appState.subjects.find(sb => sb.id === asg.subjectId);
-                      const room = appState.planLekcji.rooms.find(rm => rm.id === asg.roomId);
-                      const grp = appState.planLekcji.schoolGroups.find(g => g.id === asg.groupId);
+                      const cls = classesMap.get(asg.classId);
+                      const t = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+                      const s = subjectsMap.get(asg.subjectId);
+                      const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
+                      const grp = asg.groupId ? groupsMap.get(asg.groupId) : null;
 
                       if (!cls || !s) return null;
 
@@ -4042,7 +4070,7 @@ export default function KreatorSzkoly({
                                 )}
                                 {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
                                   <span className="bg-indigo-55 bg-indigo-50 text-indigo-750 border border-indigo-150 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase flex items-center gap-0.5">
-                                    👥 Międzyoddziałowy: {[cls.name, ...asg.linkedClassIds.map(id => appState.classes.find(c => c.id === id)?.name)].filter(Boolean).join(' + ')}
+                                    👥 Międzyoddziałowy: {[cls.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(Boolean).join(' + ')}
                                   </span>
                                 )}
                               </div>
@@ -4199,7 +4227,7 @@ export default function KreatorSzkoly({
                     <div className="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
                       {(appState.planLekcji.specialStudents || []).map((student) => {
                         const isSelected = activeStudentId === student.id;
-                        const cls = appState.classes.find(c => c.id === student.classId);
+                        const cls = student.classId ? classesMap.get(student.classId) : null;
                         
                         return (
                           <div 
@@ -4264,12 +4292,10 @@ export default function KreatorSzkoly({
 
                 {/* Panel Prawy: Szczegóły wybranego ucznia */}
                 <div className="lg:col-span-2 space-y-6">
-                  {activeStudentId ? (() => {
-                    const student = (appState.planLekcji.specialStudents || []).find(s => s.id === activeStudentId);
-                    if (!student) return <p className="p-8 text-center text-xs text-slate-400">Wybierz ucznia z listy po lewej.</p>;
-
-                    const cls = appState.classes.find(c => c.id === student.classId);
-                    const studAssignments = (appState.planLekcji.specialAssignments || []).filter(a => a.studentId === student.id);
+                  {activeStudentId && activeStudent ? (() => {
+                    const student = activeStudent;
+                    const cls = student.classId ? classesMap.get(student.classId) : null;
+                    const studAssignments = activeStudentAssignments;
                     const supportTeacherIds = student.supportTeacherIds || [];
 
                     return (
@@ -4365,8 +4391,8 @@ export default function KreatorSzkoly({
                               </thead>
                               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                                 {studAssignments.map(asg => {
-                                  const sName = appState.subjects.find(s => s.id === asg.subjectId)?.name || 'Nieznany';
-                                  const tObj = appState.teachers.find(t => t.id === asg.teacherId);
+                                  const sName = subjectsMap.get(asg.subjectId)?.name || 'Nieznany';
+                                  const tObj = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
                                   const tName = tObj ? `${tObj.first[0]}. ${tObj.last} (${tObj.abbr})` : 'Nieprzypisany';
                                   return (
                                     <tr key={asg.id} className="hover:bg-slate-50/50">
@@ -4743,8 +4769,8 @@ export default function KreatorSzkoly({
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                       {studAssignments.map(asg => {
-                        const sName = appState.subjects.find(s => s.id === asg.subjectId)?.name || 'Nieznany';
-                        const tObj = appState.teachers.find(t => t.id === asg.teacherId);
+                        const sName = subjectsMap.get(asg.subjectId)?.name || 'Nieznany';
+                        const tObj = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
                         const tName = tObj ? `${tObj.first[0]}. ${tObj.last} (${tObj.abbr})` : 'Nieprzypisany';
                         return (
                           <tr key={asg.id} className="hover:bg-slate-50/50">
