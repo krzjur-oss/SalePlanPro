@@ -75,6 +75,7 @@ export interface SpecialStudent {
   classId: string | null;
   type: 'ni' | 'rewa' | 'wsp';
   note?: string;
+  supportTeacherIds?: string[]; // Multiple support teachers on regular lessons
 }
 
 export interface SpecialAssignment {
@@ -286,3 +287,12 @@ export interface UndoEntry {
   scope: 'day' | 'year';
   snapshot: any; // schedData state snapshot
 }
+
+export interface AppEventLog {
+  id: string;
+  timestamp: string;
+  actionType: 'restore' | 'import' | 'reset' | 'snapshot_create' | 'snapshot_delete' | 'undo' | 'redo' | 'other';
+  description: string;
+  details?: string;
+}
+

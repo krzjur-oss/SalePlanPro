@@ -1,17 +1,55 @@
 import React, { useMemo, useState } from 'react';
-import { AppState, SchedData } from '../types';
+import { AppState, SchedData, AppEventLog } from '../types';
 import { 
-  BarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, TrendingUp, Info, HelpCircle
+  BarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, TrendingUp, Info, HelpCircle,
+  Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw
 } from 'lucide-react';
 
 interface StatystykiProps {
   appState: AppState;
   schedData: SchedData;
+  historyLogs: AppEventLog[];
+  onClearHistoryLogs: () => void;
 }
 
-export default function Statystyki({ appState, schedData }: StatystykiProps) {
-  const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps'>('general');
+  export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs }: StatystykiProps) {
+  const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps' | 'history'>('general');
+  const [logSearch, setLogSearch] = useState('');
+  const [logFilterType, setLogFilterType] = useState<string>('all');
+
   const pl = appState.planLekcji;
+
+  const filteredLogs = useMemo(() => {
+    return historyLogs.filter(log => {
+      if (!log) return false;
+      const matchesSearch = 
+        log.description.toLowerCase().includes(logSearch.toLowerCase()) || 
+        (log.details && log.details.toLowerCase().includes(logSearch.toLowerCase()));
+      const matchesType = logFilterType === 'all' || log.actionType === logFilterType;
+      return matchesSearch && matchesType;
+    });
+  }, [historyLogs, logSearch, logFilterType]);
+
+  const getLogIconAndColor = (type: string) => {
+    switch (type) {
+      case 'restore':
+        return { icon: <RotateCcw size={15} className="text-emerald-600" />, bg: 'bg-emerald-100', text: 'Punkt przywracania', badgeBg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'import':
+        return { icon: <Upload size={15} className="text-blue-600" />, bg: 'bg-blue-100', text: 'Import / Kopia', badgeBg: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'reset':
+        return { icon: <Trash2 size={15} className="text-red-500" />, bg: 'bg-red-100', text: 'Reset danych', badgeBg: 'bg-red-50 text-red-700 border-red-200' };
+      case 'snapshot_create':
+        return { icon: <Camera size={15} className="text-emerald-600" />, bg: 'bg-emerald-100', text: 'Utworzenie kopii', badgeBg: 'bg-emerald-50 text-emerald-750 border-emerald-200' };
+      case 'snapshot_delete':
+        return { icon: <Trash2 size={15} className="text-emerald-600" />, bg: 'bg-emerald-50', text: 'Usunięcie kopii', badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      case 'undo':
+        return { icon: <Undo2 size={15} className="text-slate-600" />, bg: 'bg-slate-100', text: 'Cofnij (Undo)', badgeBg: 'bg-slate-100 text-slate-700 border-slate-200' };
+      case 'redo':
+        return { icon: <Redo2 size={15} className="text-slate-600" />, bg: 'bg-slate-100', text: 'Ponów (Redo)', badgeBg: 'bg-slate-100 text-slate-750 border-slate-200' };
+      default:
+        return { icon: <Activity size={15} className="text-slate-600" />, bg: 'bg-slate-100', text: 'Inne', badgeBg: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+  };
 
   // --- Map and Lookups ---
   const classesMap = useMemo(() => new Map(pl.classes.map(c => [c.id, c])), [pl.classes]);
@@ -356,6 +394,14 @@ export default function Statystyki({ appState, schedData }: StatystykiProps) {
           >
             Analiza Okienek ({gapsStats.classGaps.length + gapsStats.teacherGaps.length} wykrytych)
           </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
+              activeTab === 'history' ? 'border-indigo-600 text-indigo-700 animate-pulse' : 'border-transparent text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            <History size={13} /> Dziennik Zdarzeń ({historyLogs.length})
+          </button>
         </div>
 
         {/* ======================= TAB: GENERAL CONTENT ======================= */}
@@ -656,6 +702,122 @@ export default function Statystyki({ appState, schedData }: StatystykiProps) {
               )}
             </div>
 
+          </div>
+        )}
+
+        {/* ======================= TAB: HISTORY LOG CONTENT ======================= */}
+        {activeTab === 'history' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 select-none">
+              <div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <History size={15} className="text-indigo-600 animate-spin-slow" />
+                  Dziennik Zdarzeń Systemowych
+                </h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                  Monitorowanie zmian, przywracania stanu i operacji na danych aplikacji
+                </p>
+              </div>
+
+              {historyLogs.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić cały dziennik zdarzeń?')) {
+                      onClearHistoryLogs();
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 font-bold border border-red-200 hover:border-red-300 rounded-xl text-[10.5px] uppercase tracking-wide cursor-pointer transition select-none"
+                >
+                  <Trash2 size={12} />
+                  Wyczyść dziennik
+                </button>
+              )}
+            </div>
+
+            {/* Filter Bar */}
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative flex-1 w-full">
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={logSearch}
+                  onChange={e => setLogSearch(e.target.value)}
+                  placeholder="Filtruj zdarzenia i opisy..."
+                  className="w-full bg-slate-55 border border-slate-250 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/80 transition"
+                />
+              </div>
+
+              <div className="w-full sm:w-56 shrink-0">
+                <select
+                  value={logFilterType}
+                  onChange={e => setLogFilterType(e.target.value)}
+                  className="w-full bg-slate-55 border border-slate-250 rounded-xl py-2 px-3.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/80 cursor-pointer transition"
+                >
+                  <option value="all">Wszystkie rodzaje zdarzeń</option>
+                  <option value="restore">Przywracanie stanu (Restore)</option>
+                  <option value="import">Import planu / plików</option>
+                  <option value="reset">Resety konfiguracji</option>
+                  <option value="snapshot_create">Tworzenie snapshotów</option>
+                  <option value="snapshot_delete">Usuwanie snapshotów</option>
+                  <option value="undo">Cofanie zmian (Undo)</option>
+                  <option value="redo">Ponawianie zmian (Redo)</option>
+                  <option value="other">Inne operacje</option>
+                </select>
+              </div>
+            </div>
+
+            {/* List area */}
+            {filteredLogs.length === 0 ? (
+              <div className="py-12 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-center">
+                <History size={36} className="text-slate-300 mb-2" />
+                <p className="text-xs text-slate-500 font-bold select-none">Brak wpisów spełniających kryteria</p>
+                <p className="text-[10px] text-slate-400 font-semibold uppercase mt-1">Wykonaj jakąś operację (np. undo/redo, zmiana planu, snapshot) lub zmień filtry.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                {filteredLogs.map(log => {
+                  const meta = getLogIconAndColor(log.actionType);
+                  const logDate = new Date(log.timestamp);
+                  return (
+                    <div 
+                      key={log.id} 
+                      className="border border-slate-200/85 hover:border-slate-300 bg-slate-50/40 hover:bg-slate-50 p-4 rounded-xl flex items-start gap-3.5 transition"
+                    >
+                      {/* Left icon badge */}
+                      <div className={`p-2.5 rounded-xl ${meta.bg} shrink-0`}>
+                        {meta.icon}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <span className="font-extrabold text-xs text-slate-900 leading-tight">
+                            {log.description}
+                          </span>
+                          
+                          {/* Beautiful Date & Time Badge */}
+                          <div className="text-[10px] text-slate-400 font-semibold font-mono flex items-center gap-1 shrink-0">
+                            <Clock size={10} />
+                            {logDate.toLocaleDateString('pl-PL')} o {logDate.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </div>
+                        </div>
+
+                        {log.details && (
+                          <p className="text-[11px] text-slate-500 font-medium leading-relaxed bg-slate-100/50 p-2 border border-slate-100 rounded-lg">
+                            {log.details}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Right tag badge */}
+                      <span className={`hidden sm:inline-block font-mono font-bold text-[9px] uppercase tracking-wider px-2 py-1 rounded-md border ${meta.badgeBg} shrink-0 align-middle`}>
+                        {meta.text}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

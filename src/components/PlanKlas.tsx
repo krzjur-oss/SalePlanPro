@@ -4,7 +4,7 @@ import {
 } from '../types';
 import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
-  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter 
+  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles 
 } from 'lucide-react';
 
 const PALETTE_COLORS = [
@@ -829,7 +829,8 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       firstName: specFirstName.trim(),
       lastName: specLastName.trim(),
       classId: specClassId || null,
-      type: specType
+      type: specType,
+      supportTeacherIds: []
     };
 
     onChangeAppState({
@@ -844,6 +845,16 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     setSpecLastName('');
     setSpecClassId('');
     setActiveStudentId(newStudent.id);
+  };
+
+  const handleUpdateSpecialStudent = (updatedStudent: SpecialStudent) => {
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        specialStudents: pl.specialStudents.map(s => s.id === updatedStudent.id ? updatedStudent : s)
+      }
+    });
   };
 
   const handleRemoveSpecialStudent = (id: string, e: React.MouseEvent) => {
@@ -893,6 +904,20 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     setSpecSupportId('');
     setSpecHoursPerW(2);
     setSpecWithClass(false);
+  };
+
+  const handleRemoveSpecialAssignment = (asgId: string) => {
+    if (!confirm('Czy na pewno chcesz usunąć to przypisanie zajęć?')) return;
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        specialAssignments: pl.specialAssignments.filter(a => a.id !== asgId),
+        specialLessons: Object.fromEntries(
+          Object.entries(pl.specialLessons).filter(([_, l]) => l.assignmentId !== asgId)
+        )
+      }
+    });
   };
 
   const currentStudent = useMemo(() => {
@@ -1995,186 +2020,518 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
 
         {/* ── NAUCZANIE SPECJALNE (Moduł specjalny) ── */}
         {activeTab === 'special' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
             
-            {/* Uczniowie specjalni */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">🎓 Uczniowie specjalni</h3>
+            {/* Lewy panel: Uczniowie specjalni */}
+            <div className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
+              <div className="flex items-center gap-2 border-b border-slate-100 pb-3 select-none">
+                <Users size={16} className="text-blue-600" />
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest leading-relaxed">🎓 Uczniowie specjalni</h3>
+              </div>
               
-              <form onSubmit={handleAddSpecialStudent} className="flex flex-col gap-2">
-                <input 
-                  type="text" 
-                  placeholder="Imię" 
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50"
-                  value={specFirstName}
-                  onChange={(e) => setSpecFirstName(e.target.value)}
-                />
-                <input 
-                  type="text" 
-                  placeholder="Nazwisko *" 
-                  required
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50"
-                  value={specLastName}
-                  onChange={(e) => setSpecLastName(e.target.value)}
-                />
-                <select
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
-                  value={specType}
-                  onChange={(e) => setSpecType(e.target.value as any)}
-                >
-                  <option value="ni">Nauczanie Indywidualne (NI)</option>
-                  <option value="rewa">Rewalidacja (Rewa)</option>
-                  <option value="wsp">Wspomaganie (Wsp)</option>
-                </select>
-                <select
-                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
-                  value={specClassId}
-                  onChange={(e) => setSpecClassId(e.target.value)}
-                >
-                  <option value="">Wybierz klasę macierzystą</option>
-                  {pl.classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <button type="submit" className="w-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs">
-                  Dodaj Ucznia
-                </button>
-              </form>
-
-              <div className="space-y-1">
-                {pl.specialStudents.map(s => (
-                  <div
-                    key={s.id}
-                    onClick={() => setActiveStudentId(s.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between group transition-all cursor-pointer ${
-                      activeStudentId === s.id ? 'bg-indigo-50 text-indigo-700 font-bold border-l-4 border-indigo-600' : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        setActiveStudentId(s.id);
-                      }
-                    }}
-                  >
-                    <span>{s.lastName} {s.firstName} ({s.type.toUpperCase()})</span>
-                    <button 
-                      onClick={(e) => handleRemoveSpecialStudent(s.id, e)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+              {/* Formularz dodawania nowego ucznia */}
+              <div className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-200/60 shadow-3xs">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 select-none">➕ Dodaj nowego ucznia</span>
+                <form onSubmit={handleAddSpecialStudent} className="flex flex-col gap-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Imię" 
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-white"
+                      value={specFirstName}
+                      onChange={(e) => setSpecFirstName(e.target.value)}
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="Nazwisko *" 
+                      required
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-white"
+                      value={specLastName}
+                      onChange={(e) => setSpecLastName(e.target.value)}
+                    />
                   </div>
-                ))}
+                  <select
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white outline-none font-semibold text-slate-700"
+                    value={specType}
+                    onChange={(e) => setSpecType(e.target.value as any)}
+                  >
+                    <option value="ni">Nauczanie Indywidualne (NI)</option>
+                    <option value="rewa">Rewalidacja (Rewa)</option>
+                    <option value="wsp">Wspomaganie (Wsp)</option>
+                  </select>
+                  <select
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white outline-none font-semibold text-slate-700"
+                    value={specClassId}
+                    onChange={(e) => setSpecClassId(e.target.value)}
+                  >
+                    <option value="">Wybierz klasę macierzystą</option>
+                    {pl.classes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <button type="submit" className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer">
+                    Dodaj Ucznia
+                  </button>
+                </form>
+              </div>
+
+              {/* Lista uczniów */}
+              <div className="space-y-1.5 max-h-[40vh] overflow-y-auto pr-1">
+                {pl.specialStudents.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-xs italic border border-dashed border-slate-200 rounded-xl select-none leading-relaxed">
+                    Brak dodanych uczniów. Wypełnij formularz powyżej, aby dodać pierwszego ucznia.
+                  </div>
+                ) : (
+                  pl.specialStudents.map(s => {
+                    const studentClass = s.classId ? classesMap.get(s.classId) : null;
+                    const typeLabels = { ni: 'NI', rewa: 'Rewa', wsp: 'Wsp' };
+                    const typeColors = {
+                      ni: 'bg-amber-50 text-amber-700 border-amber-200',
+                      rewa: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                      wsp: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    };
+                    return (
+                      <div
+                        key={s.id}
+                        onClick={() => setActiveStudentId(s.id)}
+                        className={`w-full text-left px-3.5 py-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between group transition-all cursor-pointer select-none ${
+                          activeStudentId === s.id 
+                            ? 'bg-blue-50/60 border-blue-400 text-blue-900 shadow-xs' 
+                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600'
+                        }`}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            setActiveStudentId(s.id);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-black border shrink-0 ${typeColors[s.type] || 'bg-slate-100 text-slate-700'}`}>
+                            {typeLabels[s.type] || s.type.toUpperCase()}
+                          </span>
+                          <span className="truncate font-bold text-slate-805">{s.lastName} {s.firstName}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {studentClass && (
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono font-bold leading-normal border border-slate-200">
+                              {studentClass.name}
+                            </span>
+                          )}
+                          <button 
+                            type="button"
+                            onClick={(e) => handleRemoveSpecialStudent(s.id, e)}
+                            className="bg-transparent border-none opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer transition-opacity"
+                            title="Usuń profil ucznia"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
-
-            {/* Przepustowość godzin spec. */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 md:col-span-2">
-              {currentStudent ? (
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 mb-2">
-                    🌟 Przypisania zajęć dla: {currentStudent.firstName} {currentStudent.lastName}
-                  </h3>
+ 
+            {/* Prawy panel: Edycja przypisań, profilu i statystyk wybranego ucznia */}
+            <div className="lg:col-span-8 space-y-6">
+              {currentStudent ? (() => {
+                // Obliczenie statystyk godzin dla wybranego ucznia
+                const classHours = studentAssignments
+                  .filter(a => a.withClass)
+                  .reduce((sum, a) => sum + a.hoursPerWeek, 0);
                   
-                  <form onSubmit={handleAddSpecialAssignment} className="grid grid-cols-1 md:grid-cols-4 gap-2 border-b border-slate-100 pb-4 mb-4">
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Przedmiot</label>
-                      <select
-                        required
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
-                        value={specSubjectId}
-                        onChange={(e) => setSpecSubjectId(e.target.value)}
-                      >
-                        <option value="">Przedmiot</option>
-                        {pl.subjects.map(sub => (
-                          <option key={sub.id} value={sub.id}>{sub.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                const individualHours = studentAssignments
+                  .filter(a => !a.withClass)
+                  .reduce((sum, a) => sum + a.hoursPerWeek, 0);
 
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Nauczyciel Prowadzący</label>
-                      <select
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
-                        value={specTeacherId}
-                        onChange={(e) => setSpecTeacherId(e.target.value)}
-                      >
-                        <option value="">Wybierz nauczyciela</option>
-                        {pl.teachers.map(t => (
-                          <option key={t.id} value={t.id}>{t.first} {t.last}</option>
-                        ))}
-                      </select>
-                    </div>
+                const totalHours = classHours + individualHours;
 
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Wspomagający nauczyciel</label>
-                      <select
-                        className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
-                        value={specSupportId}
-                        onChange={(e) => setSpecSupportId(e.target.value)}
-                      >
-                        <option value="">Wybierz nauczyciela</option>
-                        {pl.teachers.map(t => (
-                          <option key={t.id} value={t.id}>{t.first} {t.last}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-4">
-                      <div className="flex-1">
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Godzin</label>
-                        <input 
-                          type="number"
-                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50"
-                          value={specHoursPerW}
-                          onChange={(e) => setSpecHoursPerW(Number(e.target.value))}
-                        />
+                return (
+                  <div className="space-y-6">
+                    
+                    {/* Sekcja 1: Profil i wsparcie w klasie / Edycja uczniów */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-3 select-none">
+                        <div className="flex items-center gap-2">
+                          <Settings size={15} className="text-indigo-600" />
+                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Edycja Profilu ucznia i Wsparcie w klasie</h4>
+                        </div>
+                        <span className="text-[10px] bg-slate-150 text-slate-700 font-bold px-2.5 py-0.5 rounded-full border border-slate-205 font-mono">
+                          ID: {currentStudent.id.substring(0, 5)}...
+                        </span>
                       </div>
-                      <label className="flex items-center gap-1.5 text-xs text-slate-600 mt-2 select-none shrink-0">
-                        <input 
-                          type="checkbox"
-                          checked={specWithClass}
-                          onChange={(e) => setSpecWithClass(e.target.checked)}
-                          className="rounded border-slate-300 text-blue-600"
-                        />
-                        <span>Z klasą</span>
-                      </label>
-                      <button type="submit" className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 mt-2 h-8">
-                        Dodaj
-                      </button>
-                    </div>
-                  </form>
 
-                  <div className="space-y-2">
-                    {studentAssignments.map(a => {
-                      const subj = subjectsMap.get(a.subjectId);
-                      const t = a.teacherId ? teachersMap.get(a.teacherId) : null;
-                      const supp = a.supportTeacherId ? teachersMap.get(a.supportTeacherId) : null;
+                      {/* Pola formularza edycji profilu */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Imię</label>
+                          <input 
+                            type="text"
+                            value={currentStudent.firstName}
+                            onChange={(e) => {
+                              handleUpdateSpecialStudent({
+                                ...currentStudent,
+                                firstName: e.target.value
+                              });
+                            }}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500 bg-slate-50 font-bold text-slate-850"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Nazwisko</label>
+                          <input 
+                            type="text"
+                            value={currentStudent.lastName}
+                            onChange={(e) => {
+                              handleUpdateSpecialStudent({
+                                ...currentStudent,
+                                lastName: e.target.value
+                              });
+                            }}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500 bg-slate-50 font-bold text-slate-850"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Typ wsparcia</label>
+                          <select
+                            value={currentStudent.type}
+                            onChange={(e) => {
+                              handleUpdateSpecialStudent({
+                                ...currentStudent,
+                                type: e.target.value as any
+                              });
+                            }}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-bold text-slate-850"
+                          >
+                            <option value="ni">Nauczanie Indywidualne (NI)</option>
+                            <option value="rewa">Rewalidacja (Rewa)</option>
+                            <option value="wsp">Wspomaganie (Wsp)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Klasa macierzysta</label>
+                          <select
+                            value={currentStudent.classId || ''}
+                            onChange={(e) => {
+                              handleUpdateSpecialStudent({
+                                ...currentStudent,
+                                classId: e.target.value || null
+                              });
+                            }}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-bold text-slate-850"
+                          >
+                            <option value="">Brak klasy macierzystej</option>
+                            {pl.classes.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* DODATKOWO: Nauczyciele wspomagający w klasie */}
+                      <div className="pt-3 border-t border-slate-100 space-y-2">
+                        <div>
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                            <Users size={12} className="text-indigo-500 shrink-0" />
+                            Nauczyciele wspomagający na lekcjach klasowych (Zajęcia z klasą)
+                          </span>
+                          <p className="text-[9.5px] text-slate-400 font-semibold leading-relaxed mt-0.5 select-none">
+                            Wskąż kadrę wspomagającą, która wspiera ucznia bezpośrednio na jego regularnych zajęciach grupowych z klasą macierzystą (możesz zaznaczyć wielu nauczycieli):
+                          </p>
+                        </div>
+
+                        {/* Lista nauczycieli - grid checkboxów */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 max-h-24 overflow-y-auto pr-1 border border-slate-205 rounded-xl p-2.5 bg-slate-50/50 custom-scrollbar">
+                          {pl.teachers.map(t => {
+                            const isChecked = (currentStudent.supportTeacherIds || []).includes(t.id);
+                            return (
+                              <label 
+                                key={t.id} 
+                                className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-[10px] font-bold cursor-pointer select-none transition-all leading-tight ${
+                                  isChecked 
+                                    ? 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-900 shadow-3xs' 
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                              >
+                                <input 
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const currentList = currentStudent.supportTeacherIds || [];
+                                    const updatedList = e.target.checked 
+                                      ? [...currentList, t.id]
+                                      : currentList.filter(id => id !== t.id);
+                                    handleUpdateSpecialStudent({
+                                      ...currentStudent,
+                                      supportTeacherIds: updatedList
+                                    });
+                                  }}
+                                  className="rounded border-slate-300 text-indigo-600 h-3 w-3 cursor-pointer shrink-0"
+                                />
+                                <span className="truncate" title={`${t.first} ${t.last}`}>{t.first.charAt(0)}. {t.last} ({t.abbr})</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        <div className="text-[10px] text-slate-500 font-medium select-none flex items-center gap-1">
+                          Wykaz nauczycieli wspomagających w klasie: {currentStudent.supportTeacherIds && currentStudent.supportTeacherIds.length > 0 ? (
+                            <span className="font-bold text-slate-800 bg-slate-100 py-0.5 px-2 rounded-md border border-slate-200 ml-1">
+                              {currentStudent.supportTeacherIds.length === 1 ? '1 nauczyciel' : `${currentStudent.supportTeacherIds.length} nauczycieli`} (
+                              {currentStudent.supportTeacherIds.map(id => teachersMap.get(id)?.abbr).filter(Boolean).join(', ')}
+                              )
+                            </span>
+                          ) : (
+                            <span className="italic text-slate-400">Brak przypisanego wsparcia kadrowego na lekcjach w klasie.</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sekcja 2: Statystyki Wymiaru Godzin */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       
-                      return (
-                        <div key={a.id} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between text-xs bg-white shadow-sm">
+                      {/* Suma godzin */}
+                      <div className="bg-gradient-to-br from-indigo-50 to-blue-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col justify-between shadow-3xs select-none">
+                        <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest block">Łączne pensum ucznia</span>
+                        <div className="flex items-baseline gap-1 mt-2">
+                          <span className="text-3xl font-black text-indigo-950 font-mono">{totalHours}</span>
+                          <span className="text-xs font-extrabold text-indigo-500">godz. / tydz.</span>
+                        </div>
+                        <p className="text-[9.5px] text-indigo-805 font-bold leading-normal mt-2">
+                          Sumaryczny tygodniowy wymiar lekcji i innych zajęć dedykowanych.
+                        </p>
+                      </div>
+
+                      {/* Z klasą */}
+                      <div className="bg-gradient-to-br from-emerald-50/90 to-teal-50/30 border border-emerald-150 rounded-2xl p-4 flex flex-col justify-between shadow-3xs select-none">
+                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest block">Zajęcia z klasą</span>
+                        <div className="flex items-baseline gap-1 mt-2">
+                          <span className="text-3xl font-black text-emerald-950 font-mono">{classHours}</span>
+                          <span className="text-xs font-extrabold text-emerald-600 bg-white/40 px-1.5 py-0.2 rounded border border-emerald-100">godz. / tydz.</span>
+                        </div>
+                        <p className="text-[9.5px] text-emerald-805 font-bold leading-normal mt-2">
+                          Lekcje zintegrowane, na których uczeń realizuje program wspólnie ze swoją klasą.
+                        </p>
+                      </div>
+
+                      {/* Indywidualnie */}
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50/30 border border-amber-150 rounded-2xl p-4 flex flex-col justify-between shadow-3xs select-none">
+                        <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest block">Zajęcia indywidualne</span>
+                        <div className="flex items-baseline gap-1 mt-2">
+                          <span className="text-3xl font-black text-amber-950 font-mono">{individualHours}</span>
+                          <span className="text-xs font-extrabold text-amber-600 bg-white/40 px-1.5 py-0.2 rounded border border-amber-100">godz. / tydz.</span>
+                        </div>
+                        <p className="text-[9.5px] text-amber-805 font-bold leading-normal mt-2">
+                          Przedmioty w systemie zindywidualizowanym (sam na sam z nauczycielem).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Sekcja 3: Dodawanie nowych zajęć (Z klasą / Indywidualnie) */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                      <div className="flex items-center gap-1.5 border-b border-slate-100 pb-3 select-none">
+                        <Sparkles size={15} className="text-indigo-600 animate-pulse" />
+                        <h4 className="text-xs font-black text-slate-805 uppercase tracking-wider">Nowe zajęcia specjalne lub indywidualne</h4>
+                      </div>
+
+                      <form onSubmit={handleAddSpecialAssignment} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
-                            <div className="font-bold" style={{ color: subj?.color }}>
-                              {subj?.name} {a.withClass ? '(Z klasą)' : '(Indywidualnie)'}
-                            </div>
-                            <div className="text-slate-500 mt-1">
-                              👤 Prowadzący: {t ? `${t.first} ${t.last}` : '—'} 
-                              {supp && ` · 👥 Wspomaganie: ${supp.first} ${supp.last}`}
-                            </div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Przedmiot</label>
+                            <select
+                              required
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800"
+                              value={specSubjectId}
+                              onChange={(e) => setSpecSubjectId(e.target.value)}
+                            >
+                              <option value="">Wybierz przedmiot...</option>
+                              {pl.subjects.map(sub => (
+                                <option key={sub.id} value={sub.id}>{sub.name} ({sub.short})</option>
+                              ))}
+                            </select>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="font-bold underline">{a.hoursPerWeek}h/Tydz</span>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Nauczyciel Prowadzący</label>
+                            <select
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-805"
+                              value={specTeacherId}
+                              onChange={(e) => setSpecTeacherId(e.target.value)}
+                            >
+                              <option value="">Nauczyciel prowadzący...</option>
+                              {pl.teachers.map(t => (
+                                <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Wspomagający na tym przedmiocie</label>
+                            <select
+                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-805"
+                              value={specSupportId}
+                              onChange={(e) => setSpecSupportId(e.target.value)}
+                            >
+                              <option value="">Brak wspomagającego do tych zajęć...</option>
+                              {pl.teachers.map(t => (
+                                <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                              ))}
+                            </select>
                           </div>
                         </div>
-                      );
-                    })}
+
+                        {/* Forma zajęć: Zajęcia z klasą vs Indywidualne */}
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
+                          <div className="sm:col-span-4">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Tygodniowy wymiar godzin</label>
+                            <div className="flex items-center gap-2">
+                              <input 
+                                type="number"
+                                min="1"
+                                max="40"
+                                required
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-bold"
+                                value={specHoursPerW}
+                                onChange={(e) => setSpecHoursPerW(Number(e.target.value))}
+                              />
+                              <span className="text-xs text-slate-500 font-bold shrink-0">godz. / tydz.</span>
+                            </div>
+                          </div>
+
+                          {/* Selektor form i form integracji */}
+                          <div className="sm:col-span-5 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSpecWithClass(true)}
+                              className={`flex-1 p-2 rounded-xl border font-bold text-[10.5px] transition-all flex flex-col items-center justify-center cursor-pointer select-none leading-relaxed border-solid ${
+                                specWithClass 
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-3xs' 
+                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              <span className="font-extrabold uppercase text-[7.5px] tracking-wider mb-0.5 text-emerald-600">Forma Integracji</span>
+                              🏫 Zajęcia z klasą
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSpecWithClass(false)}
+                              className={`flex-1 p-2 rounded-xl border font-bold text-[10.5px] transition-all flex flex-col items-center justify-center cursor-pointer select-none leading-relaxed border-solid ${
+                                !specWithClass 
+                                  ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-3xs' 
+                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              <span className="font-extrabold uppercase text-[7.5px] tracking-wider mb-0.5 text-amber-600">Forma Osobna</span>
+                              👤 Indywidualne
+                            </button>
+                          </div>
+
+                          <div className="sm:col-span-3">
+                            <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 transition-all flex items-center justify-center gap-1 cursor-pointer">
+                              <Plus size={13} /> Dodaj zajęcie
+                            </button>
+                          </div>
+                        </div>
+                      </form>
+                    </div>
+
+                    {/* Sekcja 4: Wykaz zajęć przypisanych do tego ucznia */}
+                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3.5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2.5">
+                        <span className="text-xs font-black text-slate-500 uppercase tracking-wider block">Wykaz zdefiniowanych zajęć ({studentAssignments.length})</span>
+                        <p className="text-[10px] text-slate-400 font-bold leading-normal select-none">
+                          Zadania te zostaną udostępnione w bazie do rozpisania planu godzin.
+                        </p>
+                      </div>
+
+                      {studentAssignments.length === 0 ? (
+                        <div className="p-8 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400 italic text-xs py-10 select-none">
+                          Brak zdefiniowanych zajęć i przedmiotów dla tego ucznia. Użyj formularza powyżej, aby stworzyć pierwszą pozycję.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                          {studentAssignments.map(a => {
+                            const subj = subjectsMap.get(a.subjectId);
+                            const mainTeacher = a.teacherId ? teachersMap.get(a.teacherId) : null;
+                            const supportTeacher = a.supportTeacherId ? teachersMap.get(a.supportTeacherId) : null;
+                            
+                            return (
+                              <div 
+                                key={a.id} 
+                                className={`p-4 border rounded-2xl flex flex-col justify-between text-xs bg-white transition hover:shadow-xs relative border-l-4 group ${
+                                  a.withClass ? 'border-l-emerald-500 border-slate-200' : 'border-l-amber-500 border-slate-200'
+                                }`}
+                              >
+                                {/* Przedmiot i usunięcie */}
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="min-w-0">
+                                    <span className="font-bold text-[12.5px] block truncate leading-tight" style={{ color: subj?.color || '#334155' }}>
+                                      {subj?.name}
+                                    </span>
+                                    <span className={`inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border mt-1 leading-none ${
+                                      a.withClass 
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-150' 
+                                        : 'bg-amber-50 text-amber-700 border-amber-150'
+                                    }`}>
+                                      {a.withClass ? '🏫 Z klasą' : '👤 Indywidualnie'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="font-black text-[10.5px] bg-slate-100/80 border border-slate-200 text-slate-705 px-1.5 py-0.5 rounded font-mono">
+                                      {a.hoursPerWeek}h/tydz
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSpecialAssignment(a.id)}
+                                      className="text-slate-400 hover:text-red-500 transition p-1 rounded-md hover:bg-rose-50 bg-transparent border-none cursor-pointer"
+                                      title="Usuń to przypisanie zajęć"
+                                    >
+                                      <Trash2 size={12.5} strokeWidth={2.5} />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Nauczyciele na lekcji */}
+                                <div className="space-y-1.5 mt-2 font-semibold text-slate-600 text-[10.5px]">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-slate-400 text-[10px] select-none font-sans">Prowadzący:</span>
+                                    {mainTeacher ? (
+                                      <span className="text-slate-800 font-extrabold">{mainTeacher.first} {mainTeacher.last} (<strong className="font-mono">{mainTeacher.abbr}</strong>)</span>
+                                    ) : (
+                                      <span className="text-red-500 italic font-semibold">Brak przydziału</span>
+                                    )}
+                                  </div>
+
+                                  {supportTeacher ? (
+                                    <div className="flex items-center gap-1.5 p-1 px-1.5 bg-indigo-50/70 border border-indigo-100 rounded-lg mt-1 font-sans">
+                                      <span className="text-indigo-805 text-[8px] font-black uppercase tracking-wider bg-indigo-100 px-1 py-0.5 rounded shrink-0 leading-none">Wspomaganie lekcyjne</span>
+                                      <span className="text-indigo-950 font-bold truncate leading-none">
+                                        {supportTeacher.first} {supportTeacher.last} ({supportTeacher.abbr})
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="text-[9px] text-slate-400 italic select-none font-sans mt-0.5">Brak dodatkowego wspomagania na tym przedmiocie.</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-400 select-none">
-                  <span>👶</span>
-                  <span className="text-sm font-semibold mt-1">Wybierz ucznia, aby edytować karty zajęć specjalnych</span>
+                );
+              })() : (
+                <div className="h-full flex flex-col items-center justify-center p-12 text-center text-slate-400 select-none bg-white border border-slate-200 rounded-2xl border-dashed min-h-[450px]">
+                  <span className="text-4xl animate-bounce">🎓</span>
+                  <span className="text-sm font-semibold mt-3 text-slate-700 font-sans">Wybierz ucznia z lewej listy</span>
+                  <p className="text-[11px] text-slate-405 max-w-sm mt-1 leading-relaxed font-semibold">
+                    Zdefiniujesz tutaj klasę macierzystą ucznia, jego formę wsparcia (NI / Rewalidacja / Wspomaganie), indywidualne przedmioty z ich kadrą, wymiarem godzin oraz wieloma nauczycielami wspomagającymi na lekcjach klasowych.
+                  </p>
                 </div>
               )}
             </div>

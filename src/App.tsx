@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom
+  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog
 } from './types';
 import { 
   getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
@@ -108,14 +108,81 @@ export default function App() {
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>(() => {
     const saved = localStorage.getItem('saleplan_v3_snapshots');
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { }
+      try { 
+        const parsed = JSON.parse(saved); 
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) { }
     }
     return [];
   });
 
+  const [historyLogs, setHistoryLogs] = useState<AppEventLog[]>(() => {
+    const saved = localStorage.getItem('saleplan_v3_history_logs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [
+      {
+        id: 'init-system',
+        timestamp: new Date().toISOString(),
+        actionType: 'other',
+        description: 'Zainicjalizowano dziennik pracy programu',
+        details: 'Dziennik jest gotowy do monitorowania operacji użytkownika.'
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('saleplan_v3_history_logs', JSON.stringify(historyLogs));
+  }, [historyLogs]);
+
+  const addEventLog = (actionType: AppEventLog['actionType'], description: string, details?: string) => {
+    const newLog: AppEventLog = {
+      id: 'log-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now(),
+      timestamp: new Date().toISOString(),
+      actionType,
+      description,
+      details
+    };
+    setHistoryLogs(prev => [newLog, ...prev.slice(0, 99)]); // keep up to 100 entries for stability
+  };
+
+  const handleChangeSnapshots = (newSnaps: SnapshotEntry[]) => {
+    if (newSnaps.length > snapshots.length) {
+      const added = newSnaps.find(n => !snapshots.some(s => s && s.id === n.id));
+      if (added) {
+        addEventLog(
+          'snapshot_create',
+          'Utworzono punkt przywracania (Snapshot)',
+          `Nazwa: "${added.name}".` + (added.comment ? ` Komentarz: "${added.comment}"` : '')
+        );
+      }
+    } else if (newSnaps.length < snapshots.length) {
+      const deleted = snapshots.find(s => s && !newSnaps.some(n => n.id === s.id));
+      if (deleted) {
+        addEventLog(
+          'snapshot_delete',
+          'Usunięto punkt przywracania (Snapshot)',
+          `Nazwa: "${deleted.name}".`
+        );
+      }
+    } else if (newSnaps.length === 0 && snapshots.length > 0) {
+      addEventLog(
+        'snapshot_delete',
+        'Wyczyszczono wszystkie punkty przywracania',
+        'Usunięto bezpowrotnie wszystkie zapisane kopie zapasowe planu.'
+      );
+    }
+    setSnapshots(newSnaps);
+  };
+
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie'>('kreator');
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   const handleUpdateAppState = (newState: AppState | ((prev: AppState) => AppState)) => {
     setAppState(prev => {
@@ -238,6 +305,7 @@ export default function App() {
     setRedoStack(prev => [...prev, JSON.parse(JSON.stringify(schedData))]);
     setSchedData(previous);
     setUndoStack(prev => prev.slice(0, -1));
+    addEventLog('undo', 'Cofnięto zmianę planu (Undo)', 'Przywrócono poprzedni stan rozmieszczenia sal / dyżurów.');
   };
 
   const handleRedo = () => {
@@ -246,6 +314,7 @@ export default function App() {
     setUndoStack(prev => [...prev, JSON.parse(JSON.stringify(schedData))]);
     setSchedData(next);
     setRedoStack(prev => prev.slice(0, -1));
+    addEventLog('redo', 'Ponowiono zmianę planu (Redo)', 'Zastosowano ponownie uprzednio cofniętą operację.');
   };
 
   // ── BRIDGING/IMPORT SESSIONS FROM ETAP 1 TO ETAP 2 ──
@@ -380,15 +449,120 @@ export default function App() {
 
     setSchedData(nextSchedData);
     notify(`Zsynchronizowano lekcje! Przeniesiono pomyślnie ${countTransfer} jednostek lekcyjnych.`, 'ok');
+    addEventLog(
+      'import',
+      'Import siatki z Planu Klas (Etap 1)',
+      `Przeniesiono pomyślnie ${countTransfer} jednostek lekcyjnych i sal do gabinetów.`
+    );
   };
 
   // ── SNAPSHOT ACTIONS ──
+  const validateSnapshotData = (state: any, sched: any): boolean => {
+    if (!state || typeof state !== 'object') {
+      notify('Błąd spójności danych: Stan aplikacji ma nieprawidłowy format.', 'err');
+      return false;
+    }
+    if (!sched || typeof sched !== 'object') {
+      notify('Błąd spójności danych: Harmonogram lekcji ma nieprawidłowy format.', 'err');
+      return false;
+    }
+    if (typeof state.yearKey !== 'string' || !state.yearKey) {
+      notify('Błąd spójności danych: Brak identyfikatora roku (yearKey).', 'err');
+      return false;
+    }
+    if (!state.school || typeof state.school !== 'object' || typeof state.school.name !== 'string') {
+      notify('Błąd spójności danych: Brak lub uszkodzona struktura danych szkoły.', 'err');
+      return false;
+    }
+    if (!state.planLekcji || typeof state.planLekcji !== 'object') {
+      notify('Błąd spójności danych: Brak struktury planu lekcji.', 'err');
+      return false;
+    }
+    const pl = state.planLekcji;
+    if (!Array.isArray(pl.hours) || !Array.isArray(pl.classes) || !Array.isArray(pl.teachers) || !Array.isArray(pl.subjects)) {
+      notify('Błąd spójności danych: Brak wymaganych list (godziny, klasy, nauczyciele lub przedmioty).', 'err');
+      return false;
+    }
+    if (!state.dyzury || typeof state.dyzury !== 'object' || !Array.isArray(state.dyzury.miejsca) || !Array.isArray(state.dyzury.przerwy)) {
+      notify('Błąd spójności danych: Brak lub uszkodzona sekcja dyżurów.', 'err');
+      return false;
+    }
+    return true;
+  };
+
   const handleRestoreSnapshotState = (restoredAppState: AppState, restoredSchedData: SchedData) => {
+    const startTime = performance.now();
+    console.group('⏱️ Rozpoczęcie procedury przywracania stanu z punktu przywracania (Snapshot)');
+    
+    if (!validateSnapshotData(restoredAppState, restoredSchedData)) {
+      console.error('❌ Walidacja spójności danych przywracanego punktu nie powiodła się.');
+      console.groupEnd();
+      throw new Error('Walidacja spójności danych nie powiodła się.');
+    }
+
+    // Obliczenie statystyk przywracanych obiektów dla ułatwienia debugowania
+    const classesCount = restoredAppState.planLekcji?.classes?.length || 0;
+    const teachersCount = restoredAppState.planLekcji?.teachers?.length || 0;
+    const roomsCount = restoredAppState.planLekcji?.rooms?.length || 0;
+    const subjectsCount = restoredAppState.planLekcji?.subjects?.length || 0;
+    const assignmentsCount = restoredAppState.planLekcji?.assignments?.length || 0;
+    const lessonsCount = Object.keys(restoredAppState.planLekcji?.lessons || {}).length;
+
+    const specialStudentsCount = restoredAppState.planLekcji?.specialStudents?.length || 0;
+    const specialAssignmentsCount = restoredAppState.planLekcji?.specialAssignments?.length || 0;
+    const specialLessonsCount = Object.keys(restoredAppState.planLekcji?.specialLessons || {}).length;
+
+    const dutyPlacesCount = restoredAppState.dyzury?.miejsca?.length || 0;
+    const dutyScheduleCount = Object.keys(restoredAppState.dyzury?.harmonogram || {}).length;
+
+    let schedCellsCount = 0;
+    if (restoredSchedData) {
+      for (const yKey in restoredSchedData) {
+        const yearData = restoredSchedData[yKey];
+        if (yearData) {
+          for (const dIdx in yearData) {
+            const dayData = yearData[+dIdx];
+            if (dayData) {
+              for (const hKey in dayData) {
+                const hData = dayData[hKey];
+                if (hData) {
+                  schedCellsCount += Object.keys(hData).length;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    console.log('📊 Przywracane struktury danych i obiekty:');
+    console.log(`- Klasy: ${classesCount}`);
+    console.log(`- Nauczyciele: ${teachersCount}`);
+    console.log(`- Sale lekcyjne: ${roomsCount}`);
+    console.log(`- Przedmioty: ${subjectsCount}`);
+    console.log(`- Przydziały (Assignments): ${assignmentsCount}`);
+    console.log(`- Obsadzone lekcje (Lessons): ${lessonsCount}`);
+    console.log(`- Uczniowie ze spec. potrzebami: ${specialStudentsCount}`);
+    console.log(`- Specjalne przydziały / lekcje: ${specialAssignmentsCount} / ${specialLessonsCount}`);
+    console.log(`- Miejsca dyżurów / zaplanowane dyżury: ${dutyPlacesCount} / ${dutyScheduleCount}`);
+    console.log(`- Komórki harmonogramu (SchedData): ${schedCellsCount}`);
+
     // Save active schedule into undo history so the user can easily revert a restore action if needed
     pushToUndo(schedData);
     handleUpdateAppState(restoredAppState);
     setSchedData(restoredSchedData);
+
+    const duration = performance.now() - startTime;
+    console.log(`✅ Synchronizacja stanów i struktur zakończona pomyślnie.`);
+    console.log(`⏱️ Czas procesowania logicznego: ${duration.toFixed(2)} ms`);
+    console.groupEnd();
+
     notify('Przywrócono stan planu do wybranego punktu przywracania', 'ok');
+    addEventLog(
+      'restore',
+      'Przywrócono plan z punktu przywracania',
+      `Zaktualizowano całą konfigurację dla szkoły "${restoredAppState.school?.name || ''}" (${restoredAppState.yearLabel || ''}). Proces trwał ${duration.toFixed(2)} ms.`
+    );
   };
 
   // ── JSON BACKUPS ACTIONS ──
@@ -416,6 +590,11 @@ export default function App() {
           handleUpdateAppState(data.appState);
           setSchedData(data.schedData);
           notify('Pomyślnie wczytano archiwum lekcyjne!', 'ok');
+          addEventLog(
+            'import',
+            'Wczytano kopię zapasową JSON (plik)',
+            `Pomyślnie przywrócono stan planu lekcji i konfigurację dla szkoły "${data.appState.school?.name || ''}".`
+          );
         } else {
           notify('Błędny format pliku archiwum', 'err');
         }
@@ -432,6 +611,11 @@ export default function App() {
     handleUpdateAppState(getDemoAppState());
     setSchedData({});
     notify('Zresetowano całą konfigurację programu', 'ok');
+    addEventLog(
+      'reset',
+      'Zresetowano konfigurację i wyczyszczono plan',
+      'Wycofano wszystkie dane do stanu demonstracyjnego (demo).'
+    );
   };
 
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
@@ -447,7 +631,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden">
+    <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
       
       {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY ── */}
       <header className="bg-slate-900 text-white px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between shadow-md select-none shrink-0 border-b border-slate-950">
@@ -733,6 +917,8 @@ export default function App() {
           <Statystyki 
             appState={appState} 
             schedData={schedData}
+            historyLogs={historyLogs}
+            onClearHistoryLogs={() => setHistoryLogs([])}
           />
         )}
         {currentTab === 'o_programie' && (
@@ -799,9 +985,26 @@ export default function App() {
         appState={appState}
         schedData={schedData}
         snapshots={snapshots}
-        onChangeSnapshots={setSnapshots}
+        onChangeSnapshots={handleChangeSnapshots}
         onRestoreSnapshot={handleRestoreSnapshotState}
+        isRestoring={isRestoring}
+        onRestoringChange={setIsRestoring}
       />
+
+      {isRestoring && (
+        <div 
+          className="fixed inset-0 z-[9999] bg-slate-950/40 backdrop-blur-xs pointer-events-none cursor-wait select-none flex flex-col items-center justify-center text-white"
+          id="restoring-pointer-blocker"
+        >
+          <div className="bg-slate-900/95 border border-slate-700/50 rounded-2xl p-6 flex flex-col items-center shadow-2xl space-y-3 max-w-xs text-center pointer-events-none">
+            <RefreshCw className="w-10 h-10 text-indigo-400 animate-spin" />
+            <div className="space-y-1">
+              <p className="font-extrabold text-sm tracking-tight font-sans text-slate-100">Inicjalizacja danych...</p>
+              <p className="text-[10.5px] text-slate-400 font-semibold leading-relaxed">Trwa bezpieczna podmiana stanów i przebudowa widoków planu.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
