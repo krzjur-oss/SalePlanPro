@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment 
 } from '../types';
@@ -6,6 +6,7 @@ import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
   User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles 
 } from 'lucide-react';
+import PlanGenerator from './PlanGenerator';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -25,6 +26,8 @@ const PALETTE_COLORS = [
   '#475569', '#334155', '#64748b', '#4b5563'  // Slate / Dark Grays
 ];
 
+const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
 interface PlanKlasProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
@@ -38,7 +41,14 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     pl.classes.length > 0 ? pl.classes[0].id : null
   );
   const [activeTab, setActiveTab] = useState<'plan' | 'assign' | 'special' | 'teachers'>('plan');
+  const [showGenerator, setShowGenerator] = useState(false);
   const [draggedAssignId, setDraggedAssignId] = useState<string | null>(null);
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
+  const touchDragRef = useRef<HTMLDivElement | null>(null);
+  const touchStartPosRef = useRef<{ x: number, y: number } | null>(null);
+  const touchDraggedAssignIdRef = useRef<string | null>(null);
+  const [draggedLessonKey, setDraggedLessonKey] = useState<string | null>(null);
+  const touchDraggedLessonKeyRef = useRef<string | null>(null);
 
   // Form states for modal / quick inline adding
   const [newClassName, setNewClassName] = useState('');
@@ -732,22 +742,26 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
   };
 
   // Drag and Drop
-  const handleDragStart = (id: string) => {
+  const handleDragStart = (id: string, lessonKey?: string) => {
     setDraggedAssignId(id);
+    if (lessonKey) {
+      setDraggedLessonKey(lessonKey);
+    } else {
+      setDraggedLessonKey(null);
+    }
   };
 
-  const handleDropOnCell = (day: number, hour: number) => {
-    if (!draggedAssignId || !activeClassId) return;
+  const placeAssignmentOnCell = (assignId: string, day: number, hour: number) => {
+    if (!assignId || !activeClassId) return;
 
     const updatedLessons = { ...pl.lessons };
     
     // Check hours limits
-    const asg = pl.assignments.find(a => a.id === draggedAssignId);
+    const asg = pl.assignments.find(a => a.id === assignId);
     if (asg) {
-      const placed = placedHours[draggedAssignId] || 0;
+      const placed = placedHours[assignId] || 0;
       if (placed >= asg.hoursPerWeek) {
-        if (!confirm(`Zrealizowano już limit ${asg.hoursPerWeek} godzin. Czy umieścić nadwymiarowo?`)) {
-          setDraggedAssignId(null);
+        if (!confirm(`Zrealizowano już limit ${asg.hoursPerWeek} godzin dla tego przydziału. Czy umieścić nadwymiarowo?`)) {
           return;
         }
       }
@@ -768,7 +782,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     allInvolved.forEach(clsId => {
       const lessonKey = `${clsId}|${day}|${hour}`;
       updatedLessons[lessonKey] = {
-        assignmentId: draggedAssignId,
+        assignmentId: assignId,
         locked: false,
         supportTeacherId: defaultSupportTeacherId
       };
@@ -783,8 +797,118 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       ...appState,
       planLekcji: updatedPL
     });
+  };
 
-    setDraggedAssignId(null);
+  const handleDropOnCell = (day: number, hour: number) => {
+    if (draggedAssignId) {
+      placeAssignmentOnCell(draggedAssignId, day, hour);
+      setDraggedAssignId(null);
+    }
+  };
+
+  // Touch Drag-And-Drop Handlers
+  const handleTouchStart = (e: React.TouchEvent, assignId: string, lessonKey?: string) => {
+    const touch = e.touches[0];
+    touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+    touchDraggedAssignIdRef.current = assignId;
+    touchDraggedLessonKeyRef.current = lessonKey || null;
+    console.log('[TOUCH_DND] touchstart:', { assignId, lessonKey, clientX: touch.clientX, clientY: touch.clientY });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, assignId: string) => {
+    if (!touchStartPosRef.current) return;
+    const touch = e.touches[0];
+    const diffX = touch.clientX - touchStartPosRef.current.x;
+    const diffY = touch.clientY - touchStartPosRef.current.y;
+    const distance = Math.sqrt(diffX * diffX + diffY * diffY);
+
+    if (distance > 8) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+
+      // Update coordinates & contents of the floating element directly via DOM
+      if (touchDragRef.current) {
+        if (touchDragRef.current.style.display === 'none' || touchDragRef.current.style.display === '') {
+          // Initialize display and contents once drag is recognized
+          const asgVal = pl.assignments.find(a => a.id === assignId);
+          const subjVal = asgVal ? subjectsMap.get(asgVal.subjectId) : null;
+          const teacherVal = asgVal && asgVal.teacherId ? teachersMap.get(asgVal.teacherId) : null;
+
+          touchDragRef.current.style.display = 'flex';
+          touchDragRef.current.style.borderLeftColor = subjVal?.color || '#3b82f6';
+
+          const labelSubj = touchDragRef.current.querySelector('[data-role="subject-name"]') as HTMLElement;
+          if (labelSubj) {
+            labelSubj.textContent = subjVal?.name || 'Przedmiot';
+            labelSubj.style.color = subjVal?.color || '#1e1b4b';
+          }
+
+          const labelTeacher = touchDragRef.current.querySelector('[data-role="teacher-name"]') as HTMLElement;
+          if (labelTeacher) {
+            labelTeacher.textContent = teacherVal ? `👤 ${teacherVal.first[0]}. ${teacherVal.last}` : '👤 Nieprzypisany';
+          }
+
+          console.log('[TOUCH_DND] Drag visually initialized via DOM:', assignId);
+        }
+
+        // Apply 3D translation based on current touch position
+        touchDragRef.current.style.transform = `translate3d(${touch.clientX - 70}px, ${touch.clientY - 35}px, 0)`;
+      }
+
+      console.log('[TOUCH_DND] touchmove坐标:', { clientX: touch.clientX, clientY: touch.clientY });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const activeId = touchDraggedAssignIdRef.current;
+    console.log('[TOUCH_DND] touchend triggered. Active assignment ID:', activeId);
+
+    // Hide the floating element immediately before checking elementFromPoint
+    if (touchDragRef.current) {
+      touchDragRef.current.style.display = 'none';
+    }
+
+    if (activeId && touchStartPosRef.current) {
+      const touch = e.changedTouches[0] || (e.touches && e.touches[0]);
+      if (touch) {
+        const x = touch.clientX;
+        const y = touch.clientY;
+        console.log('[TOUCH_DND] Release coordinates:', { x, y });
+
+        const element = document.elementFromPoint(x, y);
+        console.log('[TOUCH_DND] Element at release point:', element ? `${element.tagName}.${element.className}` : 'null');
+
+        if (element) {
+          const deleteZone = element.closest('[data-cell-type="delete-zone"]');
+          if (deleteZone) {
+            const activeKey = touchDraggedLessonKeyRef.current;
+            console.log('[TOUCH_DND] Dropped into delete-zone. Key:', activeKey);
+            if (activeKey) {
+              handleRemoveLesson(activeKey);
+            }
+          } else {
+            const cell = element.closest('[data-cell-type="plan-cell"]');
+            console.log('[TOUCH_DND] Resolved target cell element:', cell ? `${cell.tagName}[data-day="${cell.getAttribute('data-day')}"][data-hour="${cell.getAttribute('data-hour')}"]` : 'null');
+
+            if (cell) {
+              const dayStr = cell.getAttribute('data-day');
+              const hourStr = cell.getAttribute('data-hour');
+              if (dayStr !== null && hourStr !== null) {
+                const day = parseInt(dayStr, 10);
+                const hour = parseInt(hourStr, 10);
+                console.log('[TOUCH_DND] Dropping assignment inside cell:', { day, hour });
+                placeAssignmentOnCell(activeId, day, hour);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    touchDraggedAssignIdRef.current = null;
+    touchDraggedLessonKeyRef.current = null;
+    touchStartPosRef.current = null;
   };
 
   const handleRemoveLesson = (key: string) => {
@@ -1133,6 +1257,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button 
+                  onClick={() => setShowGenerator(true)}
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
+                >
+                  <Sparkles size={14} /> Autogenerator planu lekcji
+                </button>
+                <button 
                   onClick={onTransfer}
                   className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
                 >
@@ -1181,6 +1311,9 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                               className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top h-28 transition-all ${
                                 isConf ? 'bg-red-50/70 border-2 border-red-300' : ''
                               }`}
+                              data-cell-type="plan-cell"
+                              data-day={dayIndex}
+                              data-hour={hourIndex}
                               onDragOver={(e) => e.preventDefault()}
                               onDrop={() => handleDropOnCell(dayIndex, hourIndex)}
                             >
@@ -1193,12 +1326,42 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
 
                                 return (
                                   <div 
-                                    className={`h-full min-h-[90px] rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-shadow ${
+                                    onClick={() => {
+                                      if (selectedAssignmentId) {
+                                        placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                      }
+                                    }}
+                                    draggable={!isTouchDevice}
+                                    onDragStart={(e) => {
+                                      if (isTouchDevice) {
+                                        e.preventDefault();
+                                        return;
+                                      }
+                                      handleDragStart(asg.id, key);
+                                    }}
+                                    onTouchStart={(e) => handleTouchStart(e, asg.id, key)}
+                                    onTouchMove={(e) => handleTouchMove(e, asg.id)}
+                                    onTouchEnd={handleTouchEnd}
+                                    onContextMenu={(e) => e.preventDefault()}
+                                    className={`h-full min-h-[90px] rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
+                                      selectedAssignmentId 
+                                        ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
+                                        : 'hover:shadow-md'
+                                    } ${
                                       isConf 
                                         ? 'border-red-600 bg-red-50 text-red-900 shadow-sm'
-                                        : 'bg-white shadow-sm hover:shadow-md'
+                                        : 'bg-white shadow-sm'
                                     }`}
-                                    style={isConf ? {} : { borderLeftColor: subj?.color || '#cbd5e1' }}
+                                    style={{
+                                      ...(isConf ? {} : { borderLeftColor: subj?.color || '#cbd5e1' }),
+                                      WebkitTouchCallout: 'none',
+                                      WebkitUserSelect: 'none',
+                                      KhtmlUserSelect: 'none',
+                                      MozUserSelect: 'none',
+                                      msUserSelect: 'none',
+                                      userSelect: 'none',
+                                      WebkitUserDrag: 'none'
+                                    }}
                                   >
                                     <div>
                                       <div className="flex items-center justify-between gap-1">
@@ -1206,8 +1369,17 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                                           {subj?.name}
                                         </span>
                                         <button 
-                                          onClick={() => handleRemoveLesson(key)}
-                                          className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRemoveLesson(key);
+                                          }}
+                                          onTouchStart={(e) => e.stopPropagation()}
+                                          onTouchEnd={(e) => {
+                                            e.stopPropagation();
+                                            handleRemoveLesson(key);
+                                          }}
+                                          className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-6 h-6 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer"
+                                          title="Usuń lekcję z siatki"
                                         >
                                           ✕
                                         </button>
@@ -1247,7 +1419,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                                       )}
 
                                       {/* Wybór nauczyciela wspomagającego */}
-                                      <div className="mt-1.5 pt-1 border-t border-slate-100">
+                                      <div 
+                                        className="mt-1.5 pt-1 border-t border-slate-100" 
+                                        onClick={(e) => e.stopPropagation()}
+                                        onTouchStart={(e) => e.stopPropagation()}
+                                        onTouchEnd={(e) => e.stopPropagation()}
+                                      >
                                         <select
                                           title="Nauczyciel wspomagający"
                                           className={`w-full text-[9px] font-semibold border rounded px-1.5 py-0.5 outline-none transition cursor-pointer ${
@@ -1294,8 +1471,24 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                                   </div>
                                 );
                               })() : (
-                                <div className="h-full border border-dashed border-slate-200 rounded-lg flex items-center justify-center text-slate-300 text-lg hover:border-blue-400 hover:text-blue-400 transition-colors select-none font-light min-h-[90px]">
-                                  +
+                                <div 
+                                  onClick={() => {
+                                    if (selectedAssignmentId) {
+                                      placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                    }
+                                  }}
+                                  className={`h-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-all select-none min-h-[90px] ${
+                                    selectedAssignmentId 
+                                      ? 'border-indigo-300 bg-indigo-50/40 text-indigo-550 hover:bg-indigo-50/80 hover:border-indigo-400 cursor-pointer' 
+                                      : 'border-slate-200 text-slate-300 hover:border-blue-400 hover:text-blue-400 cursor-default'
+                                  }`}
+                                >
+                                  <span className="text-lg font-light">+</span>
+                                  {selectedAssignmentId && (
+                                    <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600 px-1.5 py-0.5 bg-white border border-indigo-200 rounded shadow-xs mt-1 animate-pulse">
+                                      Wstaw
+                                    </span>
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -1624,12 +1817,21 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                 {pl.teachers.map(t => (
                   <div key={t.id} className="py-2.5 flex items-center justify-between text-xs gap-1.5 group">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-semibold text-slate-700 truncate">{t.first} {t.last}</span>
                         <span className="bg-slate-100 px-1.5 py-0.2 rounded font-mono text-[10px] font-black text-slate-500">{t.abbr}</span>
+                        {t.inactive && (
+                          <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded font-black uppercase">Nieaktywny</span>
+                        )}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
-                        Pensum: {t.maxHours || 18}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}
+                      <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span>Pensum: {t.maxHours || 18}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}</span>
+                        {t.inactive && t.inactiveComment && (
+                          <span className="text-rose-600 font-semibold italic">({t.inactiveComment})</span>
+                        )}
+                        {!t.inactive && t.substitutions && t.substitutions.length > 0 && (
+                          <span className="text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.2 rounded">🔀 Zastępstwa: {t.substitutions.length} lekcji</span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5">
@@ -2543,36 +2745,106 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       {/* ── SKRYTKA LEKCJI DO UMIESZCZENIA (PO_PRAWEJ) ── */}
       {activeTab === 'plan' && currentClass && (
         <aside className="w-full md:w-64 border-l border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none">
-          <div className="p-4 border-b border-slate-100">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">🗂️ Lekcje do umieszczenia</span>
-            <span className="text-[10px] text-slate-400 mt-1 block">Przeciągnij przedmioty na siatkę planu lekcji.</span>
+            <span className="text-[10px] text-slate-400 mt-1 block">Przeciągnij przedmiot na siatkę lub użyj ułatwienia dotykowego:</span>
+            <div className="mt-2.5 p-2 bg-indigo-50 border border-indigo-150 rounded-lg text-[9.5px] text-indigo-900 font-medium leading-normal">
+              📱 <strong>Ekran dotykowy?</strong> Kliknij lekcję poniżej, a potem tapnij pole w siatce (puste lub zajęte) aby ją wstawić/podmienić. Ten sam przedmiot możesz wstawić w wiele miejsc!
+            </div>
+            {selectedAssignmentId && (
+              <div className="mt-2.5 p-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[9.5px] text-emerald-850 font-bold flex items-center justify-between">
+                <span>🎯 Aktywny pędzel: {subjectsMap.get(pl.assignments.find(as => as.id === selectedAssignmentId)?.subjectId || '')?.name}</span>
+                <button 
+                  onClick={() => setSelectedAssignmentId(null)}
+                  className="font-bold text-[10px] text-emerald-600 bg-white border border-emerald-300 rounded px-1.5 py-0.5 hover:bg-emerald-100 uppercase"
+                >
+                  Anuluj
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="p-3 space-y-2">
+            {/* STREFA USUWANIA Z PLANU (DND) */}
+            <div 
+              data-cell-type="delete-zone"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (draggedLessonKey) {
+                  handleRemoveLesson(draggedLessonKey);
+                  setDraggedLessonKey(null);
+                }
+                setDraggedAssignId(null);
+              }}
+              className="p-4 border-2 border-dashed border-red-300 rounded-xl bg-red-50/50 hover:bg-red-50 hover:border-red-400 transition-all flex flex-col items-center justify-center text-center text-red-700 min-h-[90px] cursor-default gap-1.5 focus-within:ring-2 focus-within:ring-red-400 mb-4"
+            >
+              <Trash2 className="text-red-500 pointer-events-none" size={24} />
+              <div className="pointer-events-none">
+                <span className="text-xs font-bold block">Usuń z planu</span>
+                <span className="text-[10px] text-red-500 font-semibold leading-tight block mt-0.5">Przeciągnij tutaj kafelek lekcji z siatki, aby go usunąć</span>
+              </div>
+            </div>
+
             {classAssignments.map(a => {
               const s = subjectsMap.get(a.subjectId);
               const t = a.teacherId ? teachersMap.get(a.teacherId) : null;
               const placed = placedHours[a.id] || 0;
               const limitAchieved = placed >= a.hoursPerWeek;
+              const isSelected = selectedAssignmentId === a.id;
 
               return (
                 <div 
                   key={a.id}
-                  draggable
-                  onDragStart={() => handleDragStart(a.id)}
-                  className={`p-3 rounded-xl border border-slate-200 shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-400 hover:shadow transition-all group ${
-                    limitAchieved ? 'bg-slate-50/50 opacity-60' : 'bg-white'
+                  draggable={!isTouchDevice}
+                  onDragStart={(e) => {
+                    if (isTouchDevice) {
+                      e.preventDefault();
+                      return;
+                    }
+                    handleDragStart(a.id);
+                  }}
+                  onTouchStart={(e) => handleTouchStart(e, a.id)}
+                  onTouchMove={(e) => handleTouchMove(e, a.id)}
+                  onTouchEnd={handleTouchEnd}
+                  onClick={() => {
+                    setSelectedAssignmentId(isSelected ? null : a.id);
+                  }}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer select-none group relative overflow-hidden touch-none ${
+                    isSelected
+                      ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/50 shadow'
+                      : limitAchieved 
+                        ? 'bg-slate-50/70 border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300' 
+                        : 'bg-white border-slate-200 hover:border-blue-400 hover:shadow shadow-sm'
                   }`}
+                  style={{
+                    WebkitTouchCallout: 'none',
+                    WebkitUserSelect: 'none',
+                    KhtmlUserSelect: 'none',
+                    MozUserSelect: 'none',
+                    msUserSelect: 'none',
+                    userSelect: 'none',
+                    WebkitUserDrag: 'none'
+                  }}
                 >
+                  {isSelected && (
+                    <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl uppercase tracking-widest leading-none">
+                      Pędzel
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-1">
                     <span className="font-bold text-xs truncate" style={{ color: s?.color }}>{s?.name}</span>
                     <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
-                      limitAchieved ? 'bg-slate-200 text-slate-600' : 'bg-blue-50 text-blue-700'
+                      isSelected
+                        ? 'bg-indigo-600 text-white'
+                        : limitAchieved 
+                          ? 'bg-slate-200 text-slate-600' 
+                          : 'bg-blue-50 text-blue-700'
                     }`}>
                       {placed} / {a.hoursPerWeek}
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-1 select-none font-medium truncate flex justify-between items-center flex-wrap gap-1">
+                  <div className="text-[10px] text-slate-500 mt-1 font-medium truncate flex justify-between items-center flex-wrap gap-1">
                     <span>👤 {t ? `${t.first} ${t.last} (${t.abbr})` : 'Nieprzypisany'}</span>
                     {a.preferredBlockSize !== undefined && a.preferredBlockSize > 1 && (
                       <span className="text-[8px] tracking-wider text-purple-700 bg-purple-50 font-black px-1.5 py-0.2 rounded border border-purple-100 uppercase">
@@ -2588,6 +2860,35 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
             )}
           </div>
         </aside>
+      )}
+
+      {/* Element pływający (podążający za palcem) przy przeciąganiu dotykowym */}
+      <div 
+        ref={touchDragRef}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          pointerEvents: 'none',
+          zIndex: 99999,
+          display: 'none',
+          transform: 'translate3d(0px, 0px, 0)'
+        }}
+        className="bg-white/95 border border-indigo-450 p-2.5 rounded-xl shadow-xl w-40 flex flex-col justify-between font-sans leading-tight border-l-4"
+      >
+        <span data-role="subject-name" className="text-xs font-bold truncate">
+          Przedmiot
+        </span>
+        <span data-role="teacher-name" className="text-[10px] text-slate-500 mt-1 truncate">
+          👤 Nieprzypisany
+        </span>
+      </div>
+      {showGenerator && (
+        <PlanGenerator 
+          appState={appState} 
+          onChangeAppState={onChangeAppState} 
+          onClose={() => setShowGenerator(false)} 
+        />
       )}
     </div>
   );

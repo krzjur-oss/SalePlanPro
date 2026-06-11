@@ -1192,7 +1192,7 @@ export default function PlanSal({
                               type="button"
                               onClick={() => handleEditHomeroom(col, cKey)}
                               title="Zarządzaj opiekunem/gospodarzem sali"
-                              className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 hover:text-blue-700 hover:bg-slate-100 p-1.5 rounded-md transition-all cursor-pointer text-slate-400 z-10"
+                              className="absolute top-1 right-1 opacity-60 group-hover:opacity-100 hover:opacity-100 text-slate-500 hover:text-blue-700 hover:bg-slate-100 p-1 rounded-md transition-all cursor-pointer z-10"
                             >
                               <UserCheck size={12} />
                             </button>
@@ -1227,9 +1227,13 @@ export default function PlanSal({
                                 )}
                               </div>
                             ) : (
-                              <div className="mt-1 text-[8.5px] text-slate-350 italic opacity-0 group-hover:opacity-100 transition-opacity">
-                                Brak gospodarza
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleEditHomeroom(col, cKey)}
+                                className="mt-1.5 text-[9px] text-slate-400 hover:text-blue-700 hover:bg-blue-50/50 border border-dashed border-slate-200 hover:border-blue-300 rounded px-1.5 py-0.5 inline-flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                              >
+                                + Ustaw gospodarza
+                              </button>
                             )}
                           </th>
                         );

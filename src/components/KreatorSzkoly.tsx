@@ -1315,6 +1315,9 @@ export default function KreatorSzkoly({
   const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
   const [newTColor, setNewTColor] = useState(() => PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706');
   const [newTAvailability, setNewTAvailability] = useState<string[]>([]);
+  const [newTInactive, setNewTInactive] = useState(false);
+  const [newTInactiveComment, setNewTInactiveComment] = useState('');
+  const [newTSubstitutions, setNewTSubstitutions] = useState<string[]>([]);
 
   // Trigger auto abbr
   const updateTAbbrAuto = (f: string, l: string) => {
@@ -1333,6 +1336,9 @@ export default function KreatorSzkoly({
     setNewTMaxHours(t.maxHours || 18);
     setNewTOvertimeHours(t.overtimeHours || 0);
     setNewTColor(t.color || '#d97706');
+    setNewTInactive(t.inactive || false);
+    setNewTInactiveComment(t.inactiveComment || '');
+    setNewTSubstitutions(t.substitutions || []);
 
     // Load or generate list of available slots
     if (t.availability) {
@@ -1360,6 +1366,9 @@ export default function KreatorSzkoly({
     setNewTMaxHours(18);
     setNewTOvertimeHours(0);
     setNewTAvailability([]);
+    setNewTInactive(false);
+    setNewTInactiveComment('');
+    setNewTSubstitutions([]);
     const nextColor = PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706';
     setNewTColor(nextColor);
   };
@@ -1403,7 +1412,10 @@ export default function KreatorSzkoly({
             maxHours: Number(newTMaxHours),
             overtimeHours: Number(newTOvertimeHours) || undefined,
             color: newTColor,
-            availability: newTAvailability
+            availability: newTAvailability,
+            inactive: newTInactive,
+            inactiveComment: newTInactiveComment.trim(),
+            substitutions: newTSubstitutions
           };
         }
         return t;
@@ -1425,6 +1437,9 @@ export default function KreatorSzkoly({
       setIsTAbbrManual(false);
       setNewTMaxHours(18);
       setNewTOvertimeHours(0);
+      setNewTInactive(false);
+      setNewTInactiveComment('');
+      setNewTSubstitutions([]);
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti('Zaktualizowano dane nauczyciela');
@@ -1437,7 +1452,10 @@ export default function KreatorSzkoly({
         abbr: formattedAbbr,
         maxHours: Number(newTMaxHours),
         overtimeHours: Number(newTOvertimeHours) || undefined,
-        color: newTColor
+        color: newTColor,
+        inactive: newTInactive,
+        inactiveComment: newTInactiveComment.trim(),
+        substitutions: newTSubstitutions
       };
 
       const nextT = [...appState.teachers, newTeacher];
@@ -1457,6 +1475,9 @@ export default function KreatorSzkoly({
       setIsTAbbrManual(false);
       setNewTMaxHours(18);
       setNewTOvertimeHours(0);
+      setNewTInactive(false);
+      setNewTInactiveComment('');
+      setNewTSubstitutions([]);
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti(`Dodano nauczyciela: ${newTeacher.first} ${newTeacher.last}`);
@@ -1862,6 +1883,73 @@ export default function KreatorSzkoly({
     });
     return hours;
   }, [appState.planLekcji.assignments]);
+
+  const DAY_NAMES = useMemo(() => ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'], []);
+
+  const inactiveTeachersLessonsList = useMemo(() => {
+    const result: Array<{
+      inactiveTeacher: Teacher;
+      lessons: Array<{
+        key: string;
+        classId: string;
+        className: string;
+        day: number;
+        hourNum: number;
+        subjectId: string;
+        subjectName: string;
+        subjectShort: string;
+        color: string;
+        assignmentId: string;
+      }>
+    }> = [];
+
+    const inactiveTeachers = appState.teachers.filter(t => t.inactive && t.id !== editingTeacherId);
+    
+    inactiveTeachers.forEach(it => {
+      const itLessons: any[] = [];
+      
+      const itAsgs = appState.planLekcji.assignments.filter(a => a.teacherId === it.id);
+      const asgIds = new Set(itAsgs.map(a => a.id));
+
+      Object.entries(appState.planLekcji.lessons).forEach(([lessonKey, lesson]) => {
+        if (asgIds.has(lesson.assignmentId)) {
+          const parts = lessonKey.split('|');
+          if (parts.length >= 3) {
+            const classId = parts[0];
+            const day = parseInt(parts[1]);
+            const hourNum = parseInt(parts[2]);
+            
+            const cls = appState.classes.find(c => c.id === classId);
+            const asg = itAsgs.find(a => a.id === lesson.assignmentId);
+            const sub = asg ? appState.subjects.find(s => s.id === asg.subjectId) : null;
+            
+            itLessons.push({
+              key: lessonKey,
+              classId,
+              className: cls ? cls.name : 'Klasa ' + classId,
+              day,
+              hourNum,
+              subjectId: asg ? asg.subjectId : '',
+              subjectName: sub ? sub.name : 'Przedmiot',
+              subjectShort: sub ? sub.short : 'Przedmiot',
+              color: sub?.color || '#3b82f6',
+              assignmentId: lesson.assignmentId
+            });
+          }
+        }
+      });
+
+      // Sort by day and hours
+      itLessons.sort((a, b) => a.day - b.day || a.hourNum - b.hourNum);
+
+      result.push({
+        inactiveTeacher: it,
+        lessons: itLessons
+      });
+    });
+
+    return result;
+  }, [appState.teachers, appState.planLekcji.lessons, appState.planLekcji.assignments, appState.classes, appState.subjects, editingTeacherId]);
 
   const classTotalHoursMap = useMemo(() => {
     const hours: Record<string, number> = {};
@@ -3361,6 +3449,84 @@ export default function KreatorSzkoly({
                       </div>
                     </div>
 
+                    <div className="bg-slate-100/50 p-2.5 rounded-lg border border-slate-200 space-y-2 mt-1">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 w-3.5 h-3.5 cursor-pointer"
+                          checked={newTInactive}
+                          onChange={(e) => {
+                            setNewTInactive(e.target.checked);
+                            if (!e.target.checked) {
+                              setNewTInactiveComment('');
+                            }
+                          }}
+                        />
+                        <span className="text-xs font-black text-rose-700">🔴 Nauczyciel nieaktywny</span>
+                      </label>
+                      {newTInactive && (
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-slate-500 font-bold">Komentarz / Powód nieobecności</label>
+                          <input 
+                            type="text" 
+                            placeholder="np. L4, urlop zdrowotny"
+                            className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none"
+                            value={newTInactiveComment}
+                            onChange={(e) => setNewTInactiveComment(e.target.value)}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {!newTInactive && inactiveTeachersLessonsList.length > 0 && (
+                      <div className="bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100 space-y-2 mt-1 text-[11px]">
+                        <span className="font-bold text-indigo-800 flex items-center gap-1">
+                          🔀 Przydziel zastępstwo ({newTSubstitutions.length})
+                        </span>
+                        <p className="text-[9px] text-slate-500 leading-snug">
+                          Wybierz lekcje nieaktywnych nauczycieli oddane w zastępstwo:
+                        </p>
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto bg-white p-1.5 border border-slate-200 rounded-md">
+                          {inactiveTeachersLessonsList.map(({ inactiveTeacher, lessons }) => (
+                            <div key={inactiveTeacher.id} className="space-y-1">
+                              <div className="text-[9px] font-black text-slate-500 uppercase border-b border-slate-100 pb-0.5 mb-1 flex justify-between items-center">
+                                <span>Za {inactiveTeacher.abbr}</span>
+                                {inactiveTeacher.inactiveComment && (
+                                  <span className="text-[8px] text-rose-600 font-normal italic">({inactiveTeacher.inactiveComment})</span>
+                                )}
+                              </div>
+                              {lessons.length === 0 ? (
+                                <p className="text-[9px] text-slate-400 italic">Brak zaplanowanych godzin</p>
+                              ) : (
+                                lessons.map(ls => {
+                                  const isChecked = newTSubstitutions.includes(ls.key);
+                                  return (
+                                    <label key={ls.key} className="flex items-center gap-1.5 hover:bg-slate-50 p-1 rounded cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3 h-3 cursor-pointer"
+                                        checked={isChecked}
+                                        onChange={() => {
+                                          if (isChecked) {
+                                            setNewTSubstitutions(newTSubstitutions.filter(k => k !== ls.key));
+                                          } else {
+                                            setNewTSubstitutions([...newTSubstitutions, ls.key]);
+                                          }
+                                        }}
+                                      />
+                                      <span className="text-[10px] text-slate-700 leading-tight">
+                                        <strong>{ls.className}</strong>: {DAY_NAMES[ls.day]} l.{ls.hourNum} ({ls.subjectShort})
+                                      </span>
+                                    </label>
+                                  );
+                                })
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold block mb-1.5">Kolor profilu (Wybierz spośród 60 kolorów)</label>
                       <div className="grid grid-cols-8 gap-1 max-h-24 overflow-y-auto p-1.5 border border-slate-200 bg-slate-50 rounded-lg">
@@ -3417,7 +3583,19 @@ export default function KreatorSzkoly({
                               {t.abbr}
                             </span>
                             <div>
-                              <span className="text-xs font-black text-slate-900 leading-none">{t.first} {t.last}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-slate-900 leading-none">{t.first} {t.last}</span>
+                                {t.inactive && (
+                                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">
+                                    🔴 Nieaktywny
+                                  </span>
+                                )}
+                              </div>
+                              {t.inactive && t.inactiveComment && (
+                                <p className="text-[10px] text-rose-600 font-semibold italic mt-0.5">
+                                  Powód: {t.inactiveComment}
+                                </p>
+                              )}
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                                 <span className="text-[10px] text-slate-400 font-semibold">
                                   Pensum: {t.maxHours}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}
@@ -3427,6 +3605,11 @@ export default function KreatorSzkoly({
                                 }`}>
                                   Przydział: {assignedHours}h / {limitSum}h
                                 </span>
+                                {!t.inactive && t.substitutions && t.substitutions.length > 0 && (
+                                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded font-black border border-indigo-200" title={t.substitutions.join(', ')}>
+                                    🔀 Zastępstwa: {t.substitutions.length} lekcji
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -3591,6 +3774,83 @@ export default function KreatorSzkoly({
                                 ))}
                               </div>
                             </div>
+
+                            <div className="bg-slate-100/65 p-3 rounded-xl border border-slate-200/60 space-y-2 mt-2 col-span-2">
+                              <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-slate-300 text-rose-600 focus:ring-rose-500 w-3.5 h-3.5 cursor-pointer"
+                                  checked={newTInactive}
+                                  onChange={(e) => {
+                                    setNewTInactive(e.target.checked);
+                                    if (!e.target.checked) setNewTInactiveComment('');
+                                  }}
+                                />
+                                <span className="text-xs font-black text-rose-700">🔴 Nauczyciel nieaktywny</span>
+                              </label>
+                              {newTInactive && (
+                                <div className="space-y-1">
+                                  <label className="text-[9px] text-slate-500 font-bold">Komentarz / Powód nieobecności</label>
+                                  <input 
+                                    type="text" 
+                                    placeholder="np. L4, urlop zdrowotny"
+                                    className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none"
+                                    value={newTInactiveComment}
+                                    onChange={(e) => setNewTInactiveComment(e.target.value)}
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {!newTInactive && inactiveTeachersLessonsList.length > 0 && (
+                              <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-150 space-y-2.5 mt-2 col-span-2">
+                                <span className="font-bold text-indigo-800 text-xs flex items-center gap-1.5">
+                                  🔀 Przydzielone zastępstwa ({newTSubstitutions.length})
+                                </span>
+                                <p className="text-[10px] text-slate-500 leading-snug">
+                                  Zaznacz, które z poniższych zajęć nieobecnych nauczycieli zostały przydzielone temu nauczycielowi w ramach zastępstwa:
+                                </p>
+                                <div className="space-y-2 max-h-48 overflow-y-auto bg-white p-2 border border-slate-200 rounded-lg">
+                                  {inactiveTeachersLessonsList.map(({ inactiveTeacher, lessons }) => (
+                                    <div key={inactiveTeacher.id} className="space-y-1 border-b last:border-0 border-slate-100 pb-1.5 last:pb-0 mb-1.5 last:mb-0">
+                                      <div className="text-[9px] font-black text-slate-500 uppercase flex justify-between items-center bg-slate-50/80 px-1 py-0.5 rounded">
+                                        <span>Za {inactiveTeacher.first} {inactiveTeacher.last} ({inactiveTeacher.abbr})</span>
+                                        {inactiveTeacher.inactiveComment && (
+                                          <span className="text-[8.5px] text-rose-600 font-semibold italic">({inactiveTeacher.inactiveComment})</span>
+                                        )}
+                                      </div>
+                                      {lessons.length === 0 ? (
+                                        <p className="text-[9px] text-slate-400 italic px-1 pt-1">Brak zaplanowanych godzin</p>
+                                      ) : (
+                                        lessons.map(ls => {
+                                          const isChecked = newTSubstitutions.includes(ls.key);
+                                          return (
+                                            <label key={ls.key} className="flex items-center gap-2 hover:bg-slate-50/85 p-1.5 rounded cursor-pointer select-none border border-slate-50 text-[10.5px]">
+                                              <input
+                                                type="checkbox"
+                                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer shrink-0"
+                                                checked={isChecked}
+                                                onChange={() => {
+                                                  if (isChecked) {
+                                                    setNewTSubstitutions(newTSubstitutions.filter(k => k !== ls.key));
+                                                  } else {
+                                                    setNewTSubstitutions([...newTSubstitutions, ls.key]);
+                                                  }
+                                                }}
+                                              />
+                                              <div className="leading-tight shrink overflow-hidden">
+                                                <div className="font-bold text-slate-800">{DAY_NAMES[ls.day]}, lekcja {ls.hourNum}</div>
+                                                <div className="text-slate-500 text-[9px]">{ls.className} • <span className="font-semibold" style={{ color: ls.color }}>{ls.subjectShort}</span></div>
+                                              </div>
+                                            </label>
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
 

@@ -317,6 +317,40 @@ export default function App() {
     addEventLog('redo', 'Ponowiono zmianę planu (Redo)', 'Zastosowano ponownie uprzednio cofniętą operację.');
   };
 
+  // ── KEYBOARD SHORTCUTS FOR UNDO / REDO ──
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl) {
+        const tagName = activeEl.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || activeEl.getAttribute('contenteditable') === 'true') {
+          return;
+        }
+      }
+
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (isCmdOrCtrl) {
+        if (e.key === 'z' || e.key === 'Z') {
+          if (e.shiftKey) {
+            e.preventDefault();
+            handleRedo();
+          } else {
+            e.preventDefault();
+            handleUndo();
+          }
+        } else if (e.key === 'y' || e.key === 'Y') {
+          e.preventDefault();
+          handleRedo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [undoStack, redoStack, schedData]);
+
   // ── BRIDGING/IMPORT SESSIONS FROM ETAP 1 TO ETAP 2 ──
   const handleImportFromPlanKlas = () => {
     if (!confirm('Czy chcesz przetransferować siatkę zajęć z Planu Klas do Planu Sal? Spowoduje to nadpisanie bieżącego układu sal dla wspólnych slotów lekcyjnych.')) return;

@@ -36,6 +36,9 @@ export interface Teacher {
   color?: string;
   overtimeHours?: number;
   availability?: string[]; // format: "dayIndex-hourNum" (np. "0-1")
+  inactive?: boolean;
+  inactiveComment?: string;
+  substitutions?: string[]; // entries format: "inactiveTeacherId|dayIndex|hourNum" or similar representing assigned substitutions
 }
 
 export interface SchoolGroup {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell } from '../types';
-import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle } from 'lucide-react';
+import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X } from 'lucide-react';
 
 interface WydrukiProps {
   appState: AppState;
@@ -19,6 +19,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [selectedRoomId, setSelectedRoomId] = useState<string>('all');
   const [popupBlocked, setPopupBlocked] = useState<boolean>(false);
   const [isInIframe, setIsInIframe] = useState<boolean>(false);
+  const [isPrintFriendlyWeeklyMode, setIsPrintFriendlyWeeklyMode] = useState<boolean>(false);
+  const [weeklyPageOrientation, setWeeklyPageOrientation] = useState<'portrait' | 'landscape'>('landscape');
 
   useEffect(() => {
     try {
@@ -735,6 +737,341 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     return pl.rooms.filter(r => r.id === selectedRoomId);
   }, [pl.rooms, selectedRoomId]);
 
+  if (isPrintFriendlyWeeklyMode) {
+    return (
+      <div id="weekly-print-overlay" className="fixed inset-0 bg-slate-100/90 backdrop-blur-md z-[9999] overflow-y-auto p-4 md:p-8 font-sans text-slate-800">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            body > * {
+              display: none !important;
+            }
+            #weekly-print-overlay {
+              display: block !important;
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              background: white !important;
+              padding: 0 !important;
+              margin: 0 !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+            .page-break {
+              page-break-after: always !important;
+              break-after: page !important;
+            }
+            .print-card {
+              border: 1px solid #000 !important;
+              margin-bottom: 25px !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              box-shadow: none !important;
+              padding: 10px !important;
+            }
+            table {
+              border-collapse: collapse !important;
+              width: 100% !important;
+            }
+            th, td {
+              border: 1px solid #000 !important;
+              color: #000 !important;
+              padding: 4px 6px !important;
+              font-size: 10px !important;
+            }
+            th {
+              background-color: #f1f5f9 !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            @page {
+              size: ${weeklyPageOrientation};
+              margin: 10mm;
+            }
+          }
+        ` }} />
+
+        {/* Top bar (Control stripe) - Hidden during print */}
+        <div className="no-print bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 mb-6 max-w-5xl mx-auto shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 bg-slate-800 rounded-lg text-indigo-400">
+              <Printer size={20} />
+            </span>
+            <div className="text-left">
+              <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-tight">Tryb przygotowania do druku</span>
+              <h3 className="text-sm font-black uppercase text-white leading-tight">
+                Podgląd Tygodniowego Planu • {printType === 'classes' ? 'Oddziały' : 'Nauczyciele'}
+              </h3>
+            </div>
+          </div>
+
+          {/* Controls inside top-bar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Quick selector of layout orientation */}
+            <div className="flex items-center gap-1.5 bg-slate-800 p-1 rounded-lg">
+              <button
+                onClick={() => setWeeklyPageOrientation('portrait')}
+                className={`px-3 py-1 text-[11px] font-bold rounded-md transition ${weeklyPageOrientation === 'portrait' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                Pionowo (A4)
+              </button>
+              <button
+                onClick={() => setWeeklyPageOrientation('landscape')}
+                className={`px-3 py-1 text-[11px] font-bold rounded-md transition ${weeklyPageOrientation === 'landscape' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              >
+                Poziomo (A4)
+              </button>
+            </div>
+
+            {/* Quick selector of active class or teacher directly in overlay */}
+            {printType === 'classes' ? (
+              <select
+                value={selectedClassId}
+                onChange={(e) => setSelectedClassId(e.target.value)}
+                className="bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
+              >
+                <option value="all">Wszystkie oddziały</option>
+                {pl.classes.map(c => (
+                  <option key={c.id} value={c.id}>Klasa {c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={selectedTeacherId}
+                onChange={(e) => setSelectedTeacherId(e.target.value)}
+                className="bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
+              >
+                <option value="all">Wszyscy nauczyciele</option>
+                {pl.teachers.map(t => (
+                  <option key={t.id} value={t.id}>{t.last} {t.first}</option>
+                ))}
+              </select>
+            )}
+
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-indigo-600 border-solid"
+            >
+              <Printer size={13} /> Drukuj teraz (Ctrl+P)
+            </button>
+            
+            <button
+              onClick={() => setIsPrintFriendlyWeeklyMode(false)}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition select-none cursor-pointer"
+            >
+              Zamknij podgląd
+            </button>
+          </div>
+        </div>
+
+        {/* Outer content container containing all printed sheets */}
+        <div className="max-w-5xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0">
+          
+          {printType === 'classes' ? (
+            classesToPrint.map((cls, idx) => {
+              return (
+                <div key={cls.id} className={`print-card pb-8 border-b border-slate-150 last:border-0 ${idx < classesToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
+                  {/* Class Header */}
+                  <div className="flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-4">
+                    <div className="text-left">
+                      <h2 className="text-xl font-black text-slate-950">TYGODNIOWY PLAN LEKCJI • KLASA {cls.name}</h2>
+                      <p className="text-xs text-slate-500 font-bold uppercase">{appState.school.name} • Plan lekcji</p>
+                    </div>
+                    <div className="text-right text-[10px] text-slate-400 font-bold uppercase">
+                      Rok szkolny: {appState.yearLabel} • {scheduleVersion === 'etap1' ? 'Wersja Plan Klas' : 'Wersja Plan Sal'}
+                    </div>
+                  </div>
+
+                  {/* Clean Grid Table */}
+                  <table className="w-full text-xs border border-slate-300">
+                    <thead>
+                      <tr className="bg-slate-100 uppercase font-black text-slate-800">
+                        <th className="w-24 border border-slate-300 p-2.5 text-center text-[10px]">Nr / Godz</th>
+                        {DAYS_NAMES.map(d => (
+                          <th key={d} className="border border-slate-300 p-2.5 text-center text-[10px]">{d}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {hoursList.map((hour, hIdx) => {
+                        const hourKeyStr = String(hour.num);
+                        return (
+                          <tr key={hour.num} className="bg-white">
+                            <td className="border border-slate-300 p-2 py-2.5 font-mono text-center text-[10px] bg-slate-50/50">
+                              <span className="font-extrabold text-slate-900">{hour.num}</span>
+                              <span className="block text-[8px] text-slate-400 font-semibold leading-none mt-0.5">{hour.start}-{hour.end}</span>
+                            </td>
+
+                            {[0, 1, 2, 3, 4].map(dayIdx => {
+                              let displayItems: Array<{ subject: string; teacherAbbr?: string; roomName?: string }> = [];
+
+                              if (scheduleVersion === 'etap1') {
+                                const lessonKeyStr = `${cls.id}|${dayIdx}|${hIdx}`;
+                                const lesson = pl.lessons[lessonKeyStr];
+                                if (lesson) {
+                                  const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+                                  if (asg) {
+                                    const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
+                                    const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+                                    const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
+                                    displayItems.push({
+                                      subject,
+                                      teacherAbbr: teacher?.abbr,
+                                      roomName: room?.name
+                                    });
+                                  }
+                                }
+                              } else {
+                                const clsMapData = etap2Schedule.classes[cls.id] || {};
+                                const daySchedules = clsMapData[dayIdx] || {};
+                                const hourCells = daySchedules[hourKeyStr] || [];
+                                
+                                hourCells.forEach(cell => {
+                                  displayItems.push({
+                                    subject: cell.subject,
+                                    teacherAbbr: cell.teacherAbbr,
+                                    roomName: cell.note
+                                  });
+                                });
+                              }
+
+                              return (
+                                <td key={dayIdx} className="border border-slate-300 p-2.5 align-middle text-center min-h-[50px] bg-white">
+                                  {displayItems.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {displayItems.map((it, dIdx) => (
+                                        <div key={dIdx} className="text-[10px] leading-tight">
+                                          <span className="font-black text-slate-900 block tracking-tight text-[10.5px]">{it.subject}</span>
+                                          <div className="flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1">
+                                            {it.teacherAbbr && <span className="bg-slate-100 border border-slate-150 px-1 rounded">{it.teacherAbbr}</span>}
+                                            {it.roomName && <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded">sala: {it.roomName}</span>}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[9px] text-slate-200 font-bold font-mono">-</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })
+          ) : (
+            teachersToPrint.map((teacher, idx) => {
+              return (
+                <div key={teacher.id} className={`print-card pb-8 border-b border-slate-150 last:border-0 ${idx < teachersToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
+                  {/* Teacher Header */}
+                  <div className="flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-4">
+                    <div className="text-left">
+                      <h2 className="text-xl font-black text-slate-950">TYGODNIOWY PLAN NAUCZYCIELA • {teacher.last.toUpperCase()} {teacher.first.toUpperCase()} ({teacher.abbr})</h2>
+                      <p className="text-xs text-slate-500 font-bold uppercase">{appState.school.name} • Plan lekcji</p>
+                    </div>
+                    <div className="text-right text-[10px] text-slate-400 font-bold uppercase">
+                      Rok szkolny: {appState.yearLabel} • {scheduleVersion === 'etap1' ? 'Wersja Plan Klas' : 'Wersja Plan Sal'}
+                    </div>
+                  </div>
+
+                  {/* Clean Grid Table */}
+                  <table className="w-full text-xs border border-slate-300">
+                    <thead>
+                      <tr className="bg-slate-100 uppercase font-black text-slate-800">
+                        <th className="w-24 border border-slate-300 p-2.5 text-center text-[10px]">Nr / Godz</th>
+                        {DAYS_NAMES.map(d => (
+                          <th key={d} className="border border-slate-300 p-2.5 text-center text-[10px]">{d}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {hoursList.map((hour, hIdx) => {
+                        const hourKeyStr = String(hour.num);
+                        return (
+                          <tr key={hour.num} className="bg-white">
+                            <td className="border border-slate-300 p-2 py-2.5 font-mono text-center text-[10px] bg-slate-50/50">
+                              <span className="font-extrabold text-slate-900">{hour.num}</span>
+                              <span className="block text-[8px] text-slate-200 font-semibold leading-none mt-0.5">{hour.start}-{hour.end}</span>
+                            </td>
+
+                            {[0, 1, 2, 3, 4].map(dayIdx => {
+                              let displayItems: Array<{ subject: string; className: string; roomName?: string }> = [];
+
+                              if (scheduleVersion === 'etap1') {
+                                Object.entries(pl.lessons).forEach(([key, lesson]) => {
+                                  const parts = key.split('|');
+                                  const classId = parts[0];
+                                  const dIdx = parseInt(parts[1], 10);
+                                  const hrIndex = parseInt(parts[2], 10);
+
+                                  if (dIdx === dayIdx && hrIndex === hIdx) {
+                                    const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+                                    if (asg && asg.teacherId === teacher.id) {
+                                      const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
+                                      const clsName = classesMap.get(classId)?.name || 'Inna';
+                                      const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
+                                      displayItems.push({
+                                        subject,
+                                        className: clsName,
+                                        roomName: room?.name
+                                      });
+                                    }
+                                  }
+                                });
+                              } else {
+                                const tSched = etap2Schedule.teachers[teacher.id] || {};
+                                const daySchedules = tSched[dayIdx] || {};
+                                const hourCells = daySchedules[hourKeyStr] || [];
+                                
+                                hourCells.forEach(cell => {
+                                  displayItems.push({
+                                    subject: cell.subject,
+                                    className: cell.className || cell.classes?.join('+') || 'Klasa',
+                                    roomName: cell.note
+                                  });
+                                });
+                              }
+
+                              return (
+                                <td key={dayIdx} className="border border-slate-300 p-2.5 align-middle text-center min-h-[50px] bg-white">
+                                  {displayItems.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {displayItems.map((it, dIdx) => (
+                                        <div key={dIdx} className="text-[10px] leading-tight">
+                                          <span className="font-black text-slate-900 block tracking-tight text-[10.5px]">{it.subject}</span>
+                                          <div className="flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1">
+                                            <span className="bg-amber-100 hover:bg-amber-200 border border-amber-200 text-amber-800 px-1 rounded">{it.className}</span>
+                                            {it.roomName && <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded">sala: {it.roomName}</span>}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-[9px] text-slate-200 font-bold font-mono">-</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 relative print:p-0 print:bg-white print:overflow-visible">
       {/* CSS rules specifically injected for elegant printing */}
@@ -832,6 +1169,15 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer"
               >
                 <Printer size={15} className="animate-pulse" /> Podgląd płachty sal
+              </button>
+            )}
+            {(printType === 'classes' || printType === 'teachers') && (
+              <button 
+                onClick={() => setIsPrintFriendlyWeeklyMode(true)}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-indigo-600 border-solid"
+                title="Generuj przejrzysty i czytelny tygodniowy plan dostosowany do wydruku z czyszczeniem interfejsu"
+              >
+                <Calendar size={15} /> Generuj Tygodniowy Plan
               </button>
             )}
             <button 
