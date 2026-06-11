@@ -17,6 +17,7 @@ export interface ClassRoom {
   desc?: string;
   type?: string;
   capacity?: number;
+  isGrade1_3?: boolean;
 }
 
 export interface Subject {
@@ -39,6 +40,7 @@ export interface Teacher {
   inactive?: boolean;
   inactiveComment?: string;
   substitutions?: string[]; // entries format: "inactiveTeacherId|dayIndex|hourNum" or similar representing assigned substitutions
+  preferredRooms?: string[]; // list of preferred room column keys (e.g. ["f0_s0_104"])
 }
 
 export interface SchoolGroup {

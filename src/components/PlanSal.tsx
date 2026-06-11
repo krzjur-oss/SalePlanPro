@@ -62,6 +62,476 @@ export default function PlanSal({
   const [hrClassName2, setHrClassName2] = useState<string>('');
   const [hrTeacherAbbr2, setHrTeacherAbbr2] = useState<string>('');
 
+  // Sched generator states
+  const [showGenerator, setShowGenerator] = useState<boolean>(false);
+  const [genPriorityHomerooms, setGenPriorityHomerooms] = useState<boolean>(true);
+  const [genPriorityTeachers, setGenPriorityTeachers] = useState<boolean>(true);
+  const [genExcludeWF, setGenExcludeWF] = useState<boolean>(true);
+  const [genAutoPlaceWF, setGenAutoPlaceWF] = useState<boolean>(true);
+  const [genClearExisting, setGenClearExisting] = useState<boolean>(true);
+  const [teacherSearch, setTeacherSearch] = useState<string>('');
+
+  // List of all classrooms from columns in the layout
+  const allRoomsList = useMemo(() => {
+    const rawCols = flattenColumns(appState.floors);
+    return rawCols.map(col => {
+      const roomKey = colKey(col);
+      return {
+        key: roomKey,
+        num: col.room.num,
+        sub: col.room.sub || '',
+        floorName: col.floor.name,
+        bldName: appState.buildings[col.floor.buildingIdx]?.name || ''
+      };
+    });
+  }, [appState.floors, appState.buildings]);
+
+  const handleAddPreferredRoom = (teacherId: string, roomKey: string) => {
+    const updatedTeachers = appState.teachers.map(t => {
+      if (t.id === teacherId) {
+        const preferred = t.preferredRooms || [];
+        if (!preferred.includes(roomKey)) {
+          return { ...t, preferredRooms: [...preferred, roomKey] };
+        }
+      }
+      return t;
+    });
+
+    onChangeAppState({
+      ...appState,
+      teachers: updatedTeachers,
+      planLekcji: {
+        ...appState.planLekcji,
+        teachers: updatedTeachers
+      }
+    });
+    notify('Dodano preferowaną salę', 'ok');
+  };
+
+  const handleRemovePreferredRoom = (teacherId: string, roomKey: string) => {
+    const updatedTeachers = appState.teachers.map(t => {
+      if (t.id === teacherId) {
+        const preferred = t.preferredRooms || [];
+        return { ...t, preferredRooms: preferred.filter(k => k !== roomKey) };
+      }
+      return t;
+    });
+
+    onChangeAppState({
+      ...appState,
+      teachers: updatedTeachers,
+      planLekcji: {
+        ...appState.planLekcji,
+        teachers: updatedTeachers
+      }
+    });
+    notify('Usunięto preferowaną salę', 'ok');
+  };
+
+  const handleAutoGenerateRooms = () => {
+    // Save current to undo in parent
+    const yearKey = appState.yearKey;
+    const pl = appState.planLekcji;
+
+    if (!pl || !pl.assignments) {
+      notify('Brak przydziałów lekcyjnych w Etapie 1!', 'err');
+      return;
+    }
+
+    const assignmentsMap = new Map<string, Assignment>((pl.assignments || []).map(a => [a.id, a]));
+    const teachersMap = new Map<string, Teacher>((pl.teachers || []).map(t => [t.id, t]));
+    const subjectsMap = new Map<string, Subject>((pl.subjects || []).map(s => [s.id, s]));
+    
+    // Support lookups by ID and by clean room name
+    const roomsMap = new Map<string, ClassRoom>();
+    (pl.rooms || []).forEach(r => {
+      roomsMap.set(r.id, r);
+      roomsMap.set(r.name.toLowerCase().trim(), r);
+    });
+
+    const allRoomCols = flattenColumns(appState.floors);
+    if (allRoomCols.length === 0) {
+      notify('Brak sal w układzie architektonicznym szkoły!', 'err');
+      return;
+    }
+
+    const nextSchedData = { ...schedData };
+    if (!nextSchedData[yearKey]) {
+      nextSchedData[yearKey] = {};
+    }
+
+    let totalPlaced = 0;
+    let totalSkippedPE = 0;
+    let totalUnassigned = 0;
+
+    const isPESubject = (subjectId: string, teacherId: string | null) => {
+      const sub = subjectsMap.get(subjectId);
+      if (!sub) return false;
+      const name = (sub.name || '').toLowerCase();
+      const s = (sub.short || '').toLowerCase();
+
+      const teacher = teacherId ? teachersMap.get(teacherId) : null;
+      const tAbbr = teacher ? (teacher.abbr || '').toLowerCase() : '';
+
+      return (
+        s.includes('wf') ||
+        s.includes('w-f') ||
+        name.includes('wychowanie fizyczne') ||
+        name.includes('w-f') ||
+        name.includes('wf') ||
+        tAbbr === 'wf'
+      );
+    };
+
+    // Main 5-day solver loop
+    for (let day = 0; day < 5; day++) {
+      if (!nextSchedData[yearKey][day]) {
+        nextSchedData[yearKey][day] = {};
+      }
+
+      appState.hours.forEach(hourKey => {
+        const hourIdx = pl.hours.findIndex(h => String(h.num) === hourKey);
+        if (hourIdx === -1) return;
+
+        if (genClearExisting) {
+          nextSchedData[yearKey][day][hourKey] = {};
+        }
+
+        const colKeyCells = nextSchedData[yearKey][day][hourKey] || {};
+        nextSchedData[yearKey][day][hourKey] = colKeyCells;
+
+        const lessonsToAssign: any[] = [];
+
+        pl.classes.forEach(cls => {
+          const lessonKey = `${cls.id}|${day}|${hourIdx}`;
+          const lesson = pl.lessons[lessonKey];
+          if (!lesson) return;
+
+          const asg = assignmentsMap.get(lesson.assignmentId);
+          if (!asg) return;
+
+          // Deduplicate multi-class assignments
+          if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
+            return;
+          }
+
+          const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+          const subject = subjectsMap.get(asg.subjectId);
+          const roomEtap1 = asg.roomId ? roomsMap.get(asg.roomId) : null;
+
+          const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
+          const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
+            ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
+            : [];
+          const combinedClasses = [cls.name, ...extraClasses];
+
+          const isPE = isPESubject(asg.subjectId, asg.teacherId);
+
+          lessonsToAssign.push({
+            id: lessonKey,
+            assignmentId: asg.id,
+            classId: cls.id,
+            className: cls.name,
+            classYear: cls.year,
+            groupId: asg.groupId,
+            combinedClasses,
+            teacherId: asg.teacherId,
+            teacherAbbr: teacher?.abbr || '?',
+            suppTeacherAbbr: suppTeacher?.abbr,
+            subjectId: asg.subjectId,
+            subjectShort: subject?.short || 'Zajęcia',
+            subjectName: subject?.name || 'Zajęcia',
+            suggestedRoomId: asg.roomId,
+            suggestedRoomName: roomEtap1 ? roomEtap1.name : null,
+            isPE
+          });
+        });
+
+        const availableMainCols = allRoomCols.filter(col => {
+          const roomNameClean = (col.room.num || '').toLowerCase().trim();
+          const meta = roomsMap.get(roomNameClean);
+          const bld = appState.buildings[col.floor.buildingIdx];
+          const isIndividual = meta?.type === 'indywidualne';
+          const isSport = meta?.type === 'sport' || bld?.multi === true;
+          return !isIndividual && !isSport;
+        });
+
+        const availableSportCols = allRoomCols.filter(col => {
+          const roomNameClean = (col.room.num || '').toLowerCase().trim();
+          const meta = roomsMap.get(roomNameClean);
+          const bld = appState.buildings[col.floor.buildingIdx];
+          return meta?.type === 'sport' || bld?.multi === true;
+        });
+
+        const occupiedKeys = new Set<string>();
+        Object.keys(colKeyCells).forEach(ck => {
+          const cell = colKeyCells[ck];
+          if (cell) {
+            occupiedKeys.add(ck);
+          }
+        });
+
+        const standardLessons = lessonsToAssign.filter(l => !l.isPE);
+        const peLessons = lessonsToAssign.filter(l => l.isPE);
+
+        // A. Place PE Lessons
+        if (genExcludeWF) {
+          if (genAutoPlaceWF) {
+            peLessons.forEach(lesson => {
+              let assignedKey = '';
+              for (const col of availableSportCols) {
+                const key = colKey(col);
+                if (!occupiedKeys.has(key)) {
+                  assignedKey = key;
+                  break;
+                }
+              }
+
+              if (!assignedKey) {
+                totalUnassigned++;
+              } else {
+                occupiedKeys.add(assignedKey);
+                colKeyCells[assignedKey] = {
+                  teacherAbbr: lesson.teacherAbbr,
+                  supportTeacherAbbr: lesson.suppTeacherAbbr,
+                  classes: lesson.combinedClasses,
+                  className: mergeClassNames(lesson.combinedClasses).join('+'),
+                  subject: lesson.subjectName,
+                  note: 'Zajęcia sportowe (W-F)',
+                  _bridgeMeta: {
+                    classId: lesson.classId,
+                    teacherId: lesson.teacherId,
+                    subjectId: lesson.subjectId,
+                    roomId: lesson.suggestedRoomId,
+                    groupId: null,
+                    suggestedRoom: lesson.suggestedRoomName
+                  }
+                };
+                totalPlaced++;
+              }
+            });
+          } else {
+            totalSkippedPE += peLessons.length;
+          }
+        } else {
+          standardLessons.push(...peLessons);
+        }
+
+        // B. Place Standard Lessons (Greedy heuristic matching with custom priorities)
+        let unassignedStandard = [...standardLessons];
+
+        while (unassignedStandard.length > 0) {
+          const candidates: { lessonIdx: number; colKey: string; score: number }[] = [];
+
+          unassignedStandard.forEach((lesson, lIdx) => {
+            allRoomCols.forEach(col => {
+              const key = colKey(col);
+              if (occupiedKeys.has(key)) return;
+
+              const roomNameClean = (col.room.num || '').toLowerCase().trim();
+              const meta = roomsMap.get(roomNameClean);
+              const bld = appState.buildings[col.floor.buildingIdx];
+              const isSport = meta?.type === 'sport' || bld?.multi === true;
+              const isIndividual = meta?.type === 'indywidualne';
+
+              let score = 0;
+
+              // Rule 1: Homerooms (Sala wychowawcza klasy lub gospodarz sali)
+              const hr = appState.homerooms?.[key];
+              if (genPriorityHomerooms && hr) {
+                if (hr.className && lesson.combinedClasses.some(cName => cName.toUpperCase().trim() === hr.className.toUpperCase().trim())) {
+                  score += 2000;
+                }
+                if (hr.teacherAbbr && lesson.teacherAbbr && hr.teacherAbbr.toUpperCase().trim() === lesson.teacherAbbr.toUpperCase().trim()) {
+                  score += 1200;
+                }
+                if (hr.className2 && lesson.combinedClasses.some(cName => cName.toUpperCase().trim() === hr.className2.toUpperCase().trim())) {
+                  score += 800;
+                }
+                if (hr.teacherAbbr2 && lesson.teacherAbbr && hr.teacherAbbr2.toUpperCase().trim() === lesson.teacherAbbr.toUpperCase().trim()) {
+                  score += 500;
+                }
+              }
+
+              // Rule 2: Teacher's Preferred Classroom
+              if (genPriorityTeachers && lesson.teacherId) {
+                const tObj = appState.teachers.find(t => t.id === lesson.teacherId);
+                if (tObj?.preferredRooms && tObj.preferredRooms.includes(key)) {
+                  score += 1500;
+                }
+              }
+
+              // Rule 3: Suggested Room from Etap 1
+              if (lesson.suggestedRoomName && roomNameClean === lesson.suggestedRoomName.toLowerCase().trim()) {
+                score += 300;
+              }
+
+              // Teacher's consecutive lessons: if advisor taught in this colKey at the previous hour, stay in same room
+              if (hourIdx > 0 && lesson.teacherId) {
+                const prevHourKey = appState.hours[hourIdx - 1];
+                const prevColKeyCells = nextSchedData[yearKey][day][prevHourKey] || {};
+                const prevCell = prevColKeyCells[key]; // key is the colKey of the room candidate
+                if (prevCell) {
+                  const cellsList = Array.isArray(prevCell) ? prevCell : [prevCell];
+                  const hasSameTeacher = cellsList.some(cell => {
+                    const cellMeta = cell?._bridgeMeta;
+                    return cellMeta && cellMeta.teacherId === lesson.teacherId;
+                  });
+                  if (hasSameTeacher) {
+                    score += 5000; // Large bonus to stay in same room!
+                  }
+                }
+              }
+
+              // Special younger classes (1-3) rule: standard lessons (except PE/Informatics) must reside in homerooms
+              const isGrade1_3 = (lesson.classYear && lesson.classYear >= 1 && lesson.classYear <= 3) || 
+                                 ['1', '2', '3'].includes((lesson.className || '').trim().charAt(0));
+                                 
+              const isINFSubject = (subjectId: string) => {
+                const sub = subjectsMap.get(subjectId);
+                if (!sub) return false;
+                const name = (sub.name || '').toLowerCase();
+                const short = (sub.short || '').toLowerCase();
+                return (
+                  short.includes('inf') ||
+                  short.includes('e-inf') ||
+                  name.includes('informatyk') ||
+                  name.includes('edukacja informatyczna') ||
+                  name.includes('zajęcia komputerowe')
+                );
+              };
+              
+              const isPEOrInf = lesson.isPE || isINFSubject(lesson.subjectId);
+              
+              // Find if this classroom is registered as this class's homeroom
+              const isClassHomeroom = hr && hr.className && (
+                hr.className.toUpperCase().trim() === lesson.className.toUpperCase().trim() ||
+                (hr.className2 && hr.className2.toUpperCase().trim() === lesson.className.toUpperCase().trim())
+              );
+              
+              if (isGrade1_3 && !isPEOrInf) {
+                const classHasHomeroomDefined = Object.values(appState.homerooms || {}).some(hObj => 
+                  hObj.className?.toUpperCase().trim() === lesson.className.toUpperCase().trim() ||
+                  hObj.className2?.toUpperCase().trim() === lesson.className.toUpperCase().trim()
+                );
+                
+                if (classHasHomeroomDefined) {
+                  if (isClassHomeroom) {
+                    score += 50000; // Enormous bonus to enforce placement in own homeroom
+                  } else {
+                    score -= 50000; // Enormous penalty to prevent placement in other classrooms
+                  }
+                }
+
+                // Dedicated 1-3 room allocation rule
+                if (meta?.isGrade1_3) {
+                  score += 15000; // Prefer designated 1-3 classrooms
+                } else {
+                  score -= 5000;  // Discourage placement of 1-3 classes in generic classrooms
+                }
+              } else if (!isGrade1_3) {
+                // Prevent older classes from stealing rooms marked explicitly for 1-3
+                if (meta?.isGrade1_3) {
+                  score -= 20000; // Strong penalty to leave 1-3 classrooms empty for juniors
+                }
+              }
+
+              // Whole-class lessons versus group-divided lessons prioritization in large/small rooms
+              const isWholeClass = !lesson.groupId;
+              const capacity = meta?.capacity || 30; // standard room defaults to 30
+              
+              if (isWholeClass) {
+                // If taking whole class, prefer larger rooms
+                if (capacity >= 25) {
+                  score += capacity * 30; // e.g. up to +1500 score bonus for large capacity
+                } else {
+                  score -= (30 - capacity) * 30; // penalty for placing whole class in small rooms
+                }
+              } else {
+                // For group split classes, prefer smaller rooms so we leave large ones to whole classes
+                if (capacity >= 25) {
+                  score -= capacity * 40; // penalize group-split lesson taking large room (e.g. up to -1200)
+                } else {
+                  score += (30 - capacity) * 40; // bonus for choosing smaller room
+                }
+              }
+
+              // Adjustments/Penalties for sport or individual rooms when placing standard lessons
+              if (isSport) {
+                score -= 800;
+              }
+              if (isIndividual) {
+                score -= 400;
+              }
+
+              candidates.push({
+                lessonIdx: lIdx,
+                colKey: key,
+                score
+              });
+            });
+          });
+
+          if (candidates.length === 0) {
+            unassignedStandard.forEach(() => {
+              totalUnassigned++;
+            });
+            break;
+          }
+
+          candidates.sort((a, b) => b.score - a.score);
+          const best = candidates[0];
+
+          if (best.score < -4000) {
+            unassignedStandard.forEach(() => {
+              totalUnassigned++;
+            });
+            break;
+          }
+
+          const chosenLesson = unassignedStandard[best.lessonIdx];
+          const chosenRoomKey = best.colKey;
+
+          colKeyCells[chosenRoomKey] = {
+            teacherAbbr: chosenLesson.teacherAbbr,
+            supportTeacherAbbr: chosenLesson.suppTeacherAbbr,
+            classes: chosenLesson.combinedClasses,
+            className: mergeClassNames(chosenLesson.combinedClasses).join('+'),
+            subject: chosenLesson.subjectName,
+            note: chosenLesson.suggestedRoomName ? `(sugestia: ${chosenLesson.suggestedRoomName})` : undefined,
+            _bridgeMeta: {
+              classId: chosenLesson.classId,
+              teacherId: chosenLesson.teacherId,
+              subjectId: chosenLesson.subjectId,
+              roomId: chosenLesson.suggestedRoomId,
+              groupId: null,
+              suggestedRoom: chosenLesson.suggestedRoomName
+            }
+          };
+
+          occupiedKeys.add(chosenRoomKey);
+          totalPlaced++;
+
+          unassignedStandard.splice(best.lessonIdx, 1);
+        }
+      });
+    }
+
+    onChangeSchedData(nextSchedData);
+
+    let summary = `Wygenerowano plan dla sal lekcyjnych!\n`;
+    summary += `🔹 Przydzielono pomyślnie: ${totalPlaced} godzin\n`;
+    if (totalSkippedPE > 0) {
+      summary += `🔹 Pominięte lekcje W-F: ${totalSkippedPE} godzin\n`;
+    }
+    if (totalUnassigned > 0) {
+      summary += `⚠️ Brak wolnych sal dla: ${totalUnassigned} lekcji (wypchnięte do puli bocznej)`;
+    }
+
+    notify(summary, 'ok');
+    setShowGenerator(false);
+  };
+
   const sortedClasses = useMemo(() => {
     return [...appState.classes].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
   }, [appState.classes]);
@@ -1065,7 +1535,14 @@ export default function PlanSal({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowGenerator(true)}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold text-indigo-750 bg-indigo-50 border border-indigo-200 hover:bg-indigo-150 flex items-center gap-1.5 transition-all shadow-xs"
+            >
+              <Sparkles size={14} className="text-indigo-650 animate-pulse" /> Inteligentny Generator Sal
+            </button>
             <button
               onClick={onImportFromPlanKlas}
               className="px-4 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 flex items-center gap-1.5 transition-all"
@@ -1714,6 +2191,246 @@ export default function PlanSal({
                 </div>
               </div>
             </form>
+          </div>
+        )}
+
+        {showGenerator && (
+          <div className="fixed inset-0 z-[2000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-in fade-in duration-200">
+              {/* Header */}
+              <div className="px-6 py-4 bg-slate-50 border-b border-slate-150 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="bg-indigo-100 text-indigo-700 p-2 rounded-xl bg-indigo-50">
+                    <Sparkles size={18} className="animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-sm">🧠 Inteligentny Generator i Optymalizator Sal Lekcyjnych</h3>
+                    <p className="text-[10px] text-slate-500 font-medium font-sans">Automatyczny przydział gabinetów lekcyjnych w oparciu o hierarchię pierwszeństwa i wymagania</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGenerator(false)}
+                  className="text-slate-450 hover:text-slate-700 text-sm font-bold cursor-pointer transition p-1 bg-slate-100 hover:bg-slate-200 rounded-lg w-7 h-7 flex items-center justify-center font-mono"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0">
+                {/* Left Side: Parameters / Settings */}
+                <div className="w-full md:w-5/12 border-b md:border-b-0 md:border-r border-slate-150 p-6 flex flex-col justify-between overflow-y-auto custom-scrollbar bg-slate-50/40">
+                  <div className="space-y-5">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800 mb-1.5 uppercase tracking-wider">⚙️ Parametry i Reguły Algorytmu</h4>
+                      <p className="text-[10px] text-slate-500 leading-relaxed mb-3">Włącz lub wyłącz reguły optymalizacji, które determinują przydział sal lekcyjnych.</p>
+
+                      <div className="space-y-3">
+                        <label className="flex items-start gap-2.5 p-3.5 bg-white border border-slate-150 rounded-xl hover:bg-white/80 cursor-pointer transition select-none">
+                          <input
+                            type="checkbox"
+                            checked={genPriorityHomerooms}
+                            onChange={(e) => setGenPriorityHomerooms(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                          />
+                          <div className="leading-tight">
+                            <span className="text-xs font-bold text-slate-800 block">👑 Pierwszeństwo sal wychowawczych</span>
+                            <span className="text-[9.5px] text-slate-500 mt-0.5 block font-medium">Klasa otrzymuje salę przypisaną do niej jako gabinet wychowawczy (gospodarz).</span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 p-3.5 bg-white border border-slate-150 rounded-xl hover:bg-white/80 cursor-pointer transition select-none">
+                          <input
+                            type="checkbox"
+                            checked={genPriorityTeachers}
+                            onChange={(e) => setGenPriorityTeachers(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                          />
+                          <div className="leading-tight">
+                            <span className="text-xs font-bold text-slate-800 block">⭐ Preferowane gabinety nauczycieli</span>
+                            <span className="text-[9.5px] text-slate-500 mt-0.5 block font-medium">Algorytm w drugiej kolejności dobiera sale oznaczone jako preferowane przez wybranego wykładowcę.</span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start gap-2.5 p-3.5 bg-white border border-slate-150 rounded-xl hover:bg-white/80 cursor-pointer transition select-none">
+                          <input
+                            type="checkbox"
+                            checked={genExcludeWF}
+                            onChange={(e) => {
+                              setGenExcludeWF(e.target.checked);
+                              if (!e.target.checked) setGenAutoPlaceWF(false);
+                            }}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                          />
+                          <div className="leading-tight">
+                            <span className="text-xs font-bold text-slate-800 block">🚫 Wyklucz wychowanie fizyczne (W-F)</span>
+                            <span className="text-[9.5px] text-slate-500 mt-0.5 block font-medium">Lekcje W-F nie rezerwują klasycznych sal lekcyjnych w budynku głównym.</span>
+                          </div>
+                        </label>
+
+                        {genExcludeWF && (
+                          <label className="flex items-start gap-2.5 p-3 px-4 bg-indigo-50 border border-indigo-150 rounded-xl hover:bg-indigo-50 cursor-pointer transition select-none ml-2">
+                            <input
+                              type="checkbox"
+                              checked={genAutoPlaceWF}
+                              onChange={(e) => setGenAutoPlaceWF(e.target.checked)}
+                              className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <div className="leading-tight">
+                              <span className="text-xs font-bold text-indigo-900 block">🏟️ Auto-przydział sal sportowych dla W-F</span>
+                              <span className="text-[9.5px] text-indigo-750 mt-0.5 block font-medium">Automatycznie rozmieszcza lekcje W-F na sali gimnastycznej i obiektach sportowych.</span>
+                            </div>
+                          </label>
+                        )}
+
+                        <label className="flex items-start gap-2.5 p-3.5 bg-white border border-slate-150 rounded-xl hover:bg-white/80 cursor-pointer transition select-none">
+                          <input
+                            type="checkbox"
+                            checked={genClearExisting}
+                            onChange={(e) => setGenClearExisting(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 w-4 h-4 cursor-pointer"
+                          />
+                          <div className="leading-tight">
+                            <span className="text-xs font-bold text-rose-800 block">🗑️ Wyczyść dotychczasowy plan sal przed wygenerowaniem</span>
+                            <span className="text-[9.5px] text-rose-600 mt-0.5 block font-bold uppercase tracking-wider">Resetuje układ sal w planie lekcji przed przydzieleniem nowych sal.</span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-4 mt-4 space-y-3">
+                    <div className="bg-slate-100 p-3 rounded-lg text-[10.5px] text-slate-600 font-medium space-y-1">
+                      <div className="flex justify-between">
+                        <span>Liczba klas:</span>
+                        <span className="font-bold text-slate-800">{appState.classes.length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Liczba nauczycieli:</span>
+                        <span className="font-bold text-slate-800">{appState.teachers.length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Zgłoszone gabinety lekcyjne:</span>
+                        <span className="font-bold text-slate-800">{allRoomsList.length}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleAutoGenerateRooms}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-3 text-xs font-black shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Sparkles size={15} /> ⚡ Uruchom Generowanie Gabinetów
+                    </button>
+                  </div>
+                </div>
+
+                {/* Right Side: Preferred Rooms Config */}
+                <div className="w-full md:w-7/12 p-6 flex flex-col min-h-0">
+                  <div className="flex items-center justify-between mb-3 shrink-0 gap-4">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">👩‍🏫 Preferencje Nauczycieli (Pokoje i Gabinety)</h4>
+                      <p className="text-[10px] text-slate-500 font-medium font-sans">Ustal sale lekcyjne, w których nauczyciele najchętniej prowadzą swoje zajęcia.</p>
+                    </div>
+
+                    <div className="relative max-w-[200px]">
+                      <input
+                        type="text"
+                        placeholder="Szukaj nauczyciela..."
+                        value={teacherSearch}
+                        onChange={(e) => setTeacherSearch(e.target.value)}
+                        className="px-2.5 py-1.5 border border-slate-250 bg-white rounded-lg text-xs outline-none focus:border-indigo-500 w-full font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Table with list of teachers */}
+                  <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white p-1 custom-scrollbar">
+                    {appState.teachers
+                      .filter(t => {
+                        const q = teacherSearch.toLowerCase();
+                        return (
+                          t.first.toLowerCase().includes(q) ||
+                          t.last.toLowerCase().includes(q) ||
+                          t.abbr.toLowerCase().includes(q)
+                        );
+                      })
+                      .map(t => {
+                        return (
+                          <div key={t.id} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs hover:bg-slate-50/40">
+                            <div>
+                              <div className="font-extrabold text-slate-800 text-[11px] leading-tight">
+                                {t.last} {t.first}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                Skrót: <span className="font-bold text-slate-650 bg-slate-100 px-1 py-0.2 rounded">{t.abbr}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {/* Selected preferred badges */}
+                              {t.preferredRooms && t.preferredRooms.length > 0 ? (
+                                t.preferredRooms.map(rk => {
+                                  const rObj = allRoomsList.find(r => r.key === rk);
+                                  return (
+                                    <span key={rk} className="inline-flex items-center gap-0.5 bg-indigo-50 text-indigo-700 border border-indigo-150 px-2 py-0.5 rounded-md text-[10px] font-black leading-none">
+                                      Sala {rObj ? rObj.num : rk}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemovePreferredRoom(t.id, rk)}
+                                        className="text-indigo-450 hover:text-indigo-700 font-extrabold text-[10px] ml-1 cursor-pointer transition shrink-0"
+                                        title="Usuń"
+                                      >
+                                        ✕
+                                      </button>
+                                    </span>
+                                  );
+                                })
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">Brak preferencji</span>
+                              )}
+
+                              {/* Dropdown select to add new */}
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    handleAddPreferredRoom(t.id, e.target.value);
+                                  }
+                                }}
+                                className="bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-350 text-[10px] text-slate-700 rounded-lg p-0.5 px-1.5 focus:outline-none focus:border-indigo-500 max-w-[120px] cursor-pointer"
+                              >
+                                <option value="">+ Dodaj</option>
+                                {allRoomsList.map(rm => {
+                                  const alreadyHas = t.preferredRooms?.includes(rm.key);
+                                  if (alreadyHas) return null;
+                                  return (
+                                    <option key={rm.key} value={rm.key}>
+                                      Sala {rm.num} {rm.sub ? `(${rm.sub})` : ''} - {rm.floorName}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-150 flex items-center justify-end gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowGenerator(false)}
+                  className="px-5 py-2 hover:bg-slate-200 text-slate-700 bg-slate-100 rounded-lg text-xs font-bold transition cursor-pointer"
+                >
+                  Zamknij okno preferencji
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

@@ -730,7 +730,7 @@ export default function KreatorSzkoly({
   const [newRoomAutomaticAbbr, setNewRoomAutomaticAbbr] = useState<boolean>(true);
   const [newRoomCustomAbbr, setNewRoomCustomAbbr] = useState('');
   const [newRoomDesc, setNewRoomDesc] = useState('');
-  const [newRoomType, setNewRoomType] = useState<'ogolna' | 'informatyka' | 'indywidualne' | 'sport'>('ogolna');
+  const [newRoomType, setNewRoomType] = useState<'ogolna' | 'wczesnoszkolna' | 'informatyka' | 'indywidualne' | 'sport'>('ogolna');
   const [newRoomBldIdx, setNewRoomBldIdx] = useState(0);
 
   // Sync room's level and segment with current building's custom structure choice
@@ -793,10 +793,13 @@ export default function KreatorSzkoly({
 
     const roomTypeLabels: Record<string, string> = {
       ogolna: 'Sala ogólna',
+      wczesnoszkolna: 'Sala klas 1-3 (Nauczanie początkowe)',
       informatyka: 'Pracownia informatyczna',
       indywidualne: 'Zajęcia indywidualne (gabinet)',
       sport: 'Zajęcia sportowe (sala gimn./basen/orlik)'
     };
+
+    const isGrade1_3 = newRoomType === 'wczesnoszkolna';
 
     if (editingRoomId) {
       // Find old room name
@@ -813,7 +816,8 @@ export default function KreatorSzkoly({
         name: finalRoomName,
         desc: (newRoomDesc.trim() || roomTypeLabels[newRoomType]),
         type: newRoomType,
-        capacity: newRoomType === 'indywidualne' ? 5 : 30
+        capacity: newRoomType === 'indywidualne' ? 5 : 30,
+        isGrade1_3: isGrade1_3
       };
 
       const nextRooms = appState.planLekcji.rooms.map(r => r.id === editingRoomId ? updatedClassroom : r);
@@ -892,7 +896,8 @@ export default function KreatorSzkoly({
         name: finalRoomName,
         desc: (newRoomDesc.trim() || roomTypeLabels[newRoomType]),
         type: newRoomType,
-        capacity: newRoomType === 'indywidualne' ? 5 : 30
+        capacity: newRoomType === 'indywidualne' ? 5 : 30,
+        isGrade1_3: isGrade1_3
       };
 
       // Synthesize physical floor column
@@ -2842,6 +2847,7 @@ export default function KreatorSzkoly({
                         onChange={(e) => setNewRoomType(e.target.value as any)}
                       >
                         <option value="ogolna">Sala ogólna (klasowa)</option>
+                        <option value="wczesnoszkolna">🧸 Sala dla klas 1-3 (Nauczanie początkowe)</option>
                         <option value="informatyka">🖥️ Informatyka / Pracownia komp.</option>
                         <option value="sport">🏊 Sportowe (sala gimn / basen)</option>
                         <option value="indywidualne">🗣️ Zajęcia indywidualne (rewalidacja)</option>
@@ -2909,6 +2915,9 @@ export default function KreatorSzkoly({
                               {(r.type === 'ogolna' || !r.type) && (
                                 <span className="bg-slate-100 text-slate-600 font-semibold px-1.5 py-0.5 rounded text-[9px] uppercase">Ogólna</span>
                               )}
+                              {r.isGrade1_3 && (
+                                <span className="bg-amber-50 text-amber-700 border border-amber-200/65 font-semibold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide flex items-center gap-0.5">🧸 Klasy 1-3</span>
+                              )}
                             </div>
                             <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{r.desc || 'Gabinet ogólny'}</p>
                             
@@ -2936,7 +2945,7 @@ export default function KreatorSzkoly({
                               setNewRoomAutomaticAbbr(false);
                               setNewRoomCustomAbbr(r.name);
                               setNewRoomDesc(r.desc);
-                              setNewRoomType(r.type || 'ogolna');
+                              setNewRoomType(r.isGrade1_3 ? 'wczesnoszkolna' : ((r.type || 'ogolna') as any));
                               
                               const loc = getRoomLocationInfo(r.name);
                               if (loc) {

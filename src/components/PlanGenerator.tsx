@@ -29,6 +29,11 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
   const [noStudentGaps, setNoStudentGaps] = useState<boolean>(true);
   const [allowDoubleBlocks, setAllowDoubleBlocks] = useState<boolean>(true);
   const [includeSpecialNI, setIncludeSpecialNI] = useState<boolean>(true);
+  const [limitComputerLabs, setLimitComputerLabs] = useState<boolean>(true);
+  const [customComputerLabsCount, setCustomComputerLabsCount] = useState<number>(() => {
+    const fromRooms = pl.rooms?.filter(r => r.type === 'informatyka').length || 0;
+    return fromRooms > 0 ? fromRooms : 1;
+  });
 
   // Maintain custom role settings for teachers during this generator session
   const [teacherConfigs, setTeacherConfigs] = useState<Record<string, TeacherRoleConfig>>(() => {
@@ -89,6 +94,22 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
         const daysCount = 5; // Monday to Friday
         const maxHoursCount = pl.hours.length || 9; // usually 0 to 8 or 9
         
+        const isINFSubject = (subjectId: string) => {
+          const sub = subjectsMap.get(subjectId);
+          if (!sub) return false;
+          const name = (sub.name || '').toLowerCase();
+          const short = (sub.short || '').toLowerCase();
+          return (
+            short.includes('inf') ||
+            short.includes('e-inf') ||
+            name.includes('informatyk') ||
+            name.includes('edukacja informatyczna')
+          );
+        };
+
+        // Track computer science lessons scheduled at each slot: "day|hour" -> count
+        const infLessonsCount = new Map<string, number>();
+
         // 1. Initialize result lessons state and lock state
         // Keep all currently locked lessons intact!
         const generatedLessons: Record<string, Lesson> = {};
@@ -113,8 +134,14 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
             classBusy.add(`${classId}|${day}|${hour}`);
 
             const asg = pl.assignments.find(a => a.id === value.assignmentId);
-            if (asg && asg.teacherId) {
-              teacherBusy.add(`${asg.teacherId}|${day}|${hour}`);
+            if (asg) {
+              if (asg.teacherId) {
+                teacherBusy.add(`${asg.teacherId}|${day}|${hour}`);
+              }
+              if (isINFSubject(asg.subjectId)) {
+                const slotKey = `${day}|${hour}`;
+                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
+              }
             }
           }
         });
@@ -211,6 +238,14 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
           // Check basic clashes
           if (classBusy.has(`${unit.classId}|${day}|${hour}`)) return -1;
           if (unit.teacherId && teacherBusy.has(`${unit.teacherId}|${day}|${hour}`)) return -1;
+
+          // Check computer science labs limit
+          if (limitComputerLabs && isINFSubject(unit.subjectId)) {
+            const currentCount = infLessonsCount.get(`${day}|${hour}`) || 0;
+            if (currentCount >= customComputerLabsCount) {
+              return -1; // No free computer labs in this slot
+            }
+          }
 
           // Check builder parameters
           // Teacher availability
@@ -395,12 +430,20 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
               generatedLessons[k1] = { assignmentId: unit.assignmentId, locked: false };
               classBusy.add(`${unit.classId}|${bestDay}|${bestHour}`);
               if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${bestDay}|${bestHour}`);
+              if (isINFSubject(unit.subjectId)) {
+                const slotKey = `${bestDay}|${bestHour}`;
+                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
+              }
 
               // Cell 2
               const k2 = `${secondUnit.classId}|${bestDay}|${bestHour + 1}`;
               generatedLessons[k2] = { assignmentId: secondUnit.assignmentId, locked: false };
               classBusy.add(`${secondUnit.classId}|${bestDay}|${bestHour + 1}`);
               if (secondUnit.teacherId) teacherBusy.add(`${secondUnit.teacherId}|${bestDay}|${bestHour + 1}`);
+              if (isINFSubject(secondUnit.subjectId)) {
+                const slotKey = `${bestDay}|${bestHour + 1}`;
+                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
+              }
 
               // Remove second unit from queue
               regularUnits.splice(nextMatchIdx, 1);
@@ -411,6 +454,10 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
               generatedLessons[k] = { assignmentId: unit.assignmentId, locked: false };
               classBusy.add(`${unit.classId}|${bestDay}|${bestHour}`);
               if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${bestDay}|${bestHour}`);
+              if (isINFSubject(unit.subjectId)) {
+                const slotKey = `${bestDay}|${bestHour}`;
+                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
+              }
               placedRegularCount += 1;
             }
             placed = true;
@@ -423,10 +470,21 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
               for (let h = 0; h < maxHoursCount; h++) {
                 if (!classBusy.has(`${unit.classId}|${d}|${h}`)) {
                   if (!unit.teacherId || !teacherBusy.has(`${unit.teacherId}|${d}|${h}`)) {
+                    if (limitComputerLabs && isINFSubject(unit.subjectId)) {
+                      const currentCount = infLessonsCount.get(`${d}|${h}`) || 0;
+                      if (currentCount >= customComputerLabsCount) {
+                        continue;
+                      }
+                    }
+
                     const k = `${unit.classId}|${d}|${h}`;
                     generatedLessons[k] = { assignmentId: unit.assignmentId, locked: false };
                     classBusy.add(`${unit.classId}|${d}|${h}`);
                     if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${d}|${h}`);
+                    if (isINFSubject(unit.subjectId)) {
+                      const slotKey = `${d}|${h}`;
+                      infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
+                    }
                     placedRegularCount += 1;
                     fallbackPlaced = true;
                     break;
@@ -440,8 +498,14 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
               const subj = subjectsMap.get(unit.subjectId);
               const cls = classesMap.get(unit.classId);
               const teacher = unit.teacherId ? teachersMap.get(unit.teacherId) : null;
+              
+              let reasonSuffix = '';
+              if (limitComputerLabs && isINFSubject(unit.subjectId)) {
+                reasonSuffix = ' (możliwe przekroczenie limitu wolnych pracowni komputerowych)';
+              }
+
               warnings.push(
-                `Nie udało się dopasować godziny przedmiotu: "${subj?.name || 'Przedmiot'}" dla klasy ${cls?.name || 'Klasa'} (Nauczyciel: ${teacher ? teacher.abbr : 'Brak'}).`
+                `Nie udało się dopasować godziny przedmiotu: "${subj?.name || 'Przedmiot'}" dla klasy ${cls?.name || 'Klasa'} (Nauczyciel: ${teacher ? teacher.abbr : 'Brak'})${reasonSuffix}.`
               );
             }
           }
@@ -814,6 +878,44 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
                         Automatycznie dopasuje wolne sloty nauczycieli do zajęć zindywidualizowanych dla zgłoszonych uczniów ze specjalnymi potrzebami.
                       </p>
                     </div>
+                  </div>
+
+                  {/* Limit pracowni informatycznych */}
+                  <div className="p-4 border border-slate-200 rounded-2xl flex flex-col justify-between hover:border-blue-400 transition bg-slate-50/50">
+                    <div>
+                      <div className="flex items-start gap-3 cursor-pointer" onClick={() => setLimitComputerLabs(!limitComputerLabs)}>
+                        <input 
+                          type="checkbox"
+                          checked={limitComputerLabs}
+                          onChange={() => {}}
+                          className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 pointer-events-none"
+                        />
+                        <div>
+                          <span className="text-xs font-black text-slate-800 block select-none">🖥️ Limit zajęć informatycznych (pracownia komp.)</span>
+                          <p className="text-[10.5px] text-slate-450 font-medium leading-relaxed mt-1 select-none">
+                            Ogranicza liczbę jednoczesnych zajęć z informatyki / edukacji informatycznej do liczby sprawnych pracowni komputerowych w szkole.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {limitComputerLabs && (
+                      <div className="flex items-center gap-3 mt-4 border-t border-slate-100 pt-3">
+                        <span className="text-[10.5px] text-slate-500 font-bold select-none whitespace-nowrap">Dostępne pracownie:</span>
+                        <input 
+                          type="number"
+                          min="1"
+                          max="10"
+                          className="w-16 px-2 py-1 text-xs font-black font-mono border border-slate-250 bg-white rounded-lg outline-none focus:border-indigo-500"
+                          value={customComputerLabsCount}
+                          onChange={(e) => setCustomComputerLabsCount(Math.max(1, Number(e.target.value)))}
+                        />
+                        <span className="text-[10px] text-slate-450 font-medium select-none">
+                          {pl.rooms?.filter(r => r.type === 'informatyka').length > 0 
+                            ? `(wykryto ${pl.rooms.filter(r => r.type === 'informatyka').length} w rejestrze sal)` 
+                            : '(brak zarejestrowanych sal typu informatyka)'}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                 </div>
