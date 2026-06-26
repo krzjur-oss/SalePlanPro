@@ -59,16 +59,20 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          // Zapisz świeżą wersję strony do pamięci podręcznej
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
-          return response;
+          if (response.ok) {
+            // Zapisz świeżą wersję strony do pamięci podręcznej
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+            return response;
+          }
+          // Jeśli odpowiedź sieciowa nie jest prawidłowa (np. 404), spróbuj wczytać z cache
+          return caches.match(BASE_PATH + 'index.html') || caches.match(BASE_PATH) || caches.match(event.request) || response;
         })
         .catch(() => {
           // W przypadku awarii sieci odpalamy bezpieczny, lokalny index.html
-          return caches.match(BASE_PATH + 'index.html') || caches.match(event.request);
+          return caches.match(BASE_PATH + 'index.html') || caches.match(BASE_PATH) || caches.match(event.request);
         })
     );
     return;
@@ -94,7 +98,7 @@ self.addEventListener('fetch', (event) => {
 
       // Jeżeli nie ma w cache - pobierz z sieci i zapisz
       return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+        if (!networkResponse || networkResponse.status !== 200 || (networkResponse.type !== 'basic' && networkResponse.type !== 'cors')) {
           return networkResponse;
         }
 

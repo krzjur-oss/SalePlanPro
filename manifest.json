@@ -2,11 +2,12 @@
   "name": "SalePlan Pro v3",
   "short_name": "SalePlan Pro",
   "description": "Profesjonalny system planowania lekcji, sal lekcyjnych i dyżurów",
-  "start_url": "./",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#020617",
-  "orientation": "portrait-primary",
+  "orientation": "landscape",
   "icons": [
     {
       "src": "favicon.svg",
