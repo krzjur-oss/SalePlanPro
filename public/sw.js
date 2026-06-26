@@ -5,7 +5,9 @@ const PRE_CACHE_RESOURCES = [
   BASE_PATH,
   BASE_PATH + 'index.html',
   BASE_PATH + 'manifest.json',
-  BASE_PATH + 'favicon.svg'
+  BASE_PATH + 'favicon.svg',
+  BASE_PATH + 'icon-192.png',
+  BASE_PATH + 'icon-512.png'
 ];
 
 // 1. Zdarzenie Instalacji: cache'owanie zasobów powłoki aplikacji (App Shell)
