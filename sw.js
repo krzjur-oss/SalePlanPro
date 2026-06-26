@@ -57,23 +57,31 @@ self.addEventListener('fetch', (event) => {
   // Pozwala to na pobieranie świeżego HTML, a gdy jesteśmy całkowicie offline - odpala z cache.
   if (event.request.mode === 'navigate' || requestUrl.pathname === BASE_PATH || requestUrl.pathname.endsWith('.html')) {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
+      (async () => {
+        try {
+          const response = await fetch(event.request);
           if (response.ok) {
             // Zapisz świeżą wersję strony do pamięci podręcznej
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseClone);
-            });
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, response.clone());
             return response;
           }
           // Jeśli odpowiedź sieciowa nie jest prawidłowa (np. 404), spróbuj wczytać z cache
-          return caches.match(BASE_PATH + 'index.html') || caches.match(BASE_PATH) || caches.match(event.request) || response;
-        })
-        .catch(() => {
+          const fallback = await caches.match(BASE_PATH + 'index.html') || 
+                           await caches.match(BASE_PATH) || 
+                           await caches.match(event.request);
+          return fallback || response;
+        } catch (error) {
           // W przypadku awarii sieci odpalamy bezpieczny, lokalny index.html
-          return caches.match(BASE_PATH + 'index.html') || caches.match(BASE_PATH) || caches.match(event.request);
-        })
+          const fallback = await caches.match(BASE_PATH + 'index.html') || 
+                           await caches.match(BASE_PATH) || 
+                           await caches.match(event.request);
+          if (fallback) {
+            return fallback;
+          }
+          throw error;
+        }
+      })()
     );
     return;
   }
