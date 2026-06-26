@@ -1519,34 +1519,80 @@ export default function KreatorSzkoly({
   const [newCorridorDesc, setNewCorridorDesc] = useState('');
   const [newCorridorCount, setNewCorridorCount] = useState(1);
   const [newCorridorConnectedRooms, setNewCorridorConnectedRooms] = useState<string[]>([]);
+  const [editingCorridorId, setEditingCorridorId] = useState<string | null>(null);
 
-  const handleAddCorridorDuty = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCorridorName.trim()) return;
+  const handleStartEditCorridor = (place: MiejsceDyzuru) => {
+    setEditingCorridorId(place.id);
+    setNewCorridorName(place.name);
+    setNewCorridorFloor(place.floor || '');
+    setNewCorridorDesc(place.desc || '');
+    setNewCorridorCount(place.teachersNeeded || 1);
+    setNewCorridorConnectedRooms(place.connectedRooms || []);
+  };
 
-    const newPlace: MiejsceDyzuru = {
-      id: 'm_' + uid(),
-      name: newCorridorName.trim(),
-      floor: newCorridorFloor.trim() || undefined,
-      desc: newCorridorDesc.trim() || undefined,
-      teachersNeeded: newCorridorCount,
-      connectedRooms: newCorridorConnectedRooms
-    };
-
-    onChangeAppState({
-      ...appState,
-      dyzury: {
-        ...appState.dyzury,
-        miejsca: [...appState.dyzury.miejsca, newPlace]
-      }
-    });
-
+  const handleCancelEditCorridor = () => {
+    setEditingCorridorId(null);
     setNewCorridorName('');
     setNewCorridorFloor('');
     setNewCorridorDesc('');
     setNewCorridorCount(1);
     setNewCorridorConnectedRooms([]);
-    showNoti(`Dodano punkt korytarzowy: - wymagani dyżurny: ${newPlace.teachersNeeded}`);
+  };
+
+  const handleAddCorridorDuty = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCorridorName.trim()) return;
+
+    if (editingCorridorId) {
+      const updatedPlace: MiejsceDyzuru = {
+        id: editingCorridorId,
+        name: newCorridorName.trim(),
+        floor: newCorridorFloor.trim() || undefined,
+        desc: newCorridorDesc.trim() || undefined,
+        teachersNeeded: newCorridorCount,
+        connectedRooms: newCorridorConnectedRooms
+      };
+
+      onChangeAppState({
+        ...appState,
+        dyzury: {
+          ...appState.dyzury,
+          miejsca: appState.dyzury.miejsca.map(m => m.id === editingCorridorId ? updatedPlace : m)
+        }
+      });
+
+      setEditingCorridorId(null);
+      setNewCorridorName('');
+      setNewCorridorFloor('');
+      setNewCorridorDesc('');
+      setNewCorridorCount(1);
+      setNewCorridorConnectedRooms([]);
+      showNoti(`Zaktualizowano punkt korytarzowy: ${updatedPlace.name}`);
+    } else {
+      const newPlace: MiejsceDyzuru = {
+        id: 'm_' + uid(),
+        name: newCorridorName.trim(),
+        floor: newCorridorFloor.trim() || undefined,
+        desc: newCorridorDesc.trim() || undefined,
+        teachersNeeded: newCorridorCount,
+        connectedRooms: newCorridorConnectedRooms
+      };
+
+      onChangeAppState({
+        ...appState,
+        dyzury: {
+          ...appState.dyzury,
+          miejsca: [...appState.dyzury.miejsca, newPlace]
+        }
+      });
+
+      setNewCorridorName('');
+      setNewCorridorFloor('');
+      setNewCorridorDesc('');
+      setNewCorridorCount(1);
+      setNewCorridorConnectedRooms([]);
+      showNoti(`Dodano punkt korytarzowy: - wymagani dyżurny: ${newPlace.teachersNeeded}`);
+    }
   };
 
   const handleRemoveCorridor = (id: string) => {
@@ -1557,6 +1603,9 @@ export default function KreatorSzkoly({
         miejsca: appState.dyzury.miejsca.filter(m => m.id !== id)
       }
     });
+    if (editingCorridorId === id) {
+      handleCancelEditCorridor();
+    }
     showNoti('Usunięto stanowisko dyżurów');
   };
 
@@ -3980,7 +4029,9 @@ export default function KreatorSzkoly({
                 
                 {/* Addition Form */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit">
-                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">Dodaj punkt dyżurów</h3>
+                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">
+                    {editingCorridorId ? '✏️ Edytuj punkt dyżurów' : 'Dodaj punkt dyżurów'}
+                  </h3>
                   <form onSubmit={handleAddCorridorDuty} className="space-y-3">
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold">Lokalizacja / Schody / Plac *</label>
@@ -4062,9 +4113,20 @@ export default function KreatorSzkoly({
                       )}
                     </div>
 
-                    <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow mt-2">
-                      Dodaj punkt dyżuru
-                    </button>
+                    <div className="flex gap-2 mt-2">
+                      <button type="submit" className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow transition">
+                        {editingCorridorId ? 'Zapisz zmiany' : 'Dodaj punkt dyżuru'}
+                      </button>
+                      {editingCorridorId && (
+                        <button 
+                          type="button" 
+                          onClick={handleCancelEditCorridor}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-lg transition"
+                        >
+                          Anuluj
+                        </button>
+                      )}
+                    </div>
                   </form>
                 </div>
 
@@ -4077,7 +4139,7 @@ export default function KreatorSzkoly({
                   <div className="divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
                     {appState.dyzury.miejsca.map(place => (
                       <div key={place.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
-                        <div className="flex items-start gap-3 w-[85%]">
+                        <div className="flex items-start gap-3 w-[80%]">
                           <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-100">
                             <Shield size={16} />
                           </span>
@@ -4104,12 +4166,28 @@ export default function KreatorSzkoly({
                             )}
                           </div>
                         </div>
-                        <button 
-                          onClick={() => handleRemoveCorridor(place.id)}
-                          className="p-1 px-2 text-slate-400 hover:text-red-500 rounded"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button 
+                            type="button"
+                            onClick={() => handleStartEditCorridor(place)}
+                            className={`p-1 px-2 rounded transition-colors ${
+                              editingCorridorId === place.id 
+                                ? 'text-blue-600 bg-blue-50' 
+                                : 'text-slate-400 hover:text-blue-600 hover:bg-slate-100'
+                            }`}
+                            title="Edytuj"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleRemoveCorridor(place.id)}
+                            className="p-1 px-2 text-slate-400 hover:text-red-500 rounded hover:bg-slate-100 transition-colors"
+                            title="Usuń"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {appState.dyzury.miejsca.length === 0 && (
