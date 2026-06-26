@@ -23,6 +23,7 @@ export const DEFAULT_GENERATOR_SETTINGS: GeneratorSettings = {
   maxGapsPerTeacher: 2,
   obeyAvailability: true,
   avoidExtremes: true,
+  avoidExtremesSubjectIds: [],
   noStudentGaps: true,
   allowDoubleBlocks: true,
   includeSpecialNI: true,
@@ -190,20 +191,74 @@ export default function UstawieniaGeneratorow({ appState, onChangeAppState }: Us
             </div>
 
             {/* avoidExtremes */}
-            <div className="flex items-start gap-3 p-3 bg-slate-50/50 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
-              <input 
-                type="checkbox" 
-                id="set_avoidExtremes"
-                className="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
-                checked={settings.avoidExtremes}
-                onChange={(e) => updateSettings({ avoidExtremes: e.target.checked })}
-              />
-              <label htmlFor="set_avoidExtremes" className="cursor-pointer select-none space-y-0.5">
-                <span className="text-xs font-bold text-slate-800 block">Unikaj skrajnych rozkładów lekcji</span>
-                <span className="text-[10px] text-slate-500 block leading-tight">
-                  Zapobiega sytuacji, w której nauczyciel ma zajęcia tylko na samym początku i na samym końcu dnia.
-                </span>
-              </label>
+            <div className="space-y-2">
+              <div className="flex items-start gap-3 p-3 bg-slate-50/50 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
+                <input 
+                  type="checkbox" 
+                  id="set_avoidExtremes"
+                  className="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                  checked={settings.avoidExtremes}
+                  onChange={(e) => updateSettings({ avoidExtremes: e.target.checked })}
+                />
+                <label htmlFor="set_avoidExtremes" className="cursor-pointer select-none space-y-0.5 flex-1">
+                  <span className="text-xs font-bold text-slate-800 block">Unikaj skrajnych rozkładów lekcji</span>
+                  <span className="text-[10px] text-slate-500 block leading-tight">
+                    Zapobiega sytuacji, w której nauczyciel ma zajęcia tylko na samym początku i na samym końcu dnia.
+                  </span>
+                </label>
+              </div>
+
+              {settings.avoidExtremes && (
+                <div className="ml-7 p-3 bg-blue-50/30 border border-blue-100 rounded-xl space-y-2 animate-in slide-in-from-top-1 duration-150">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-extrabold text-slate-700 uppercase tracking-wider block">Wybierz przedmioty objęte regułą:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allSubjectIds = appState.planLekcji.subjects.map(s => s.id);
+                        const isAllSelected = (settings.avoidExtremesSubjectIds || []).length === allSubjectIds.length;
+                        updateSettings({ avoidExtremesSubjectIds: isAllSelected ? [] : allSubjectIds });
+                      }}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition cursor-pointer uppercase"
+                    >
+                      {(settings.avoidExtremesSubjectIds || []).length === appState.planLekcji.subjects.length ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+                    </button>
+                  </div>
+                  <p className="text-[9.5px] text-slate-500 leading-normal">
+                    Zaznaczone przedmioty będą omijać skrajne godziny. Pozostałe przedmioty (np. koła zainteresowań, zajęcia dodatkowe) będą mogły być planowane na skrajnych godzinach lekcyjnych.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-white border border-slate-200 rounded-lg custom-scrollbar">
+                    {appState.planLekcji.subjects.map(sub => {
+                      const currentSelected = settings.avoidExtremesSubjectIds || appState.planLekcji.subjects.map(s => s.id);
+                      const isChecked = currentSelected.includes(sub.id);
+                      return (
+                        <label 
+                          key={sub.id} 
+                          className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer select-none text-[11px]"
+                        >
+                          <input 
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              let nextSelected: string[];
+                              if (e.target.checked) {
+                                nextSelected = [...currentSelected, sub.id];
+                              } else {
+                                nextSelected = currentSelected.filter(id => id !== sub.id);
+                              }
+                              updateSettings({ avoidExtremesSubjectIds: nextSelected });
+                            }}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                          />
+                          <span className="truncate font-medium text-slate-700" title={sub.name}>
+                            {sub.name} <span className="text-[9.5px] text-slate-450 font-mono">({sub.short})</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* noStudentGaps */}

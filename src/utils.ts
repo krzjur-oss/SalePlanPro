@@ -391,6 +391,7 @@ export function getDemoAppState(): AppState {
       maxGapsPerTeacher: 2,
       obeyAvailability: true,
       avoidExtremes: true,
+      avoidExtremesSubjectIds: [],
       noStudentGaps: true,
       allowDoubleBlocks: true,
       includeSpecialNI: true,

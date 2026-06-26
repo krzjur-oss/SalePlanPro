@@ -252,6 +252,7 @@ export interface GeneratorSettings {
   maxGapsPerTeacher: number;
   obeyAvailability: boolean;
   avoidExtremes: boolean;
+  avoidExtremesSubjectIds?: string[];
   noStudentGaps: boolean;
   allowDoubleBlocks: boolean;
   includeSpecialNI: boolean;

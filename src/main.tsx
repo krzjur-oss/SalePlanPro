@@ -6,7 +6,7 @@ import './index.css';
 // Rejestracja Service Workera dla pełnej obsługi trybu offline (PWA)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('./sw.js')
       .then((registration) => {
         console.log('[Service Worker] Aktywny i zarejestrowany na zakresie:', registration.scope);
       })

@@ -26,6 +26,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
   const [maxGapsPerTeacher, setMaxGapsPerTeacher] = useState<number>(() => appState.generatorSettings?.maxGapsPerTeacher ?? 2);
   const [obeyAvailability, setObeyAvailability] = useState<boolean>(() => appState.generatorSettings?.obeyAvailability ?? true);
   const [avoidExtremes, setAvoidExtremes] = useState<boolean>(() => appState.generatorSettings?.avoidExtremes ?? true);
+  const [avoidExtremesSubjectIds, setAvoidExtremesSubjectIds] = useState<string[]>(() => appState.generatorSettings?.avoidExtremesSubjectIds ?? []);
   const [noStudentGaps, setNoStudentGaps] = useState<boolean>(() => appState.generatorSettings?.noStudentGaps ?? true);
   const [allowDoubleBlocks, setAllowDoubleBlocks] = useState<boolean>(() => appState.generatorSettings?.allowDoubleBlocks ?? true);
   const [includeSpecialNI, setIncludeSpecialNI] = useState<boolean>(() => appState.generatorSettings?.includeSpecialNI ?? true);
@@ -264,13 +265,16 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
 
           // Extremes avoidance
           if (avoidExtremes) {
-            // Hour 0 is heavily penalized
-            if (hour === 0) {
-              score -= 100;
-            }
-            // Hours after 6 are penalized
-            if (hour >= 6) {
-              score -= (hour - 5) * 40;
+            const appliesToSubject = !avoidExtremesSubjectIds || avoidExtremesSubjectIds.length === 0 || avoidExtremesSubjectIds.includes(unit.subjectId);
+            if (appliesToSubject) {
+              // Hour 0 is heavily penalized
+              if (hour === 0) {
+                score -= 100;
+              }
+              // Hours after 6 are penalized
+              if (hour >= 6) {
+                score -= (hour - 5) * 40;
+              }
             }
           }
 
@@ -600,7 +604,19 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
 
         onChangeAppState({
           ...appState,
-          planLekcji: updatedPL
+          planLekcji: updatedPL,
+          generatorSettings: {
+            ...appState.generatorSettings,
+            maxGapsPerTeacher,
+            obeyAvailability,
+            avoidExtremes,
+            avoidExtremesSubjectIds,
+            noStudentGaps,
+            allowDoubleBlocks,
+            includeSpecialNI,
+            limitComputerLabs,
+            customComputerLabsCount
+          }
         });
 
         setGenerationResult({
@@ -820,19 +836,72 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
                   </div>
 
                   {/* Skrajne godziny */}
-                  <div className="p-4 border border-slate-200 rounded-2xl flex items-start gap-3 hover:border-blue-400 transition cursor-pointer bg-slate-50/50" onClick={() => setAvoidExtremes(!avoidExtremes)}>
-                    <input 
-                      type="checkbox"
-                      checked={avoidExtremes}
-                      onChange={() => {}}
-                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 pointer-events-none"
-                    />
-                    <div>
-                      <span className="text-xs font-black text-slate-800 block select-none">⏰ Omijaj skrajne godziny (godzina zerowa / późne)</span>
-                      <p className="text-[10.5px] text-slate-450 font-medium leading-relaxed mt-1 select-none">
-                        Unikaj w miarę możliwości planowania lekcji na godzinę 0 (przed 8:00) oraz późnych lekcjach (od 7. godziny wzwyż).
-                      </p>
+                  <div className="p-4 border border-slate-200 rounded-2xl flex flex-col gap-3 bg-slate-50/50">
+                    <div className="flex items-start gap-3 hover:text-indigo-600 transition cursor-pointer" onClick={() => setAvoidExtremes(!avoidExtremes)}>
+                      <input 
+                        type="checkbox"
+                        checked={avoidExtremes}
+                        onChange={() => {}}
+                        className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 pointer-events-none"
+                      />
+                      <div>
+                        <span className="text-xs font-black text-slate-800 block select-none">⏰ Omijaj skrajne godziny (godzina zerowa / późne)</span>
+                        <p className="text-[10.5px] text-slate-450 font-medium leading-relaxed mt-1 select-none">
+                          Unikaj w miarę możliwości planowania lekcji na godzinę 0 (przed 8:00) oraz późnych lekcjach (od 7. godziny wzwyż).
+                        </p>
+                      </div>
                     </div>
+
+                    {avoidExtremes && (
+                      <div className="ml-7 p-3 bg-blue-50/30 border border-blue-100 rounded-xl space-y-2 animate-in slide-in-from-top-1 duration-150">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10.5px] font-extrabold text-slate-700 uppercase tracking-wider block">Wybierz przedmioty objęte regułą:</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const allSubjectIds = pl.subjects.map(s => s.id);
+                              const isAllSelected = (avoidExtremesSubjectIds || []).length === allSubjectIds.length;
+                              setAvoidExtremesSubjectIds(isAllSelected ? [] : allSubjectIds);
+                            }}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition cursor-pointer uppercase font-mono"
+                          >
+                            {(avoidExtremesSubjectIds || []).length === pl.subjects.length ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-1 bg-white border border-slate-200 rounded-lg custom-scrollbar">
+                          {pl.subjects.map(sub => {
+                            const currentSelected = avoidExtremesSubjectIds || pl.subjects.map(s => s.id);
+                            const isChecked = currentSelected.includes(sub.id);
+                            return (
+                              <label 
+                                key={sub.id} 
+                                className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer select-none text-[11px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input 
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    let nextSelected: string[];
+                                    if (e.target.checked) {
+                                      nextSelected = [...currentSelected, sub.id];
+                                    } else {
+                                      nextSelected = currentSelected.filter(id => id !== sub.id);
+                                    }
+                                    setAvoidExtremesSubjectIds(nextSelected);
+                                  }}
+                                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                                />
+                                <span className="truncate font-medium text-slate-700" title={sub.name}>
+                                  {sub.name} <span className="text-[9.5px] text-slate-450 font-mono">({sub.short})</span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Dostępność nauczycieli */}
