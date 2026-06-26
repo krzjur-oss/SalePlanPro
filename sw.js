@@ -1,9 +1,11 @@
+const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
+
 const CACHE_NAME = 'saleplan-cache-v3';
 const PRE_CACHE_RESOURCES = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.svg'
+  BASE_PATH,
+  BASE_PATH + 'index.html',
+  BASE_PATH + 'manifest.json',
+  BASE_PATH + 'favicon.svg'
 ];
 
 // 1. Zdarzenie Instalacji: cache'owanie zasobów powłoki aplikacji (App Shell)
@@ -53,7 +55,7 @@ self.addEventListener('fetch', (event) => {
 
   // Strategia dla stron HTML (zapytania nawigacyjne): "Network-First" (Najpierw Sieć) z zapasowym Cache
   // Pozwala to na pobieranie świeżego HTML, a gdy jesteśmy całkowicie offline - odpala z cache.
-  if (event.request.mode === 'navigate' || requestUrl.pathname === '/' || requestUrl.pathname.endsWith('.html')) {
+  if (event.request.mode === 'navigate' || requestUrl.pathname === BASE_PATH || requestUrl.pathname.endsWith('.html')) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
@@ -66,7 +68,7 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => {
           // W przypadku awarii sieci odpalamy bezpieczny, lokalny index.html
-          return caches.match('/index.html') || caches.match(event.request);
+          return caches.match(BASE_PATH + 'index.html') || caches.match(event.request);
         })
     );
     return;
