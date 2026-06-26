@@ -7,7 +7,7 @@ Niniejszy dokument określa zasady korzystania z aplikacji **SalePlan Pro v3** (
 ## § 1. Postanowienia Ogólne
 
 1. Aplikacja **SalePlan Pro v3** jest darmowym, autonomicznym narzędziem wspomagającym tworzenie planów lekcji, przydział sal lekcyjnych oraz układanie harmonogramów dyżurów w szkołach i placówkach oświatowych.
-2. Kod źródłowy Aplikacji jest publicznie dostępny i dystrybuowany na warunkach otwartoźródłowej licencji **MIT**.
+2. Oprogramowanie dystrybuowane jest na warunkach Darmowej Licencji Edukacyjnej (Zastrzeżonej). Zezwala ona na bezpłatne korzystanie z oprogramowania w placówkach oświatowych, lecz zabrania kopiowania, dystrybuowania, modyfikowania oraz komercjalizacji kodu bez uprzedniej pisemnej zgody autora. Szczegółowe zapisy licencji znajdują się w pliku LICENSE.
 3. Korzystanie z Aplikacji oznacza akceptację warunków niniejszego regulaminu.
 
 ---

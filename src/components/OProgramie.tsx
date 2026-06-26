@@ -188,17 +188,19 @@ export default function OProgramie() {
             {/* 3. LICENCJA */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-6 space-y-4">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Award size={16} className="text-emerald-500" /> 📄 Licencja oprogramowania (Apache-2.0)
+                <Award size={16} className="text-emerald-500" /> 📄 Darmowa Licencja Edukacyjna (Zastrzeżona)
               </h3>
-              <div className="text-xs text-slate-600 space-y-3 leading-relaxed font-mono bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
-                <p className="font-bold underline text-slate-800">Apache License, Version 2.0 (January 2004)</p>
-                <p>Licensed under the Apache License, Version 2.0 (the "License");</p>
-                <p>you may not use this file except in compliance with the License.</p>
-                <p>You may obtain a copy of the License at:</p>
-                <p className="text-blue-600">http://www.apache.org/licenses/LICENSE-2.0</p>
-                <p className="pt-2">Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.</p>
-                <p className="pt-2"><strong>WARUNKI GWARANCJI:</strong></p>
-                <p>OPROGRAMOWANIE JEST DOSTARCZANE TAKIE, JAKIE JEST ("AS IS"), BEZ JAKICHKOLWIEK GWARANCJI, WYRAŹNYCH LUB DOROZUMIANYCH, W TYM GWARANCJI WARTOŚCI HANDLOWEJ LUB PRZYDATNOŚCI DO OKREŚLONEGO CELU.</p>
+              <div className="text-xs text-slate-650 space-y-3 leading-relaxed bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-56 overflow-y-auto">
+                <p className="font-bold text-slate-850 border-b border-slate-200 pb-1.5">Warunki licencyjne SalePlan Pro v3:</p>
+                <p><strong>1. Dozwolony użytek:</strong> Licencja udziela bezpłatnego, niewyłącznego prawa do korzystania z Oprogramowania na terenie i na potrzeby placówek oświatowych (np. szkół i przedszkoli).</p>
+                <p><strong>2. Zastrzeżenie praw i zakazy:</strong> Użytkownik ani osoby trzecie nie mają prawa do:</p>
+                <ul className="list-disc pl-4 space-y-1">
+                  <li>kopiowania i powielania kodu źródłowego poza potrzebami własnymi placówki,</li>
+                  <li>dystrybuowania, rozpowszechniania lub udostępniania kodu bez zgody autora,</li>
+                  <li>modyfikowania, zmieniania kodu źródłowego lub tworzenia projektów zależnych,</li>
+                  <li>komercjalizacji, sprzedaży lub czerpania korzyści majątkowych z oprogramowania.</li>
+                </ul>
+                <p className="pt-2"><strong>3. Brak gwarancji:</strong> Oprogramowanie dostarczane jest w stanie "takim, jakie jest" (AS IS). Autor nie odpowiada za ewentualne błędy i skutki ich wystąpienia.</p>
               </div>
             </div>
 

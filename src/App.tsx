@@ -988,7 +988,7 @@ export default function App() {
       {/* ── STOPKA STATYSTYCZNA LICENCJI ── */}
       <footer className="bg-slate-900 border-t border-slate-950 text-slate-500 py-3 px-6 flex flex-col md:flex-row justify-between items-center gap-3.5 text-[10px] select-none shrink-0 font-medium">
         <div className="flex items-center gap-3">
-          <span>Licencja: Apache-2.0 · Offline Client-side App</span>
+          <span>Licencja: Edukacyjna (Zastrzeżona) · Offline Client-side App</span>
           <span className="text-slate-750 font-bold">|</span>
           <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[9px]">
             {saveStatus === 'saving' && (

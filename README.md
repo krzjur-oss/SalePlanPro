@@ -76,4 +76,4 @@ Program został zaprojektowany z zachowaniem najwyższych standardów ochrony da
 
 ## 📄 Licencja
 
-Projekt dystrybuowany jest na warunkach otwartej licencji **MIT**. Szczegóły znajdują się w pliku `LICENSE`.
+Projekt dystrybuowany jest na warunkach **Darmowej Licencji Edukacyjnej (Zastrzeżonej)**. Zezwala ona na bezpłatne użytkowanie oprogramowania w placówkach oświatowych, lecz zabrania kopiowania, dystrybuowania, modyfikowania oraz komercjalizacji kodu bez zgody autora. Szczegóły znajdują się w pliku `LICENSE`.

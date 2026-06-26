@@ -1,21 +1,39 @@
-MIT License
+Darmowa Licencja Edukacyjna SalePlan Pro v3 (Zastrzeżona) / SalePlan Pro v3 Free Educational License (Proprietary)
 
-Copyright (c) 2026 Krzysztof Jurewicz (KrzJur@gmail.com)
+Copyright (c) 2026 Krzysztof Jurewicz (KrzJur@gmail.com / https://github.com/KrzJur-oss/SalePlanPro)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+POLSKA WERSJA JĘZYKOWA (POLISH VERSION)
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Niniejsza umowa licencyjna określa warunki korzystania z oprogramowania SalePlan Pro v3 (zwanego dalej "Oprogramowaniem").
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. DOZWOLONY UŻYTEK:
+Licencjodawca udziela użytkownikom bezpłatnego, niewyłącznego, nieprzenoszalnego i ograniczonego prawa do instalowania, uruchamiania i używania Oprogramowania wyłącznie na terenie i na potrzeby placówek oświatowych (szkoły podstawowe, szkoły ponadpodstawowe, przedszkola, zespoły szkolno-przedszkolne i inne placówki edukacyjne).
+
+2. OGRANICZENIA (ZAKAZ KOPIOWANIA, DYSTRYBUCJI, MODYFIKACJI I KOMERCJALIZACJI):
+Użytkownik oraz jakakolwiek osoba trzecia NIE MA PRAWA do:
+a) Kopiowania i powielania kodu źródłowego lub skompilowanych plików Oprogramowania w celach innych niż bezpośrednie uruchomienie aplikacji na potrzeby własne placówki oświatowej.
+b) Dystrybuowania, rozpowszechniania, sublicencjonowania, wypożyczania lub udostępniania Oprogramowania osobom trzecim, w szczególności poprzez umieszczanie go w innych repozytoriach, sklepach z aplikacjami lub serwerach pobierania bez uprzedniej pisemnej zgody Licencjodawcy.
+c) Modyfikowania, dekompilowania, inżynierii wstecznej (reverse engineering), zmieniania kodu źródłowego lub tworzenia utworów zależnych na podstawie Oprogramowania.
+d) Komercjalizacji Oprogramowania – zabrania się sprzedaży, odpłatnego udostępniania, czerpania korzyści majątkowych z dystrybucji lub wdrażania Oprogramowania, a także oferowania płatnych usług powiązanych bezpośrednio z kodem Oprogramowania bez pisemnej zgody Licencjodawcy.
+
+3. BRAK GWARANCJI:
+Oprogramowanie dostarczane jest w stanie "TAKIM, JAKIE JEST" (AS IS), bez jakiejkejkolwiek gwarancji, wyraźnej lub dorozumianej. Licencjodawca nie gwarantuje bezbłędnego działania Oprogramowania ani przydatności do określonego celu. Licencjodawca nie ponosi odpowiedzialności za jakiekolwiek szkody powstałe w wyniku korzystania lub braku możliwości korzystania z Oprogramowania.
+
+---
+
+ENGLISH VERSION
+
+This license agreement defines the terms and conditions for using SalePlan Pro v3 (hereinafter "Software").
+
+1. PERMITTED USE:
+The Licensor grants users a free, non-exclusive, non-transferable, and limited right to install, run, and use the Software solely within and for the purposes of educational institutions (primary schools, secondary schools, kindergartens, and other educational facilities).
+
+2. RESTRICTIONS (PROHIBITION OF COPYING, DISTRIBUTION, MODIFICATION, AND COMMERCIALIZATION):
+The user and any third party DO NOT have the right to:
+a) Copy or reproduce the source code or compiled files of the Software for purposes other than directly running the application for the educational institution's own needs.
+b) Distribute, sub-license, rent, lease, or make the Software available to third parties, specifically by uploading it to other repositories, app stores, or download servers without prior written consent from the Licensor.
+c) Modify, decompile, reverse engineer, alter the source code, or create derivative works based on the Software.
+d) Commercialize the Software – it is strictly forbidden to sell, rent, monetize, or profit from the distribution or implementation of the Software, or offer paid services tied directly to the Software code without written consent from the Licensor.
+
+3. DISCLAIMER OF WARRANTY:
+The Software is provided "AS IS", without warranty of any kind, express or implied. The Licensor does not warrant that the Software is error-free or fit for a particular purpose. In no event shall the Licensor be liable for any damages arising out of the use or inability to use the Software.
