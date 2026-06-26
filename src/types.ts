@@ -248,6 +248,23 @@ export interface PlanDyzuryState {
   };
 }
 
+export interface GeneratorSettings {
+  maxGapsPerTeacher: number;
+  obeyAvailability: boolean;
+  avoidExtremes: boolean;
+  noStudentGaps: boolean;
+  allowDoubleBlocks: boolean;
+  includeSpecialNI: boolean;
+  limitComputerLabs: boolean;
+  customComputerLabsCount: number;
+
+  genPriorityHomerooms: boolean;
+  genPriorityTeachers: boolean;
+  genExcludeWF: boolean;
+  genAutoPlaceWF: boolean;
+  genClearExisting: boolean;
+}
+
 export interface AppState {
   yearKey: string;
   yearLabel: string;
@@ -262,6 +279,7 @@ export interface AppState {
   homerooms: HomeroomState;
   planLekcji: PlanLekcjiState;
   dyzury: PlanDyzuryState;
+  generatorSettings?: GeneratorSettings;
 }
 
 export interface ArchiveEntry {

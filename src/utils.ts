@@ -387,6 +387,21 @@ export function getDemoAppState(): AppState {
         excludeTeachers: [],
       },
     },
+    generatorSettings: {
+      maxGapsPerTeacher: 2,
+      obeyAvailability: true,
+      avoidExtremes: true,
+      noStudentGaps: true,
+      allowDoubleBlocks: true,
+      includeSpecialNI: true,
+      limitComputerLabs: true,
+      customComputerLabsCount: 1,
+      genPriorityHomerooms: true,
+      genPriorityTeachers: true,
+      genExcludeWF: true,
+      genAutoPlaceWF: true,
+      genClearExisting: true,
+    },
   };
 }
 

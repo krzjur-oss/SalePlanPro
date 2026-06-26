@@ -23,14 +23,17 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
   const pl = appState.planLekcji;
 
   // ── GENERATOR OPTIONS STATED BY USER ──
-  const [maxGapsPerTeacher, setMaxGapsPerTeacher] = useState<number>(2);
-  const [obeyAvailability, setObeyAvailability] = useState<boolean>(true);
-  const [avoidExtremes, setAvoidExtremes] = useState<boolean>(true);
-  const [noStudentGaps, setNoStudentGaps] = useState<boolean>(true);
-  const [allowDoubleBlocks, setAllowDoubleBlocks] = useState<boolean>(true);
-  const [includeSpecialNI, setIncludeSpecialNI] = useState<boolean>(true);
-  const [limitComputerLabs, setLimitComputerLabs] = useState<boolean>(true);
+  const [maxGapsPerTeacher, setMaxGapsPerTeacher] = useState<number>(() => appState.generatorSettings?.maxGapsPerTeacher ?? 2);
+  const [obeyAvailability, setObeyAvailability] = useState<boolean>(() => appState.generatorSettings?.obeyAvailability ?? true);
+  const [avoidExtremes, setAvoidExtremes] = useState<boolean>(() => appState.generatorSettings?.avoidExtremes ?? true);
+  const [noStudentGaps, setNoStudentGaps] = useState<boolean>(() => appState.generatorSettings?.noStudentGaps ?? true);
+  const [allowDoubleBlocks, setAllowDoubleBlocks] = useState<boolean>(() => appState.generatorSettings?.allowDoubleBlocks ?? true);
+  const [includeSpecialNI, setIncludeSpecialNI] = useState<boolean>(() => appState.generatorSettings?.includeSpecialNI ?? true);
+  const [limitComputerLabs, setLimitComputerLabs] = useState<boolean>(() => appState.generatorSettings?.limitComputerLabs ?? true);
   const [customComputerLabsCount, setCustomComputerLabsCount] = useState<number>(() => {
+    if (appState.generatorSettings?.customComputerLabsCount !== undefined) {
+      return appState.generatorSettings.customComputerLabsCount;
+    }
     const fromRooms = pl.rooms?.filter(r => r.type === 'informatyka').length || 0;
     return fromRooms > 0 ? fromRooms : 1;
   });

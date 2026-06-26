@@ -64,11 +64,11 @@ export default function PlanSal({
 
   // Sched generator states
   const [showGenerator, setShowGenerator] = useState<boolean>(false);
-  const [genPriorityHomerooms, setGenPriorityHomerooms] = useState<boolean>(true);
-  const [genPriorityTeachers, setGenPriorityTeachers] = useState<boolean>(true);
-  const [genExcludeWF, setGenExcludeWF] = useState<boolean>(true);
-  const [genAutoPlaceWF, setGenAutoPlaceWF] = useState<boolean>(true);
-  const [genClearExisting, setGenClearExisting] = useState<boolean>(true);
+  const [genPriorityHomerooms, setGenPriorityHomerooms] = useState<boolean>(() => appState.generatorSettings?.genPriorityHomerooms ?? true);
+  const [genPriorityTeachers, setGenPriorityTeachers] = useState<boolean>(() => appState.generatorSettings?.genPriorityTeachers ?? true);
+  const [genExcludeWF, setGenExcludeWF] = useState<boolean>(() => appState.generatorSettings?.genExcludeWF ?? true);
+  const [genAutoPlaceWF, setGenAutoPlaceWF] = useState<boolean>(() => appState.generatorSettings?.genAutoPlaceWF ?? true);
+  const [genClearExisting, setGenClearExisting] = useState<boolean>(() => appState.generatorSettings?.genClearExisting ?? true);
   const [teacherSearch, setTeacherSearch] = useState<string>('');
 
   // List of all classrooms from columns in the layout

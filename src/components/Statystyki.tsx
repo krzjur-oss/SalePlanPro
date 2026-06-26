@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { AppState, SchedData, AppEventLog } from '../types';
+import { AppState, SchedData, AppEventLog, DyzurEntry } from '../types';
 import { 
   BarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, TrendingUp, Info, HelpCircle,
-  Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw
+  Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw, RefreshCw, XCircle, ShieldAlert
 } from 'lucide-react';
 
 interface StatystykiProps {
@@ -13,11 +13,18 @@ interface StatystykiProps {
 }
 
   export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs }: StatystykiProps) {
-  const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps' | 'history'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps' | 'audit' | 'history'>('audit');
+  const [isScanning, setIsScanning] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   const [logFilterType, setLogFilterType] = useState<string>('all');
 
   const pl = appState.planLekcji;
+  const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
+
+  const getHourLabel = (hIdx: number) => {
+    const h = pl.hours[hIdx];
+    return h ? `${h.num}. lekcja (${h.start}-${h.end})` : `${hIdx + 1}. lekcja`;
+  };
 
   const filteredLogs = useMemo(() => {
     return historyLogs.filter(log => {
@@ -204,8 +211,6 @@ interface StatystykiProps {
     const classGaps: Array<{ className: string; dayName: string; missingHours: number[] }> = [];
     const teacherGaps: Array<{ teacherName: string; dayName: string; missingHours: number[] }> = [];
 
-    const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
-
     // 1. Check Classes for gaps
     pl.classes.forEach(c => {
       for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
@@ -288,6 +293,226 @@ interface StatystykiProps {
     return { classGaps, teacherGaps };
   }, [pl.classes, pl.teachers, pl.lessons, pl.assignments, hoursList, pl.hours]);
 
+  // --- Calculation: Automatic Audit (Automatyczny audyt) ---
+  const teacherConflicts = useMemo(() => {
+    const conflicts: Array<{
+      teacher: { name: string; abbr: string };
+      dayIdx: number;
+      hourIdx: number;
+      lessons: Array<{ className: string; subjectName: string }>;
+    }> = [];
+
+    const groups: Record<string, typeof scheduledLessonsList> = {};
+    scheduledLessonsList.forEach(l => {
+      if (l.teacherId) {
+        const key = `${l.teacherId}|${l.dayIdx}|${l.hourIdx}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(l);
+      }
+    });
+
+    Object.entries(groups).forEach(([key, list]) => {
+      if (list.length > 1) {
+        const uniqueClasses = Array.from(new Set(list.map(l => l.classId)));
+        if (uniqueClasses.length > 1) {
+          const parts = key.split('|');
+          const teacherId = parts[0];
+          const dayIdx = parseInt(parts[1], 10);
+          const hourIdx = parseInt(parts[2], 10);
+          const teacher = teachersMap.get(teacherId);
+
+          conflicts.push({
+            teacher: teacher ? { name: `${teacher.first} ${teacher.last}`, abbr: teacher.abbr } : { name: 'Nieznany', abbr: '?' },
+            dayIdx,
+            hourIdx,
+            lessons: list.map(l => {
+              const cls = classesMap.get(l.classId);
+              const sub = subjectsMap.get(l.subjectId);
+              return {
+                className: cls ? cls.name : '?',
+                subjectName: sub ? sub.name : '?'
+              };
+            })
+          });
+        }
+      }
+    });
+
+    return conflicts;
+  }, [scheduledLessonsList, teachersMap, classesMap, subjectsMap]);
+
+  const missingRoomLessons = useMemo(() => {
+    const missing: Array<{
+      className: string;
+      dayIdx: number;
+      hourIdx: number;
+      subjectName: string;
+      teacherAbbr: string;
+    }> = [];
+
+    scheduledLessonsList.forEach(l => {
+      if (!l.roomId) {
+        const cls = classesMap.get(l.classId);
+        const sub = subjectsMap.get(l.subjectId);
+        const teacher = l.teacherId ? teachersMap.get(l.teacherId) : null;
+        missing.push({
+          className: cls ? cls.name : '?',
+          dayIdx: l.dayIdx,
+          hourIdx: l.hourIdx,
+          subjectName: sub ? sub.name : '?',
+          teacherAbbr: teacher ? teacher.abbr : 'Brak'
+        });
+      }
+    });
+
+    return missing;
+  }, [scheduledLessonsList, classesMap, subjectsMap, teachersMap]);
+
+  const overlappingDuties = useMemo(() => {
+    const overlaps: Array<{
+      teacher: { name: string; abbr: string };
+      dayIdx: number;
+      breakIdx: number;
+      breakName: string;
+      places: string[];
+    }> = [];
+
+    const groups: Record<string, Array<{ miejsceId: string; entry: DyzurEntry }>> = {};
+    
+    Object.entries(appState.dyzury.harmonogram).forEach(([key, entry]) => {
+      if (entry && entry.teacherAbbr) {
+        const parts = key.split('|');
+        if (parts.length >= 3) {
+          const miejsceId = parts[0];
+          const dayIdx = parseInt(parts[1], 10);
+          const breakIdx = parseInt(parts[2], 10);
+
+          const groupKey = `${entry.teacherAbbr}|${dayIdx}|${breakIdx}`;
+          if (!groups[groupKey]) groups[groupKey] = [];
+          groups[groupKey].push({ miejsceId, entry });
+        }
+      }
+    });
+
+    const placesMap = new Map(appState.dyzury.miejsca.map(m => [m.id, m]));
+
+    Object.entries(groups).forEach(([groupKey, list]) => {
+      if (list.length > 1) {
+        const parts = groupKey.split('|');
+        const teacherAbbr = parts[0];
+        const dayIdx = parseInt(parts[1], 10);
+        const breakIdx = parseInt(parts[2], 10);
+
+        const teacher = pl.teachers.find(t => t.abbr === teacherAbbr);
+        const prw = appState.dyzury.przerwy[breakIdx];
+        const breakLabel = prw ? `${prw.name} (${prw.start}-${prw.end})` : `Przerwa nr ${breakIdx + 1}`;
+
+        const placeNames = list.map(item => {
+          const p = placesMap.get(item.miejsceId);
+          return p ? p.name : 'Nieznane miejsce';
+        });
+
+        overlaps.push({
+          teacher: teacher ? { name: `${teacher.first} ${teacher.last}`, abbr: teacher.abbr } : { name: teacherAbbr, abbr: teacherAbbr },
+          dayIdx,
+          breakIdx,
+          breakName: breakLabel,
+          places: placeNames
+        });
+      }
+    });
+
+    return overlaps;
+  }, [appState.dyzury, pl.teachers]);
+
+  const classConflicts = useMemo(() => {
+    const conflicts: Array<{
+      className: string;
+      dayIdx: number;
+      hourIdx: number;
+      lessons: Array<{ subjectName: string; teacherAbbr: string }>;
+    }> = [];
+
+    const groups: Record<string, typeof scheduledLessonsList> = {};
+    scheduledLessonsList.forEach(l => {
+      const key = `${l.classId}|${l.dayIdx}|${l.hourIdx}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(l);
+    });
+
+    Object.entries(groups).forEach(([key, list]) => {
+      if (list.length > 1) {
+        const parts = key.split('|');
+        const classId = parts[0];
+        const dayIdx = parseInt(parts[1], 10);
+        const hourIdx = parseInt(parts[2], 10);
+        const cls = classesMap.get(classId);
+
+        conflicts.push({
+          className: cls ? cls.name : '?',
+          dayIdx,
+          hourIdx,
+          lessons: list.map(l => {
+            const sub = subjectsMap.get(l.subjectId);
+            const teacher = l.teacherId ? teachersMap.get(l.teacherId) : null;
+            return {
+              subjectName: sub ? sub.name : '?',
+              teacherAbbr: teacher ? teacher.abbr : 'Brak'
+            };
+          })
+        });
+      }
+    });
+
+    return conflicts;
+  }, [scheduledLessonsList, classesMap, subjectsMap, teachersMap]);
+
+  const roomConflicts = useMemo(() => {
+    const conflicts: Array<{
+      roomName: string;
+      dayIdx: number;
+      hourIdx: number;
+      lessons: Array<{ className: string; subjectName: string; teacherAbbr: string }>;
+    }> = [];
+
+    const groups: Record<string, typeof scheduledLessonsList> = {};
+    scheduledLessonsList.forEach(l => {
+      if (l.roomId) {
+        const key = `${l.roomId}|${l.dayIdx}|${l.hourIdx}`;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(l);
+      }
+    });
+
+    Object.entries(groups).forEach(([key, list]) => {
+      if (list.length > 1) {
+        const parts = key.split('|');
+        const roomId = parts[0];
+        const dayIdx = parseInt(parts[1], 10);
+        const hourIdx = parseInt(parts[2], 10);
+        const room = roomsMap.get(roomId);
+
+        conflicts.push({
+          roomName: room ? room.name : '?',
+          dayIdx,
+          hourIdx,
+          lessons: list.map(l => {
+            const cls = classesMap.get(l.classId);
+            const sub = subjectsMap.get(l.subjectId);
+            const teacher = l.teacherId ? teachersMap.get(l.teacherId) : null;
+            return {
+              className: cls ? cls.name : '?',
+              subjectName: sub ? sub.name : '?',
+              teacherAbbr: teacher ? teacher.abbr : 'Brak'
+            };
+          })
+        });
+      }
+    });
+
+    return conflicts;
+  }, [scheduledLessonsList, roomsMap, classesMap, subjectsMap, teachersMap]);
+
   // --- General Summary Statistics Metrics ---
   const totalClasses = pl.classes.length;
   const totalTeachers = pl.teachers.length;
@@ -361,10 +586,18 @@ interface StatystykiProps {
         </div>
 
         {/* ——— TAB BUTTONS ——— */}
-        <div className="flex border-b border-slate-200">
+        <div className="flex border-b border-slate-200 overflow-x-auto whitespace-nowrap">
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'audit' ? 'border-red-600 text-red-700 bg-red-50/20 font-extrabold' : 'border-transparent text-slate-500 hover:text-red-650'
+            }`}
+          >
+            🔍 Automatyczny Audyt ({teacherConflicts.length + missingRoomLessons.length + overlappingDuties.length + classConflicts.length + roomConflicts.length})
+          </button>
           <button
             onClick={() => setActiveTab('general')}
-            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 ${
               activeTab === 'general' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -372,7 +605,7 @@ interface StatystykiProps {
           </button>
           <button
             onClick={() => setActiveTab('teachers')}
-            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 ${
               activeTab === 'teachers' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -380,7 +613,7 @@ interface StatystykiProps {
           </button>
           <button
             onClick={() => setActiveTab('rooms')}
-            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 ${
               activeTab === 'rooms' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -388,7 +621,7 @@ interface StatystykiProps {
           </button>
           <button
             onClick={() => setActiveTab('gaps')}
-            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 ${
               activeTab === 'gaps' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
@@ -396,13 +629,354 @@ interface StatystykiProps {
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 shrink-0 ${
               activeTab === 'history' ? 'border-indigo-600 text-indigo-700 animate-pulse' : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
             <History size={13} /> Dziennik Zdarzeń ({historyLogs.length})
           </button>
         </div>
+
+        {/* ======================= TAB: AUTOMATIC AUDIT CONTENT ======================= */}
+        {activeTab === 'audit' && (
+          <div className="space-y-6">
+            {/* Header / Control Card */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <ShieldAlert className="text-red-550" size={18} />
+                  Diagnostyka i Audyt Harmonogramu
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Inteligentny silnik analityczny skanuje plan pod kątem konfliktów godzinowych, braków lokalowych oraz błędów w dyżurach.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsScanning(true);
+                  setTimeout(() => {
+                    setIsScanning(false);
+                  }, 600);
+                }}
+                disabled={isScanning}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider transition cursor-pointer select-none shadow-xs shrink-0"
+              >
+                <RefreshCw size={14} className={`transition ${isScanning ? 'animate-spin' : ''}`} />
+                {isScanning ? 'Skanowanie...' : 'Skanuj ponownie'}
+              </button>
+            </div>
+
+            {isScanning ? (
+              <div className="bg-white border border-slate-200 rounded-2xl p-16 shadow-xs flex flex-col items-center justify-center text-center space-y-4">
+                <div className="relative">
+                  <div className="w-12 h-12 border-4 border-red-200 border-t-red-650 rounded-full animate-spin"></div>
+                  <Search size={18} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-red-600 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Trwa generowanie raportu audytu</h4>
+                  <p className="text-[11px] text-slate-450 uppercase font-black tracking-widest font-mono">Przetwarzanie reguł poprawności...</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Audit summary message */}
+                {(teacherConflicts.length + missingRoomLessons.length + overlappingDuties.length + classConflicts.length + roomConflicts.length) === 0 ? (
+                  <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-6 flex items-start gap-4 shadow-xs">
+                    <div className="p-3 bg-emerald-100/80 text-emerald-700 rounded-2xl shrink-0">
+                      <CheckCircle className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-black text-emerald-900 uppercase tracking-wider">Brak wykrytych konfliktów!</h4>
+                      <p className="text-xs text-emerald-750 font-medium leading-relaxed">
+                        Gratulacje! Twój plan lekcji jest w pełni spójny i wolny od błędów. Wszyscy nauczyciele uczą tylko w jednym miejscu naraz, każda zaplanowana lekcja ma przydzielony gabinet, a dyżury nauczycieli nie nakładają się na siebie.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-red-50/60 border border-red-200 rounded-2xl p-6 flex items-start gap-4 shadow-xs">
+                    <div className="p-3 bg-red-100 text-red-750 rounded-2xl shrink-0">
+                      <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1 flex-1">
+                      <h4 className="text-sm font-black text-red-950 uppercase tracking-wider">Wykryto niespójności w harmonogramie</h4>
+                      <p className="text-xs text-red-800 font-medium leading-relaxed">
+                        Znaleziono łącznie <strong className="font-extrabold">{teacherConflicts.length + missingRoomLessons.length + overlappingDuties.length + classConflicts.length + roomConflicts.length} błędy/ów</strong>, które wymagają Twojej uwagi w celu zapewnienia prawidłowego funkcjonowania szkoły.
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {teacherConflicts.length > 0 && (
+                          <span className="bg-red-100 text-red-800 font-bold font-mono px-2.5 py-1 rounded-md text-[10px] uppercase">
+                            Nauczyciele: {teacherConflicts.length}
+                          </span>
+                        )}
+                        {overlappingDuties.length > 0 && (
+                          <span className="bg-amber-100 text-amber-950 font-bold font-mono px-2.5 py-1 rounded-md text-[10px] uppercase">
+                            Nakładające się dyżury: {overlappingDuties.length}
+                          </span>
+                        )}
+                        {missingRoomLessons.length > 0 && (
+                          <span className="bg-blue-100 text-blue-800 font-bold font-mono px-2.5 py-1 rounded-md text-[10px] uppercase">
+                            Klasy bez sali: {missingRoomLessons.length}
+                          </span>
+                        )}
+                        {classConflicts.length > 0 && (
+                          <span className="bg-orange-100 text-orange-950 font-bold font-mono px-2.5 py-1 rounded-md text-[10px] uppercase">
+                            Klasy w dwóch miejscach: {classConflicts.length}
+                          </span>
+                        )}
+                        {roomConflicts.length > 0 && (
+                          <span className="bg-purple-100 text-purple-950 font-bold font-mono px-2.5 py-1 rounded-md text-[10px] uppercase">
+                            Zajęte sale: {roomConflicts.length}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Audit Grid Details */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* SECTION 1: TEACHER IN TWO PLACES */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <Users size={14} className="text-red-500" />
+                          Nauczyciel w dwóch miejscach naraz
+                        </h4>
+                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${teacherConflicts.length > 0 ? 'bg-red-100 text-red-805' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {teacherConflicts.length}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                        Sytuacje, w których ten sam nauczyciel ma zaplanowane zajęcia z różnymi klasami w tej samej godzinie lekcyjnej
+                      </p>
+                    </div>
+
+                    {teacherConflicts.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400 font-medium italic">
+                        Brak konfliktów. Wszyscy nauczyciele prowadzą maksymalnie jedną lekcję naraz.
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                        {teacherConflicts.map((conf, idx) => (
+                          <div key={idx} className="bg-red-50/40 border border-red-200/60 p-3.5 rounded-xl text-xs space-y-2">
+                            <div className="flex justify-between items-center font-bold text-slate-900">
+                              <span className="text-red-900 font-extrabold">
+                                {conf.teacher.name} ({conf.teacher.abbr})
+                              </span>
+                              <span className="bg-red-100 text-red-950 font-mono font-black px-2 py-0.5 rounded text-[9.5px]">
+                                {DAYS[conf.dayIdx]}, {getHourLabel(conf.hourIdx)}
+                              </span>
+                            </div>
+                            <div className="border-t border-red-100 pt-2 text-[11px] text-slate-600 space-y-1">
+                              <p className="font-semibold text-slate-500 uppercase text-[9px] tracking-wider mb-1">Nakładające się zajęcia:</p>
+                              {conf.lessons.map((les, lidx) => (
+                                <div key={lidx} className="flex justify-between items-center bg-white border border-red-100 rounded p-1.5">
+                                  <span className="font-extrabold text-slate-800">Klasa {les.className}</span>
+                                  <span className="text-slate-500 italic font-medium">{les.subjectName}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECTION 2: OVERLAPPING DUTIES */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <Shield size={14} className="text-amber-500" />
+                          Nakładające się dyżury
+                        </h4>
+                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${overlappingDuties.length > 0 ? 'bg-amber-100 text-amber-950' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {overlappingDuties.length}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                        Konflikty polegające na przypisaniu nauczycielowi wielu dyżurów w różnych miejscach na tej samej przerwie
+                      </p>
+                    </div>
+
+                    {overlappingDuties.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400 font-medium italic">
+                        Brak konfliktów dyżurów. Każdy nauczyciel ma maksymalnie jedno miejsce dyżurowania na danej przerwie.
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                        {overlappingDuties.map((conf, idx) => (
+                          <div key={idx} className="bg-amber-50/30 border border-amber-200/50 p-3.5 rounded-xl text-xs space-y-2">
+                            <div className="flex justify-between items-center font-bold text-slate-900">
+                              <span className="text-amber-900 font-extrabold">
+                                {conf.teacher.name} ({conf.teacher.abbr})
+                              </span>
+                              <span className="bg-amber-100 text-amber-950 font-mono font-black px-2 py-0.5 rounded text-[9.5px]">
+                                {DAYS[conf.dayIdx]}, {conf.breakName}
+                              </span>
+                            </div>
+                            <div className="border-t border-amber-100 pt-2 text-[11px] text-slate-600 space-y-1">
+                              <p className="font-semibold text-slate-500 uppercase text-[9px] tracking-wider mb-1">Kolidujące miejsca dyżurowania:</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {conf.places.map((place, pidx) => (
+                                  <span key={pidx} className="bg-white border border-amber-150 px-2 py-1 rounded font-bold text-amber-950">
+                                    📍 {place}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECTION 3: CLASS WITHOUT ROOM */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <MapPin size={14} className="text-blue-500" />
+                          Lekcje klas bez przypisanej sali
+                        </h4>
+                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${missingRoomLessons.length > 0 ? 'bg-blue-100 text-blue-805' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {missingRoomLessons.length}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                        Sytuacje, w których zaplanowano zajęcia lekcyjne, ale nie przydzielono im żadnego gabinetu (Etap 2)
+                      </p>
+                    </div>
+
+                    {missingRoomLessons.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400 font-medium italic">
+                        Brak brakujących sal. Każda zaplanowana lekcja ma swój gabinet.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                        {missingRoomLessons.map((m, idx) => (
+                          <div key={idx} className="bg-blue-50/40 border border-blue-100 p-3 rounded-xl text-xs flex justify-between items-center">
+                            <div>
+                              <div className="font-extrabold text-slate-900">
+                                Klasa <span className="text-blue-750">{m.className}</span> — {m.subjectName}
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-semibold block uppercase mt-0.5">
+                                Nauczyciel: {m.teacherAbbr}
+                              </span>
+                            </div>
+                            <span className="bg-blue-100 text-blue-900 font-mono font-black px-2 py-0.5 rounded text-[9px] shrink-0">
+                              {DAYS[m.dayIdx]}, lekcja {m.hourIdx + 1}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECTION 4: CLASS IN TWO PLACES (EXTRA VALUE) */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col space-y-4">
+                    <div className="border-b border-slate-100 pb-3">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <AlertTriangle size={14} className="text-orange-500" />
+                          Klasa w dwóch miejscach naraz
+                        </h4>
+                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${classConflicts.length > 0 ? 'bg-orange-100 text-orange-950' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {classConflicts.length}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                        Wykryte błędy, w których jedna klasa ma zaplanowane kilka zajęć w tym samym czasie
+                      </p>
+                    </div>
+
+                    {classConflicts.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400 font-medium italic">
+                        Brak konfliktów klasowych. Żadna klasa nie ma nałożonych lekcji.
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                        {classConflicts.map((conf, idx) => (
+                          <div key={idx} className="bg-orange-50/40 border border-orange-200/50 p-3.5 rounded-xl text-xs space-y-2">
+                            <div className="flex justify-between items-center font-bold text-slate-900">
+                              <span className="text-orange-900 font-extrabold">
+                                Klasa {conf.className}
+                              </span>
+                              <span className="bg-orange-100 text-orange-950 font-mono font-black px-2 py-0.5 rounded text-[9.5px]">
+                                {DAYS[conf.dayIdx]}, {getHourLabel(conf.hourIdx)}
+                              </span>
+                            </div>
+                            <div className="border-t border-orange-100 pt-2 text-[11px] text-slate-600 space-y-1">
+                              <p className="font-semibold text-slate-500 uppercase text-[9px] tracking-wider mb-1">Nałożone lekcje:</p>
+                              {conf.lessons.map((les, lidx) => (
+                                <div key={lidx} className="flex justify-between items-center bg-white border border-orange-100 rounded p-1.5">
+                                  <span className="font-extrabold text-slate-850">{les.subjectName}</span>
+                                  <span className="text-slate-500 font-bold font-mono">Nauczyciel: {les.teacherAbbr}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECTION 5: ROOM DOUBLE BOOKED (EXTRA VALUE) */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col space-y-4 lg:col-span-2">
+                    <div className="border-b border-slate-100 pb-3">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <Building size={14} className="text-purple-500" />
+                          Sala lekcyjna zajęta przez wiele lekcji naraz
+                        </h4>
+                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${roomConflicts.length > 0 ? 'bg-purple-100 text-purple-950' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {roomConflicts.length}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                        Sytuacje podwójnego obłożenia, gdzie ta sama sala została przydzielona dwóm lub więcej klasom w tej samej godzinie lekcyjnej
+                      </p>
+                    </div>
+
+                    {roomConflicts.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-400 font-medium italic">
+                        Brak konfliktów sal. Żaden gabinet nie jest zajęty przez więcej niż jedną klasę w tym samym czasie.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[350px] overflow-y-auto pr-1">
+                        {roomConflicts.map((conf, idx) => (
+                          <div key={idx} className="bg-purple-50/40 border border-purple-200/50 p-3.5 rounded-xl text-xs space-y-2">
+                            <div className="flex justify-between items-center font-bold text-slate-900">
+                              <span className="text-purple-950 font-black">
+                                🏫 Sala {conf.roomName}
+                              </span>
+                              <span className="bg-purple-100 text-purple-950 font-mono font-black px-2 py-0.5 rounded text-[9.5px]">
+                                {DAYS[conf.dayIdx]}, {getHourLabel(conf.hourIdx)}
+                              </span>
+                            </div>
+                            <div className="border-t border-purple-100 pt-2 text-[11px] text-slate-600 space-y-1">
+                              <p className="font-semibold text-slate-400 uppercase text-[9px] tracking-wider mb-1">Lekcje zaplanowane w tej sali:</p>
+                              {conf.lessons.map((les, lidx) => (
+                                <div key={lidx} className="flex justify-between items-center bg-white border border-purple-100 rounded p-1.5">
+                                  <span className="font-extrabold text-slate-800">Klasa {les.className}</span>
+                                  <span className="text-slate-500 italic">{les.subjectName} ({les.teacherAbbr})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* ======================= TAB: GENERAL CONTENT ======================= */}
         {activeTab === 'general' && (
