@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Info, User, FileText, Shield, Award, HelpCircle, Heart, HeartHandshake, CheckCircle2, ChevronRight, Mail, ExternalLink, Globe, KeyRound
+  Info, User, FileText, Shield, Award, HelpCircle, Heart, HeartHandshake, CheckCircle2, ChevronRight, Mail, ExternalLink, Globe, KeyRound, Github
 } from 'lucide-react';
 
 export default function OProgramie() {
@@ -86,10 +86,12 @@ export default function OProgramie() {
                 </div>
                 <div className="pt-2 space-y-1.5">
                   <a 
-                    href="mailto:KrzJur@gmail.com"
+                    href="https://github.com/KrzJur-oss/SalePlanPro"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center gap-2 text-[11px] text-slate-500 hover:text-blue-600 transition"
                   >
-                    <Mail size={12} className="text-slate-400" /> KrzJur@gmail.com
+                    <Github size={12} className="text-slate-400" /> github.com/KrzJur-oss/SalePlanPro
                   </a>
                   <div className="flex items-center gap-2 text-[11px] text-slate-500">
                     <Globe size={12} className="text-slate-400" /> Rzeszów / Warszawa, Polska
