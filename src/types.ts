@@ -320,3 +320,14 @@ export interface AppEventLog {
   details?: string;
 }
 
+export interface AppErrorLog {
+  id: string;
+  timestamp: string;
+  message: string;
+  stack?: string;
+  type: 'runtime' | 'promise' | 'manual' | 'sw';
+  userAgent: string;
+  url: string;
+}
+
+

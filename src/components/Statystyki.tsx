@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { AppState, SchedData, AppEventLog, DyzurEntry } from '../types';
+import React, { useMemo, useState, useEffect } from 'react';
+import { AppState, SchedData, AppEventLog, DyzurEntry, AppErrorLog } from '../types';
 import { 
   BarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, TrendingUp, Info, HelpCircle,
   Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw, RefreshCw, XCircle, ShieldAlert
 } from 'lucide-react';
+import { getStorageSize, formatBytes } from '../utils';
 
 interface StatystykiProps {
   appState: AppState;
@@ -13,12 +14,119 @@ interface StatystykiProps {
 }
 
   export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs }: StatystykiProps) {
-  const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps' | 'audit' | 'history'>('audit');
+  const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps' | 'audit' | 'history' | 'errors'>('audit');
   const [isScanning, setIsScanning] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   const [logFilterType, setLogFilterType] = useState<string>('all');
 
+  const [errorLogs, setErrorLogs] = useState<AppErrorLog[]>(() => {
+    const saved = localStorage.getItem('saleplan_v3_error_logs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    const handleNewError = (e: Event) => {
+      const customEvent = e as CustomEvent<AppErrorLog>;
+      if (customEvent.detail) {
+        setErrorLogs(prev => {
+          // Avoid duplicate errors if already present
+          if (prev.some(err => err.id === customEvent.detail.id)) return prev;
+          return [customEvent.detail, ...prev];
+        });
+      }
+    };
+    window.addEventListener('app-error-added', handleNewError);
+    return () => window.removeEventListener('app-error-added', handleNewError);
+  }, []);
+
   const pl = appState.planLekcji;
+
+  const handleExportErrorLogs = () => {
+    const lessonsCount = Object.keys(pl.lessons || {}).length;
+    const systemInfo = {
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      platform: navigator.platform,
+      online: navigator.onLine,
+      screen: {
+        width: window.screen.width,
+        height: window.screen.height,
+        availWidth: window.screen.availWidth,
+        availHeight: window.screen.availHeight,
+        pixelRatio: window.devicePixelRatio,
+        orientation: window.screen.orientation ? window.screen.orientation.type : 'unknown'
+      },
+      window: {
+        width: window.innerWidth,
+        height: window.innerHeight
+      },
+      pwa: {
+        standalone: window.matchMedia('(display-mode: standalone)').matches,
+        isProduction: import.meta.env.PROD
+      },
+      storage: {
+        localStorageBytes: getStorageSize()
+      },
+      anonymizedStats: {
+        classesCount: pl.classes?.length || 0,
+        teachersCount: pl.teachers?.length || 0,
+        roomsCount: pl.rooms?.length || 0,
+        subjectsCount: pl.subjects?.length || 0,
+        assignmentsCount: pl.assignments?.length || 0,
+        lessonsScheduledCount: lessonsCount,
+        specialStudentsCount: pl.specialStudents?.length || 0,
+        specialAssignmentsCount: pl.specialAssignments?.length || 0,
+        buildingsCount: appState.buildings?.length || 0,
+        floorsCount: appState.floors?.length || 0,
+        dutiesCount: Object.keys(appState.dyzury?.harmonogram || {}).length,
+        snapshotsCount: (() => {
+          try {
+            const saved = localStorage.getItem('saleplan_v3_snapshots');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              return Array.isArray(parsed) ? parsed.length : 0;
+            }
+          } catch (e) {}
+          return 0;
+        })()
+      }
+    };
+
+    const anonymizedSystemLogs = historyLogs.map(log => ({
+      id: log.id,
+      timestamp: log.timestamp,
+      actionType: log.actionType,
+      description: log.description
+    }));
+
+    const exportData = {
+      title: "SalePlan Pro v3 - Bezpieczny Eksport Diagnostyczny (Zgodny z RODO/GDPR)",
+      description: "Ten plik zawiera wyłącznie dane diagnostyczne i logi błędów. Nie zawiera żadnych danych osobowych, nazwisk nauczycieli, nazw klas, sal lekcyjnych ani planów lekcji.",
+      systemInfo,
+      errorLogs,
+      systemEventLogs: anonymizedSystemLogs
+    };
+
+    try {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `saleplan_diagnostyka_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (e) {
+      console.error("Export failed:", e);
+    }
+  };
+
   const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
   const getHourLabel = (hIdx: number) => {
@@ -634,6 +742,14 @@ interface StatystykiProps {
             }`}
           >
             <History size={13} /> Dziennik Zdarzeń ({historyLogs.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('errors')}
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'errors' ? 'border-red-600 text-red-700 bg-red-50/20' : 'border-transparent text-slate-500 hover:text-red-600'
+            }`}
+          >
+            <ShieldAlert size={13} className="text-red-500" /> Dziennik Błędów ({errorLogs.length})
           </button>
         </div>
 
@@ -1392,6 +1508,173 @@ interface StatystykiProps {
                 })}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ======================= TAB: ERROR LOG CONTENT ======================= */}
+        {activeTab === 'errors' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 select-none">
+              <div>
+                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                  <ShieldAlert size={15} className="text-red-500 animate-pulse" />
+                  Dziennik Diagnostyki i Błędów Programu
+                </h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 font-sans">
+                  Automatyczne przechwytywanie błędów działania aplikacji, instalacji i trybu offline (Zgodne z RODO/GDPR)
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleExportErrorLogs}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-[10.5px] uppercase tracking-wide cursor-pointer transition select-none shadow-xs"
+                >
+                  <Upload size={12} className="rotate-180" />
+                  Eksportuj bezpieczny log
+                </button>
+
+                {errorLogs.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić cały dziennik błędów diagnostycznych?')) {
+                        localStorage.removeItem('saleplan_v3_error_logs');
+                        setErrorLogs([]);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 font-bold border border-red-200 hover:border-red-300 rounded-xl text-[10.5px] uppercase tracking-wide cursor-pointer transition select-none"
+                  >
+                    <Trash2 size={12} />
+                    Wyczyść błędy
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    try {
+                      throw new Error("Testowy błąd wygenerowany ręcznie przez użytkownika w celach diagnostycznych.");
+                    } catch (e: any) {
+                      if ((window as any).__addAppError) {
+                        (window as any).__addAppError(e.message, e.stack, 'manual');
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-650 font-bold border border-slate-200 hover:border-slate-300 rounded-xl text-[10.5px] uppercase tracking-wide cursor-pointer transition select-none"
+                >
+                  <Activity size={12} />
+                  Generuj błąd testowy
+                </button>
+              </div>
+            </div>
+
+            {/* GDPR / Compliance notice */}
+            <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 flex items-start gap-3 font-sans">
+              <Shield className="text-emerald-700 shrink-0 mt-0.5" size={16} />
+              <div className="space-y-0.5">
+                <h4 className="text-[11px] font-bold text-emerald-900 uppercase">Pełna ochrona danych osobowych (RODO/GDPR)</h4>
+                <p className="text-[10.5px] text-emerald-800 leading-relaxed">
+                  Log diagnostyczny nie zapisuje ani nie eksportuje żadnych danych wprowadzonych przez Ciebie do bazy programu. Nazwy szkół, nazwiska nauczycieli, nazwy klas i sal są całkowicie pomijane. Eksport zawiera wyłącznie numeryczne statystyki rozmiaru bazy danych, informacje o Twojej przeglądarce, rozdzielczości ekranu (przydatne do diagnozy orientacji pion/poziom) oraz komunikaty techniczne błędów systemowych.
+                </p>
+              </div>
+            </div>
+
+            {/* Diagnostics Stats grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4 font-sans">
+              <div>
+                <span className="text-[9px] text-slate-400 font-bold block uppercase">Przeglądarka i System</span>
+                <span className="text-[11px] font-bold text-slate-800 truncate block mt-0.5" title={navigator.userAgent}>
+                  {navigator.userAgent.includes("Chrome") && !navigator.userAgent.includes("Edg") ? "Chrome / Chromium" : 
+                   navigator.userAgent.includes("Firefox") ? "Firefox" : 
+                   navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome") ? "Safari" : "Inna (np. Brave / Vivaldi)"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] text-slate-400 font-bold block uppercase">Ekran i Orientacja</span>
+                <span className="text-[11px] font-bold text-slate-800 block mt-0.5 font-mono">
+                  {window.screen.width}x{window.screen.height} ({window.screen.orientation ? window.screen.orientation.type : 'nieznana'})
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] text-slate-400 font-bold block uppercase">Rozmiar danych w pamięci</span>
+                <span className="text-[11px] font-bold text-slate-800 block mt-0.5 font-mono">
+                  {formatBytes(getStorageSize())}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] text-slate-400 font-bold block uppercase">Status sieci / PWA</span>
+                <span className="text-[11px] font-bold text-slate-800 block mt-0.5">
+                  {navigator.onLine ? "🌐 Online" : "📴 Offline"} ({window.matchMedia('(display-mode: standalone)').matches ? "Aplikacja PWA" : "Przeglądarka"})
+                </span>
+              </div>
+            </div>
+
+            {/* Error logs list */}
+            <div className="space-y-3 font-sans">
+              <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wide">
+                Zarejestrowane Błędy ({errorLogs.length})
+              </h4>
+
+              {errorLogs.length === 0 ? (
+                <div className="py-12 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-center">
+                  <CheckCircle className="text-emerald-500 mb-2" />
+                  <p className="text-xs text-slate-500 font-bold select-none">Brak zarejestrowanych błędów systemowych!</p>
+                  <p className="text-[10px] text-slate-400 font-semibold uppercase mt-1 text-center px-4">Aplikacja działa stabilnie. Kliknij przycisk „Generuj błąd testowy”, aby sprawdzić logowanie.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                  {errorLogs.map(err => {
+                    const errDate = new Date(err.timestamp);
+                    const isSW = err.type === 'sw';
+                    const isManual = err.type === 'manual';
+                    const isPromise = err.type === 'promise';
+                    return (
+                      <div 
+                        key={err.id} 
+                        className="border border-red-200/80 bg-red-50/10 hover:bg-red-50/20 p-4 rounded-xl space-y-3 transition text-left"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`font-mono font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 rounded border ${
+                                isSW ? "bg-purple-100 text-purple-750 border-purple-200" :
+                                isManual ? "bg-blue-100 text-blue-750 border-blue-200" :
+                                isPromise ? "bg-amber-100 text-amber-800 border-amber-200" :
+                                "bg-red-100 text-red-800 border-red-200"
+                              }`}>
+                                {isSW ? "Service Worker" : isManual ? "Ręczny test" : isPromise ? "Promise Rejection" : "Krytyczny JS"}
+                              </span>
+                              <span className="text-xs font-black text-slate-900 leading-snug break-all">
+                                {err.message}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-medium break-all mt-1">
+                              URL: <span className="font-mono">{err.url}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-[10px] text-slate-400 font-semibold font-mono flex items-center gap-1 shrink-0 whitespace-nowrap">
+                            <Clock size={10} />
+                            {errDate.toLocaleDateString('pl-PL')} o {errDate.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </div>
+                        </div>
+
+                        {err.stack && (
+                          <details className="group border border-slate-200 rounded-lg overflow-hidden">
+                            <summary className="bg-slate-50 hover:bg-slate-100 px-3 py-1.5 text-[10px] font-bold text-slate-600 cursor-pointer select-none transition flex items-center justify-between">
+                              <span>Pokaż stos wywołań (Stack trace)</span>
+                              <span className="transition-transform duration-200 group-open:rotate-180">▼</span>
+                            </summary>
+                            <div className="bg-slate-900 text-slate-300 p-3 text-[10.5px] font-mono leading-relaxed overflow-x-auto max-h-60 border-t border-slate-200 whitespace-pre">
+                              {err.stack}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
