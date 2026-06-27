@@ -6,9 +6,10 @@ import {
 import { 
   Building as BuildingIcon, School as SchoolIcon, Users, BookOpen, GraduationCap, ShieldAlert, BadgePlus,
   Trash2, Landmark, CheckCircle, ArrowRight, ArrowLeft, Plus, Users2, HelpCircle, Eye, Shield, MapPin, Sparkles, Layers,
-  Edit3, RefreshCw, X, Calendar
+  Edit3, RefreshCw, X, Calendar, FileSpreadsheet, Upload
 } from 'lucide-react';
 import { uid, genAbbr, ensureUniqueAbbr, subjectAbbr } from '../utils';
+import SioImport from './SioImport';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -92,6 +93,7 @@ export default function KreatorSzkoly({
   onChangeArchive
 }: KreatorSzkolyProps) {
   const [activeStep, setActiveStep] = useState<number>(1);
+  const [showSioImport, setShowSioImport] = useState<boolean>(false);
 
   // Success Notification
   const [noti, setNoti] = useState<{ text: string; type: 'info' | 'success' } | null>(null);
@@ -2120,12 +2122,44 @@ export default function KreatorSzkoly({
 
           {/* STEP 1: Basic School Settings */}
           {activeStep === 1 && (
-            <div className="max-w-4xl mx-auto space-y-6">
-              <div className="border-b border-slate-200 pb-4">
-                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 1</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">🏫 Dane Szkoły i Rok Szkolny</h2>
-                <p className="text-xs text-slate-500 mt-1">Skonfiguruj nazwę, kontakt i aktualny okres planowania lekcji.</p>
-              </div>
+            showSioImport ? (
+              <SioImport 
+                appState={appState} 
+                onChangeAppState={onChangeAppState} 
+                onClose={() => setShowSioImport(false)}
+                onShowNotification={showNoti}
+              />
+            ) : (
+              <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+                <div className="border-b border-slate-200 pb-4">
+                  <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 1</span>
+                  <h2 className="text-xl font-black text-slate-900 mt-2">🏫 Dane Szkoły i Rok Szkolny</h2>
+                  <p className="text-xs text-slate-500 mt-1">Skonfiguruj nazwę, kontakt i aktualny okres planowania lekcji.</p>
+                </div>
+
+                {/* SIO CSV IMPORT PROMOTION BANNER */}
+                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm select-none">
+                  <div className="flex items-start gap-3.5">
+                    <div className="bg-indigo-650 text-white rounded-xl p-2.5 shadow-sm shrink-0">
+                      <FileSpreadsheet size={20} className="animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                        📥 Szybki Start: Zaimportuj całą szkołę z SIO / Arkusza
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-1 max-w-xl leading-relaxed">
+                        Zamiast ręcznie uzupełniać klasy, nauczycieli, przedmioty i przydziały godzin – wyślij plik CSV z SIO. System automatycznie wyodrębni dane i pozwoli Ci je zatwierdzić przed zapisem.
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setShowSioImport(true)}
+                    className="px-4 py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-xs transition shrink-0 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Upload size={13} /> Uruchom Importer SIO
+                  </button>
+                </div>
 
               <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
                 <div className="space-y-1">
@@ -2549,6 +2583,7 @@ export default function KreatorSzkoly({
                 </button>
               </div>
             </div>
+            )
           )}
 
           {/* STEP 2: Buildings */}
