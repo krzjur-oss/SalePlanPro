@@ -42,6 +42,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
 
   const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number } | null>(null);
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
+  const [dutyNote, setDutyNote] = useState('');
+  const [dutyLocked, setDutyLocked] = useState(true);
+
+  const [editingPlaceId, setEditingPlaceId] = useState<string | null>(null);
+  const [editingBreakNum, setEditingBreakNum] = useState<number | null>(null);
 
   const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
   const DAYS_SHORT = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'];
@@ -149,33 +154,90 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     e.preventDefault();
     if (!newPlaceName.trim()) return;
 
-    const newPlace: MiejsceDyzuru = {
-      id: uid(),
-      name: newPlaceName.trim(),
-      desc: newPlaceDesc.trim() || undefined,
-      floor: newPlaceFloor.trim() || undefined,
-      teachersNeeded: newPlaceTeachersNeeded,
-      connectedRooms: newPlaceConnectedRooms
-    };
+    if (editingPlaceId) {
+      // Edit existing
+      const updatedPlaces = dyz.miejsca.map(m => {
+        if (m.id === editingPlaceId) {
+          return {
+            ...m,
+            name: newPlaceName.trim(),
+            desc: newPlaceDesc.trim() || undefined,
+            floor: newPlaceFloor.trim() || undefined,
+            teachersNeeded: newPlaceTeachersNeeded,
+            connectedRooms: newPlaceConnectedRooms
+          };
+        }
+        return m;
+      });
 
-    onChangeAppState({
-      ...appState,
-      dyzury: {
-        ...dyz,
-        miejsca: [...dyz.miejsca, newPlace]
-      }
-    });
+      onChangeAppState({
+        ...appState,
+        dyzury: {
+          ...dyz,
+          miejsca: updatedPlaces
+        }
+      });
 
+      setEditingPlaceId(null);
+      setNewPlaceName('');
+      setNewPlaceFloor('');
+      setNewPlaceDesc('');
+      setNewPlaceTeachersNeeded(1);
+      setNewPlaceConnectedRooms([]);
+      notify('Zaktualizowano miejsce dyżuru');
+    } else {
+      // Add new
+      const newPlace: MiejsceDyzuru = {
+        id: uid(),
+        name: newPlaceName.trim(),
+        desc: newPlaceDesc.trim() || undefined,
+        floor: newPlaceFloor.trim() || undefined,
+        teachersNeeded: newPlaceTeachersNeeded,
+        connectedRooms: newPlaceConnectedRooms
+      };
+
+      onChangeAppState({
+        ...appState,
+        dyzury: {
+          ...dyz,
+          miejsca: [...dyz.miejsca, newPlace]
+        }
+      });
+
+      setNewPlaceName('');
+      setNewPlaceFloor('');
+      setNewPlaceDesc('');
+      setNewPlaceTeachersNeeded(1);
+      setNewPlaceConnectedRooms([]);
+      notify('Dodano miejsce dyżuru');
+    }
+  };
+
+  const handleStartEditPlace = (place: MiejsceDyzuru) => {
+    setEditingPlaceId(place.id);
+    setNewPlaceName(place.name);
+    setNewPlaceFloor(place.floor || '');
+    setNewPlaceDesc(place.desc || '');
+    setNewPlaceTeachersNeeded(place.teachersNeeded || 1);
+    setNewPlaceConnectedRooms(place.connectedRooms || []);
+    notify(`Edycja miejsca: ${place.name}`);
+  };
+
+  const handleCancelEditPlace = () => {
+    setEditingPlaceId(null);
     setNewPlaceName('');
     setNewPlaceFloor('');
     setNewPlaceDesc('');
     setNewPlaceTeachersNeeded(1);
     setNewPlaceConnectedRooms([]);
-    notify('Dodano miejsce dyżuru');
   };
 
   const handleRemovePlace = (id: string) => {
     if (!confirm('Czy na pewno chcesz usunąć to miejsce dyżuru? Skasuje to również zaplanowane w nim dyżury.')) return;
+
+    if (editingPlaceId === id) {
+      handleCancelEditPlace();
+    }
 
     // Filter harmonogram
     const nextHarm = { ...dyz.harmonogram };
@@ -200,25 +262,70 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     e.preventDefault();
     if (!newBreakStart || !newBreakEnd) return;
 
-    const newPrzerwa: Przerwa = {
-      num: dyz.przerwy.length + 1,
-      start: newBreakStart,
-      end: newBreakEnd,
-      name: newBreakName.trim() || `Przerwa ${dyz.przerwy.length + 1}`
-    };
+    if (editingBreakNum !== null) {
+      // Edit existing
+      const updatedBreaks = dyz.przerwy.map(p => {
+        if (p.num === editingBreakNum) {
+          return {
+            ...p,
+            start: newBreakStart,
+            end: newBreakEnd,
+            name: newBreakName.trim() || `Przerwa ${p.num}`
+          };
+        }
+        return p;
+      });
 
-    onChangeAppState({
-      ...appState,
-      dyzury: {
-        ...dyz,
-        przerwy: [...dyz.przerwy, newPrzerwa]
-      }
-    });
+      onChangeAppState({
+        ...appState,
+        dyzury: {
+          ...dyz,
+          przerwy: updatedBreaks
+        }
+      });
 
+      setEditingBreakNum(null);
+      setNewBreakStart('');
+      setNewBreakEnd('');
+      setNewBreakName('');
+      notify('Zaktualizowano przerwę szkolną');
+    } else {
+      // Add new
+      const newPrzerwa: Przerwa = {
+        num: dyz.przerwy.length + 1,
+        start: newBreakStart,
+        end: newBreakEnd,
+        name: newBreakName.trim() || `Przerwa ${dyz.przerwy.length + 1}`
+      };
+
+      onChangeAppState({
+        ...appState,
+        dyzury: {
+          ...dyz,
+          przerwy: [...dyz.przerwy, newPrzerwa]
+        }
+      });
+
+      setNewBreakStart('');
+      setNewBreakEnd('');
+      setNewBreakName('');
+      notify('Dodano przerwę szkolną');
+    }
+  };
+
+  const handleStartEditBreak = (p: Przerwa) => {
+    setEditingBreakNum(p.num);
+    setNewBreakStart(p.start);
+    setNewBreakEnd(p.end);
+    setNewBreakName(p.name);
+    notify(`Edycja przerwy: ${p.name || `nr ${p.num}`}`);
+  };
+
+  const handleCancelEditBreak = () => {
+    setEditingBreakNum(null);
     setNewBreakStart('');
     setNewBreakEnd('');
     setNewBreakName('');
-    notify('Dodano przerwę szkolną');
   };
 
   const handleAddPreDuty = () => {
@@ -267,6 +374,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
 
   const handleRemoveBreak = (num: number) => {
     if (!confirm('Czy na pewno chcesz usunąć tę przerwę?')) return;
+
+    if (editingBreakNum === num) {
+      handleCancelEditBreak();
+    }
 
     const nextHarm = { ...dyz.harmonogram };
     Object.keys(nextHarm).forEach((key) => {
@@ -652,7 +763,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
   const openDirectAssign = (miejsceId: string, przerwa: number) => {
     setEditingSlot({ miejsceId, przerwa });
     const key = `${miejsceId}|${activeDay}|${przerwa}`;
-    setSelectedTeacher(dyz.harmonogram[key]?.teacherAbbr || '');
+    const entry = dyz.harmonogram[key];
+    setSelectedTeacher(entry?.teacherAbbr || '');
+    setDutyNote(entry?.note || '');
+    setDutyLocked(entry ? entry.locked : true);
   };
 
   const saveDirectAssign = (e?: React.FormEvent) => {
@@ -666,7 +780,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     if (selectedTeacher) {
       nextHarm[key] = {
         teacherAbbr: selectedTeacher,
-        locked: true
+        locked: dutyLocked,
+        note: dutyNote.trim() || undefined
       };
     } else {
       delete nextHarm[key];
@@ -853,7 +968,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                                   <span className="text-[9px] text-slate-400 truncate max-w-[80px] font-medium mt-0.5">
                                     {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
                                   </span>
-                                  {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany manually">🔒</span>}
+                                  {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
+                                  {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
                                 </div>
                               ) : (
                                 <button 
@@ -928,7 +1044,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1 select-none">
-                <Plus size={14} /> Dodaj punkt dyżurów
+                {editingPlaceId ? <Edit3 size={14} className="text-amber-500" /> : <Plus size={14} />} 
+                {editingPlaceId ? 'Edytuj punkt dyżurów' : 'Dodaj punkt dyżurów'}
               </h3>
               <form onSubmit={handleAddPlace} className="flex flex-col gap-2">
                 <input 
@@ -956,7 +1073,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                 <div className="flex flex-col gap-1 text-left px-1">
                   <span className="text-[10px] text-slate-500 font-bold">Liczba nauczycieli na dyżurze:</span>
                   <input 
-                    type="number" 
+                     type="number" 
                     min={1} 
                     max={5}
                     className="w-full px-3 py-1 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none font-bold"
@@ -999,9 +1116,30 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                   )}
                 </div>
 
-                <button type="submit" className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm mt-2 transition">
-                  Dodaj Miejsce
-                </button>
+                {editingPlaceId ? (
+                  <div className="flex gap-2 mt-2">
+                    <button 
+                      type="submit" 
+                      className="flex-1 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-sm transition"
+                    >
+                      Zapisz zmiany
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={handleCancelEditPlace}
+                      className="py-2 px-3 rounded-lg bg-slate-100 hover:bg-slate-250 text-slate-600 border border-slate-200 font-bold text-xs shadow-sm transition"
+                    >
+                      Anuluj
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    type="submit" 
+                    className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm mt-2 transition"
+                  >
+                    Dodaj Miejsce
+                  </button>
+                )}
               </form>
             </div>
 
@@ -1038,12 +1176,22 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                       <td className="p-3 text-xs text-slate-500 font-semibold">{place.teachersNeeded || 1}</td>
                       <td className="p-3 text-xs text-slate-400">{place.desc || '—'}</td>
                       <td className="p-3 text-xs text-center">
-                        <button 
-                          onClick={() => handleRemovePlace(place.id)}
-                          className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button 
+                            onClick={() => handleStartEditPlace(place)}
+                            className="p-1 text-slate-400 hover:text-amber-600 rounded transition-colors"
+                            title="Edytuj miejsce"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button 
+                            onClick={() => handleRemovePlace(place.id)}
+                            className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
+                            title="Usuń miejsce"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1099,9 +1247,27 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                       onChange={(e) => setNewBreakEnd(e.target.value)}
                     />
                   </div>
-                  <button type="submit" className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm h-[32px]">
-                    Dodaj
-                  </button>
+                  {editingBreakNum !== null ? (
+                    <div className="flex gap-1 shrink-0 h-[32px]">
+                      <button 
+                        type="submit" 
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-sm"
+                      >
+                        Zapisz
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={handleCancelEditBreak}
+                        className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold shadow-sm"
+                      >
+                        X
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="submit" className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm h-[32px]">
+                      Dodaj
+                    </button>
+                  )}
                 </form>
 
                 <button
@@ -1119,12 +1285,22 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                         <span className="font-bold text-slate-700">{p.name || `Przerwa nr ${p.num}`}</span>
                         <span className="text-[10px] text-slate-400 font-mono font-semibold ml-2">({p.start}–{p.end})</span>
                       </div>
-                      <button 
-                        onClick={() => handleRemoveBreak(p.num)}
-                        className="text-slate-400 hover:text-red-500"
-                      >
-                        ✕
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleStartEditBreak(p)}
+                          className="text-slate-400 hover:text-amber-600 transition"
+                          title="Edytuj przerwę"
+                        >
+                          <Edit3 size={12} />
+                        </button>
+                        <button 
+                          onClick={() => handleRemoveBreak(p.num)}
+                          className="text-slate-400 hover:text-red-500 font-bold transition text-sm"
+                          title="Usuń przerwę"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1206,9 +1382,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
               dyz.harmonogram[`${m.id}|${activeDay}|${prw}`]?.teacherAbbr === t.abbr
             );
             
-            const currentCount = teacherDutyCounts[t.abbr] || 0;
+            const currentMins = teacherDutyMinutes[t.abbr] || 0;
+            const maxMins = teacherMaxMinutes[t.abbr] || 0;
             const isCurrentlyAssignedHere = dyz.harmonogram[`${pl.id}|${activeDay}|${prw}`]?.teacherAbbr === t.abbr;
-            const isOverLimit = currentCount >= maxDuties && !isCurrentlyAssignedHere;
+            const isOverLimit = currentMins >= maxMins && !isCurrentlyAssignedHere;
 
             let score = 1; // standard neutral
             let reason = 'Wolny (brak przyległych lekcji)';
@@ -1218,7 +1395,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
               reason = 'Zajęty - pełni inny dyżur na tej przerwie';
             } else if (isOverLimit) {
               score = 0;
-              reason = `Przekroczony limit dyżurów (${currentCount}/${maxDuties})`;
+              reason = `Przekroczony limit minutowy (${currentMins}/${maxMins} min)`;
             } else {
               const roomBeforeConnected = lessonBefore?.roomName && connected.includes(lessonBefore.roomName);
               const roomAfterConnected = lessonAfter?.roomName && connected.includes(lessonAfter.roomName);
@@ -1241,7 +1418,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
               reason,
               lessonBefore,
               lessonAfter,
-              currentCount,
+              currentMins,
+              maxMins,
               isCurrentlyAssignedHere
             };
           });
@@ -1250,7 +1428,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
             if (b.score !== a.score) {
               return b.score - a.score;
             }
-            return a.currentCount - b.currentCount;
+            const deficitA = a.maxMins - a.currentMins;
+            const deficitB = b.maxMins - b.currentMins;
+            return deficitB - deficitA; // prefer those with larger deficit
           });
         };
 
@@ -1275,7 +1455,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                 </button>
               </div>
 
-              {/* Informacja o przyległych salach */}
+              {/* Informacja o przyległach salach */}
               {miejsce.connectedRooms && miejsce.connectedRooms.length > 0 && (
                 <div className="px-5 py-2.5 bg-blue-50/50 border-b border-blue-100/40 text-[11px] flex flex-wrap items-center gap-1.5 font-semibold text-slate-600">
                   <span className="text-slate-500 text-[10px] font-bold uppercase">Przyległe sale:</span>
@@ -1288,6 +1468,34 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
               )}
 
               <div className="p-4 overflow-y-auto space-y-2 flex-1 scrollbar-thin">
+                {/* Opcje edycji dyżuru */}
+                {selectedTeacher && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3 mb-3">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                      <span>Ustawienia dyżuru dla: <span className="font-mono bg-white px-1.5 py-0.5 border rounded text-blue-700">{selectedTeacher}</span></span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Notatka / Uwagi:</label>
+                      <input 
+                        type="text"
+                        placeholder="np. Zastępstwo za Kowalskiego"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:border-blue-500 font-medium"
+                        value={dutyNote}
+                        onChange={(e) => setDutyNote(e.target.value)}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                      <input 
+                        type="checkbox"
+                        checked={dutyLocked}
+                        onChange={(e) => setDutyLocked(e.target.checked)}
+                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                      />
+                      <span>Zablokuj dyżur (zapobiega nadpisaniu przez generator)</span>
+                    </label>
+                  </div>
+                )}
+
                 {/* Opcja: Brak dyżuru */}
                 <button
                   type="button"
@@ -1307,7 +1515,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                 </div>
 
                 <div className="space-y-1.5">
-                  {candidates.map(({ teacher, score, reason, lessonBefore, lessonAfter, currentCount }) => {
+                  {candidates.map(({ teacher, score, reason, lessonBefore, lessonAfter, currentMins, maxMins }) => {
                     const isSelected = selectedTeacher === teacher.abbr;
                     const isBusy = score === -1;
                     
@@ -1339,8 +1547,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                             </span>
                             {teacher.first} {teacher.last}
                           </span>
-                          <span className={`text-[10px] font-bold ${currentCount >= maxDuties ? 'text-red-600' : 'text-slate-400'}`}>
-                            {currentCount} / {maxDuties} dyżurów
+                          <span className={`text-[10px] font-bold ${currentMins >= maxMins ? 'text-red-600' : 'text-slate-400'}`}>
+                            {currentMins} / {maxMins} min
                           </span>
                         </div>
 
@@ -1361,7 +1569,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                           </span>
                         </div>
 
-                        {/* Show candidate's school lessons context */}
+                        {/* Show school lessons context */}
                         {(lessonBefore || lessonAfter) && (
                           <div className="mt-1 text-[9px] font-semibold text-slate-400 bg-slate-50/50 rounded p-1.5 space-y-0.5 border border-slate-100">
                             {lessonBefore && (
@@ -1405,6 +1613,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     </div>
   );
 }
+
 export function uid(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
