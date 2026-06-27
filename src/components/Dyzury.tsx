@@ -5,6 +5,14 @@ import {
   Shield, Timer, RefreshCcw, Trash2, Edit3, Plus, Settings, Check, HelpCircle 
 } from 'lucide-react';
 
+const getBreakDuration = (p: Przerwa): number => {
+  const [sh, sm] = p.start.split(':').map(Number);
+  const [eh, em] = p.end.split(':').map(Number);
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0;
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  return diff < 0 ? diff + 24 * 60 : diff;
+};
+
 interface DyzuryProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
@@ -40,6 +48,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
 
   // ── LOOKUPS & CALCULATIONS ──
 
+  // Excluded teachers set
+  const excludedSet = useMemo(() => new Set(excludeTeachers), [excludeTeachers]);
+
+  // Active / Eligible teachers
+  const eligibleTeachers = useMemo(() => {
+    return appState.teachers.filter(t => !excludedSet.has(t.abbr));
+  }, [appState.teachers, excludedSet]);
+
   // Teacher hours in Plan Sal weekly
   const teacherHours = useMemo(() => {
     const hours: { [abbr: string]: number } = {};
@@ -73,13 +89,59 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     return counts;
   }, [dyz.harmonogram]);
 
-  // Excluded teachers set
-  const excludedSet = useMemo(() => new Set(excludeTeachers), [excludeTeachers]);
+  // Current duty allocation minutes per teacher
+  const teacherDutyMinutes = useMemo(() => {
+    const mins: { [abbr: string]: number } = {};
+    Object.entries(dyz.harmonogram).forEach(([key, entry]) => {
+      if (entry.teacherAbbr) {
+        const parts = key.split('|'); // [miejsceId, day, przerwaNum]
+        const przerwaNum = parseInt(parts[2]);
+        const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
+        if (przerwa) {
+          const d = getBreakDuration(przerwa);
+          mins[entry.teacherAbbr] = (mins[entry.teacherAbbr] || 0) + d;
+        }
+      }
+    });
+    return mins;
+  }, [dyz.harmonogram, dyz.przerwy]);
 
-  // Active / Eligible teachers
-  const eligibleTeachers = useMemo(() => {
-    return appState.teachers.filter(t => !excludedSet.has(t.abbr));
-  }, [appState.teachers, excludedSet]);
+  // Target max minutes for each teacher based on FTE
+  const teacherMaxMinutes = useMemo(() => {
+    const maxMins: { [abbr: string]: number } = {};
+    const fullTimeHours = 18;
+    let sumProportions = 0;
+
+    eligibleTeachers.forEach(t => {
+      const hours = teacherHours[t.abbr] || 0;
+      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+      sumProportions += prop;
+    });
+
+    if (sumProportions === 0) sumProportions = 1;
+
+    // Calculate total required minutes
+    let totalRequiredDutyMinutes = 0;
+    for (let day = 0; day < 5; day++) {
+      for (const przerwa of dyz.przerwy) {
+        const d = getBreakDuration(przerwa);
+        for (const miejsce of dyz.miejsca) {
+          totalRequiredDutyMinutes += d * (miejsce.teachersNeeded || 1);
+        }
+      }
+    }
+
+    const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
+    eligibleTeachers.forEach(t => {
+      const hours = teacherHours[t.abbr] || 0;
+      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+      maxMins[t.abbr] = Math.max(15, Math.ceil(avgMinutesForFullTime * prop));
+    });
+
+    return maxMins;
+  }, [eligibleTeachers, teacherHours, dyz.przerwy, dyz.miejsca]);
+
+
 
   // ── HANDLERS ──
 
@@ -274,6 +336,91 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     });
   };
 
+  const wouldViolateConsecutiveDutiesRule = (
+    teacherAbbr: string,
+    day: number,
+    candidateBreakNum: number,
+    currentHarm: any,
+    miejsca: MiejsceDyzuru[],
+    przerwy: Przerwa[]
+  ): boolean => {
+    const sortedBreaks = [...przerwy].sort((a, b) => {
+      const [ah, am] = a.start.split(':').map(Number);
+      const [bh, bm] = b.start.split(':').map(Number);
+      return (ah * 60 + am) - (bh * 60 + bm);
+    });
+
+    const dutyInSortedIndices = sortedBreaks.map((p) => {
+      if (p.num === candidateBreakNum) return true;
+      const hasDuty = miejsca.some(m => 
+        currentHarm[`${m.id}|${day}|${p.num}`]?.teacherAbbr === teacherAbbr
+      );
+      return hasDuty;
+    });
+
+    for (let i = 0; i <= sortedBreaks.length - 3; i++) {
+      if (dutyInSortedIndices[i] && dutyInSortedIndices[i + 1] && dutyInSortedIndices[i + 2]) {
+        const dur1 = getBreakDuration(sortedBreaks[i]);
+        const dur2 = getBreakDuration(sortedBreaks[i + 1]);
+        const dur3 = getBreakDuration(sortedBreaks[i + 2]);
+
+        if (dur1 <= 10 && dur2 <= 10 && dur3 <= 10) {
+          return true; // Violation
+        }
+      }
+    }
+    return false;
+  };
+
+  const isTeacherAvailableForBreak = (abbr: string, dayIdx: number, przerwa: Przerwa): boolean => {
+    const yk = appState.yearKey;
+    const dayData = schedData[yk]?.[dayIdx] || {};
+    const activeHours: number[] = [];
+
+    Object.keys(dayData).forEach(hourKey => {
+      const hNum = parseInt(hourKey);
+      if (!isNaN(hNum)) {
+        const hourData = dayData[hourKey] || {};
+        const hasClass = Object.values(hourData).some((cell: any) => {
+          const cells = Array.isArray(cell) ? cell : [cell];
+          return cells.some((c: any) => c?.teacherAbbr === abbr);
+        });
+        if (hasClass) {
+          activeHours.push(hNum);
+        }
+      }
+    });
+
+    if (activeHours.length === 0) return false;
+
+    const minHour = Math.min(...activeHours);
+    const maxHour = Math.max(...activeHours);
+
+    const firstTimeslot = appState.timeslots?.find(t => t.num === minHour);
+    const lastTimeslot = appState.timeslots?.find(t => t.num === maxHour);
+
+    if (!firstTimeslot || !lastTimeslot) {
+      return przerwa.num >= minHour - 1 && przerwa.num <= maxHour;
+    }
+
+    const toMins = (tStr: string) => {
+      const [h, m] = tStr.split(':').map(Number);
+      return (isNaN(h) || isNaN(m)) ? 0 : h * 60 + m;
+    };
+
+    const dayStartMins = toMins(firstTimeslot.start);
+    const dayEndMins = toMins(lastTimeslot.end);
+
+    const breakStartMins = toMins(przerwa.start);
+    const breakEndMins = toMins(przerwa.end);
+
+    const isBetween = breakStartMins >= dayStartMins && breakEndMins <= dayEndMins;
+    const isDirectlyBefore = breakEndMins === dayStartMins || (breakEndMins > dayStartMins - 30 && breakEndMins <= dayStartMins);
+    const isDirectlyAfter = breakStartMins === dayEndMins || (breakStartMins >= dayEndMins && breakStartMins < dayEndMins + 30);
+
+    return isBetween || isDirectlyBefore || isDirectlyAfter || (przerwa.num >= minHour - 1 && przerwa.num <= maxHour);
+  };
+
   // ── AUTO-SUGESTIA DYŻURÓW (Smart duty optimizer with connected rooms preference) ──
   const handleAutoSuggest = () => {
     if (dyz.miejsca.length === 0) {
@@ -286,108 +433,162 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     }
 
     const nextHarm = { ...dyz.harmonogram };
-    const dutyAlloc = { ...teacherDutyCounts };
 
-    // Sort eligible teachers: teachers with LESS lessons in week have HIGHER priority for corridor duty
-    const sortedTeachers = [...eligibleTeachers].sort((a, b) =>
-      (teacherHours[a.abbr] || 0) - (teacherHours[b.abbr] || 0)
-    );
+    const fullTimeHours = 18;
+    const teacherProportions: { [abbr: string]: number } = {};
+    let sumProportions = 0;
 
-    let assignedCount = 0;
-    let fallbackOffset = 0;
+    eligibleTeachers.forEach(t => {
+      const hours = teacherHours[t.abbr] || 0;
+      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+      teacherProportions[t.abbr] = prop;
+      sumProportions += prop;
+    });
 
-    // Iterate through all slots (Days x Breaks x Places)
+    if (sumProportions === 0) sumProportions = 1;
+
+    // Calculate total duty slots needed for the week and their duration
+    let totalRequiredDutyMinutes = 0;
     for (let day = 0; day < 5; day++) {
       for (const przerwa of dyz.przerwy) {
+        const breakDur = getBreakDuration(przerwa);
         for (const miejsce of dyz.miejsca) {
-          const key = `${miejsce.id}|${day}|${przerwa.num}`;
-          
-          // Skip if slot is already occupied and locked by user
-          if (nextHarm[key]?.locked) continue;
+          totalRequiredDutyMinutes += breakDur * (miejsce.teachersNeeded || 1);
+        }
+      }
+    }
 
-          let selected: string | null = null;
-          const connected = miejsce.connectedRooms || [];
+    // Target/Max minutes for each teacher
+    const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
+    const teacherMaxMinutes: { [abbr: string]: number } = {};
+    eligibleTeachers.forEach(t => {
+      // Set a baseline minimum of at least 15 mins so they can be assigned at least once if needed
+      teacherMaxMinutes[t.abbr] = Math.max(15, Math.ceil(avgMinutesForFullTime * teacherProportions[t.abbr]));
+    });
 
-          // TIER 1: Teacher who is free, under limit, and has a lesson in one of the CONNECTED classrooms right before or after the break
-          if (connected.length > 0) {
-            for (let i = 0; i < sortedTeachers.length; i++) {
-              const idx = (i + fallbackOffset) % sortedTeachers.length;
-              const t = sortedTeachers[idx];
+    // Track assigned minutes for each teacher
+    const assignedMinutes: { [abbr: string]: number } = {};
+    eligibleTeachers.forEach(t => {
+      assignedMinutes[t.abbr] = 0;
+    });
 
-              if ((dutyAlloc[t.abbr] || 0) >= maxDuties) continue;
+    // Populate assignedMinutes with currently locked duties
+    Object.entries(nextHarm).forEach(([key, entry]) => {
+      if (entry.locked && entry.teacherAbbr && assignedMinutes[entry.teacherAbbr] !== undefined) {
+        const parts = key.split('|'); // [miejsceId, day, przerwaNum]
+        const przerwaNum = parseInt(parts[2]);
+        const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
+        if (przerwa) {
+          assignedMinutes[entry.teacherAbbr] += getBreakDuration(przerwa);
+        }
+      }
+    });
 
-              // Check if teacher is already assigned to another spot in this identical break
-              const alreadyAssignedInBreak = dyz.miejsca.some(m => 
-                nextHarm[`${m.id}|${day}|${przerwa.num}`]?.teacherAbbr === t.abbr
-              );
-              if (alreadyAssignedInBreak) continue;
+    // Clear unlocked duties first so we can regenerate them
+    Object.keys(nextHarm).forEach(key => {
+      if (!nextHarm[key]?.locked) {
+        delete nextHarm[key];
+      }
+    });
 
-              const hourBefore = String(przerwa.num);
-              const hourAfter = String(przerwa.num + 1);
+    // Helper to check if teacher can be assigned to a break
+    const canAssignTeacher = (
+      t: any,
+      day: number,
+      przerwa: Przerwa,
+      allowedMinutesBuffer: number
+    ): boolean => {
+      // Check if they are active on this day and during this break
+      if (!isTeacherAvailableForBreak(t.abbr, day, przerwa)) return false;
 
-              const hasClassInConnected = 
-                _teacherHasClassInConnectedRooms(t.abbr, day, hourBefore, connected) ||
-                _teacherHasClassInConnectedRooms(t.abbr, day, hourAfter, connected);
+      // Check if they have already hit their limit (with buffer)
+      const dur = getBreakDuration(przerwa);
+      if (assignedMinutes[t.abbr] + dur > teacherMaxMinutes[t.abbr] + allowedMinutesBuffer) return false;
 
-              if (hasClassInConnected) {
-                selected = t.abbr;
-                fallbackOffset = (idx + 1) % sortedTeachers.length;
-                break;
-              }
-            }
-          }
+      // Check if already assigned in this identical break (to another place)
+      const alreadyAssignedInBreak = dyz.miejsca.some(m => 
+        nextHarm[`${m.id}|${day}|${przerwa.num}`]?.teacherAbbr === t.abbr
+      );
+      if (alreadyAssignedInBreak) return false;
 
-          // TIER 2: Teacher who is free, under limit, and has a lesson in ANY classroom before or after the break
-          if (!selected) {
-            for (let i = 0; i < sortedTeachers.length; i++) {
-              const idx = (i + fallbackOffset) % sortedTeachers.length;
-              const t = sortedTeachers[idx];
+      // Check consecutive duties rule
+      if (wouldViolateConsecutiveDutiesRule(t.abbr, day, przerwa.num, nextHarm, dyz.miejsca, dyz.przerwy)) {
+        return false;
+      }
 
-              if ((dutyAlloc[t.abbr] || 0) >= maxDuties) continue;
+      return true;
+    };
 
-              const alreadyAssignedInBreak = dyz.miejsca.some(m => 
-                nextHarm[`${m.id}|${day}|${przerwa.num}`]?.teacherAbbr === t.abbr
-              );
-              if (alreadyAssignedInBreak) continue;
+    let assignedCount = 0;
 
-              const hourBefore = String(przerwa.num);
-              const hourAfter = String(przerwa.num + 1);
+    // We do multi-pass scheduling to ensure perfect balance:
+    // We try to fill slots with 0 buffer first. If some slots remain, we try with +15 min buffer, then +30 min, up to +60 min.
+    const buffers = [0, 15, 30, 45, 60, 120];
 
-              const hasClassNearby = _teacherHasClass(t.abbr, day, hourBefore) || _teacherHasClass(t.abbr, day, hourAfter);
-              if (hasClassNearby) {
-                selected = t.abbr;
-                fallbackOffset = (idx + 1) % sortedTeachers.length;
-                break;
-              }
-            }
-          }
+    for (const buffer of buffers) {
+      // Loop through days, breaks, places
+      for (let day = 0; day < 5; day++) {
+        for (const przerwa of dyz.przerwy) {
+          const breakDur = getBreakDuration(przerwa);
 
-          // TIER 3: Fallback - assign the most free eligible teacher in the pool
-          if (!selected) {
-            for (let i = 0; i < sortedTeachers.length; i++) {
-              const idx = (i + fallbackOffset) % sortedTeachers.length;
-              const t = sortedTeachers[idx];
+          for (const miejsce of dyz.miejsca) {
+            const key = `${miejsce.id}|${day}|${przerwa.num}`;
 
-              if ((dutyAlloc[t.abbr] || 0) >= maxDuties) continue;
+            // Skip if already filled
+            if (nextHarm[key]) continue;
 
-              const alreadyAssignedInBreak = dyz.miejsca.some(m => 
-                nextHarm[`${m.id}|${day}|${przerwa.num}`]?.teacherAbbr === t.abbr
-              );
-              if (alreadyAssignedInBreak) continue;
+            let selected: string | null = null;
+            const connected = miejsce.connectedRooms || [];
 
-              selected = t.abbr;
-              fallbackOffset = (idx + 1) % sortedTeachers.length;
-              break;
-            }
-          }
-
-          if (selected) {
-            nextHarm[key] = {
-              teacherAbbr: selected,
-              locked: false
+            // Sort teachers who can be assigned, preferring the ones who are furthest from their maximum limit
+            const getDeficit = (abbr: string) => {
+              return teacherMaxMinutes[abbr] - assignedMinutes[abbr];
             };
-            dutyAlloc[selected] = (dutyAlloc[selected] || 0) + 1;
-            assignedCount++;
+
+            const candidates = [...eligibleTeachers]
+              .filter(t => canAssignTeacher(t, day, przerwa, buffer))
+              .sort((a, b) => getDeficit(b.abbr) - getDeficit(a.abbr)); // larger deficit first
+
+            if (candidates.length === 0) continue;
+
+            // TIER 1: Connected rooms preference
+            if (connected.length > 0) {
+              const connectedCandidate = candidates.find(t => {
+                const hourBefore = String(przerwa.num);
+                const hourAfter = String(przerwa.num + 1);
+                return _teacherHasClassInConnectedRooms(t.abbr, day, hourBefore, connected) ||
+                       _teacherHasClassInConnectedRooms(t.abbr, day, hourAfter, connected);
+              });
+              if (connectedCandidate) {
+                selected = connectedCandidate.abbr;
+              }
+            }
+
+            // TIER 2: Nearby classrooms preference (directly before or after the break)
+            if (!selected) {
+              const nearbyCandidate = candidates.find(t => {
+                const hourBefore = String(przerwa.num);
+                const hourAfter = String(przerwa.num + 1);
+                return _teacherHasClass(t.abbr, day, hourBefore) || _teacherHasClass(t.abbr, day, hourAfter);
+              });
+              if (nearbyCandidate) {
+                selected = nearbyCandidate.abbr;
+              }
+            }
+
+            // TIER 3: Fallback - most free candidate in pool
+            if (!selected && candidates.length > 0) {
+              selected = candidates[0].abbr;
+            }
+
+            if (selected) {
+              nextHarm[key] = {
+                teacherAbbr: selected,
+                locked: false
+              };
+              assignedMinutes[selected] += breakDur;
+              assignedCount++;
+            }
           }
         }
       }
@@ -677,13 +878,15 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
             {/* Panel statystyk dyżurów */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 select-none">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">📊 Bilans dyżurów nauczycielskich</h3>
-              <p className="text-[11px] text-slate-400 leading-normal">Poniższa lista prezentuje sumaryczną liczbę corridor duties na nauczyciela w bieżącym tygodniu (cel limitu: {maxDuties}h).</p>
+              <p className="text-[11px] text-slate-400 leading-normal">Poniższa lista prezentuje sumaryczną liczbę i czas dyżurów w bieżącym tygodniu zbalansowaną proporcjonalnie do wymiaru godzin lekcyjnych nauczyciela.</p>
               
               <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
                 {appState.teachers.map(t => {
                   const dc = teacherDutyCounts[t.abbr] || 0;
+                  const dm = teacherDutyMinutes[t.abbr] || 0;
+                  const maxMins = teacherMaxMinutes[t.abbr] || 0;
                   const hours = teacherHours[t.abbr] || 0;
-                  const isOver = dc > maxDuties;
+                  const isOver = dm > maxMins;
                   const isExcluded = excludedSet.has(t.abbr);
 
                   return (
@@ -692,20 +895,23 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                         <span className={`truncate ${isExcluded ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
                           {t.first} {t.last}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-mono mt-0.5">Siatka lekcji: {hours}h lekcyjnych</span>
+                        <span className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          Siatka: {hours}h lekcyjnych (etat: {hours >= 18 ? '1.00' : (hours / 18).toFixed(2)})
+                        </span>
                       </div>
                       <div className="flex items-center gap-2">
                         {isExcluded ? (
                           <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Zwolniony</span>
                         ) : (
-                          <span className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
+                          <span className={`px-2 py-1 rounded font-mono font-bold text-[10px] flex flex-col items-end border ${
                             isOver 
-                              ? 'bg-red-50 text-red-700 border border-red-200 font-extrabold'
-                              : dc >= maxDuties
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-500'
+                              ? 'bg-red-50 text-red-700 border-red-200 font-extrabold'
+                              : dm >= maxMins
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-slate-50 text-slate-500 border-slate-100'
                           }`}>
-                            {dc} / {maxDuties} dyżurów
+                            <span className="font-bold">{dc} dyżurów</span>
+                            <span className="text-[9px] text-slate-400 font-normal mt-0.5">{dm} / {maxMins} min</span>
                           </span>
                         )}
                       </div>
