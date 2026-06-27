@@ -1,6 +1,6 @@
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
-const CACHE_NAME = 'saleplan-cache-v3';
+const CACHE_NAME = 'saleplan-cache-v4';
 const PRE_CACHE_RESOURCES = [
   BASE_PATH,
   BASE_PATH + 'index.html',
