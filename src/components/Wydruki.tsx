@@ -1683,6 +1683,18 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             </div>
           )}
 
+          {printType === 'rooms' && (
+            <div className="space-y-1 flex flex-col justify-end">
+              <label className="text-[10px] text-slate-400 font-bold uppercase invisible sm:block">Akcja</label>
+              <button
+                onClick={openRoomsPrintPreview}
+                className="w-full h-[38px] px-4 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-amber-600 border-solid"
+              >
+                <Printer size={15} /> Podgląd wydruku płachty sal
+              </button>
+            </div>
+          )}
+
           {printType === 'duties' && (
             <div className="flex items-end justify-center py-2 bg-emerald-50 text-emerald-800 border-l-4 border-emerald-500 rounded-lg text-[10px] font-bold p-3">
               <div>
