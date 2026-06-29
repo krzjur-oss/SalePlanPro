@@ -597,19 +597,33 @@ Error generating stack: `+l.message+`
       </html>
     `},b=()=>{try{const S=v(),de=window.open("","_blank");de?(de.document.write(S),de.document.close()):$e(!0)}catch(S){console.error(S),$e(!0)}},j=x.useMemo(()=>w==="all"?we.classes:we.classes.filter(S=>S.id===w),[we.classes,w]),D=x.useMemo(()=>U==="all"?we.teachers:we.teachers.filter(S=>S.id===U),[we.teachers,U]),je=x.useMemo(()=>N==="all"?we.rooms:we.rooms.filter(S=>S.id===N),[we.rooms,N]);return et?e.jsxs("div",{id:"weekly-print-overlay",className:"fixed inset-0 bg-slate-100/90 backdrop-blur-md z-[9999] overflow-y-auto p-4 md:p-8 font-sans text-slate-800",children:[e.jsx("style",{dangerouslySetInnerHTML:{__html:`
           @media print {
-            body > * {
+            /* Ukrywamy nagłówek i stopkę systemową */
+            header, footer, #restoring-pointer-blocker {
               display: none !important;
             }
+
+            /* Resetujemy wysokości i paski przewijania kontenerów nadrzędnych */
+            html, body, #root, [class*="h-screen"], [class*="overflow-hidden"] {
+              height: auto !important;
+              width: auto !important;
+              overflow: visible !important;
+              position: static !important;
+            }
+
+            body {
+              background-color: white !important;
+              color: black !important;
+            }
+
             #weekly-print-overlay {
               display: block !important;
-              position: absolute !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 100% !important;
-              height: auto !important;
+              position: static !important;
               background: white !important;
               padding: 0 !important;
               margin: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              overflow: visible !important;
             }
             .no-print {
               display: none !important;
@@ -648,6 +662,19 @@ Error generating stack: `+l.message+`
           }
         `}}),e.jsxs("div",{className:"no-print bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 mb-6 max-w-5xl mx-auto shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4",children:[e.jsxs("div",{className:"flex items-center gap-2.5",children:[e.jsx("span",{className:"p-2 bg-slate-800 rounded-lg text-indigo-400",children:e.jsx(jn,{size:20})}),e.jsxs("div",{className:"text-left",children:[e.jsx("span",{className:"text-[10px] text-slate-400 block uppercase font-bold tracking-tight",children:"Tryb przygotowania do druku"}),e.jsxs("h3",{className:"text-sm font-black uppercase text-white leading-tight",children:["Podgląd Tygodniowego Planu • ",m==="classes"?"Oddziały":"Nauczyciele"]})]})]}),e.jsxs("div",{className:"flex items-center gap-3 flex-wrap",children:[e.jsxs("div",{className:"flex items-center gap-1.5 bg-slate-800 p-1 rounded-lg",children:[e.jsx("button",{onClick:()=>ot("portrait"),className:`px-3 py-1 text-[11px] font-bold rounded-md transition ${st==="portrait"?"bg-indigo-600 text-white":"text-slate-400 hover:text-white"}`,children:"Pionowo (A4)"}),e.jsx("button",{onClick:()=>ot("landscape"),className:`px-3 py-1 text-[11px] font-bold rounded-md transition ${st==="landscape"?"bg-indigo-600 text-white":"text-slate-400 hover:text-white"}`,children:"Poziomo (A4)"})]}),m==="classes"?e.jsxs("select",{value:w,onChange:S=>Q(S.target.value),className:"bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer",children:[e.jsx("option",{value:"all",children:"Wszystkie oddziały"}),we.classes.map(S=>e.jsxs("option",{value:S.id,children:["Klasa ",S.name]},S.id))]}):e.jsxs("select",{value:U,onChange:S=>M(S.target.value),className:"bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer",children:[e.jsx("option",{value:"all",children:"Wszyscy nauczyciele"}),we.teachers.map(S=>e.jsxs("option",{value:S.id,children:[S.last," ",S.first]},S.id))]}),e.jsxs("button",{onClick:()=>window.print(),className:"px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-indigo-600 border-solid",children:[e.jsx(jn,{size:13})," Drukuj teraz (Ctrl+P)"]}),e.jsx("button",{onClick:()=>ct(!1),className:"px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition select-none cursor-pointer",children:"Zamknij podgląd"})]})]}),e.jsx("div",{className:"max-w-5xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0",children:m==="classes"?j.map((S,de)=>e.jsxs("div",{className:`print-card pb-8 border-b border-slate-150 last:border-0 ${de<j.length-1?"page-break mb-12":""}`,children:[e.jsxs("div",{className:"flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-4",children:[e.jsxs("div",{className:"text-left",children:[e.jsxs("h2",{className:"text-xl font-black text-slate-950",children:["TYGODNIOWY PLAN LEKCJI • KLASA ",S.name]}),e.jsxs("p",{className:"text-xs text-slate-500 font-bold uppercase",children:[n.school.name," • Plan lekcji"]})]}),e.jsxs("div",{className:"text-right text-[10px] text-slate-400 font-bold uppercase",children:["Rok szkolny: ",n.yearLabel," • ",h==="etap1"?"Wersja Plan Klas":"Wersja Plan Sal"]})]}),e.jsxs("table",{className:"w-full text-xs border border-slate-300",children:[e.jsx("thead",{children:e.jsxs("tr",{className:"bg-slate-100 uppercase font-black text-slate-800",children:[e.jsx("th",{className:"w-24 border border-slate-300 p-2.5 text-center text-[10px]",children:"Nr / Godz"}),Yn.map(z=>e.jsx("th",{className:"border border-slate-300 p-2.5 text-center text-[10px]",children:z},z))]})}),e.jsx("tbody",{className:"divide-y divide-slate-200",children:Se.map((z,Y)=>{const _e=String(z.num);return e.jsxs("tr",{className:"bg-white",children:[e.jsxs("td",{className:"border border-slate-300 p-2 py-2.5 font-mono text-center text-[10px] bg-slate-50/50",children:[e.jsx("span",{className:"font-extrabold text-slate-900",children:z.num}),e.jsxs("span",{className:"block text-[8px] text-slate-400 font-semibold leading-none mt-0.5",children:[z.start,"-",z.end]})]}),[0,1,2,3,4].map(he=>{var I;let _=[];if(h==="etap1"){const G=`${S.id}|${he}|${Y}`,re=we.lessons[G];if(re){const xe=we.assignments.find(Le=>Le.id===re.assignmentId);if(xe){const Le=((I=P.get(xe.subjectId))==null?void 0:I.name)||"Inny",E=xe.teacherId?k.get(xe.teacherId):null,B=xe.roomId?Ae.get(xe.roomId):null;_.push({subject:Le,teacherAbbr:E==null?void 0:E.abbr,roomName:B==null?void 0:B.name})}}}else(((Ue.classes[S.id]||{})[he]||{})[_e]||[]).forEach(Le=>{_.push({subject:Le.subject,teacherAbbr:Le.teacherAbbr,roomName:Le.note})});return e.jsx("td",{className:"border border-slate-300 p-2.5 align-middle text-center min-h-[50px] bg-white",children:_.length>0?e.jsx("div",{className:"space-y-1.5",children:_.map((G,re)=>e.jsxs("div",{className:"text-[10px] leading-tight",children:[e.jsx("span",{className:"font-black text-slate-900 block tracking-tight text-[10.5px]",children:G.subject}),e.jsxs("div",{className:"flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1",children:[G.teacherAbbr&&e.jsx("span",{className:"bg-slate-100 border border-slate-150 px-1 rounded",children:G.teacherAbbr}),G.roomName&&e.jsxs("span",{className:"bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded",children:["sala: ",G.roomName]})]})]},re))}):e.jsx("span",{className:"text-[9px] text-slate-200 font-bold font-mono",children:"-"})},he)})]},z.num)})})]})]},S.id)):D.map((S,de)=>e.jsxs("div",{className:`print-card pb-8 border-b border-slate-150 last:border-0 ${de<D.length-1?"page-break mb-12":""}`,children:[e.jsxs("div",{className:"flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-4",children:[e.jsxs("div",{className:"text-left",children:[e.jsxs("h2",{className:"text-xl font-black text-slate-950",children:["TYGODNIOWY PLAN NAUCZYCIELA • ",S.last.toUpperCase()," ",S.first.toUpperCase()," (",S.abbr,")"]}),e.jsxs("p",{className:"text-xs text-slate-500 font-bold uppercase",children:[n.school.name," • Plan lekcji"]})]}),e.jsxs("div",{className:"text-right text-[10px] text-slate-400 font-bold uppercase",children:["Rok szkolny: ",n.yearLabel," • ",h==="etap1"?"Wersja Plan Klas":"Wersja Plan Sal"]})]}),e.jsxs("table",{className:"w-full text-xs border border-slate-300",children:[e.jsx("thead",{children:e.jsxs("tr",{className:"bg-slate-100 uppercase font-black text-slate-800",children:[e.jsx("th",{className:"w-24 border border-slate-300 p-2.5 text-center text-[10px]",children:"Nr / Godz"}),Yn.map(z=>e.jsx("th",{className:"border border-slate-300 p-2.5 text-center text-[10px]",children:z},z))]})}),e.jsx("tbody",{className:"divide-y divide-slate-200",children:Se.map((z,Y)=>{const _e=String(z.num);return e.jsxs("tr",{className:"bg-white",children:[e.jsxs("td",{className:"border border-slate-300 p-2 py-2.5 font-mono text-center text-[10px] bg-slate-50/50",children:[e.jsx("span",{className:"font-extrabold text-slate-900",children:z.num}),e.jsxs("span",{className:"block text-[8px] text-slate-200 font-semibold leading-none mt-0.5",children:[z.start,"-",z.end]})]}),[0,1,2,3,4].map(he=>{let _=[];return h==="etap1"?Object.entries(we.lessons).forEach(([I,G])=>{var B,ve;const re=I.split("|"),xe=re[0],Le=parseInt(re[1],10),E=parseInt(re[2],10);if(Le===he&&E===Y){const J=we.assignments.find(fe=>fe.id===G.assignmentId);if(J&&J.teacherId===S.id){const fe=((B=P.get(J.subjectId))==null?void 0:B.name)||"Inny",Ke=((ve=ke.get(xe))==null?void 0:ve.name)||"Inna",Ge=J.roomId?Ae.get(J.roomId):null;_.push({subject:fe,className:Ke,roomName:Ge==null?void 0:Ge.name})}}}):(((Ue.teachers[S.id]||{})[he]||{})[_e]||[]).forEach(xe=>{var Le;_.push({subject:xe.subject,className:xe.className||((Le=xe.classes)==null?void 0:Le.join("+"))||"Klasa",roomName:xe.note})}),e.jsx("td",{className:"border border-slate-300 p-2.5 align-middle text-center min-h-[50px] bg-white",children:_.length>0?e.jsx("div",{className:"space-y-1.5",children:_.map((I,G)=>e.jsxs("div",{className:"text-[10px] leading-tight",children:[e.jsx("span",{className:"font-black text-slate-900 block tracking-tight text-[10.5px]",children:I.subject}),e.jsxs("div",{className:"flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1",children:[e.jsx("span",{className:"bg-amber-100 hover:bg-amber-200 border border-amber-200 text-amber-800 px-1 rounded",children:I.className}),I.roomName&&e.jsxs("span",{className:"bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded",children:["sala: ",I.roomName]})]})]},G))}):e.jsx("span",{className:"text-[9px] text-slate-200 font-bold font-mono",children:"-"})},he)})]},z.num)})})]})]},S.id))})]}):e.jsxs("div",{className:"flex-1 overflow-y-auto px-6 py-6 bg-slate-50 relative print:p-0 print:bg-white print:overflow-visible",children:[e.jsx("style",{children:`
         @media print {
+          /* Ukrywamy nagłówek i stopkę systemową */
+          header, footer, #restoring-pointer-blocker {
+            display: none !important;
+          }
+
+          /* Resetujemy wysokości i paski przewijania kontenerów nadrzędnych */
+          html, body, #root, [class*="h-screen"], [class*="overflow-hidden"] {
+            height: auto !important;
+            width: auto !important;
+            overflow: visible !important;
+            position: static !important;
+          }
+
           .no-print {
             display: none !important;
           }
