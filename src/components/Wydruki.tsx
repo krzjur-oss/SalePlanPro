@@ -472,6 +472,65 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   const generateRoomsMatrixHtml = () => {
+    const numRooms = roomsToPrint.length;
+    
+    // Dynamic styles based on room count to fit wide matrices on A4
+    let colMinWidth = '110px';
+    let thPadding = '8px';
+    let tdPadding = '8px';
+    let clsFontSize = '10px';
+    let subjFontSize = '9px';
+    let tAbbrFontSize = '8.5px';
+    let headerNameFontSize = '12px';
+    let headerDescFontSize = '8.5px';
+    let showHeaderDesc = true;
+    let maxSubjWidth = '130px';
+
+    if (numRooms > 24) {
+      colMinWidth = '45px';
+      thPadding = '3px 1px';
+      tdPadding = '3px 1px';
+      clsFontSize = '7.5px';
+      subjFontSize = '7px';
+      tAbbrFontSize = '6.5px';
+      headerNameFontSize = '8px';
+      showHeaderDesc = false;
+      maxSubjWidth = '50px';
+    } else if (numRooms > 16) {
+      colMinWidth = '65px';
+      thPadding = '4px 2px';
+      tdPadding = '4px 2px';
+      clsFontSize = '8.5px';
+      subjFontSize = '8px';
+      tAbbrFontSize = '7.5px';
+      headerNameFontSize = '9.5px';
+      showHeaderDesc = false;
+      maxSubjWidth = '75px';
+    } else if (numRooms > 10) {
+      colMinWidth = '85px';
+      thPadding = '6px 3px';
+      tdPadding = '6px 3px';
+      clsFontSize = '9px';
+      subjFontSize = '8.5px';
+      tAbbrFontSize = '8px';
+      headerNameFontSize = '11px';
+      headerDescFontSize = '7.5px';
+      maxSubjWidth = '100px';
+    } else if (numRooms > 6) {
+      colMinWidth = '100px';
+      thPadding = '8px 4px';
+      tdPadding = '8px 4px';
+      clsFontSize = '9.5px';
+      subjFontSize = '9px';
+      tAbbrFontSize = '8px';
+      headerNameFontSize = '12px';
+      headerDescFontSize = '8px';
+      maxSubjWidth = '115px';
+    }
+
+    // Suggested zoom scale to fit a standard landscape A4 page horizontally
+    const recommendedScale = Math.min(1.0, Math.max(0.35, 12 / numRooms));
+
     let daysHtml = '';
     
     [0, 1, 2, 3, 4].forEach(dayIdx => {
@@ -523,15 +582,15 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           let cellContent = '-';
           if (lessonsInRoom.length > 0) {
             cellContent = lessonsInRoom.map(it => `
-              <div style="margin-bottom: 6px; line-height: 1.2;">
-                <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; padding: 2px 6px; border-radius: 4px; font-size: 10px; display: inline-block;">
+              <div style="margin-bottom: 4px; line-height: 1.15;">
+                <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; padding: 1px 4px; border-radius: 4px; font-size: ${clsFontSize}; display: inline-block;">
                   ${it.className}
                 </span>
-                <div style="font-size: 9px; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;" title="${it.subject}">
+                <div style="font-size: ${subjFontSize}; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: ${maxSubjWidth}; margin-top: 1px;" title="${it.subject}">
                   ${it.subject}
                 </div>
                 ${it.teacherAbbr ? `
-                  <span style="background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; padding: 1px 4px; border-radius: 3px; font-size: 8.5px; font-weight: bold; display: inline-block; margin-top: 2px;">
+                  <span style="background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; padding: 1px 3px; border-radius: 3px; font-size: ${tAbbrFontSize}; font-weight: bold; display: inline-block; margin-top: 1px;">
                     ${it.teacherAbbr}
                   </span>` : ''}
               </div>
@@ -539,7 +598,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           }
 
           roomsCellsHtml += `
-            <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; vertical-align: top; background: #fff; min-height: 50px;">
+            <td style="border: 1px solid #cbd5e1; padding: ${tdPadding}; text-align: center; vertical-align: top; background: #fff; min-height: 40px;">
               ${cellContent}
             </td>
           `;
@@ -547,9 +606,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
         rowsHtml += `
           <tr>
-            <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px;">
-              <div style="font-size: 12px; font-weight: 900; color: #0f172a;">${hour.num}</div>
-              <div style="font-size: 8.5px; color: #64748b; margin-top: 2px;">${hour.start}-${hour.end}</div>
+            <td style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px;">
+              <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${hour.num}</div>
+              <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${hour.start}-${hour.end}</div>
             </td>
             ${roomsCellsHtml}
           </tr>
@@ -557,26 +616,26 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       });
 
       daysHtml += `
-        <div class="day-sheet" style="page-break-after: always; margin-bottom: 40px;">
-          <div style="background-color: #0f172a; color: #ffffff; padding: 12px 18px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-            <span style="font-size: 13px; font-weight: 950; letter-spacing: 0.05em;">
+        <div class="day-sheet" style="page-break-after: always; margin-bottom: 30px;">
+          <div style="background-color: #0f172a; color: #ffffff; padding: 10px 14px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            <span style="font-size: 12px; font-weight: 950; letter-spacing: 0.05em;">
               📅 ${DAYS_NAMES[dayIdx].toUpperCase()} — PŁACHTA OBŁOŻENIA GABINETÓW
             </span>
-            <span style="font-size: 10px; font-weight: bold; font-family: monospace; opacity: 0.85;">
-              Wydruk zbiorczy
+            <span style="font-size: 9px; font-weight: bold; font-family: monospace; opacity: 0.85;">
+              Wydruk zbiorczy (Sal: ${numRooms})
             </span>
           </div>
 
-          <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; min-width: 700px;">
+          <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; min-width: 600px;">
             <thead>
               <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 11px; font-weight: 900; width: 90px; color: #1e293b;">
+                <th style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 10px; font-weight: 900; width: 70px; color: #1e293b;">
                   Lekcja / Godz
                 </th>
                 ${roomsToPrint.map(room => `
-                  <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; font-size: 11px; font-weight: 950; min-width: 110px; color: #020617;">
-                    <span style="font-family: monospace; font-size: 12px; display: block;">${room.name}</span>
-                    <span style="font-size: 8.5px; color: #475569; font-weight: 500; display: block; margin-top: 2px; text-transform: uppercase;">${room.desc || 'sala ogólna'}</span>
+                  <th style="border: 1px solid #cbd5e1; padding: ${thPadding}; text-align: center; font-size: 11px; font-weight: 950; min-width: ${colMinWidth}; color: #020617;">
+                    <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">${room.name}</span>
+                    ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: uppercase;">${room.desc || 'sala ogólna'}</span>` : ''}
                   </th>
                 `).join('')}
               </tr>
@@ -611,6 +670,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             border-bottom: 3px solid #0f172a;
             padding-bottom: 12px;
             margin-bottom: 24px;
+            transform-origin: top left;
           }
           .header-title h1 {
             margin: 0;
@@ -677,6 +737,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             background-color: #e2e8f0;
           }
           
+          .content {
+            transform-origin: top left;
+          }
+          
           @media print {
             .no-print-bar {
               display: none !important;
@@ -695,7 +759,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             }
             @page {
               size: landscape;
-              margin: 10mm;
+              margin: 8mm;
             }
           }
         </style>
@@ -706,6 +770,28 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             <span style="font-weight: 900; font-size: 13px; color: #020617;">PODGLĄD WYDRUKU PŁACHTY GABINETÓW</span>
             <span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">Układ poziomy (A4 landscape) został automatycznie zoptymalizowany pod drukarkę</span>
           </div>
+          
+          <div style="display: flex; align-items: center; gap: 16px; margin-left: auto; margin-right: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase; white-space: nowrap;">Skala wydruku (Zoom):</label>
+              <select id="scale-selector" onchange="adjustScale(this.value)" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; font-weight: bold; color: #1e293b; background: white; cursor: pointer;">
+                <option value="1.0" ${recommendedScale >= 0.95 ? 'selected' : ''}>Auto (100%)</option>
+                <option value="0.95" ${recommendedScale >= 0.9 && recommendedScale < 0.95 ? 'selected' : ''}>95%</option>
+                <option value="0.90" ${recommendedScale >= 0.85 && recommendedScale < 0.9 ? 'selected' : ''}>90%</option>
+                <option value="0.85" ${recommendedScale >= 0.8 && recommendedScale < 0.85 ? 'selected' : ''}>85% (Kompaktowa)</option>
+                <option value="0.80" ${recommendedScale >= 0.75 && recommendedScale < 0.8 ? 'selected' : ''}>80%</option>
+                <option value="0.75" ${recommendedScale >= 0.7 && recommendedScale < 0.75 ? 'selected' : ''}>75%</option>
+                <option value="0.70" ${recommendedScale >= 0.65 && recommendedScale < 0.7 ? 'selected' : ''}>70%</option>
+                <option value="0.65" ${recommendedScale >= 0.6 && recommendedScale < 0.65 ? 'selected' : ''}>65%</option>
+                <option value="0.60" ${recommendedScale >= 0.55 && recommendedScale < 0.6 ? 'selected' : ''}>60% (Gęsta)</option>
+                <option value="0.55" ${recommendedScale >= 0.5 && recommendedScale < 0.55 ? 'selected' : ''}>55%</option>
+                <option value="0.50" ${recommendedScale >= 0.45 && recommendedScale < 0.5 ? 'selected' : ''}>50%</option>
+                <option value="0.45" ${recommendedScale >= 0.4 && recommendedScale < 0.45 ? 'selected' : ''}>45%</option>
+                <option value="0.40" ${recommendedScale < 0.4 ? 'selected' : ''}>40% (Bardzo gęsta)</option>
+              </select>
+            </div>
+          </div>
+
           <div style="display: flex; gap: 8px;">
             <button class="btn-close" onclick="window.close()">Zamknij okno</button>
             <button class="btn-print" onclick="window.print()">
@@ -731,11 +817,27 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         </div>
 
         <script>
-          // Softly trigger printing once document renders
+          function adjustScale(scaleValue) {
+            const content = document.querySelector('.content');
+            const header = document.querySelector('.header');
+            if (content) {
+              content.style.zoom = scaleValue;
+              content.style.webkitZoom = scaleValue;
+            }
+            if (header) {
+              header.style.zoom = scaleValue;
+              header.style.webkitZoom = scaleValue;
+            }
+          }
+
+          // Initial scale application
           window.addEventListener('DOMContentLoaded', () => {
+            const initialScale = document.getElementById('scale-selector')?.value || '1.0';
+            adjustScale(initialScale);
+            
             setTimeout(() => {
               window.print();
-            }, 350);
+            }, 550);
           });
         </script>
       </body>
