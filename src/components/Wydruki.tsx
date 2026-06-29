@@ -1023,6 +1023,301 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     }
   };
 
+  const generateDutiesHtml = () => {
+    const places = appState.dyzury.miejsca;
+    const breaks = appState.dyzury.przerwy;
+    const recommendedScale = Math.min(1.0, Math.max(0.45, 8 / Math.max(places.length, 1)));
+
+    let daysHtml = '';
+
+    [0, 1, 2, 3, 4].forEach(dayIdx => {
+      let rowsHtml = '';
+      
+      breaks.forEach(p => {
+        let colsHtml = '';
+        places.forEach(place => {
+          const dutyKey = `${place.id}|${dayIdx}|${p.num}`;
+          const entry = appState.dyzury.harmonogram[dutyKey];
+          const t = entry?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) : null;
+          
+          let cellContent = '-';
+          if (entry?.teacherAbbr) {
+            cellContent = `
+              <div style="font-weight: 900; background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 4px 8px; border-radius: 6px; font-size: 11px; display: inline-block; min-width: 45px; text-align: center;">
+                ${entry.teacherAbbr}
+              </div>
+              <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 3px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${t ? `${t.first} ${t.last}` : ''}">
+                ${t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
+              </div>
+            `;
+          }
+
+          colsHtml += `
+            <td style="border: 1px solid #cbd5e1; padding: 10px 6px; text-align: center; vertical-align: middle; background: #fff;">
+              ${cellContent}
+            </td>
+          `;
+        });
+
+        rowsHtml += `
+          <tr>
+            <td style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; background-color: #f8fafc; font-weight: bold; font-size: 10.5px; width: 140px;">
+              <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${p.name || `Przerwa ${p.num}`}</div>
+              <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 2px; font-family: monospace;">⏱️ ${p.start} - ${p.end}</div>
+            </td>
+            ${colsHtml}
+          </tr>
+        `;
+      });
+
+      daysHtml += `
+        <div class="day-section" style="page-break-inside: avoid; break-inside: avoid; margin-bottom: 32px;">
+          <div style="background-color: #0f172a; color: #fff; padding: 8px 14px; margin-bottom: 12px; font-weight: 900; font-size: 11.5px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+            <span style="letter-spacing: 0.05em; text-transform: uppercase;">📅 ${DAYS_NAMES[dayIdx]} — HARMONOGRAM DYŻURÓW</span>
+            <span style="font-size: 8.5px; font-family: monospace; font-weight: bold; opacity: 0.8; text-transform: uppercase;">PODZIAŁ NA REJONY / MIEJSCA DYŻUROWAŃ</span>
+          </div>
+
+          ${places.length === 0 ? `
+            <p style="font-size: 11px; color: #64748b; font-style: italic; padding: 12px; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; background: #fafafa;">Brak zdefiniowanych miejsc dyżurowania.</p>
+          ` : `
+            <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; table-layout: fixed; border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+              <thead>
+                <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+                  <th style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 11px; font-weight: 900; color: #334155; width: 140px;">PRZERWA / GODZINA</th>
+                  ${places.map(place => `
+                    <th style="border: 1px solid #cbd5e1; padding: 8px 6px; text-align: center; font-size: 10.5px; font-weight: 900; color: #1e293b; background-color: #f8fafc;">
+                      <div style="font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 10.5px;">📍 ${place.name}</div>
+                      ${place.floor ? `<div style="font-size: 8px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">${place.floor}</div>` : ''}
+                    </th>
+                  `).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          `}
+        </div>
+      `;
+    });
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Plan i Harmonogram Dyżurów — SalePlan Pro</title>
+        <style>
+          body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc;
+            color: #0f172a;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .no-print-bar {
+            background-color: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+          }
+          .btn-close {
+            background-color: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+          }
+          .btn-close:hover {
+            background-color: #e2e8f0;
+            color: #1e293b;
+          }
+          .btn-print {
+            background-color: #059669;
+            color: #fff;
+            border: 1px solid #059669;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-weight: 900;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+          }
+          .btn-print:hover {
+            background-color: #047857;
+            border-color: #047857;
+          }
+          .header {
+            background-color: #fff;
+            border-bottom: 2px solid #0f172a;
+            padding: 24px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+          }
+          .header-title h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 900;
+            letter-spacing: -0.01em;
+            color: #0f172a;
+          }
+          .header-title p {
+            margin: 4px 0 0 0;
+            font-size: 11.5px;
+            color: #475569;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .meta-info {
+            font-size: 9px;
+            font-weight: bold;
+            text-align: right;
+            line-height: 1.5;
+            color: #64748b;
+            text-transform: uppercase;
+          }
+          .content {
+            padding: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+          }
+          @media print {
+            .no-print-bar {
+              display: none !important;
+            }
+            body {
+              background-color: #fff !important;
+            }
+            .header {
+              padding: 12px 0 20px 0 !important;
+              margin-bottom: 16px !important;
+              border-bottom: 2px solid #000 !important;
+            }
+            .content {
+              padding: 0 !important;
+              max-width: 100% !important;
+            }
+            td, th {
+              border: 1px solid #000 !important;
+            }
+            @page {
+              size: landscape;
+              margin: 8mm;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print-bar">
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 900; font-size: 13px; color: #020617;">PODGLĄD HARMONOGRAMU DYŻURÓW</span>
+            <span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">Układ poziomy (A4 landscape) został automatycznie zoptymalizowany pod drukarkę</span>
+          </div>
+          
+          <div style="display: flex; align-items: center; gap: 16px; margin-left: auto; margin-right: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase; white-space: nowrap;">Skala wydruku (Zoom):</label>
+              <select id="scale-selector" onchange="adjustScale(this.value)" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; font-weight: bold; color: #1e293b; background: white; cursor: pointer;">
+                <option value="1.0" ${recommendedScale >= 0.95 ? 'selected' : ''}>Auto (100%)</option>
+                <option value="0.95" ${recommendedScale >= 0.9 && recommendedScale < 0.95 ? 'selected' : ''}>95%</option>
+                <option value="0.90" ${recommendedScale >= 0.85 && recommendedScale < 0.9 ? 'selected' : ''}>90%</option>
+                <option value="0.85" ${recommendedScale >= 0.8 && recommendedScale < 0.85 ? 'selected' : ''}>85% (Kompaktowa)</option>
+                <option value="0.80" ${recommendedScale >= 0.75 && recommendedScale < 0.8 ? 'selected' : ''}>80%</option>
+                <option value="0.75" ${recommendedScale >= 0.7 && recommendedScale < 0.75 ? 'selected' : ''}>75%</option>
+                <option value="0.70" ${recommendedScale >= 0.65 && recommendedScale < 0.7 ? 'selected' : ''}>70%</option>
+                <option value="0.65" ${recommendedScale >= 0.6 && recommendedScale < 0.65 ? 'selected' : ''}>65%</option>
+                <option value="0.60" ${recommendedScale >= 0.55 && recommendedScale < 0.6 ? 'selected' : ''}>60% (Gęsta)</option>
+                <option value="0.55" ${recommendedScale >= 0.5 && recommendedScale < 0.55 ? 'selected' : ''}>55%</option>
+                <option value="0.50" ${recommendedScale >= 0.45 && recommendedScale < 0.5 ? 'selected' : ''}>50%</option>
+                <option value="0.45" ${recommendedScale >= 0.4 && recommendedScale < 0.45 ? 'selected' : ''}>45%</option>
+                <option value="0.40" ${recommendedScale < 0.4 ? 'selected' : ''}>40% (Bardzo gęsta)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-close" onclick="window.close()">Zamknij okno</button>
+            <button class="btn-print" onclick="window.print()">
+              🖨️ Drukuj (Ctrl+P)
+            </button>
+          </div>
+        </div>
+
+        <div class="header">
+          <div class="header-title">
+            <h1>PLAN I HARMONOGRAM DYŻURÓW NAUCZYCIELSKICH</h1>
+            <p>${appState.school.name} — Rok szkolny ${appState.yearLabel}</p>
+          </div>
+          <div class="meta-info">
+            SYSTEM GENERACYJNY SalePlan Pro<br>
+            MODUŁ DYŻURÓW SZKOLNYCH<br>
+            DATA GENEROWANIA: ${new Date().toLocaleDateString('pl-PL')} o ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+
+        <div class="content">
+          ${daysHtml}
+        </div>
+
+        <script>
+          function adjustScale(scaleValue) {
+            const content = document.querySelector('.content');
+            const header = document.querySelector('.header');
+            if (content) {
+              content.style.zoom = scaleValue;
+              content.style.webkitZoom = scaleValue;
+            }
+            if (header) {
+              header.style.zoom = scaleValue;
+              header.style.webkitZoom = scaleValue;
+            }
+          }
+
+          // Initial scale application
+          window.addEventListener('DOMContentLoaded', () => {
+            const initialScale = document.getElementById('scale-selector')?.value || '1.0';
+            adjustScale(initialScale);
+            
+            setTimeout(() => {
+              window.print();
+            }, 550);
+          });
+        </script>
+      </body>
+      </html>
+    `;
+  };
+
+  const openDutiesPrintPreview = () => {
+    try {
+      const htmlContent = generateDutiesHtml();
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+      } else {
+        setPopupBlocked(true);
+      }
+    } catch (e) {
+      console.error(e);
+      setPopupBlocked(true);
+    }
+  };
+
   // --- Classes Data Resolution ---
   const classesToPrint = useMemo(() => {
     if (selectedClassId === 'all') {
@@ -1570,6 +1865,14 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 <Printer size={15} className="animate-pulse" /> Podgląd płachty sal
               </button>
             )}
+            {printType === 'duties' && (
+              <button 
+                onClick={openDutiesPrintPreview}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer"
+              >
+                <Printer size={15} className="animate-pulse" /> Podgląd dyżurów
+              </button>
+            )}
             {(printType === 'classes' || printType === 'teachers') && (
               <button 
                 onClick={() => setIsPrintFriendlyWeeklyMode(true)}
@@ -1696,11 +1999,14 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           )}
 
           {printType === 'duties' && (
-            <div className="flex items-end justify-center py-2 bg-emerald-50 text-emerald-800 border-l-4 border-emerald-500 rounded-lg text-[10px] font-bold p-3">
-              <div>
-                <span className="block font-black uppercase text-xs">Dyżury gotowe</span>
-                Renderuje kompletny podział przerwa po przerwie dla całej kadry.
-              </div>
+            <div className="space-y-1 flex flex-col justify-end">
+              <label className="text-[10px] text-slate-400 font-bold uppercase invisible sm:block">Akcja</label>
+              <button
+                onClick={openDutiesPrintPreview}
+                className="w-full h-[38px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-emerald-600 border-solid"
+              >
+                <Printer size={15} /> Podgląd wydruku dyżurów
+              </button>
             </div>
           )}
         </div>
@@ -2205,58 +2511,75 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
             <div className="space-y-8">
               {[0, 1, 2, 3, 4].map(dayIdx => {
-                // Find if there are actually any duties scheduled on this day
-                const dayDutiesList: { miejsceName: string; przerwaName: string; przerwaTime: string; teacherAbbr: string }[] = [];
-                
-                appState.dyzury.miejsca.forEach(miejsce => {
-                  appState.dyzury.przerwy.forEach(przerwa => {
+                const hasAnyDutiesOnThisDay = appState.dyzury.miejsca.some(miejsce =>
+                  appState.dyzury.przerwy.some(przerwa => {
                     const dutyKey = `${miejsce.id}|${dayIdx}|${przerwa.num}`;
-                    const entry = appState.dyzury.harmonogram[dutyKey];
-                    if (entry && entry.teacherAbbr) {
-                      dayDutiesList.push({
-                        miejsceName: miejsce.name,
-                        przerwaName: przerwa.name || `Przerwa ${przerwa.num}`,
-                        przerwaTime: `${przerwa.start} - ${przerwa.end}`,
-                        teacherAbbr: entry.teacherAbbr
-                      });
-                    }
-                  });
-                });
+                    return !!appState.dyzury.harmonogram[dutyKey]?.teacherAbbr;
+                  })
+                );
 
                 return (
                   <div key={dayIdx} className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 break-inside-avoid">
-                    <h3 className="text-sm font-black text-slate-950 uppercase tracking-wide border-b border-slate-200 pb-1 mb-3">
+                    <h3 className="text-xs font-black text-slate-950 uppercase tracking-wide border-b border-slate-200 pb-1.5 mb-3 flex items-center gap-1.5">
                       📅 {DAYS_NAMES[dayIdx]}
                     </h3>
 
-                    {dayDutiesList.length === 0 ? (
-                      <p className="text-[10px] text-slate-400 italic">Brak przydzielonych dyżurów na ten dzień.</p>
+                    {!hasAnyDutiesOnThisDay ? (
+                      <p className="text-[10px] text-slate-400 italic py-1.5">Brak przydzielonych dyżurów na ten dzień.</p>
+                    ) : appState.dyzury.miejsca.length === 0 ? (
+                      <p className="text-[10px] text-slate-400 italic py-1.5">Brak zdefiniowanych miejsc dyżurowania.</p>
                     ) : (
-                      <table className="w-full text-xs border border-slate-300">
-                        <thead>
-                          <tr className="bg-slate-100 font-black uppercase">
-                            <th className="border border-slate-300 p-2 text-left">Przerwa / Godzina</th>
-                            <th className="border border-slate-300 p-2 text-left">Lokalizacja / Miejsce</th>
-                            <th className="border border-slate-300 p-2 text-center w-28">Nauczyciel dyżurujący</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dayDutiesList.map((d, dIdx) => (
-                            <tr key={dIdx} className="bg-white">
-                              <td className="border border-slate-300 p-2 font-mono text-[9px]">
-                                <span className="font-extrabold text-slate-800">{d.przerwaName}</span>
-                                <span className="block text-slate-400 font-bold mt-0.5">{d.przerwaTime}</span>
-                              </td>
-                              <td className="border border-slate-300 p-2 font-semibold text-slate-700">
-                                {d.miejsceName}
-                              </td>
-                              <td className="border border-slate-300 p-2 font-extrabold text-center text-[10px]">
-                                <span className="bg-slate-900 text-white rounded px-2 py-0.5 inline-block">{d.teacherAbbr}</span>
-                              </td>
+                      <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
+                        <table className="w-full text-xs border-collapse border border-slate-300">
+                          <thead>
+                            <tr className="bg-slate-100 uppercase font-black text-slate-800 border-b border-slate-300">
+                              <th className="border border-slate-300 p-2 text-left text-[10px] w-48 bg-slate-50">Godzina / Przerwa</th>
+                              {appState.dyzury.miejsca.map(place => (
+                                <th key={place.id} className="border border-slate-300 p-2 text-center text-[10px] min-w-[110px] bg-slate-50">
+                                  <span className="block text-slate-900 font-black">📍 {place.name}</span>
+                                  {place.floor && (
+                                    <span className="block text-[8px] text-slate-500 font-bold uppercase mt-0.5">{place.floor}</span>
+                                  )}
+                                </th>
+                              ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {appState.dyzury.przerwy.map(przerwa => {
+                              return (
+                                <tr key={przerwa.num} className="bg-white border-b border-slate-200 hover:bg-slate-50/50">
+                                  <td className="border border-slate-300 p-2.5 font-mono text-[9px] text-left">
+                                    <span className="font-extrabold text-slate-800">{przerwa.name || `Przerwa ${przerwa.num}`}</span>
+                                    <span className="block text-slate-400 font-bold mt-0.5">⏱️ {przerwa.start} - {przerwa.end}</span>
+                                  </td>
+                                  {appState.dyzury.miejsca.map(place => {
+                                    const dutyKey = `${place.id}|${dayIdx}|${przerwa.num}`;
+                                    const entry = appState.dyzury.harmonogram[dutyKey];
+                                    const t = entry?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) : null;
+
+                                    return (
+                                      <td key={place.id} className="border border-slate-300 p-2 text-center align-middle">
+                                        {entry?.teacherAbbr ? (
+                                          <div className="inline-flex flex-col items-center justify-center">
+                                            <span className="bg-emerald-900 text-white rounded px-2.5 py-1 text-[10px] font-mono font-black shadow-xs tracking-wider uppercase inline-block print:bg-slate-100 print:text-slate-900 print:border print:border-slate-300">
+                                              {entry.teacherAbbr}
+                                            </span>
+                                            <span className="block text-[8.5px] text-slate-400 font-bold truncate max-w-[100px] mt-1 print:text-slate-500">
+                                              {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-slate-300 font-bold">-</span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 );
