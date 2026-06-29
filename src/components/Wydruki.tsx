@@ -9,6 +9,39 @@ interface WydrukiProps {
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
+const getRoomCategory = (room: { name: string; desc?: string }): 'ogolne' | 'indywidualne' | 'sportowe' => {
+  const name = room.name.toLowerCase();
+  const desc = (room.desc || '').toLowerCase();
+
+  // Sports facilities: basen, hala, sala gimnastyczna, fitness, wf, boisko, stadion, gym
+  if (
+    name.includes('basen') || name.includes('hala') || name.includes('wf') ||
+    name.includes('gimn') || name.includes('sport') || name.includes('boisko') ||
+    name.includes('s.gim') || name.includes('sgim') || name.includes('gym') ||
+    desc.includes('gimn') || desc.includes('sport') || desc.includes('basen') ||
+    desc.includes('hala') || desc.includes('wf') || desc.includes('boisko') ||
+    desc.includes('fitness') || desc.includes('aerob') || desc.includes('stadion')
+  ) {
+    return 'sportowe';
+  }
+
+  // Individual / Therapy rooms: indyw, terap, rewa, logop, psych, pedag, korek, rewalidacja, logopeda, psycholog, pedagog, terapeutyczna, językowa, jezyk, sensoryczna
+  if (
+    name.includes('indyw') || name.includes('terap') || name.includes('rewa') ||
+    name.includes('logop') || name.includes('psych') || name.includes('pedag') ||
+    name.includes('korek') || name.includes('język') || name.includes('jezyk') ||
+    desc.includes('indyw') || desc.includes('terap') || desc.includes('rewa') ||
+    desc.includes('logop') || desc.includes('psych') || desc.includes('pedag') ||
+    desc.includes('korek') || desc.includes('język') || desc.includes('jezyk') ||
+    desc.includes('rewalid') || desc.includes('terapia') || desc.includes('specjal') ||
+    desc.includes('gabinet') || desc.includes('sensory') || desc.includes('wspomag')
+  ) {
+    return 'indywidualne';
+  }
+
+  return 'ogolne';
+};
+
 export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties'>('classes');
   const [scheduleVersion, setScheduleVersion] = useState<'etap1' | 'etap2'>('etap1');
@@ -472,178 +505,202 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   const generateRoomsMatrixHtml = () => {
-    const numRooms = roomsToPrint.length;
-    
-    // Dynamic styles based on room count to fit wide matrices on A4
-    let colMinWidth = '110px';
-    let thPadding = '8px';
-    let tdPadding = '8px';
-    let clsFontSize = '10px';
-    let subjFontSize = '9px';
-    let tAbbrFontSize = '8.5px';
-    let headerNameFontSize = '12px';
-    let headerDescFontSize = '8.5px';
-    let showHeaderDesc = true;
-    let maxSubjWidth = '130px';
+    const ogolneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'ogolne');
+    const indywidualneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'indywidualne');
+    const sportoweRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'sportowe');
 
-    if (numRooms > 24) {
-      colMinWidth = '45px';
-      thPadding = '3px 1px';
-      tdPadding = '3px 1px';
-      clsFontSize = '7.5px';
-      subjFontSize = '7px';
-      tAbbrFontSize = '6.5px';
-      headerNameFontSize = '8px';
-      showHeaderDesc = false;
-      maxSubjWidth = '50px';
-    } else if (numRooms > 16) {
-      colMinWidth = '65px';
-      thPadding = '4px 2px';
-      tdPadding = '4px 2px';
-      clsFontSize = '8.5px';
-      subjFontSize = '8px';
-      tAbbrFontSize = '7.5px';
-      headerNameFontSize = '9.5px';
-      showHeaderDesc = false;
-      maxSubjWidth = '75px';
-    } else if (numRooms > 10) {
-      colMinWidth = '85px';
-      thPadding = '6px 3px';
-      tdPadding = '6px 3px';
-      clsFontSize = '9px';
-      subjFontSize = '8.5px';
-      tAbbrFontSize = '8px';
-      headerNameFontSize = '11px';
-      headerDescFontSize = '7.5px';
-      maxSubjWidth = '100px';
-    } else if (numRooms > 6) {
-      colMinWidth = '100px';
-      thPadding = '8px 4px';
-      tdPadding = '8px 4px';
-      clsFontSize = '9.5px';
-      subjFontSize = '9px';
-      tAbbrFontSize = '8px';
-      headerNameFontSize = '12px';
-      headerDescFontSize = '8px';
-      maxSubjWidth = '115px';
-    }
+    const categories = [
+      { id: 'ogolne', name: 'Sale Ogólne', icon: '🏫', rooms: ogolneRooms },
+      { id: 'indywidualne', name: 'Sale Indywidualne', icon: '🧩', rooms: indywidualneRooms },
+      { id: 'sportowe', name: 'Sale Sportowe', icon: '⚽', rooms: sportoweRooms }
+    ].filter(c => c.rooms.length > 0);
 
-    // Suggested zoom scale to fit a standard landscape A4 page horizontally
-    const recommendedScale = Math.min(1.0, Math.max(0.35, 12 / numRooms));
+    const maxCategoryRooms = Math.max(...categories.map(c => c.rooms.length), 1);
+    const recommendedScale = Math.min(1.0, Math.max(0.45, 12 / maxCategoryRooms));
 
     let daysHtml = '';
     
     [0, 1, 2, 3, 4].forEach(dayIdx => {
-      let rowsHtml = '';
-      
-      hoursList.forEach(hour => {
-        const fileHIdx = hoursList.findIndex(h => h.num === hour.num);
+      let tablesHtml = '';
 
-        let roomsCellsHtml = '';
-        roomsToPrint.forEach(room => {
-          let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
+      categories.forEach(cat => {
+        const catRoomsCount = cat.rooms.length;
+        
+        // Compute layout parameters dynamically for this category table
+        let colMinWidth = '110px';
+        let thPadding = '8px';
+        let tdPadding = '8px';
+        let clsFontSize = '10px';
+        let subjFontSize = '9px';
+        let tAbbrFontSize = '8.5px';
+        let headerNameFontSize = '12px';
+        let headerDescFontSize = '8.5px';
+        let showHeaderDesc = true;
+        let maxSubjWidth = '130px';
 
-          if (scheduleVersion === 'etap1') {
-            Object.entries(pl.lessons).forEach(([key, lesson]) => {
-              const parts = key.split('|');
-              const classId = parts[0];
-              const dIdx = parseInt(parts[1], 10);
-              const hrIdx = parseInt(parts[2], 10);
+        if (catRoomsCount > 24) {
+          colMinWidth = '45px';
+          thPadding = '3px 1px';
+          tdPadding = '3px 1px';
+          clsFontSize = '7.5px';
+          subjFontSize = '7px';
+          tAbbrFontSize = '6.5px';
+          headerNameFontSize = '8px';
+          showHeaderDesc = false;
+          maxSubjWidth = '50px';
+        } else if (catRoomsCount > 16) {
+          colMinWidth = '65px';
+          thPadding = '4px 2px';
+          tdPadding = '4px 2px';
+          clsFontSize = '8.5px';
+          subjFontSize = '8px';
+          tAbbrFontSize = '7.5px';
+          headerNameFontSize = '9.5px';
+          showHeaderDesc = false;
+          maxSubjWidth = '75px';
+        } else if (catRoomsCount > 10) {
+          colMinWidth = '85px';
+          thPadding = '6px 3px';
+          tdPadding = '6px 3px';
+          clsFontSize = '9px';
+          subjFontSize = '8.5px';
+          tAbbrFontSize = '8px';
+          headerNameFontSize = '11px';
+          headerDescFontSize = '7.5px';
+          maxSubjWidth = '100px';
+        } else if (catRoomsCount > 6) {
+          colMinWidth = '100px';
+          thPadding = '8px 4px';
+          tdPadding = '8px 4px';
+          clsFontSize = '9.5px';
+          subjFontSize = '9px';
+          tAbbrFontSize = '8px';
+          headerNameFontSize = '12px';
+          headerDescFontSize = '8px';
+          maxSubjWidth = '115px';
+        }
 
-              if (dIdx === dayIdx && hrIdx === fileHIdx) {
-                const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                if (asg && asg.roomId === room.id) {
-                  const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-                  const clsName = classesMap.get(classId)?.name || 'Klasa';
-                  const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
-                  lessonsInRoom.push({
-                    subject,
-                    className: clsName,
-                    teacherAbbr: tAbbr
-                  });
+        let rowsHtml = '';
+        hoursList.forEach(hour => {
+          const fileHIdx = hoursList.findIndex(h => h.num === hour.num);
+
+          let roomsCellsHtml = '';
+          cat.rooms.forEach(room => {
+            let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
+
+            if (scheduleVersion === 'etap1') {
+              Object.entries(pl.lessons).forEach(([key, lesson]) => {
+                const parts = key.split('|');
+                const classId = parts[0];
+                const dIdx = parseInt(parts[1], 10);
+                const hrIdx = parseInt(parts[2], 10);
+
+                if (dIdx === dayIdx && hrIdx === fileHIdx) {
+                  const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+                  if (asg && asg.roomId === room.id) {
+                    const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+                    const clsName = classesMap.get(classId)?.name || 'Klasa';
+                    const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
+                    lessonsInRoom.push({
+                      subject,
+                      className: clsName,
+                      teacherAbbr: tAbbr
+                    });
+                  }
                 }
-              }
-            });
-          } else {
-            const rSched = etap2Schedule.rooms[room.id] || {};
-            const daySchedules = rSched[dayIdx] || {};
-            const hourKeyStr = String(hour.num);
-            const hourCells = daySchedules[hourKeyStr] || [];
-            
-            hourCells.forEach(cell => {
-              lessonsInRoom.push({
-                subject: cell.subject,
-                className: cell.className || cell.classes?.join('+') || 'Klasa',
-                teacherAbbr: cell.teacherAbbr
               });
-            });
-          }
+            } else {
+              const rSched = etap2Schedule.rooms[room.id] || {};
+              const daySchedules = rSched[dayIdx] || {};
+              const hourKeyStr = String(hour.num);
+              const hourCells = daySchedules[hourKeyStr] || [];
+              
+              hourCells.forEach(cell => {
+                lessonsInRoom.push({
+                  subject: cell.subject,
+                  className: cell.className || cell.classes?.join('+') || 'Klasa',
+                  teacherAbbr: cell.teacherAbbr
+                });
+              });
+            }
 
-          let cellContent = '-';
-          if (lessonsInRoom.length > 0) {
-            cellContent = lessonsInRoom.map(it => `
-              <div style="margin-bottom: 4px; line-height: 1.15;">
-                <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; padding: 1px 4px; border-radius: 4px; font-size: ${clsFontSize}; display: inline-block;">
-                  ${it.className}
-                </span>
-                <div style="font-size: ${subjFontSize}; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: ${maxSubjWidth}; margin-top: 1px;" title="${it.subject}">
-                  ${it.subject}
+            let cellContent = '-';
+            if (lessonsInRoom.length > 0) {
+              cellContent = lessonsInRoom.map(it => `
+                <div style="margin-bottom: 4px; line-height: 1.15;">
+                  <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; padding: 1px 4px; border-radius: 4px; font-size: ${clsFontSize}; display: inline-block;">
+                    ${it.className}
+                  </span>
+                  <div style="font-size: ${subjFontSize}; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: ${maxSubjWidth}; margin-top: 1px;" title="${it.subject}">
+                    ${it.subject}
+                  </div>
+                  ${it.teacherAbbr ? `
+                    <span style="background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; padding: 1px 3px; border-radius: 3px; font-size: ${tAbbrFontSize}; font-weight: bold; display: inline-block; margin-top: 1px;">
+                      ${it.teacherAbbr}
+                    </span>` : ''}
                 </div>
-                ${it.teacherAbbr ? `
-                  <span style="background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; padding: 1px 3px; border-radius: 3px; font-size: ${tAbbrFontSize}; font-weight: bold; display: inline-block; margin-top: 1px;">
-                    ${it.teacherAbbr}
-                  </span>` : ''}
-              </div>
-            `).join('');
-          }
+              `).join('');
+            }
 
-          roomsCellsHtml += `
-            <td style="border: 1px solid #cbd5e1; padding: ${tdPadding}; text-align: center; vertical-align: top; background: #fff; min-height: 40px;">
-              ${cellContent}
-            </td>
+            roomsCellsHtml += `
+              <td style="border: 1px solid #cbd5e1; padding: ${tdPadding}; text-align: center; vertical-align: top; background: #fff; min-height: 40px;">
+                ${cellContent}
+              </td>
+            `;
+          });
+
+          rowsHtml += `
+            <tr>
+              <td style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px; width: 70px;">
+                <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${hour.num}</div>
+                <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${hour.start}-${hour.end}</div>
+              </td>
+              ${roomsCellsHtml}
+            </tr>
           `;
         });
 
-        rowsHtml += `
-          <tr>
-            <td style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px;">
-              <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${hour.num}</div>
-              <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${hour.start}-${hour.end}</div>
-            </td>
-            ${roomsCellsHtml}
-          </tr>
+        tablesHtml += `
+          <div class="category-section" style="page-break-inside: avoid; break-inside: avoid; margin-bottom: 24px;">
+            <div style="background-color: #f1f5f9; border-left: 4px solid #0f172a; padding: 6px 10px; margin-bottom: 8px; font-weight: bold; font-size: 11px; color: #1e293b; display: flex; align-items: center; gap: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+              <span style="font-size: 13px;">${cat.icon}</span>
+              <span style="letter-spacing: 0.03em;">${cat.name.toUpperCase()} (Sal: ${catRoomsCount})</span>
+            </div>
+            
+            <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; margin-bottom: 12px;">
+              <thead>
+                <tr style="background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                  <th style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 10px; font-weight: 900; width: 70px; color: #1e293b;">
+                    Lekcja / Godz
+                  </th>
+                  ${cat.rooms.map(room => `
+                    <th style="border: 1px solid #cbd5e1; padding: ${thPadding}; text-align: center; font-size: 11px; font-weight: 950; min-width: ${colMinWidth}; color: #020617;">
+                      <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">${room.name}</span>
+                      ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: uppercase;">${room.desc || 'sala ogólna'}</span>` : ''}
+                    </th>
+                  `).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
         `;
       });
 
       daysHtml += `
         <div class="day-sheet" style="page-break-after: always; margin-bottom: 30px;">
-          <div style="background-color: #0f172a; color: #ffffff; padding: 10px 14px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+          <div style="background-color: #0f172a; color: #ffffff; padding: 10px 14px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
             <span style="font-size: 12px; font-weight: 950; letter-spacing: 0.05em;">
               📅 ${DAYS_NAMES[dayIdx].toUpperCase()} — PŁACHTA OBŁOŻENIA GABINETÓW
             </span>
             <span style="font-size: 9px; font-weight: bold; font-family: monospace; opacity: 0.85;">
-              Wydruk zbiorczy (Sal: ${numRooms})
+              Wydruk podzielony na kategorie (Razem sal: ${roomsToPrint.length})
             </span>
           </div>
 
-          <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; min-width: 600px;">
-            <thead>
-              <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                <th style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 10px; font-weight: 900; width: 70px; color: #1e293b;">
-                  Lekcja / Godz
-                </th>
-                ${roomsToPrint.map(room => `
-                  <th style="border: 1px solid #cbd5e1; padding: ${thPadding}; text-align: center; font-size: 11px; font-weight: 950; min-width: ${colMinWidth}; color: #020617;">
-                    <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">${room.name}</span>
-                    ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: uppercase;">${room.desc || 'sala ogólna'}</span>` : ''}
-                  </th>
-                `).join('')}
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
+          ${tablesHtml}
         </div>
       `;
     });
@@ -1794,118 +1851,141 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               <p className="text-xs text-slate-400 p-4 text-center">Brak gabinetów do wyświetlenia w wybranym filtrze.</p>
             ) : (
               <div className="space-y-12">
-                {[0, 1, 2, 3, 4].map((dayIdx) => {
-                  return (
-                    <div key={dayIdx} className="page-break last:pb-0 pb-2">
-                      <div className="bg-slate-900 text-white border border-slate-800 px-4 py-2.5 rounded-xl flex justify-between items-center mb-3 print:bg-slate-100 print:text-slate-900 print:border-slate-300">
-                        <span className="text-xs font-black uppercase tracking-wide">
-                          📅 {DAYS_NAMES[dayIdx]} — PŁACHTA OBŁOŻENIA GABINETÓW
-                        </span>
-                        <span className="text-[9px] uppercase font-bold font-mono text-slate-400 print:text-slate-500">
-                          {appState.yearLabel}
-                        </span>
-                      </div>
+                {(() => {
+                  const ogolneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'ogolne');
+                  const indywidualneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'indywidualne');
+                  const sportoweRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'sportowe');
 
-                      <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
-                        <table className="w-full text-xs text-left border border-slate-300 min-w-[700px]">
-                          <thead>
-                            <tr className="bg-slate-100 uppercase font-black text-slate-800">
-                              <th className="w-24 border border-slate-300 p-2 text-center text-[10.5px]">Godz / Lekcja</th>
-                              {roomsToPrint.map(room => (
-                                <th key={room.id} className="border border-slate-300 p-2 text-center text-[10.5px] min-w-[110px]">
-                                  <span className="font-mono text-[11px] block text-slate-900">{room.name}</span>
-                                  <span className="block text-[8px] text-slate-500 font-medium normal-case truncate max-w-[140px] mx-auto">{room.desc || 'ogólna'}</span>
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-200">
-                            {hoursList.map((hour, hIdx) => {
-                              const hourKeyStr = String(hour.num);
-                              return (
-                                <tr key={hour.num} className="hover:bg-slate-50/40">
-                                  {/* Hour column */}
-                                  <td className="border border-slate-300 p-2 font-mono text-center bg-slate-50/50">
-                                    <span className="font-extrabold text-slate-900 text-[11px]">{hour.num}</span>
-                                    <span className="block text-[8px] text-slate-400 leading-none mt-0.5">{hour.start}-{hour.end}</span>
-                                  </td>
+                  const categories = [
+                    { id: 'ogolne', name: 'Sale Ogólne', icon: '🏫', rooms: ogolneRooms },
+                    { id: 'indywidualne', name: 'Sale Indywidualne', icon: '🧩', rooms: indywidualneRooms },
+                    { id: 'sportowe', name: 'Sale Sportowe', icon: '⚽', rooms: sportoweRooms }
+                  ].filter(c => c.rooms.length > 0);
 
-                                  {/* Rooms cells */}
-                                  {roomsToPrint.map(room => {
-                                    let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
+                  return [0, 1, 2, 3, 4].map((dayIdx) => {
+                    return (
+                      <div key={dayIdx} className="page-break last:pb-0 pb-2">
+                        <div className="bg-slate-900 text-white border border-slate-800 px-4 py-2.5 rounded-xl flex justify-between items-center mb-4 print:bg-slate-100 print:text-slate-900 print:border-slate-300">
+                          <span className="text-xs font-black uppercase tracking-wide">
+                            📅 {DAYS_NAMES[dayIdx]} — PŁACHTA OBŁOŻENIA GABINETÓW
+                          </span>
+                          <span className="text-[9px] uppercase font-bold font-mono text-slate-400 print:text-slate-500">
+                            Podział na kategorie
+                          </span>
+                        </div>
 
-                                    if (scheduleVersion === 'etap1') {
-                                      // Search assignments matching room in stage 1
-                                      Object.entries(pl.lessons).forEach(([key, lesson]) => {
-                                        const parts = key.split('|');
-                                        const classId = parts[0];
-                                        const dIdx = parseInt(parts[1], 10);
-                                        const hrIdx = parseInt(parts[2], 10);
+                        <div className="space-y-6">
+                          {categories.map((cat) => (
+                            <div key={cat.id} className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/40 p-3 shadow-xs">
+                              <div className="flex items-center gap-2 mb-2 px-1">
+                                <span className="text-sm">{cat.icon}</span>
+                                <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{cat.name} ({cat.rooms.length})</h4>
+                              </div>
 
-                                        if (dIdx === dayIdx && hrIdx === hIdx) {
-                                          const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                          if (asg && asg.roomId === room.id) {
-                                            const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-                                            const clsName = classesMap.get(classId)?.name || 'Klasa';
-                                            const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
-                                            lessonsInRoom.push({
-                                              subject,
-                                              className: clsName,
-                                              teacherAbbr: tAbbr
-                                            });
-                                          }
-                                        }
-                                      });
-                                    } else {
-                                      // Get from Plan Sal mapping (stage 2)
-                                      const rSched = etap2Schedule.rooms[room.id] || {};
-                                      const daySchedules = rSched[dayIdx] || {};
-                                      const hourCells = daySchedules[hourKeyStr] || [];
-                                      
-                                      hourCells.forEach(cell => {
-                                        lessonsInRoom.push({
-                                          subject: cell.subject,
-                                          className: cell.className || cell.classes?.join('+') || 'Klasa',
-                                          teacherAbbr: cell.teacherAbbr
-                                        });
-                                      });
-                                    }
+                              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
+                                <table className="w-full text-xs text-left border border-slate-300 min-w-[600px] bg-white rounded-lg">
+                                  <thead>
+                                    <tr className="bg-slate-100 uppercase font-black text-slate-800">
+                                      <th className="w-24 border border-slate-300 p-2 text-center text-[10.5px]">Godz / Lekcja</th>
+                                      {cat.rooms.map(room => (
+                                        <th key={room.id} className="border border-slate-300 p-2 text-center text-[10.5px] min-w-[110px]">
+                                          <span className="font-mono text-[11px] block text-slate-900">{room.name}</span>
+                                          <span className="block text-[8px] text-slate-500 font-medium normal-case truncate max-w-[140px] mx-auto">{room.desc || 'ogólna'}</span>
+                                        </th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-200">
+                                    {hoursList.map((hour, hIdx) => {
+                                      const hourKeyStr = String(hour.num);
+                                      return (
+                                        <tr key={hour.num} className="hover:bg-slate-50/40">
+                                          {/* Hour column */}
+                                          <td className="border border-slate-300 p-2 font-mono text-center bg-slate-50/50">
+                                            <span className="font-extrabold text-slate-900 text-[11px]">{hour.num}</span>
+                                            <span className="block text-[8px] text-slate-400 leading-none mt-0.5">{hour.start}-{hour.end}</span>
+                                          </td>
 
-                                    return (
-                                      <td key={room.id} className="border border-slate-300 p-1.5 align-top text-center min-h-[50px] bg-white">
-                                        {lessonsInRoom.length > 0 ? (
-                                          <div className="space-y-1">
-                                            {lessonsInRoom.map((it, dIdx) => (
-                                              <div key={dIdx} className="text-[10px] leading-tight">
-                                                <span className="font-extrabold text-slate-900 block text-[10.5px] bg-amber-100/70 border border-amber-200/80 rounded px-1.5 py-0.5 inline-block mb-0.5">
-                                                  {it.className}
-                                                </span>
-                                                <span className="text-[9px] text-slate-700 block font-bold truncate max-w-[100px] mx-auto" title={it.subject}>
-                                                  {it.subject}
-                                                </span>
-                                                {it.teacherAbbr && (
-                                                  <span className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-1.5 rounded text-[8.5px] font-bold inline-block mt-0.5">
-                                                    {it.teacherAbbr}
-                                                  </span>
+                                          {/* Rooms cells */}
+                                          {cat.rooms.map(room => {
+                                            let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
+
+                                            if (scheduleVersion === 'etap1') {
+                                              // Search assignments matching room in stage 1
+                                              Object.entries(pl.lessons).forEach(([key, lesson]) => {
+                                                const parts = key.split('|');
+                                                const classId = parts[0];
+                                                const dIdx = parseInt(parts[1], 10);
+                                                const hrIdx = parseInt(parts[2], 10);
+
+                                                if (dIdx === dayIdx && hrIdx === hIdx) {
+                                                  const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+                                                  if (asg && asg.roomId === room.id) {
+                                                    const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+                                                    const clsName = classesMap.get(classId)?.name || 'Klasa';
+                                                    const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
+                                                    lessonsInRoom.push({
+                                                      subject,
+                                                      className: clsName,
+                                                      teacherAbbr: tAbbr
+                                                    });
+                                                  }
+                                                }
+                                              });
+                                            } else {
+                                              // Get from Plan Sal mapping (stage 2)
+                                              const rSched = etap2Schedule.rooms[room.id] || {};
+                                              const daySchedules = rSched[dayIdx] || {};
+                                              const hourCells = daySchedules[hourKeyStr] || [];
+                                              
+                                              hourCells.forEach(cell => {
+                                                lessonsInRoom.push({
+                                                  subject: cell.subject,
+                                                  className: cell.className || cell.classes?.join('+') || 'Klasa',
+                                                  teacherAbbr: cell.teacherAbbr
+                                                });
+                                              });
+                                            }
+
+                                            return (
+                                              <td key={room.id} className="border border-slate-300 p-1.5 align-top text-center min-h-[50px] bg-white">
+                                                {lessonsInRoom.length > 0 ? (
+                                                  <div className="space-y-1">
+                                                    {lessonsInRoom.map((it, dIdx) => (
+                                                      <div key={dIdx} className="text-[10px] leading-tight">
+                                                        <span className="font-extrabold text-slate-900 block text-[10.5px] bg-amber-100/70 border border-amber-200/80 rounded px-1.5 py-0.5 inline-block mb-0.5">
+                                                          {it.className}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-700 block font-bold truncate max-w-[100px] mx-auto" title={it.subject}>
+                                                          {it.subject}
+                                                        </span>
+                                                        {it.teacherAbbr && (
+                                                          <span className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-1.5 rounded text-[8.5px] font-bold inline-block mt-0.5">
+                                                            {it.teacherAbbr}
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <span className="text-[10px] text-slate-300 font-bold font-mono">-</span>
                                                 )}
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <span className="text-[10px] text-slate-300 font-bold font-mono">-</span>
-                                        )}
-                                      </td>
-                                    );
-                                  })}
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                                              </td>
+                                            );
+                                          })}
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
