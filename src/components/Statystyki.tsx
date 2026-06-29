@@ -145,6 +145,31 @@ interface StatystykiProps {
     });
   }, [historyLogs, logSearch, logFilterType]);
 
+  const historyStats = useMemo(() => {
+    let undoRedo = 0;
+    let snapshots = 0;
+    let imports = 0;
+    let resets = 0;
+    let others = 0;
+
+    historyLogs.forEach(log => {
+      if (!log) return;
+      if (log.actionType === 'undo' || log.actionType === 'redo') {
+        undoRedo++;
+      } else if (log.actionType === 'snapshot_create' || log.actionType === 'snapshot_delete' || log.actionType === 'restore') {
+        snapshots++;
+      } else if (log.actionType === 'import') {
+        imports++;
+      } else if (log.actionType === 'reset') {
+        resets++;
+      } else {
+        others++;
+      }
+    });
+
+    return { total: historyLogs.length, undoRedo, snapshots, imports, resets, others };
+  }, [historyLogs]);
+
   const getLogIconAndColor = (type: string) => {
     switch (type) {
       case 'restore':
@@ -1397,53 +1422,153 @@ interface StatystykiProps {
 
         {/* ======================= TAB: HISTORY LOG CONTENT ======================= */}
         {activeTab === 'history' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 select-none">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5 select-none">
               <div>
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <History size={15} className="text-indigo-600 animate-spin-slow" />
-                  Dziennik Zdarzeń Systemowych
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <History size={18} className="text-indigo-650 animate-spin-slow" />
+                  Wizualny Panel Historii Zmian
                 </h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
-                  Monitorowanie zmian, przywracania stanu i operacji na danych aplikacji
+                <p className="text-xs text-slate-550 mt-0.5 font-medium">
+                  Pełny podgląd działań użytkownika, operacji cofania (Undo), importu oraz punktów przywracania stanu bazy lekcyjnej.
                 </p>
               </div>
 
               {historyLogs.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => {
                     if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić cały dziennik zdarzeń?')) {
                       onClearHistoryLogs();
                     }
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 font-bold border border-red-200 hover:border-red-300 rounded-xl text-[10.5px] uppercase tracking-wide cursor-pointer transition select-none"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-650 font-black border border-red-200 hover:border-red-300 rounded-xl text-[11px] uppercase tracking-wider cursor-pointer transition shadow-xs"
                 >
-                  <Trash2 size={12} />
+                  <Trash2 size={13} className="text-red-600" />
                   Wyczyść dziennik
                 </button>
               )}
             </div>
 
-            {/* Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-center gap-3">
+            {/* QUICK STATS CARDS (Interactive filters) */}
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              {/* Card 1: ALL */}
+              <button
+                type="button"
+                onClick={() => setLogFilterType('all')}
+                className={`p-4 rounded-xl border text-left transition duration-200 flex flex-col justify-between h-24 ${
+                  logFilterType === 'all'
+                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-sm'
+                    : 'bg-white text-slate-900 border-slate-200 hover:border-indigo-300 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'all' ? 'text-indigo-100' : 'text-slate-450'}`}>
+                    Wszystkie zdarzenia
+                  </span>
+                  <History size={16} className={logFilterType === 'all' ? 'text-indigo-200' : 'text-indigo-650'} />
+                </div>
+                <span className="text-2xl font-black mt-2 leading-none">{historyStats.total}</span>
+              </button>
+
+              {/* Card 2: UNDO / REDO */}
+              <button
+                type="button"
+                onClick={() => setLogFilterType('undo')}
+                className={`p-4 rounded-xl border text-left transition duration-200 flex flex-col justify-between h-24 ${
+                  logFilterType === 'undo' || logFilterType === 'redo'
+                    ? 'bg-slate-800 text-white border-slate-900 shadow-sm'
+                    : 'bg-white text-slate-900 border-slate-200 hover:border-slate-400 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'undo' || logFilterType === 'redo' ? 'text-slate-350' : 'text-slate-450'}`}>
+                    Operacje Cofnij
+                  </span>
+                  <Undo2 size={16} className={logFilterType === 'undo' || logFilterType === 'redo' ? 'text-slate-200' : 'text-slate-550'} />
+                </div>
+                <span className="text-2xl font-black mt-2 leading-none">{historyStats.undoRedo}</span>
+              </button>
+
+              {/* Card 3: SNAPSHOTS */}
+              <button
+                type="button"
+                onClick={() => setLogFilterType('snapshot_create')}
+                className={`p-4 rounded-xl border text-left transition duration-200 flex flex-col justify-between h-24 ${
+                  logFilterType === 'snapshot_create' || logFilterType === 'snapshot_delete' || logFilterType === 'restore'
+                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                    : 'bg-white text-slate-900 border-slate-200 hover:border-emerald-300 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'snapshot_create' || logFilterType === 'snapshot_delete' || logFilterType === 'restore' ? 'text-emerald-100' : 'text-slate-450'}`}>
+                    Kopie i Migawki
+                  </span>
+                  <Camera size={16} className={logFilterType === 'snapshot_create' || logFilterType === 'snapshot_delete' || logFilterType === 'restore' ? 'text-emerald-200' : 'text-emerald-605'} />
+                </div>
+                <span className="text-2xl font-black mt-2 leading-none">{historyStats.snapshots}</span>
+              </button>
+
+              {/* Card 4: IMPORTS */}
+              <button
+                type="button"
+                onClick={() => setLogFilterType('import')}
+                className={`p-4 rounded-xl border text-left transition duration-200 flex flex-col justify-between h-24 ${
+                  logFilterType === 'import'
+                    ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                    : 'bg-white text-slate-900 border-slate-200 hover:border-blue-300 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'import' ? 'text-blue-100' : 'text-slate-450'}`}>
+                    Importy i Pliki
+                  </span>
+                  <Upload size={16} className={logFilterType === 'import' ? 'text-blue-200' : 'text-blue-605'} />
+                </div>
+                <span className="text-2xl font-black mt-2 leading-none">{historyStats.imports}</span>
+              </button>
+
+              {/* Card 5: OTHER / RESETS */}
+              <button
+                type="button"
+                onClick={() => setLogFilterType('reset')}
+                className={`p-4 rounded-xl border text-left transition duration-200 flex flex-col justify-between h-24 col-span-2 lg:col-span-1 ${
+                  logFilterType === 'reset'
+                    ? 'bg-red-600 text-white border-red-700 shadow-sm'
+                    : 'bg-white text-slate-900 border-slate-200 hover:border-red-350 hover:bg-slate-50/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'reset' ? 'text-red-100' : 'text-slate-450'}`}>
+                    Resety i Inne
+                  </span>
+                  <RefreshCw size={16} className={logFilterType === 'reset' ? 'text-red-200' : 'text-red-500'} />
+                </div>
+                <span className="text-2xl font-black mt-2 leading-none">{historyStats.resets + historyStats.others}</span>
+              </button>
+            </div>
+
+            {/* Filter Bar with Search Input & Dropdown */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row items-center gap-3 shadow-xs">
               <div className="relative flex-1 w-full">
                 <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   value={logSearch}
                   onChange={e => setLogSearch(e.target.value)}
-                  placeholder="Filtruj zdarzenia i opisy..."
-                  className="w-full bg-slate-55 border border-slate-250 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/80 transition"
+                  placeholder="Wyszukaj w dzienniku zmian (np. 'sala', 'nauczyciel', 'cofnięto')..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-550/10 focus:border-indigo-500 transition"
                 />
               </div>
 
-              <div className="w-full sm:w-56 shrink-0">
+              <div className="w-full md:w-64 shrink-0 flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase select-none whitespace-nowrap">Typ:</span>
                 <select
                   value={logFilterType}
                   onChange={e => setLogFilterType(e.target.value)}
-                  className="w-full bg-slate-55 border border-slate-250 rounded-xl py-2 px-3.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/80 cursor-pointer transition"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-550/10 focus:border-indigo-500 cursor-pointer transition"
                 >
-                  <option value="all">Wszystkie rodzaje zdarzeń</option>
+                  <option value="all">Wszystkie kategorie</option>
                   <option value="restore">Przywracanie stanu (Restore)</option>
                   <option value="import">Import planu / plików</option>
                   <option value="reset">Resety konfiguracji</option>
@@ -1456,53 +1581,86 @@ interface StatystykiProps {
               </div>
             </div>
 
-            {/* List area */}
+            {/* List area with vertical timeline line */}
             {filteredLogs.length === 0 ? (
-              <div className="py-12 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-center">
-                <History size={36} className="text-slate-300 mb-2" />
-                <p className="text-xs text-slate-500 font-bold select-none">Brak wpisów spełniających kryteria</p>
-                <p className="text-[10px] text-slate-400 font-semibold uppercase mt-1">Wykonaj jakąś operację (np. undo/redo, zmiana planu, snapshot) lub zmień filtry.</p>
+              <div className="bg-white py-16 border border-slate-200 rounded-2xl flex flex-col items-center justify-center text-center p-6 shadow-sm">
+                <div className="p-4 bg-slate-100 rounded-full mb-3 text-slate-400">
+                  <History size={36} />
+                </div>
+                <p className="text-sm text-slate-700 font-bold">Brak wpisów dla wybranej kategorii</p>
+                <p className="text-xs text-slate-450 mt-1 max-w-md">
+                  Wykonaj jakąś operację (np. edycja dyżuru, cofanie zmian, utworzenie snapshotu) lub zmień filtry wyszukiwania powyżej.
+                </p>
+                {(logSearch || logFilterType !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogSearch('');
+                      setLogFilterType('all');
+                    }}
+                    className="mt-4 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition"
+                  >
+                    Resetuj filtry
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
-                {filteredLogs.map(log => {
+              <div className="relative pl-3 md:pl-8 space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin">
+                {/* Vertical timeline track line */}
+                <div className="absolute left-[19px] md:left-[39px] top-4 bottom-4 w-[2px] bg-indigo-100 border-dashed border-l border-indigo-250/60 select-none pointer-events-none" />
+
+                {filteredLogs.map((log, index) => {
                   const meta = getLogIconAndColor(log.actionType);
                   const logDate = new Date(log.timestamp);
                   return (
                     <div 
                       key={log.id} 
-                      className="border border-slate-200/85 hover:border-slate-300 bg-slate-50/40 hover:bg-slate-50 p-4 rounded-xl flex items-start gap-3.5 transition"
+                      className="relative flex items-start gap-4 group animate-fade-in"
                     >
-                      {/* Left icon badge */}
-                      <div className={`p-2.5 rounded-xl ${meta.bg} shrink-0`}>
-                        {meta.icon}
+                      {/* Timeline dot / icon badge container */}
+                      <div className="relative z-10 shrink-0 select-none">
+                        <div className={`p-2.5 rounded-full ${meta.bg} border-2 border-white shadow-xs transition-transform duration-250 group-hover:scale-110 flex items-center justify-center w-9 h-9 md:w-10 md:h-10`}>
+                          {meta.icon}
+                        </div>
+                        {/* Sequence indicator */}
+                        <span className="absolute -bottom-1 -right-1 bg-slate-800 text-white text-[7.5px] font-mono px-1 rounded-full border border-white font-extrabold shadow-xs">
+                          {filteredLogs.length - index}
+                        </span>
                       </div>
 
-                      {/* Content */}
-                      <div className="flex-1 space-y-1">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                          <span className="font-extrabold text-xs text-slate-900 leading-tight">
-                            {log.description}
-                          </span>
+                      {/* Timeline Content card */}
+                      <div className="flex-1 bg-white border border-slate-200 hover:border-indigo-200 rounded-xl p-4 shadow-xs hover:shadow-sm transition-all duration-200 hover:-translate-y-0.5 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-50 pb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-xs text-slate-900 leading-tight">
+                              {log.description}
+                            </span>
+                          </div>
                           
                           {/* Beautiful Date & Time Badge */}
-                          <div className="text-[10px] text-slate-400 font-semibold font-mono flex items-center gap-1 shrink-0">
-                            <Clock size={10} />
+                          <div className="text-[10px] text-slate-450 font-bold font-mono bg-slate-50 border border-slate-150 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                            <Clock size={10} className="text-slate-400" />
                             {logDate.toLocaleDateString('pl-PL')} o {logDate.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </div>
                         </div>
 
                         {log.details && (
-                          <p className="text-[11px] text-slate-500 font-medium leading-relaxed bg-slate-100/50 p-2 border border-slate-100 rounded-lg">
+                          <div className="text-[11px] text-slate-500 font-semibold leading-relaxed bg-slate-55 border border-slate-150 rounded-lg p-2.5 font-mono overflow-x-auto whitespace-pre-wrap max-h-32 scrollbar-thin">
                             {log.details}
-                          </p>
+                          </div>
                         )}
-                      </div>
 
-                      {/* Right tag badge */}
-                      <span className={`hidden sm:inline-block font-mono font-bold text-[9px] uppercase tracking-wider px-2 py-1 rounded-md border ${meta.badgeBg} shrink-0 align-middle`}>
-                        {meta.text}
-                      </span>
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider select-none">
+                            ID: <span className="font-mono text-slate-550">{log.id.slice(0, 8)}...</span>
+                          </span>
+                          
+                          {/* Right tag badge */}
+                          <span className={`font-mono font-black text-[8px] uppercase tracking-wider px-2 py-0.5 rounded border ${meta.badgeBg} select-none`}>
+                            {meta.text}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}

@@ -4,7 +4,7 @@ import { colKey, flattenColumns, esc, hexRgba, mergeClassNames } from '../utils'
 import { 
   Building2, MapPin, Grid, AlertTriangle, UserCheck, RefreshCw, Trash2, Edit, Grab, Sparkles, Filter, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { DndContext, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, useSensor, useSensors, PointerSensor, TouchSensor, MouseSensor } from '@dnd-kit/core';
 import { DraggableItem, DroppableCell } from './DndWrapper';
 
 interface PlanSalProps {
@@ -42,6 +42,21 @@ export default function PlanSal({
   const [activeDay, setActiveDay] = useState<number>(0);
   const [activeRoomCategory, setActiveRoomCategory] = useState<'main' | 'individual' | 'sport'>('main');
   const [editingCell, setEditingCell] = useState<{ hour: string; colKey: string; slotIdx?: number } | null>(null);
+
+  const mouseSensor = useSensor(MouseSensor, {
+    activationConstraint: {
+      distance: 10,
+    },
+  });
+
+  const touchSensor = useSensor(TouchSensor, {
+    activationConstraint: {
+      delay: 250,
+      tolerance: 5,
+    },
+  });
+
+  const sensors = useSensors(mouseSensor, touchSensor);
 
   // States for the D&D Pool sidebar
   const [showPoolSidebar, setShowPoolSidebar] = useState<boolean>(true);
@@ -1515,7 +1530,7 @@ export default function PlanSal({
   };
 
   return (
-    <DndContext onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="flex flex-col flex-1 overflow-hidden h-full" id="page-plan-sal">
         {/* ── PASEK KONTROLI / DNIE ── */}
         <div className="bg-white border-b border-slate-200 p-4 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
@@ -1910,12 +1925,25 @@ export default function PlanSal({
                                                   {isSpecificConf && <AlertTriangle size={12} className="text-red-600 shrink-0" />}
                                                   {classes.join(', ') || '—'}
                                                 </span>
-                                                {isSpecificConf && (
-                                                  <span className="text-[8px] text-red-600 font-bold bg-white border border-red-200 px-1 py-0.5 rounded flex items-center gap-0.5 animate-pulse">
-                                                    <AlertTriangle size={8} className="text-red-500" />
-                                                    KOLIZJA
-                                                  </span>
-                                                )}
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                  {isSpecificConf && (
+                                                    <span className="text-[8px] text-red-600 font-bold bg-white border border-red-200 px-1 py-0.5 rounded flex items-center gap-0.5 animate-pulse">
+                                                      <AlertTriangle size={8} className="text-red-500" />
+                                                      KOLIZJA
+                                                    </span>
+                                                  )}
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleOpenEdit(h, cKey, slIdx);
+                                                    }}
+                                                    className="text-slate-400 hover:text-blue-600 text-[11px] p-1 rounded transition hover:bg-slate-100 cursor-pointer"
+                                                    title="Edytuj przydział"
+                                                  >
+                                                    ✏️
+                                                  </button>
+                                                </div>
                                               </div>
                                               <div className="text-[10px] text-slate-500 font-semibold mt-1">{slot.subject}</div>
                                             </div>
