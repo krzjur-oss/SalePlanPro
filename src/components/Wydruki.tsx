@@ -742,19 +742,33 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       <div id="weekly-print-overlay" className="fixed inset-0 bg-slate-100/90 backdrop-blur-md z-[9999] overflow-y-auto p-4 md:p-8 font-sans text-slate-800">
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
-            body > * {
+            /* Ukrywamy nagłówek i stopkę systemową */
+            header, footer, #restoring-pointer-blocker {
               display: none !important;
             }
+
+            /* Resetujemy wysokości i paski przewijania kontenerów nadrzędnych */
+            html, body, #root, [class*="h-screen"], [class*="overflow-hidden"] {
+              height: auto !important;
+              width: auto !important;
+              overflow: visible !important;
+              position: static !important;
+            }
+
+            body {
+              background-color: white !important;
+              color: black !important;
+            }
+
             #weekly-print-overlay {
               display: block !important;
-              position: absolute !important;
-              left: 0 !important;
-              top: 0 !important;
-              width: 100% !important;
-              height: auto !important;
+              position: static !important;
               background: white !important;
               padding: 0 !important;
               margin: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              overflow: visible !important;
             }
             .no-print {
               display: none !important;
@@ -1077,6 +1091,19 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       {/* CSS rules specifically injected for elegant printing */}
       <style>{`
         @media print {
+          /* Ukrywamy nagłówek i stopkę systemową */
+          header, footer, #restoring-pointer-blocker {
+            display: none !important;
+          }
+
+          /* Resetujemy wysokości i paski przewijania kontenerów nadrzędnych */
+          html, body, #root, [class*="h-screen"], [class*="overflow-hidden"] {
+            height: auto !important;
+            width: auto !important;
+            overflow: visible !important;
+            position: static !important;
+          }
+
           .no-print {
             display: none !important;
           }
