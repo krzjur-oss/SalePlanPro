@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom } from '../types';
+import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom, Class } from '../types';
 import { colKey, flattenColumns, esc, hexRgba, mergeClassNames } from '../utils';
 import { 
   Building2, MapPin, Grid, AlertTriangle, UserCheck, RefreshCw, Trash2, Edit, Grab, Sparkles, Filter, ChevronLeft, ChevronRight
@@ -69,6 +69,13 @@ export default function PlanSal({
   const [cellSupportTeacher, setCellSupportTeacher] = useState<string>('');
   const [cellSubject, setCellSubject] = useState<string>('');
   const [cellNote, setCellNote] = useState<string>('');
+  const [isCustomClass, setIsCustomClass] = useState<boolean>(false);
+  const [isCustomTeacher, setIsCustomTeacher] = useState<boolean>(false);
+  const [isCustomSubject, setIsCustomSubject] = useState<boolean>(false);
+  const [isCustomSupportTeacher, setIsCustomSupportTeacher] = useState<boolean>(false);
+  const [isAddingClassInline, setIsAddingClassInline] = useState<boolean>(false);
+  const [newInlineClassName, setNewInlineClassName] = useState<string>('');
+  const [selectedClasses, setSelectedClasses] = useState<string[]>(['']);
 
   // Homeroom / Custodians edit states
   const [editingHomeroom, setEditingHomeroom] = useState<{ colKey: string; roomNum: string; sub?: string } | null>(null);
@@ -815,6 +822,80 @@ export default function PlanSal({
     return list;
   }, [appState.planLekcji, appState.hours, activeDay, assignmentsMap, subjectsMap, rMap, isAssigned]);
 
+  const hourLessons = useMemo(() => {
+    if (!editingCell) return [];
+    return poolLessons.filter(l => l.hourKey === editingCell.hour);
+  }, [poolLessons, editingCell]);
+
+  const scheduledClasses = useMemo(() => {
+    return Array.from(new Set(hourLessons.map(l => l.className))).sort();
+  }, [hourLessons]);
+
+  const unassignedScheduledClasses = useMemo(() => {
+    if (!editingCell) return [];
+    const hour = editingCell.hour;
+    
+    const otherAssignedClasses = new Set<string>();
+    const yearKey = appState.yearKey;
+    const hourRow = schedData[yearKey]?.[activeDay]?.[hour] || {};
+    
+    Object.entries(hourRow).forEach(([cKey, cell]) => {
+      const isCurrentEditing = cKey === editingCell.colKey;
+      if (!cell) return;
+      const slots = Array.isArray(cell) ? cell : [cell];
+      slots.forEach((slot, slIdx) => {
+        if (isCurrentEditing && (editingCell.slotIdx === undefined || editingCell.slotIdx === slIdx)) {
+          return;
+        }
+        if (!slot) return;
+        const clses = slot.classes || (slot.className ? [slot.className] : []);
+        clses.forEach(c => {
+          if (c) otherAssignedClasses.add(c.trim().toUpperCase());
+        });
+      });
+    });
+
+    return scheduledClasses.filter(cls => {
+      return !otherAssignedClasses.has(cls.trim().toUpperCase());
+    });
+  }, [editingCell, scheduledClasses, schedData, appState.yearKey, activeDay]);
+
+  const getScheduledOptionsForIndex = (index: number) => {
+    return unassignedScheduledClasses.filter(clsName => {
+      const isSelectedElsewhere = selectedClasses.some((c, idx) => idx !== index && c && c.toUpperCase() === clsName.toUpperCase());
+      return !isSelectedElsewhere;
+    });
+  };
+
+  const getOtherOptionsForIndex = (index: number) => {
+    const schedSet = new Set(unassignedScheduledClasses.map(c => c.toUpperCase()));
+    return sortedClasses
+      .map(c => c.name)
+      .filter(clsName => {
+        if (schedSet.has(clsName.toUpperCase())) return false;
+        const isSelectedElsewhere = selectedClasses.some((c, idx) => idx !== index && c && c.toUpperCase() === clsName.toUpperCase());
+        return !isSelectedElsewhere;
+      });
+  };
+
+  const canAddMoreClasses = useMemo(() => {
+    if (!editingCell) return false;
+    const selectedSet = new Set(selectedClasses.map(c => c ? c.toUpperCase() : ''));
+    return sortedClasses.some(c => !selectedSet.has(c.name.toUpperCase()));
+  }, [editingCell, sortedClasses, selectedClasses]);
+
+  const scheduledTeachers = useMemo(() => {
+    return Array.from(new Set(hourLessons.map(l => l.teacherAbbr).filter(Boolean))).sort();
+  }, [hourLessons]);
+
+  const scheduledSubjects = useMemo(() => {
+    return Array.from(new Set(hourLessons.map(l => l.subject).filter(Boolean))).sort();
+  }, [hourLessons]);
+
+  const sortedSubjects = useMemo(() => {
+    return [...appState.subjects].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+  }, [appState.subjects]);
+
   // Collision Checking (School-wide checked)
   const collisions = useMemo(() => {
     // Map teacher abbreviations to Teacher objects for availability checks
@@ -1160,11 +1241,89 @@ export default function PlanSal({
     }
 
     setEditingCell({ hour, colKey: cKey, slotIdx });
-    setCellClass(cell?.className || cell?.classes?.[0] || '');
-    setCellTeacher(cell?.teacherAbbr || '');
-    setCellSupportTeacher(cell?.supportTeacherAbbr || '');
-    setCellSubject(cell?.subject || '');
-    setCellNote(cell?.note || '');
+    const initClass = cell?.className || cell?.classes?.[0] || '';
+    const rawClasses = cell?.classes || (cell?.className ? [cell.className] : []);
+    setSelectedClasses(rawClasses.length > 0 ? rawClasses.map(c => c.trim()) : ['']);
+    const initTeacher = cell?.teacherAbbr || '';
+    const initSupportTeacher = cell?.supportTeacherAbbr || '';
+    const initSubject = cell?.subject || '';
+    const initNote = cell?.note || '';
+
+    setCellClass(initClass);
+    setCellTeacher(initTeacher);
+    setCellSupportTeacher(initSupportTeacher);
+    setCellSubject(initSubject);
+    setCellNote(initNote);
+
+    // Determine custom flags
+    const hLessons = poolLessons.filter(l => l.hourKey === hour);
+
+    const isClassKnown = initClass === '' || hLessons.some(l => l.className.toUpperCase() === initClass.toUpperCase()) || appState.classes.some(c => c.name.toUpperCase() === initClass.toUpperCase());
+    setIsCustomClass(!isClassKnown);
+
+    const isTeacherKnown = initTeacher === '' || hLessons.some(l => l.teacherAbbr.toUpperCase() === initTeacher.toUpperCase()) || appState.teachers.some(t => t.abbr?.toUpperCase() === initTeacher.toUpperCase());
+    setIsCustomTeacher(!isTeacherKnown);
+
+    const isSupportTeacherKnown = initSupportTeacher === '' || appState.teachers.some(t => t.abbr?.toUpperCase() === initSupportTeacher.toUpperCase());
+    setIsCustomSupportTeacher(!isSupportTeacherKnown);
+
+    const isSubjectKnown = initSubject === '' || hLessons.some(l => l.subject.toUpperCase() === initSubject.toUpperCase()) || appState.subjects.some(s => s.name.toUpperCase() === initSubject.toUpperCase());
+    setIsCustomSubject(!isSubjectKnown);
+  };
+
+  const handleAddNewClassInline = () => {
+    const trimmed = newInlineClassName.trim().toUpperCase();
+    if (!trimmed) {
+      notify('Nazwa klasy nie może być pusta!', 'err');
+      return;
+    }
+
+    // Check if class already exists
+    if (appState.classes.some(c => c.name.toUpperCase() === trimmed)) {
+      notify('Klasa o tej nazwie już istnieje!', 'err');
+      setCellClass(trimmed);
+      setSelectedClasses(prev => {
+        const copy = [...prev];
+        if (copy.length === 0) return [trimmed];
+        copy[copy.length - 1] = trimmed;
+        return copy;
+      });
+      setIsCustomClass(false);
+      setIsAddingClassInline(false);
+      setNewInlineClassName('');
+      return;
+    }
+
+    const newClass: Class = {
+      id: 'cls_' + Math.random().toString(36).substring(2, 9),
+      name: trimmed,
+      color: '#6366f1',
+      groupIds: [],
+      group: 'cała klasa'
+    };
+
+    const nextClasses = [...appState.classes, newClass];
+
+    onChangeAppState({
+      ...appState,
+      classes: nextClasses,
+      planLekcji: {
+        ...appState.planLekcji,
+        classes: nextClasses
+      }
+    });
+
+    setCellClass(trimmed);
+    setSelectedClasses(prev => {
+      const copy = [...prev];
+      if (copy.length === 0) return [trimmed];
+      copy[copy.length - 1] = trimmed;
+      return copy;
+    });
+    setIsCustomClass(false);
+    setIsAddingClassInline(false);
+    setNewInlineClassName('');
+    notify(`Dodano nową klasę: ${trimmed}`, 'ok');
   };
 
   const handleSaveCell = (e: React.FormEvent) => {
@@ -1174,11 +1333,14 @@ export default function PlanSal({
     const { hour, colKey: cKey, slotIdx } = editingCell;
     const yearKey = appState.yearKey;
 
+    const finalClasses = selectedClasses.map(c => c.trim().toUpperCase()).filter(Boolean);
+    const combinedClassName = finalClasses.join(' + ');
+
     const newCell: SchedCell = {
       teacherAbbr: cellTeacher.trim().toUpperCase(),
       supportTeacherAbbr: cellSupportTeacher.trim().toUpperCase() || undefined,
-      className: cellClass.trim().toUpperCase(),
-      classes: [cellClass.trim().toUpperCase()],
+      className: combinedClassName,
+      classes: finalClasses,
       subject: cellSubject.trim(),
       note: cellNote.trim()
     };
@@ -2020,47 +2182,268 @@ export default function PlanSal({
                   ✕
                 </button>
               </div>
-              <div className="p-5 space-y-4">
+              <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+                {/* ⚡ Szybki wybór z planu lekcji */}
+                {hourLessons.length > 0 && (
+                  <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-3.5 space-y-1.5 select-none shadow-xs">
+                    <label className="block text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">
+                      ⚡ Szybki wybór z planu lekcji (godz. {editingCell.hour})
+                    </label>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        const [cls, sub, teach] = val.split('|');
+                        setCellClass(cls || '');
+                        setSelectedClasses([cls || '']);
+                        setCellTeacher(teach || '');
+                        setCellSubject(sub || '');
+                        setIsCustomClass(false);
+                        setIsCustomTeacher(false);
+                        setIsCustomSubject(false);
+                      }}
+                      className="w-full px-2 py-1.5 border border-indigo-200 bg-white rounded-lg text-xs outline-none focus:border-indigo-550 text-indigo-900 font-semibold cursor-pointer"
+                    >
+                      <option value="">-- Wybierz zaplanowaną lekcję --</option>
+                      {hourLessons.map((l, idx) => (
+                        <option key={idx} value={`${l.className}|${l.subject}|${l.teacherAbbr}`}>
+                          {l.className} • {l.subject} ({l.teacherAbbr})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Klasa / Grupy */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Klasa / Grupy</label>
-                  <input 
-                    type="text" 
-                    value={cellClass}
-                    onChange={(e) => setCellClass(e.target.value)}
-                    placeholder="np. 4A, 1B"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
-                  />
-                </div>
+                  <div className="flex items-center justify-between mb-1 select-none">
+                    <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wide">Klasa / Grupy</label>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {selectedClasses.map((cls, idx) => {
+                      const isFirst = idx === 0;
+                      return (
+                        <div key={idx} className="flex items-center gap-2">
+                          {isFirst ? (
+                            <select
+                              value={cls}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const copy = [...selectedClasses];
+                                copy[0] = val;
+                                setSelectedClasses(copy);
+                                setCellClass(val);
+                              }}
+                              className="flex-1 px-3 py-2 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 cursor-pointer"
+                            >
+                              <option value="">-- wybierz klasę --</option>
+                              {scheduledClasses.length > 0 && (
+                                <optgroup label="Zaplanowane na tę godzinę">
+                                  {scheduledClasses.map(clsName => (
+                                    <option key={clsName} value={clsName}>{clsName}</option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              <optgroup label="Wszystkie pozostałe klasy">
+                                {sortedClasses.map(c => (
+                                  <option key={c.id} value={c.name}>{c.name}</option>
+                                ))}
+                              </optgroup>
+                            </select>
+                          ) : (
+                              <div className="flex-1 flex items-center gap-2">
+                                <select
+                                  value={cls}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const copy = [...selectedClasses];
+                                    copy[idx] = val;
+                                    setSelectedClasses(copy);
+                                  }}
+                                  className="flex-1 px-3 py-2 border border-indigo-200 bg-white rounded-lg text-xs font-semibold text-indigo-900 outline-none focus:border-indigo-550 cursor-pointer"
+                                >
+                                  <option value="">-- wybierz kolejną klasę --</option>
+                                  {cls && !getScheduledOptionsForIndex(idx).some(o => o.toUpperCase() === cls.toUpperCase()) && 
+                                          !getOtherOptionsForIndex(idx).some(o => o.toUpperCase() === cls.toUpperCase()) && (
+                                    <option value={cls}>{cls}</option>
+                                  )}
+                                  
+                                  {getScheduledOptionsForIndex(idx).length > 0 && (
+                                    <optgroup label="Zaplanowane na tę godzinę (nieprzypisane)">
+                                      {getScheduledOptionsForIndex(idx).map(clsName => (
+                                        <option key={clsName} value={clsName}>{clsName}</option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+
+                                  {getOtherOptionsForIndex(idx).length > 0 && (
+                                    <optgroup label="Wszystkie pozostałe klasy">
+                                      {getOtherOptionsForIndex(idx).map(clsName => (
+                                        <option key={clsName} value={clsName}>{clsName}</option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = [...selectedClasses];
+                                    copy.splice(idx, 1);
+                                    setSelectedClasses(copy);
+                                  }}
+                                  className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition shrink-0 cursor-pointer"
+                                  title="Usuń tę klasę"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Add more class button */}
+                      {selectedClasses.length > 0 && selectedClasses[0] !== '' && canAddMoreClasses && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedClasses([...selectedClasses, '']);
+                          }}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition py-1 px-2 hover:bg-indigo-50 rounded-lg cursor-pointer mt-1"
+                        >
+                          ➕ Dodaj klasę/grupę do tej sali
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                {/* Nauczyciel */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nauczyciel</label>
-                  <input 
-                    type="text" 
-                    value={cellTeacher}
-                    onChange={(e) => setCellTeacher(e.target.value)}
-                    placeholder="np. JKOW, ANOW"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
-                  />
+                  <div className="flex items-center justify-between mb-1 select-none">
+                    <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-wide">Nauczyciel</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomTeacher(!isCustomTeacher)}
+                      className="text-[9px] font-extrabold text-blue-655 hover:text-blue-800 transition select-none cursor-pointer"
+                    >
+                      {isCustomTeacher ? '📋 Wybierz z listy' : '✍️ Wpisz ręcznie'}
+                    </button>
+                  </div>
+                  {isCustomTeacher ? (
+                    <input 
+                      type="text" 
+                      value={cellTeacher}
+                      onChange={(e) => setCellTeacher(e.target.value)}
+                      placeholder="np. JKOW, ANOW"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
+                    />
+                  ) : (
+                    <select
+                      value={cellTeacher}
+                      onChange={(e) => setCellTeacher(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="">-- wybierz nauczyciela --</option>
+                      {scheduledTeachers.length > 0 && (
+                        <optgroup label="Zaplanowane na tę godzinę">
+                          {scheduledTeachers.map(tAbbr => {
+                            const teacherObj = appState.teachers.find(t => t.abbr === tAbbr);
+                            const label = teacherObj ? `${teacherObj.last} ${teacherObj.first} (${tAbbr})` : tAbbr;
+                            return <option key={tAbbr} value={tAbbr}>{label}</option>;
+                          })}
+                        </optgroup>
+                      )}
+                      <optgroup label="Wszyscy nauczyciele">
+                        {sortedTeachers.map(t => (
+                          <option key={t.id} value={t.abbr}>{t.last} {t.first} ({t.abbr})</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  )}
                 </div>
+
+                {/* Nauczyciel Wspomagający */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nauczyciel Wspomagający</label>
-                  <input 
-                    type="text" 
-                    value={cellSupportTeacher}
-                    onChange={(e) => setCellSupportTeacher(e.target.value)}
-                    placeholder="np. KOWW, WSPM"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
-                  />
+                  <div className="flex items-center justify-between mb-1 select-none">
+                    <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-wide">Nauczyciel Wspomagający</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomSupportTeacher(!isCustomSupportTeacher)}
+                      className="text-[9px] font-extrabold text-blue-655 hover:text-blue-800 transition select-none cursor-pointer"
+                    >
+                      {isCustomSupportTeacher ? '📋 Wybierz z listy' : '✍️ Wpisz ręcznie'}
+                    </button>
+                  </div>
+                  {isCustomSupportTeacher ? (
+                    <input 
+                      type="text" 
+                      value={cellSupportTeacher}
+                      onChange={(e) => setCellSupportTeacher(e.target.value)}
+                      placeholder="np. KOWW, WSPM"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
+                    />
+                  ) : (
+                    <select
+                      value={cellSupportTeacher}
+                      onChange={(e) => setCellSupportTeacher(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="">-- brak nauczyciela wspomagającego --</option>
+                      <optgroup label="Wszyscy nauczyciele">
+                        {sortedTeachers.map(t => (
+                          <option key={t.id} value={t.abbr}>{t.last} {t.first} ({t.abbr})</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  )}
                 </div>
+
+                {/* Przedmiot */}
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Przedmiot</label>
-                  <input 
-                    type="text" 
-                    value={cellSubject}
-                    onChange={(e) => setCellSubject(e.target.value)}
-                    placeholder="np. Matematyka"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
-                  />
+                  <div className="flex items-center justify-between mb-1 select-none">
+                    <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-wide">Przedmiot</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomSubject(!isCustomSubject)}
+                      className="text-[9px] font-extrabold text-blue-655 hover:text-blue-800 transition select-none cursor-pointer"
+                    >
+                      {isCustomSubject ? '📋 Wybierz z listy' : '✍️ Wpisz ręcznie'}
+                    </button>
+                  </div>
+                  {isCustomSubject ? (
+                    <input 
+                      type="text" 
+                      value={cellSubject}
+                      onChange={(e) => setCellSubject(e.target.value)}
+                      placeholder="np. Matematyka"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
+                    />
+                  ) : (
+                    <select
+                      value={cellSubject}
+                      onChange={(e) => setCellSubject(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 cursor-pointer"
+                    >
+                      <option value="">-- wybierz przedmiot --</option>
+                      {scheduledSubjects.length > 0 && (
+                        <optgroup label="Zaplanowane na tę godzinę">
+                          {scheduledSubjects.map(subjName => (
+                            <option key={subjName} value={subjName}>{subjName}</option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label="Wszystkie przedmioty">
+                        {sortedSubjects.map(s => (
+                          <option key={s.id} value={s.name}>{s.name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  )}
                 </div>
+
+                {/* Uwagi */}
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Uwagi</label>
                   <input 
