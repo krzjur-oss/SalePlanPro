@@ -30,6 +30,51 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     }
   }, []);
 
+  // Dynamic viewport scaling manager for mobile/tablet print and preview containers
+  useEffect(() => {
+    if (isPrintFriendlyWeeklyMode) {
+      let viewportMeta = document.querySelector('meta[name="viewport"]');
+      const originalContent = viewportMeta ? viewportMeta.getAttribute('content') : '';
+      
+      if (!viewportMeta) {
+        viewportMeta = document.createElement('meta');
+        viewportMeta.setAttribute('name', 'viewport');
+        document.head.appendChild(viewportMeta);
+      }
+      
+      const targetWidth = weeklyPageOrientation === 'landscape' ? '1024' : '768';
+      viewportMeta.setAttribute('content', `width=${targetWidth}, initial-scale=0.8, shrink-to-fit=no`);
+      
+      const styleEl = document.createElement('style');
+      styleEl.id = 'print-mobile-viewport-adjustments';
+      styleEl.innerHTML = `
+        @media print {
+          html, body {
+            width: ${targetWidth}px !important;
+            min-width: ${targetWidth}px !important;
+          }
+          #weekly-print-overlay {
+            width: ${targetWidth}px !important;
+            min-width: ${targetWidth}px !important;
+          }
+        }
+      `;
+      document.head.appendChild(styleEl);
+
+      return () => {
+        if (viewportMeta) {
+          if (originalContent) {
+            viewportMeta.setAttribute('content', originalContent);
+          } else {
+            viewportMeta.removeAttribute('content');
+          }
+        }
+        const tempStyle = document.getElementById('print-mobile-viewport-adjustments');
+        if (tempStyle) tempStyle.remove();
+      };
+    }
+  }, [isPrintFriendlyWeeklyMode, weeklyPageOrientation]);
+
   const pl = appState.planLekcji;
 
   // --- Map and parse yearLabel to auto-preset start/end dates of the school year ---
@@ -549,6 +594,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       <html lang="pl">
       <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=1024, initial-scale=0.85, shrink-to-fit=no">
         <title>Płachta Gabinetów - SalePlan Pro</title>
         <style>
           body {
