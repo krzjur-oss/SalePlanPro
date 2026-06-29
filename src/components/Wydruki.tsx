@@ -42,6 +42,88 @@ const getRoomCategory = (room: { name: string; desc?: string }): 'ogolne' | 'ind
   return 'ogolne';
 };
 
+function localFlattenColumns(floors: any[]) {
+  const cols: any[] = [];
+  if (!floors) return cols;
+  floors.forEach((floor, fi) =>
+    floor.segments?.forEach((seg: any, si: number) =>
+      seg.rooms?.forEach((room: any, ri: number) =>
+        cols.push({ floorIdx: fi, segIdx: si, roomIdx: ri, floor, seg, room })
+      )
+    )
+  );
+  return cols;
+}
+
+function localColKey(col: any) {
+  const n = (col.room.num || '').trim();
+  return n
+    ? `f${col.floorIdx}_s${col.segIdx}_${n}`
+    : `f${col.floorIdx}_s${col.segIdx}_r${col.roomIdx}`;
+}
+
+function localCleanFloorName(floorName: string, buildingName?: string): string {
+  if (!buildingName) return floorName;
+  const bNameLower = buildingName.toLowerCase().trim();
+  const fNameLower = floorName.toLowerCase().trim();
+  
+  if (fNameLower.startsWith(bNameLower)) {
+    let remaining = floorName.substring(buildingName.length).trim();
+    if (remaining.startsWith('–') || remaining.startsWith('-')) {
+      remaining = remaining.substring(1).trim();
+    }
+    if (remaining) {
+      return remaining.charAt(0).toUpperCase() + remaining.slice(1);
+    }
+  }
+  return floorName;
+}
+
+function getFloorGroups(categoryCols: any[], buildings: any[]) {
+  const groups: { startIdx: number; span: number; name: string; buildingName?: string }[] = [];
+  let currentGroup = null as any;
+
+  categoryCols.forEach((col, idx) => {
+    const bIdx = col.floor.buildingIdx;
+    const bld = buildings[bIdx];
+    const buildingName = bld?.name || '';
+    const fId = col.floor.id;
+    const name = col.floor.name;
+    const key = `${bIdx}|${fId}`;
+
+    if (!currentGroup || currentGroup.key !== key) {
+      currentGroup = { startIdx: idx, span: 1, key, name, buildingName };
+      groups.push(currentGroup);
+    } else {
+      currentGroup.span++;
+    }
+  });
+
+  return groups;
+}
+
+function getSegmentGroups(categoryCols: any[]) {
+  const groups: { startIdx: number; span: number; name: string }[] = [];
+  let currentGroup = null as any;
+
+  categoryCols.forEach((col, idx) => {
+    const bIdx = col.floor.buildingIdx;
+    const fId = col.floor.id;
+    const sId = col.seg?.id || 'default_seg';
+    const name = col.seg?.name || 'Główny';
+    const key = `${bIdx}|${fId}|${sId}`;
+
+    if (!currentGroup || currentGroup.key !== key) {
+      currentGroup = { startIdx: idx, span: 1, key, name };
+      groups.push(currentGroup);
+    } else {
+      currentGroup.span++;
+    }
+  });
+
+  return groups;
+}
+
 export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties'>('classes');
   const [scheduleVersion, setScheduleVersion] = useState<'etap1' | 'etap2'>('etap1');
@@ -505,17 +587,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   const generateRoomsMatrixHtml = () => {
-    const ogolneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'ogolne');
-    const indywidualneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'indywidualne');
-    const sportoweRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'sportowe');
-
-    const categories = [
-      { id: 'ogolne', name: 'Sale Ogólne', icon: '🏫', rooms: ogolneRooms },
-      { id: 'indywidualne', name: 'Sale Indywidualne', icon: '🧩', rooms: indywidualneRooms },
-      { id: 'sportowe', name: 'Sale Sportowe', icon: '⚽', rooms: sportoweRooms }
-    ].filter(c => c.rooms.length > 0);
-
-    const maxCategoryRooms = Math.max(...categories.map(c => c.rooms.length), 1);
+    const categories = roomsPrintCategories;
+    const maxCategoryRooms = Math.max(...categories.map(c => c.cols.length), 1);
     const recommendedScale = Math.min(1.0, Math.max(0.45, 12 / maxCategoryRooms));
 
     let daysHtml = '';
@@ -524,7 +597,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       let tablesHtml = '';
 
       categories.forEach(cat => {
-        const catRoomsCount = cat.rooms.length;
+        const catRoomsCount = cat.cols.length;
+        const floorGroups = getFloorGroups(cat.cols, appState.buildings);
+        const segmentGroups = getSegmentGroups(cat.cols);
         
         // Compute layout parameters dynamically for this category table
         let colMinWidth = '110px';
@@ -585,7 +660,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           const fileHIdx = hoursList.findIndex(h => h.num === hour.num);
 
           let roomsCellsHtml = '';
-          cat.rooms.forEach(room => {
+          cat.cols.forEach(col => {
             let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
 
             if (scheduleVersion === 'etap1') {
@@ -597,25 +672,29 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
                 if (dIdx === dayIdx && hrIdx === fileHIdx) {
                   const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                  if (asg && asg.roomId === room.id) {
-                    const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-                    const clsName = classesMap.get(classId)?.name || 'Klasa';
-                    const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
-                    lessonsInRoom.push({
-                      subject,
-                      className: clsName,
-                      teacherAbbr: tAbbr
-                    });
+                  if (asg) {
+                    const metaRoom = pl.rooms.find(r => r.id === asg.roomId);
+                    const isMatch = asg.roomId === col.room.id || 
+                                    (metaRoom && metaRoom.name.toLowerCase().trim() === col.room.num.toLowerCase().trim());
+                    if (isMatch) {
+                      const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+                      const clsName = classesMap.get(classId)?.name || 'Klasa';
+                      const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
+                      lessonsInRoom.push({
+                        subject,
+                        className: clsName,
+                        teacherAbbr: tAbbr
+                      });
+                    }
                   }
                 }
               });
             } else {
-              const rSched = etap2Schedule.rooms[room.id] || {};
-              const daySchedules = rSched[dayIdx] || {};
-              const hourKeyStr = String(hour.num);
-              const hourCells = daySchedules[hourKeyStr] || [];
-              
-              hourCells.forEach(cell => {
+              const cKey = localColKey(col);
+              const rawCell = schedData[appState.yearKey]?.[dayIdx]?.[hour.num]?.[cKey];
+              const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
+              slots.forEach(cell => {
+                if (!cell) return;
                 lessonsInRoom.push({
                   subject: cell.subject,
                   className: cell.className || cell.classes?.join('+') || 'Klasa',
@@ -667,18 +746,44 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               <span style="letter-spacing: 0.03em;">${cat.name.toUpperCase()} (Sal: ${catRoomsCount})</span>
             </div>
             
-            <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; margin-bottom: 12px;">
+            <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; margin-bottom: 12px; table-layout: fixed;">
               <thead>
-                <tr style="background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                <!-- Floor level headers row -->
+                <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                   <th style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 10px; font-weight: 900; width: 70px; color: #1e293b;">
                     Lekcja / Godz
                   </th>
-                  ${cat.rooms.map(room => `
-                    <th style="border: 1px solid #cbd5e1; padding: ${thPadding}; text-align: center; font-size: 11px; font-weight: 950; min-width: ${colMinWidth}; color: #020617;">
-                      <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">${room.name}</span>
-                      ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: uppercase;">${room.desc || 'sala ogólna'}</span>` : ''}
+                  ${floorGroups.map(g => `
+                    <th colspan="${g.span}" style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; font-size: 10px; font-weight: bold; background-color: #f8fafc; color: #334155;">
+                      📍 ${localCleanFloorName(g.name, g.buildingName)}
                     </th>
                   `).join('')}
+                </tr>
+                <!-- Segment level headers row -->
+                <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                  <th style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; font-size: 9px; font-weight: 500; background-color: #f8fafc; color: #64748b;">
+                    -
+                  </th>
+                  ${segmentGroups.map(g => `
+                    <th colspan="${g.span}" style="border: 1px solid #cbd5e1; padding: 3px; text-align: center; font-size: 9px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase;">
+                      🧩 ${g.name}
+                    </th>
+                  `).join('')}
+                </tr>
+                <!-- Room level headers row -->
+                <tr style="background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                  <th style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 10px; font-weight: 900; width: 70px; color: #1e293b;">
+                    Godzina
+                  </th>
+                  ${cat.cols.map(col => {
+                    const roomDesc = col.room.sub || 'sala ogólna';
+                    return `
+                      <th style="border: 1px solid #cbd5e1; padding: ${thPadding}; text-align: center; font-size: 11px; font-weight: 950; min-width: ${colMinWidth}; color: #020617;">
+                        <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">🚪 ${col.room.num}</span>
+                        ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: lowercase;">(${roomDesc})</span>` : ''}
+                      </th>
+                    `;
+                  }).join('')}
                 </tr>
               </thead>
               <tbody>
@@ -941,6 +1046,68 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     }
     return pl.rooms.filter(r => r.id === selectedRoomId);
   }, [pl.rooms, selectedRoomId]);
+
+  // Classified and sorted columns (rooms) list for Wydruki
+  const roomsToPrintColumns = useMemo(() => {
+    const rawCols = localFlattenColumns(appState.floors);
+    
+    // Filter rooms according to selectedRoomId
+    const filteredCols = selectedRoomId === 'all'
+      ? rawCols
+      : rawCols.filter(col => {
+          const roomNameClean = (col.room.num || '').toLowerCase().trim();
+          const meta = pl.rooms.find(r => r.name.toLowerCase().trim() === roomNameClean);
+          return meta && meta.id === selectedRoomId;
+        });
+
+    const mainCols: any[] = [];
+    const individualCols: any[] = [];
+    const sportCols: any[] = [];
+
+    const roomsMap = new Map(pl.rooms.map(r => [r.name.toLowerCase().trim(), r]));
+
+    filteredCols.forEach(col => {
+      const roomNameClean = (col.room.num || '').toLowerCase().trim();
+      const meta = roomsMap.get(roomNameClean);
+      const bld = appState.buildings[col.floor.buildingIdx];
+
+      const isIndividual = meta?.type === 'indywidualne';
+      const isSport = meta?.type === 'sport' || bld?.multi === true;
+
+      if (isIndividual) {
+        individualCols.push(col);
+      } else if (isSport) {
+        sportCols.push(col);
+      } else {
+        mainCols.push(col);
+      }
+    });
+
+    // Sort alphanumerically by room.num
+    const sortFn = (a: any, b: any) => {
+      const numA = a.room.num || '';
+      const numB = b.room.num || '';
+      return numA.localeCompare(numB, undefined, { numeric: true, sensitivity: 'base' });
+    };
+
+    mainCols.sort(sortFn);
+    individualCols.sort(sortFn);
+    sportCols.sort(sortFn);
+
+    return {
+      main: mainCols,
+      individual: individualCols,
+      sport: sportCols
+    };
+  }, [appState.floors, appState.buildings, pl.rooms, selectedRoomId]);
+
+  const roomsPrintCategories = useMemo(() => {
+    return [
+      { id: 'main', name: 'Budynek Główny', icon: '🏢', cols: roomsToPrintColumns.main },
+      { id: 'individual', name: 'Nauczanie Indywidualne', icon: '🗣️', cols: roomsToPrintColumns.individual },
+      { id: 'sport', name: 'Sale Sportowe', icon: '🏆', cols: roomsToPrintColumns.sport }
+    ].filter(c => c.cols.length > 0);
+  }, [roomsToPrintColumns]);
 
   if (isPrintFriendlyWeeklyMode) {
     return (
@@ -1851,46 +2018,58 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               <p className="text-xs text-slate-400 p-4 text-center">Brak gabinetów do wyświetlenia w wybranym filtrze.</p>
             ) : (
               <div className="space-y-12">
-                {(() => {
-                  const ogolneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'ogolne');
-                  const indywidualneRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'indywidualne');
-                  const sportoweRooms = roomsToPrint.filter(r => getRoomCategory(r) === 'sportowe');
+                {[0, 1, 2, 3, 4].map((dayIdx) => {
+                  return (
+                    <div key={dayIdx} className="page-break last:pb-0 pb-2">
+                      <div className="bg-slate-900 text-white border border-slate-800 px-4 py-2.5 rounded-xl flex justify-between items-center mb-4 print:bg-slate-100 print:text-slate-900 print:border-slate-300">
+                        <span className="text-xs font-black uppercase tracking-wide">
+                          📅 {DAYS_NAMES[dayIdx]} — PŁACHTA OBŁOŻENIA GABINETÓW
+                        </span>
+                        <span className="text-[9px] uppercase font-bold font-mono text-slate-400 print:text-slate-500">
+                          Podział na kategorie
+                        </span>
+                      </div>
 
-                  const categories = [
-                    { id: 'ogolne', name: 'Sale Ogólne', icon: '🏫', rooms: ogolneRooms },
-                    { id: 'indywidualne', name: 'Sale Indywidualne', icon: '🧩', rooms: indywidualneRooms },
-                    { id: 'sportowe', name: 'Sale Sportowe', icon: '⚽', rooms: sportoweRooms }
-                  ].filter(c => c.rooms.length > 0);
+                      <div className="space-y-6">
+                        {roomsPrintCategories.map((cat) => {
+                          const floorGroups = getFloorGroups(cat.cols, appState.buildings);
+                          const segmentGroups = getSegmentGroups(cat.cols);
 
-                  return [0, 1, 2, 3, 4].map((dayIdx) => {
-                    return (
-                      <div key={dayIdx} className="page-break last:pb-0 pb-2">
-                        <div className="bg-slate-900 text-white border border-slate-800 px-4 py-2.5 rounded-xl flex justify-between items-center mb-4 print:bg-slate-100 print:text-slate-900 print:border-slate-300">
-                          <span className="text-xs font-black uppercase tracking-wide">
-                            📅 {DAYS_NAMES[dayIdx]} — PŁACHTA OBŁOŻENIA GABINETÓW
-                          </span>
-                          <span className="text-[9px] uppercase font-bold font-mono text-slate-400 print:text-slate-500">
-                            Podział na kategorie
-                          </span>
-                        </div>
-
-                        <div className="space-y-6">
-                          {categories.map((cat) => (
-                            <div key={cat.id} className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/40 p-3 shadow-xs">
+                          return (
+                            <div key={cat.id} className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/40 p-3 shadow-sm">
                               <div className="flex items-center gap-2 mb-2 px-1">
                                 <span className="text-sm">{cat.icon}</span>
-                                <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{cat.name} ({cat.rooms.length})</h4>
+                                <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{cat.name} ({cat.cols.length})</h4>
                               </div>
 
                               <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
                                 <table className="w-full text-xs text-left border border-slate-300 min-w-[600px] bg-white rounded-lg">
                                   <thead>
-                                    <tr className="bg-slate-100 uppercase font-black text-slate-800">
-                                      <th className="w-24 border border-slate-300 p-2 text-center text-[10.5px]">Godz / Lekcja</th>
-                                      {cat.rooms.map(room => (
-                                        <th key={room.id} className="border border-slate-300 p-2 text-center text-[10.5px] min-w-[110px]">
-                                          <span className="font-mono text-[11px] block text-slate-900">{room.name}</span>
-                                          <span className="block text-[8px] text-slate-500 font-medium normal-case truncate max-w-[140px] mx-auto">{room.desc || 'ogólna'}</span>
+                                    {/* Row 1: Floor headers */}
+                                    <tr className="bg-slate-100 uppercase font-black text-slate-800 border-b border-slate-300">
+                                      <th className="w-24 border border-slate-300 p-2 text-center text-[10.5px]">Lekcja / Godz</th>
+                                      {floorGroups.map((g, fIdx) => (
+                                        <th key={fIdx} colSpan={g.span} className="border border-slate-300 p-2 text-center text-[10px] bg-slate-50 font-bold text-slate-700">
+                                          📍 {localCleanFloorName(g.name, g.buildingName)}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                    {/* Row 2: Segment headers */}
+                                    <tr className="bg-white uppercase font-black text-slate-500 border-b border-slate-300">
+                                      <th className="border border-slate-300 p-1.5 text-center text-[9px] bg-slate-50 font-medium text-slate-400">-</th>
+                                      {segmentGroups.map((g, sIdx) => (
+                                        <th key={sIdx} colSpan={g.span} className="border border-slate-300 p-1.5 text-center text-[9px] bg-white text-slate-500 uppercase font-semibold">
+                                          🧩 {g.name}
+                                        </th>
+                                      ))}
+                                    </tr>
+                                    {/* Row 3: Room headers */}
+                                    <tr className="bg-slate-50 uppercase font-black text-slate-800">
+                                      <th className="border border-slate-300 p-2 text-center text-[10.5px]">Godzina</th>
+                                      {cat.cols.map((col, cIdx) => (
+                                        <th key={cIdx} className="border border-slate-300 p-2 text-center text-[10.5px] min-w-[110px]">
+                                          <span className="font-mono text-[11px] block text-slate-900">🚪 {col.room.num}</span>
+                                          <span className="block text-[8px] text-slate-500 font-medium normal-case truncate max-w-[140px] mx-auto">({col.room.sub || 'sala ogólna'})</span>
                                         </th>
                                       ))}
                                     </tr>
@@ -1907,7 +2086,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                           </td>
 
                                           {/* Rooms cells */}
-                                          {cat.rooms.map(room => {
+                                          {cat.cols.map((col, cIdx) => {
                                             let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
 
                                             if (scheduleVersion === 'etap1') {
@@ -1920,25 +2099,29 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
                                                 if (dIdx === dayIdx && hrIdx === hIdx) {
                                                   const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                                  if (asg && asg.roomId === room.id) {
-                                                    const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-                                                    const clsName = classesMap.get(classId)?.name || 'Klasa';
-                                                    const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
-                                                    lessonsInRoom.push({
-                                                      subject,
-                                                      className: clsName,
-                                                      teacherAbbr: tAbbr
-                                                    });
+                                                  if (asg) {
+                                                    const metaRoom = pl.rooms.find(r => r.id === asg.roomId);
+                                                    const isMatch = asg.roomId === col.room.id || 
+                                                                    (metaRoom && metaRoom.name.toLowerCase().trim() === col.room.num.toLowerCase().trim());
+                                                    if (isMatch) {
+                                                      const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+                                                      const clsName = classesMap.get(classId)?.name || 'Klasa';
+                                                      const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
+                                                      lessonsInRoom.push({
+                                                        subject,
+                                                        className: clsName,
+                                                        teacherAbbr: tAbbr
+                                                      });
+                                                    }
                                                   }
                                                 }
                                               });
                                             } else {
-                                              // Get from Plan Sal mapping (stage 2)
-                                              const rSched = etap2Schedule.rooms[room.id] || {};
-                                              const daySchedules = rSched[dayIdx] || {};
-                                              const hourCells = daySchedules[hourKeyStr] || [];
-                                              
-                                              hourCells.forEach(cell => {
+                                              const cKey = localColKey(col);
+                                              const rawCell = schedData[appState.yearKey]?.[dayIdx]?.[hour.num]?.[cKey];
+                                              const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
+                                              slots.forEach(cell => {
+                                                if (!cell) return;
                                                 lessonsInRoom.push({
                                                   subject: cell.subject,
                                                   className: cell.className || cell.classes?.join('+') || 'Klasa',
@@ -1948,7 +2131,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                             }
 
                                             return (
-                                              <td key={room.id} className="border border-slate-300 p-1.5 align-top text-center min-h-[50px] bg-white">
+                                              <td key={cIdx} className="border border-slate-300 p-1.5 align-top text-center min-h-[50px] bg-white">
                                                 {lessonsInRoom.length > 0 ? (
                                                   <div className="space-y-1">
                                                     {lessonsInRoom.map((it, dIdx) => (
@@ -1980,12 +2163,12 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                 </table>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
-                    );
-                  });
-                })()}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
