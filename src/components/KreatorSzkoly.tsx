@@ -77,6 +77,36 @@ const getFloorDisplayName = (floorNum: string, bld: Building | undefined): strin
   return floorNames[floorNum] || `Piętro ${floorNum}`;
 };
 
+const getDefaultSchoolYear = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0 = Jan, 11 = Dec
+  if (month >= 4) { // May to Dec
+    return `${year}/${year + 1}`;
+  } else {
+    return `${year - 1}/${year}`;
+  }
+};
+
+const getDynamicSchoolYears = (extraYears: (string | undefined)[] = []): string[] => {
+  const currentYear = new Date().getFullYear();
+  const yearsSet = new Set<string>();
+  
+  // Generate school years from currentYear - 3 to currentYear + 6
+  for (let i = -3; i <= 6; i++) {
+    yearsSet.add(`${currentYear + i}/${currentYear + i + 1}`);
+  }
+  
+  // Add any extra years from state / database configuration
+  extraYears.forEach(y => {
+    if (y && typeof y === 'string' && y.trim().length > 0) {
+      yearsSet.add(y.trim());
+    }
+  });
+  
+  return Array.from(yearsSet).sort();
+};
+
 interface KreatorSzkolyProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
@@ -125,19 +155,20 @@ export default function KreatorSzkoly({
   const [schoolShort, setSchoolShort] = useState(appState.school.short || '');
   const [schoolPhone, setSchoolPhone] = useState(appState.school.phone || '');
   const [schoolWeb, setSchoolWeb] = useState(appState.school.web || '');
-  const [schoolYear, setSchoolYear] = useState(appState.yearLabel || '2026/2027');
+  const [schoolYear, setSchoolYear] = useState(() => appState.yearLabel || getDefaultSchoolYear());
 
   // --- Copy Year states and methods ---
   const [showCopyPanel, setShowCopyPanel] = useState(false);
   const [targetYear, setTargetYear] = useState(() => {
-    const current = appState.yearLabel || '2026/2027';
+    const current = appState.yearLabel || getDefaultSchoolYear();
     const match = current.match(/^(\d{4})\/(\d{4})$/);
     if (match) {
       const y1 = parseInt(match[1]) + 1;
       const y2 = parseInt(match[2]) + 1;
       return `${y1}/${y2}`;
     }
-    return '2027/2028';
+    const currentYearNum = new Date().getFullYear();
+    return `${currentYearNum + 1}/${currentYearNum + 2}`;
   });
 
   const [copyData, setCopyData] = useState({
@@ -150,6 +181,10 @@ export default function KreatorSzkoly({
     assignments: true,
     dutySpots: true
   });
+
+  const dynamicSchoolYearsList = useMemo(() => {
+    return getDynamicSchoolYears([schoolYear, appState.yearLabel]);
+  }, [schoolYear, appState.yearLabel]);
 
   const handleCopySchoolYear = () => {
     if (!targetYear.trim()) {
@@ -370,7 +405,7 @@ export default function KreatorSzkoly({
     setSchoolShort(arch.config.school.short || '');
     setSchoolPhone(arch.config.school.phone || '');
     setSchoolWeb(arch.config.school.web || '');
-    setSchoolYear(arch.config.yearLabel || '2026/2027');
+    setSchoolYear(arch.config.yearLabel || getDefaultSchoolYear());
     setHoursList(arch.config.planLekcji.hours || arch.config.timeslots || []);
 
     if (onChangeArchive) {
@@ -2187,15 +2222,31 @@ export default function KreatorSzkoly({
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Rok szkolny</label>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Rok szkolny *</label>
                     <select 
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:border-blue-500 outline-none bg-slate-50"
                       value={schoolYear}
-                      onChange={(e) => setSchoolYear(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'custom') {
+                          const custom = prompt('Wpisz dowolny rok szkolny (np. 2028/2029):');
+                          if (custom && custom.trim()) {
+                            setSchoolYear(custom.trim());
+                          }
+                        } else {
+                          setSchoolYear(val);
+                        }
+                      }}
                     >
-                      <option value="2025/2026">2025/2026</option>
-                      <option value="2026/2027">2026/2027 (Kolejny)</option>
-                      <option value="2027/2028">2027/2028</option>
+                      {dynamicSchoolYearsList.map(yr => {
+                        const isCurrent = yr === getDefaultSchoolYear();
+                        return (
+                          <option key={yr} value={yr}>
+                            {yr} {isCurrent ? '(Bieżący)' : ''}
+                          </option>
+                        );
+                      })}
+                      <option value="custom">✍️ Inny rok szkolny...</option>
                     </select>
                   </div>
                 </div>
