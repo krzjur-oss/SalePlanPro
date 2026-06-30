@@ -107,6 +107,96 @@ const getDynamicSchoolYears = (extraYears: (string | undefined)[] = []): string[
   return Array.from(yearsSet).sort();
 };
 
+const SCHOOL_TYPES_DICTIONARIES: Record<string, { name: string; icon: string; subjects: { name: string; short: string; color: string; defaultGroupPattern?: string }[] }> = {
+  sp: {
+    name: "Szkoła Podstawowa",
+    icon: "🏫",
+    subjects: [
+      { name: "Język polski", short: "JP", color: "#dc2626" },
+      { name: "Matematyka", short: "MAT", color: "#16a34a" },
+      { name: "Język angielski", short: "ANG", color: "#2563eb" },
+      { name: "Biologia", short: "BIOL", color: "#059669" },
+      { name: "Chemia", short: "CHEM", color: "#d97706" },
+      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
+      { name: "Geografia", short: "GEOG", color: "#ea580c" },
+      { name: "Historia", short: "HIST", color: "#9333ea" },
+      { name: "Wiedza o społeczeństwie", short: "WOS", color: "#db2777" },
+      { name: "Informatyka", short: "INF", color: "#0d9488" },
+      { name: "Plastyka", short: "PLAS", color: "#eab308" },
+      { name: "Muzyka", short: "MUZ", color: "#f43f5e" },
+      { name: "Technika", short: "TECH", color: "#8b5cf6" },
+      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
+      { name: "Religia", short: "REL", color: "#14b8a6", defaultGroupPattern: "religia" },
+      { name: "Etyka", short: "ETY", color: "#64748b" },
+      { name: "Przyroda", short: "PRZY", color: "#22c55e" },
+      { name: "Edukacja dla bezpieczeństwa", short: "EDB", color: "#f97316" },
+      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" }
+    ]
+  },
+  lo: {
+    name: "Liceum Ogólnokształcące",
+    icon: "🏛️",
+    subjects: [
+      { name: "Język polski", short: "JP", color: "#dc2626" },
+      { name: "Matematyka", short: "MAT", color: "#16a34a" },
+      { name: "Język angielski", short: "ANG", color: "#2563eb" },
+      { name: "Język niemiecki", short: "NIEM", color: "#10b981", defaultGroupPattern: "niem" },
+      { name: "Biologia", short: "BIOL", color: "#059669" },
+      { name: "Chemia", short: "CHEM", color: "#d97706" },
+      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
+      { name: "Geografia", short: "GEOG", color: "#ea580c" },
+      { name: "Historia", short: "HIST", color: "#9333ea" },
+      { name: "Wiedza o społeczeństwie", short: "WOS", color: "#db2777" },
+      { name: "Informatyka", short: "INF", color: "#0d9488" },
+      { name: "Biznes i zarządzanie", short: "BIZ", color: "#0284c7" },
+      { name: "Historia i teraźniejszość", short: "HIT", color: "#475569" },
+      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
+      { name: "Religia", short: "REL", color: "#14b8a6", defaultGroupPattern: "religia" },
+      { name: "Edukacja dla bezpieczeństwa", short: "EDB", color: "#f97316" },
+      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" },
+      { name: "Filozofia", short: "FILO", color: "#a55eea" }
+    ]
+  },
+  tech: {
+    name: "Technikum",
+    icon: "⚙️",
+    subjects: [
+      { name: "Język polski", short: "JP", color: "#dc2626" },
+      { name: "Matematyka", short: "MAT", color: "#16a34a" },
+      { name: "Język angielski", short: "ANG", color: "#2563eb" },
+      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
+      { name: "Chemia", short: "CHEM", color: "#d97706" },
+      { name: "Geografia", short: "GEOG", color: "#ea580c" },
+      { name: "Historia", short: "HIST", color: "#9333ea" },
+      { name: "Informatyka", short: "INF", color: "#0d9488" },
+      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
+      { name: "Religia", short: "REL", color: "#14b8a6", defaultGroupPattern: "religia" },
+      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" },
+      { name: "Przedmioty zawodowe", short: "ZAW", color: "#2d3436" },
+      { name: "Język obcy zawodowy", short: "JOZ", color: "#57606f" },
+      { name: "Bezpieczeństwo i higiena pracy", short: "BHP", color: "#ff4757" }
+    ]
+  },
+  bs: {
+    name: "Szkoła Branżowa",
+    icon: "🔧",
+    subjects: [
+      { name: "Język polski", short: "JP", color: "#dc2626" },
+      { name: "Matematyka", short: "MAT", color: "#16a34a" },
+      { name: "Język angielski", short: "ANG", color: "#2563eb" },
+      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
+      { name: "Chemia", short: "CHEM", color: "#d97706" },
+      { name: "Geografia", short: "GEOG", color: "#ea580c" },
+      { name: "Historia", short: "HIST", color: "#9333ea" },
+      { name: "Informatyka", short: "INF", color: "#0d9488" },
+      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
+      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" },
+      { name: "Przedmioty zawodowe", short: "ZAW", color: "#2d3436" },
+      { name: "Bezpieczeństwo i higiena pracy", short: "BHP", color: "#ff4757" }
+    ]
+  }
+};
+
 interface KreatorSzkolyProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
@@ -1236,6 +1326,73 @@ export default function KreatorSzkoly({
   const [newSubjColor, setNewSubjColor] = useState(() => PALETTE_COLORS[appState.subjects?.length % PALETTE_COLORS.length] || '#16a34a');
   const [newSubjPattern, setNewSubjPattern] = useState('');
   const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
+
+  // Subject Dictionary states
+  const [selectedDictKey, setSelectedDictKey] = useState<string | null>(null);
+  const [dictSubjsSelected, setDictSubjsSelected] = useState<Record<string, boolean>>({});
+
+  const handleOpenDictionary = (key: string) => {
+    setSelectedDictKey(key);
+    const dict = SCHOOL_TYPES_DICTIONARIES[key];
+    if (dict) {
+      // Pre-select all subjects by default that aren't already added to prevent overlap
+      const initialSelected: Record<string, boolean> = {};
+      const existingShorts = new Set(appState.subjects.map(s => s.short.toUpperCase()));
+      dict.subjects.forEach(s => {
+        initialSelected[s.short] = !existingShorts.has(s.short.toUpperCase());
+      });
+      setDictSubjsSelected(initialSelected);
+    }
+  };
+
+  const handleImportSelectedSubjects = () => {
+    if (!selectedDictKey) return;
+    const dict = SCHOOL_TYPES_DICTIONARIES[selectedDictKey];
+    if (!dict) return;
+
+    // Filter down to selected items
+    const toImport = dict.subjects.filter(s => dictSubjsSelected[s.short]);
+    if (toImport.length === 0) {
+      showNoti('Nie wybrano żadnych przedmiotów do zaimportowania.', 'info');
+      return;
+    }
+
+    // Keep track of existing subject shorts to avoid duplicate additions
+    const existingShorts = new Set(appState.subjects.map(s => s.short.toUpperCase()));
+
+    let importCount = 0;
+    const newSubjects: Subject[] = [...appState.subjects];
+
+    toImport.forEach(s => {
+      if (!existingShorts.has(s.short.toUpperCase())) {
+        newSubjects.push({
+          id: 'sub_' + uid(),
+          name: s.name,
+          short: s.short.toUpperCase(),
+          color: s.color,
+          defaultGroupPattern: s.defaultGroupPattern
+        });
+        importCount++;
+      }
+    });
+
+    if (importCount > 0) {
+      onChangeAppState({
+        ...appState,
+        subjects: newSubjects,
+        planLekcji: {
+          ...appState.planLekcji,
+          subjects: newSubjects
+        }
+      });
+      showNoti(`Pomyślnie zaimportowano ${importCount} przedmiotów ze słownika!`, 'success');
+    } else {
+      showNoti('Wszystkie wybrane przedmioty już istnieją w Twojej bazie.', 'info');
+    }
+
+    setSelectedDictKey(null);
+    setDictSubjsSelected({});
+  };
 
   const handleAddSubject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -3347,6 +3504,34 @@ export default function KreatorSzkoly({
                 <p className="text-xs text-slate-500 mt-1">Uporządkuj listę prowadzonych lekcji przedmiotowych i przydziel im kolory do wizualizacji na planach.</p>
               </div>
 
+              {/* SŁOWNIKI PRZEDMIOTÓW (RODZAJE SZKÓŁ) */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="bg-blue-600 text-white p-1 rounded-md">
+                    <BookOpen size={16} />
+                  </div>
+                  <div className="text-left">
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">⚡ Słownik Przedmiotów • Szybki import dla rodzaju szkoły</h4>
+                    <p className="text-[10px] text-slate-500 font-semibold">Wybierz rodzaj szkoły, aby otworzyć gotowy słownik przedmiotów i błyskawicznie je dodać.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {Object.entries(SCHOOL_TYPES_DICTIONARIES).map(([key, dict]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleOpenDictionary(key)}
+                      type="button"
+                      className="flex flex-col items-center justify-center p-3 bg-white hover:bg-slate-50 border border-slate-200 hover:border-blue-400 rounded-xl transition cursor-pointer text-center group shadow-xs"
+                    >
+                      <span className="text-2xl mb-1.5 group-hover:scale-110 transition duration-150">{dict.icon}</span>
+                      <span className="text-xs font-black text-slate-900 leading-tight block">{dict.name}</span>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-wider">{dict.subjects.length} przedmiotów</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 {/* Form column */}
@@ -3500,6 +3685,150 @@ export default function KreatorSzkoly({
                   Dalej: Nauczyciele <ArrowRight size={14} />
                 </button>
               </div>
+
+              {/* Słownik Przedmiotów - Podgląd i wybór przedmiotów modal */}
+              {selectedDictKey && (() => {
+                const dict = SCHOOL_TYPES_DICTIONARIES[selectedDictKey];
+                if (!dict) return null;
+                
+                const existingShorts = new Set(appState.subjects.map(s => s.short.toUpperCase()));
+                const subjectsList = dict.subjects;
+
+                return (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[99999] no-print">
+                    <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
+                      {/* Modal Header */}
+                      <div className="bg-slate-900 text-white p-5 px-6 flex items-center justify-between border-b border-slate-800 shrink-0">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{dict.icon}</span>
+                          <div className="text-left">
+                            <span className="text-[9px] text-blue-400 block uppercase font-black tracking-wider">Kanon przedmiotów</span>
+                            <h3 className="text-base font-black uppercase text-white leading-tight">
+                              Słownik: {dict.name}
+                            </h3>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setSelectedDictKey(null)}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      {/* Modal Body */}
+                      <div className="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-4">
+                        <p className="text-xs text-slate-500 leading-normal font-medium text-left">
+                          Zaznacz przedmioty ze słownika, które chcesz zaimportować do swojej szkoły. Przedmioty już istniejące w Twojej konfiguracji (z tym samym skrótem) są automatycznie ignorowane.
+                        </p>
+
+                        {/* Selection helpers */}
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allSelected: Record<string, boolean> = {};
+                              subjectsList.forEach(s => {
+                                allSelected[s.short] = true;
+                              });
+                              setDictSubjsSelected(allSelected);
+                            }}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase"
+                          >
+                            Zaznacz wszystkie
+                          </button>
+                          <span className="text-slate-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDictSubjsSelected({});
+                            }}
+                            className="text-[10px] font-bold text-slate-500 hover:text-slate-600 uppercase"
+                          >
+                            Odznacz wszystkie
+                          </button>
+                        </div>
+
+                        {/* Grid checklist */}
+                        <div className="border border-slate-200 rounded-xl bg-white divide-y divide-slate-100 overflow-hidden shadow-xs">
+                          {subjectsList.map((s, idx) => {
+                            const exists = existingShorts.has(s.short.toUpperCase());
+                            const isSelected = !!dictSubjsSelected[s.short];
+                            return (
+                              <label
+                                key={idx}
+                                className={`flex items-center justify-between p-3 cursor-pointer transition select-none ${
+                                  exists ? 'bg-slate-50 opacity-60' : isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : 'hover:bg-slate-50/50'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <input
+                                    type="checkbox"
+                                    disabled={exists}
+                                    checked={isSelected && !exists}
+                                    onChange={(e) => {
+                                      setDictSubjsSelected(prev => ({
+                                        ...prev,
+                                        [s.short]: e.target.checked
+                                      }));
+                                    }}
+                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
+                                  />
+                                  <span
+                                    className="w-8 h-8 text-white font-mono font-black text-[9px] rounded-lg tracking-wider flex items-center justify-center border shadow-xs"
+                                    style={{ backgroundColor: s.color }}
+                                  >
+                                    {s.short}
+                                  </span>
+                                  <div className="text-left">
+                                    <span className="text-xs font-black text-slate-900 block leading-tight">{s.name}</span>
+                                    {s.defaultGroupPattern && (
+                                      <span className="inline-block bg-indigo-50 text-indigo-700 text-[8px] font-black px-1 py-0 rounded uppercase mt-0.5 tracking-wide">
+                                        Podgrupa: {s.defaultGroupPattern}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div>
+                                  {exists ? (
+                                    <span className="bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
+                                      Już dodany
+                                    </span>
+                                  ) : (
+                                    <span className={`text-[10px] font-black uppercase ${isSelected ? 'text-blue-600' : 'text-slate-300'}`}>
+                                      {isSelected ? 'Wybrany' : 'Pomiń'}
+                                    </span>
+                                  )}
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Modal Footer */}
+                      <div className="bg-slate-50 border-t border-slate-200 p-4 px-6 flex justify-between items-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDictKey(null)}
+                          className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition"
+                        >
+                          Anuluj
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleImportSelectedSubjects}
+                          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-lg shadow-sm transition flex items-center gap-1.5"
+                        >
+                          <BookOpen size={14} />
+                          Zaimportuj wybrane przedmioty ({subjectsList.filter(s => dictSubjsSelected[s.short] && !existingShorts.has(s.short.toUpperCase())).length})
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
