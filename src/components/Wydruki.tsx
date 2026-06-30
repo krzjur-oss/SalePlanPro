@@ -136,6 +136,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [isInIframe, setIsInIframe] = useState<boolean>(false);
   const [isPrintFriendlyWeeklyMode, setIsPrintFriendlyWeeklyMode] = useState<boolean>(false);
   const [weeklyPageOrientation, setWeeklyPageOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  
+  // State for in-app interactive duties print preview modal
+  const [isDutiesModalOpen, setIsDutiesModalOpen] = useState<boolean>(false);
+  const [dutiesModalScale, setDutiesModalScale] = useState<number>(1.0);
+  const [dutiesModalDayFilter, setDutiesModalDayFilter] = useState<number | 'all'>('all');
 
   useEffect(() => {
     try {
@@ -1753,6 +1758,20 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     );
   }
 
+  const getLessonDisplay = (lessonsList: any[]) => {
+    if (!lessonsList || lessonsList.length === 0) return null;
+    return lessonsList.map((l, i) => {
+      const cls = l.className || l.classes?.join(', ') || '';
+      const subj = l.subject || '';
+      const room = l.note || ''; // room name stored in note field
+      return (
+        <div key={i} className="text-[10px] font-semibold text-slate-700 leading-tight">
+          📚 <span className="font-extrabold text-slate-900">{subj}</span> (kl. {cls}, s. {room})
+        </div>
+      );
+    });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 relative print:p-0 print:bg-white print:overflow-visible">
       {/* CSS rules specifically injected for elegant printing */}
@@ -1867,7 +1886,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             )}
             {printType === 'duties' && (
               <button 
-                onClick={openDutiesPrintPreview}
+                onClick={() => setIsDutiesModalOpen(true)}
                 className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer"
               >
                 <Printer size={15} className="animate-pulse" /> Podgląd dyżurów
@@ -2002,7 +2021,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             <div className="space-y-1 flex flex-col justify-end">
               <label className="text-[10px] text-slate-400 font-bold uppercase invisible sm:block">Akcja</label>
               <button
-                onClick={openDutiesPrintPreview}
+                onClick={() => setIsDutiesModalOpen(true)}
                 className="w-full h-[38px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-emerald-600 border-solid"
               >
                 <Printer size={15} /> Podgląd wydruku dyżurów
@@ -2588,6 +2607,269 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           </div>
         )}
       </div>
+
+      {/* Dynamic Duties Print Preview and Verification Modal */}
+      {isDutiesModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 md:p-8 z-[9999] no-print">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-7xl w-full h-full max-h-[92vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white p-5 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                  <Printer size={22} className="animate-pulse" />
+                </span>
+                <div className="text-left">
+                  <span className="text-[10px] text-emerald-400 block uppercase font-black tracking-wider">Dynamiczny Podgląd i Weryfikacja • SchedData</span>
+                  <h3 className="text-lg font-black uppercase text-white leading-tight">
+                    Harmonogram Dyżurów Nauczycielskich
+                  </h3>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div className="flex items-center gap-3 flex-wrap">
+                {/* Day Selector */}
+                <div className="flex flex-col text-left">
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1">Dzień Tygodnia</label>
+                  <select
+                    value={dutiesModalDayFilter}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDutiesModalDayFilter(val === 'all' ? 'all' : parseInt(val, 10));
+                    }}
+                    className="bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
+                  >
+                    <option value="all">Wszystkie dni tygodnia</option>
+                    {[0, 1, 2, 3, 4].map(idx => (
+                      <option key={idx} value={idx}>{DAYS_NAMES[idx]}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Scale Selector */}
+                <div className="flex flex-col text-left">
+                  <label className="text-[9px] font-bold uppercase text-slate-400 mb-1">Skala (Zoom)</label>
+                  <select
+                    value={dutiesModalScale}
+                    onChange={(e) => setDutiesModalScale(parseFloat(e.target.value))}
+                    className="bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-2 rounded-lg focus:outline-none cursor-pointer"
+                  >
+                    <option value="0.7">70% (Gęsty/Kompaktowy)</option>
+                    <option value="0.8">80%</option>
+                    <option value="0.85">85%</option>
+                    <option value="0.9">90%</option>
+                    <option value="1.0">100% (Standardowy)</option>
+                    <option value="1.1">110% (Powiększony)</option>
+                  </select>
+                </div>
+
+                {/* Print Trigger */}
+                <div className="flex items-end h-full">
+                  <button
+                    onClick={openDutiesPrintPreview}
+                    className="h-[36px] px-4 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-emerald-600 border-solid"
+                    title="Otwórz czysty, zoptymalizowany podział A4 landscape do drukowania lub zapisu do PDF"
+                  >
+                    <Printer size={15} /> Drukuj / Generuj PDF
+                  </button>
+                </div>
+
+                {/* Close Button */}
+                <div className="flex items-end h-full">
+                  <button
+                    onClick={() => setIsDutiesModalOpen(false)}
+                    className="h-[36px] px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition flex items-center justify-center"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body (Scrollable container) */}
+            <div className="p-6 bg-slate-100 overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-slate-300">
+              <div 
+                className="mx-auto bg-white p-8 border border-slate-200 shadow-md rounded-2xl space-y-8"
+                style={{ 
+                  transform: `scale(${dutiesModalScale})`, 
+                  transformOrigin: 'top center',
+                  width: `${100 / dutiesModalScale}%`,
+                  transition: 'transform 0.15s ease-out, width 0.15s ease-out'
+                }}
+              >
+                {/* School Header */}
+                <div className="flex justify-between items-end border-b-2 border-slate-900 pb-3 mb-4">
+                  <div className="text-left">
+                    <h2 className="text-xl font-black text-slate-950">PLAN I HARMONOGRAM DYŻURÓW NAUCZYCIELSKICH</h2>
+                    <p className="text-xs text-slate-500 font-extrabold uppercase">{appState.school.name} • Rok szkolny {appState.yearLabel}</p>
+                  </div>
+                  <div className="text-right text-[10px] text-slate-400 font-bold uppercase">
+                    Generowane dynamicznie • Weryfikacja planu lekcji (SchedData)
+                  </div>
+                </div>
+
+                {/* Grid Structure */}
+                <div className="space-y-8 text-left">
+                  {[0, 1, 2, 3, 4]
+                    .filter(idx => dutiesModalDayFilter === 'all' || dutiesModalDayFilter === idx)
+                    .map(dayIdx => {
+                      const hasAnyDutiesOnThisDay = appState.dyzury.miejsca.some(miejsce =>
+                        appState.dyzury.przerwy.some(przerwa => {
+                          const dutyKey = `${miejsce.id}|${dayIdx}|${przerwa.num}`;
+                          return !!appState.dyzury.harmonogram[dutyKey]?.teacherAbbr;
+                        })
+                      );
+
+                      return (
+                        <div key={dayIdx} className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 break-inside-avoid shadow-sm">
+                          <h3 className="text-xs font-black text-slate-950 uppercase tracking-wide border-b border-slate-200 pb-2 mb-4 flex items-center justify-between">
+                            <span>📅 {DAYS_NAMES[dayIdx]}</span>
+                            <span className="text-[9px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                              {appState.dyzury.miejsca.length} Miejsc • {appState.dyzury.przerwy.length} Przerw
+                            </span>
+                          </h3>
+
+                          {!hasAnyDutiesOnThisDay ? (
+                            <p className="text-[10px] text-slate-400 italic py-2">Brak przydzielonych dyżurów na ten dzień.</p>
+                          ) : appState.dyzury.miejsca.length === 0 ? (
+                            <p className="text-[10px] text-slate-400 italic py-2">Brak zdefiniowanych miejsc dyżurowania.</p>
+                          ) : (
+                            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300 border border-slate-200 rounded-xl shadow-xs">
+                              <table className="w-full text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-slate-100 uppercase font-black text-slate-800 border-b border-slate-300">
+                                    <th className="p-3 text-left text-[10px] w-48 bg-slate-50 font-black border-r border-slate-200">
+                                      Godzina / Przerwa
+                                    </th>
+                                    {appState.dyzury.miejsca.map(place => (
+                                      <th key={place.id} className="p-3 text-center text-[10px] min-w-[200px] bg-slate-50 font-black border-r border-slate-200 last:border-r-0">
+                                        <span className="block text-slate-900 font-black">📍 {place.name}</span>
+                                        {place.floor && (
+                                          <span className="block text-[8px] text-slate-500 font-bold uppercase mt-0.5">{place.floor}</span>
+                                        )}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {appState.dyzury.przerwy.map(przerwa => {
+                                    return (
+                                      <tr key={przerwa.num} className="bg-white border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50">
+                                        <td className="p-3 font-mono text-[9px] text-left border-r border-slate-200 font-semibold bg-slate-50/30">
+                                          <span className="font-extrabold text-slate-800 block text-xs">{przerwa.name || `Przerwa ${przerwa.num}`}</span>
+                                          <span className="block text-slate-400 font-bold mt-1">⏱️ {przerwa.start} - {przerwa.end}</span>
+                                        </td>
+                                        {appState.dyzury.miejsca.map(place => {
+                                          const dutyKey = `${place.id}|${dayIdx}|${przerwa.num}`;
+                                          const entry = appState.dyzury.harmonogram[dutyKey];
+                                          const t = entry?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) : null;
+                                          const teacherId = t?.id || entry?.teacherAbbr || '';
+
+                                          // Resolve SchedData lessons directly before and after
+                                          const dayLessons = teacherId ? (etap2Schedule.teachers[teacherId]?.[dayIdx] || {}) : {};
+                                          const lessonsBefore = teacherId ? (dayLessons[String(przerwa.num)] || []) : [];
+                                          const lessonsAfter = teacherId ? (dayLessons[String(przerwa.num + 1)] || []) : [];
+                                          const hasAnyLessonsOnDay = teacherId ? (Object.values(dayLessons).some(arr => Array.isArray(arr) && arr.length > 0)) : false;
+
+                                          // Collision: double duty
+                                          const otherDutiesSameBreak = appState.dyzury.miejsca
+                                            .filter(m => m.id !== place.id)
+                                            .map(m => {
+                                              const k = `${m.id}|${dayIdx}|${przerwa.num}`;
+                                              return { placeName: m.name, entry: appState.dyzury.harmonogram[k] };
+                                            })
+                                            .filter(d => d.entry?.teacherAbbr === entry?.teacherAbbr);
+
+                                          return (
+                                            <td key={place.id} className="p-3 text-center align-middle border-r border-slate-200 last:border-r-0">
+                                              {entry?.teacherAbbr ? (
+                                                <div className="flex flex-col items-center justify-center space-y-2">
+                                                  {/* Teacher badge */}
+                                                  <div className="inline-flex flex-col items-center justify-center">
+                                                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg px-3 py-1 text-xs font-mono font-black shadow-xs tracking-wider uppercase inline-block">
+                                                      {entry.teacherAbbr}
+                                                    </span>
+                                                    <span className="block text-[9px] text-slate-600 font-bold truncate max-w-[150px] mt-1">
+                                                      {t ? `${t.first} ${t.last}` : 'Dyżur'}
+                                                    </span>
+                                                  </div>
+
+                                                  {/* Verification Context (Lessons from schedData) */}
+                                                  <div className="w-full mt-2 pt-2 border-t border-slate-100 text-left space-y-1 bg-slate-50/50 p-2 rounded-lg">
+                                                    <div className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Weryfikacja lekcji:</div>
+                                                    
+                                                    {/* Lesson before */}
+                                                    <div className="text-[9px]">
+                                                      <span className="text-slate-400 font-bold">Przed przerwą: </span>
+                                                      {lessonsBefore.length > 0 ? (
+                                                        getLessonDisplay(lessonsBefore)
+                                                      ) : (
+                                                        <span className="text-slate-400 font-medium italic">Brak lekcji</span>
+                                                      )}
+                                                    </div>
+
+                                                    {/* Lesson after */}
+                                                    <div className="text-[9px]">
+                                                      <span className="text-slate-400 font-bold">Po przerwie: </span>
+                                                      {lessonsAfter.length > 0 ? (
+                                                        getLessonDisplay(lessonsAfter)
+                                                      ) : (
+                                                        <span className="text-slate-400 font-medium italic">Brak lekcji</span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Warnings/Checks */}
+                                                  {(otherDutiesSameBreak.length > 0 || !hasAnyLessonsOnDay) && (
+                                                    <div className="w-full space-y-1">
+                                                      {otherDutiesSameBreak.length > 0 && (
+                                                        <div className="bg-red-50 text-red-700 border border-red-200 rounded p-1 text-[8.5px] font-bold text-left">
+                                                          🚨 Kolizja: Jednoczesny dyżur w rejonie: {otherDutiesSameBreak.map(d => d.placeName).join(', ')}
+                                                        </div>
+                                                      )}
+                                                      {!hasAnyLessonsOnDay && (
+                                                        <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded p-1 text-[8.5px] font-bold text-left">
+                                                          ⚠️ Brak innych lekcji w tym dniu!
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                <span className="text-slate-300 font-bold">-</span>
+                                              )}
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-slate-50 border-t border-slate-200 p-4 px-6 flex justify-between items-center shrink-0">
+              <span className="text-xs text-slate-400 font-semibold uppercase">
+                Opcje weryfikacji są dynamicznie synchronizowane z głównym widokiem deweloperskim
+              </span>
+              <button
+                onClick={() => setIsDutiesModalOpen(false)}
+                className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-lg transition"
+              >
+                Zamknij podgląd
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pop-up Blocked Fallback Modal */}
       {popupBlocked && (
