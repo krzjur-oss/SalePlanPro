@@ -6,7 +6,7 @@ import {
 export default function OProgramie() {
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto p-6 md:p-8" id="page-o-programie">
-      <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
+      <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-12">
         
         {/* NAGŁÓWEK SEKCIJI */}
         <div className="bg-slate-900 text-white rounded-3xl p-8 md:p-10 shadow-lg relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
@@ -97,7 +97,7 @@ export default function OProgramie() {
                     <Globe size={12} className="text-slate-400" /> Rzeszów / Warszawa, Polska
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-450 leading-relaxed pt-1.5 border-t border-slate-100 italic">
+                <p className="text-[10px] text-slate-500 leading-relaxed pt-1.5 border-t border-slate-100 italic">
                   Pasjonat systemów optymalizacji czasu pracy w jednostkach oświatowych i algorytmiki harmonogramowania.
                 </p>
               </div>
@@ -190,8 +190,8 @@ export default function OProgramie() {
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2 border-b border-slate-100 pb-3">
                 <Award size={16} className="text-emerald-500" /> 📄 Darmowa Licencja Edukacyjna (Zastrzeżona)
               </h3>
-              <div className="text-xs text-slate-650 space-y-3 leading-relaxed bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-56 overflow-y-auto">
-                <p className="font-bold text-slate-850 border-b border-slate-200 pb-1.5">Warunki licencyjne SalePlan Pro v3:</p>
+              <div className="text-xs text-slate-600 space-y-3 leading-relaxed bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-56 overflow-y-auto">
+                <p className="font-bold text-slate-800 border-b border-slate-200 pb-1.5">Warunki licencyjne SalePlan Pro v3:</p>
                 <p><strong>1. Dozwolony użytek:</strong> Licencja udziela bezpłatnego, niewyłącznego prawa do korzystania z Oprogramowania na terenie i na potrzeby placówek oświatowych (np. szkół i przedszkoli).</p>
                 <p><strong>2. Zastrzeżenie praw i zakazy:</strong> Użytkownik ani osoby trzecie nie mają prawa do:</p>
                 <ul className="list-disc pl-4 space-y-1">

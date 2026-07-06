@@ -657,7 +657,7 @@ interface StatystykiProps {
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 relative">
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         
         {/* --- TITLE CARD --- */}
         <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-2xl p-6 shadow-md flex justify-between items-center">
@@ -785,7 +785,7 @@ interface StatystykiProps {
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
                 <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                  <ShieldAlert className="text-red-550" size={18} />
+                  <ShieldAlert className="text-red-500" size={18} />
                   Diagnostyka i Audyt Harmonogramu
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
@@ -886,11 +886,11 @@ interface StatystykiProps {
                           <Users size={14} className="text-red-500" />
                           Nauczyciel w dwóch miejscach naraz
                         </h4>
-                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${teacherConflicts.length > 0 ? 'bg-red-100 text-red-805' : 'bg-emerald-100 text-emerald-800'}`}>
+                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${teacherConflicts.length > 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}`}>
                           {teacherConflicts.length}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
                         Sytuacje, w których ten sam nauczyciel ma zaplanowane zajęcia z różnymi klasami w tej samej godzinie lekcyjnej
                       </p>
                     </div>
@@ -983,11 +983,11 @@ interface StatystykiProps {
                           <MapPin size={14} className="text-blue-500" />
                           Lekcje klas bez przypisanej sali
                         </h4>
-                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${missingRoomLessons.length > 0 ? 'bg-blue-100 text-blue-805' : 'bg-emerald-100 text-emerald-800'}`}>
+                        <span className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-full ${missingRoomLessons.length > 0 ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-800'}`}>
                           {missingRoomLessons.length}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
                         Sytuacje, w których zaplanowano zajęcia lekcyjne, ale nie przydzielono im żadnego gabinetu (Etap 2)
                       </p>
                     </div>
@@ -1002,7 +1002,7 @@ interface StatystykiProps {
                           <div key={idx} className="bg-blue-50/40 border border-blue-100 p-3 rounded-xl text-xs flex justify-between items-center">
                             <div>
                               <div className="font-extrabold text-slate-900">
-                                Klasa <span className="text-blue-750">{m.className}</span> — {m.subjectName}
+                                Klasa <span className="text-blue-600">{m.className}</span> — {m.subjectName}
                               </div>
                               <span className="text-[10px] text-slate-400 font-semibold block uppercase mt-0.5">
                                 Nauczyciel: {m.teacherAbbr}
@@ -1029,7 +1029,7 @@ interface StatystykiProps {
                           {classConflicts.length}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
                         Wykryte błędy, w których jedna klasa ma zaplanowane kilka zajęć w tym samym czasie
                       </p>
                     </div>
@@ -1054,7 +1054,7 @@ interface StatystykiProps {
                               <p className="font-semibold text-slate-500 uppercase text-[9px] tracking-wider mb-1">Nałożone lekcje:</p>
                               {conf.lessons.map((les, lidx) => (
                                 <div key={lidx} className="flex justify-between items-center bg-white border border-orange-100 rounded p-1.5">
-                                  <span className="font-extrabold text-slate-850">{les.subjectName}</span>
+                                  <span className="font-extrabold text-slate-800">{les.subjectName}</span>
                                   <span className="text-slate-500 font-bold font-mono">Nauczyciel: {les.teacherAbbr}</span>
                                 </div>
                               ))}
@@ -1077,7 +1077,7 @@ interface StatystykiProps {
                           {roomConflicts.length}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-450 font-bold uppercase mt-1">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
                         Sytuacje podwójnego obłożenia, gdzie ta sama sala została przydzielona dwóm lub więcej klasom w tej samej godzinie lekcyjnej
                       </p>
                     </div>
@@ -1501,10 +1501,10 @@ interface StatystykiProps {
                 }`}
               >
                 <div className="flex items-center justify-between w-full">
-                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'snapshot_create' || logFilterType === 'snapshot_delete' || logFilterType === 'restore' ? 'text-emerald-100' : 'text-slate-450'}`}>
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'snapshot_create' || logFilterType === 'snapshot_delete' || logFilterType === 'restore' ? 'text-emerald-100' : 'text-slate-400'}`}>
                     Kopie i Migawki
                   </span>
-                  <Camera size={16} className={logFilterType === 'snapshot_create' || logFilterType === 'snapshot_delete' || logFilterType === 'restore' ? 'text-emerald-200' : 'text-emerald-605'} />
+                  <Camera size={16} className={logFilterType === 'snapshot_create' || logFilterType === 'snapshot_delete' || logFilterType === 'restore' ? 'text-emerald-200' : 'text-emerald-600'} />
                 </div>
                 <span className="text-2xl font-black mt-2 leading-none">{historyStats.snapshots}</span>
               </button>
@@ -1520,10 +1520,10 @@ interface StatystykiProps {
                 }`}
               >
                 <div className="flex items-center justify-between w-full">
-                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'import' ? 'text-blue-100' : 'text-slate-450'}`}>
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'import' ? 'text-blue-100' : 'text-slate-400'}`}>
                     Importy i Pliki
                   </span>
-                  <Upload size={16} className={logFilterType === 'import' ? 'text-blue-200' : 'text-blue-605'} />
+                  <Upload size={16} className={logFilterType === 'import' ? 'text-blue-200' : 'text-blue-600'} />
                 </div>
                 <span className="text-2xl font-black mt-2 leading-none">{historyStats.imports}</span>
               </button>
@@ -1535,11 +1535,11 @@ interface StatystykiProps {
                 className={`p-4 rounded-xl border text-left transition duration-200 flex flex-col justify-between h-24 col-span-2 lg:col-span-1 ${
                   logFilterType === 'reset'
                     ? 'bg-red-600 text-white border-red-700 shadow-sm'
-                    : 'bg-white text-slate-900 border-slate-200 hover:border-red-350 hover:bg-slate-50/50'
+                    : 'bg-white text-slate-900 border-slate-200 hover:border-red-300 hover:bg-slate-50/50'
                 }`}
               >
                 <div className="flex items-center justify-between w-full">
-                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'reset' ? 'text-red-100' : 'text-slate-450'}`}>
+                  <span className={`text-[10px] font-black uppercase tracking-wider ${logFilterType === 'reset' ? 'text-red-100' : 'text-slate-400'}`}>
                     Resety i Inne
                   </span>
                   <RefreshCw size={16} className={logFilterType === 'reset' ? 'text-red-200' : 'text-red-500'} />
@@ -1605,9 +1605,9 @@ interface StatystykiProps {
                 )}
               </div>
             ) : (
-              <div className="relative pl-3 md:pl-8 space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin">
+            <div className="relative pl-3 md:pl-8 space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin">
                 {/* Vertical timeline track line */}
-                <div className="absolute left-[19px] md:left-[39px] top-4 bottom-4 w-[2px] bg-indigo-100 border-dashed border-l border-indigo-250/60 select-none pointer-events-none" />
+                <div className="absolute left-[19px] md:left-[39px] top-4 bottom-4 w-[2px] bg-indigo-100 border-dashed border-l border-indigo-200/60 select-none pointer-events-none" />
 
                 {filteredLogs.map((log, index) => {
                   const meta = getLogIconAndColor(log.actionType);
@@ -1638,21 +1638,21 @@ interface StatystykiProps {
                           </div>
                           
                           {/* Beautiful Date & Time Badge */}
-                          <div className="text-[10px] text-slate-450 font-bold font-mono bg-slate-50 border border-slate-150 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
+                          <div className="text-[10px] text-slate-400 font-bold font-mono bg-slate-50 border border-slate-150 px-2 py-0.5 rounded-md flex items-center gap-1 shrink-0">
                             <Clock size={10} className="text-slate-400" />
                             {logDate.toLocaleDateString('pl-PL')} o {logDate.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                           </div>
                         </div>
 
                         {log.details && (
-                          <div className="text-[11px] text-slate-500 font-semibold leading-relaxed bg-slate-55 border border-slate-150 rounded-lg p-2.5 font-mono overflow-x-auto whitespace-pre-wrap max-h-32 scrollbar-thin">
+                          <div className="text-[11px] text-slate-500 font-semibold leading-relaxed bg-slate-50 border border-slate-150 rounded-lg p-2.5 font-mono overflow-x-auto whitespace-pre-wrap max-h-32 scrollbar-thin">
                             {log.details}
                           </div>
                         )}
 
                         <div className="flex items-center justify-between pt-1">
                           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider select-none">
-                            ID: <span className="font-mono text-slate-550">{log.id.slice(0, 8)}...</span>
+                            ID: <span className="font-mono text-slate-500">{log.id.slice(0, 8)}...</span>
                           </span>
                           
                           {/* Right tag badge */}

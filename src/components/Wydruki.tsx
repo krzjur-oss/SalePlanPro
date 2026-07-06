@@ -1480,7 +1480,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         ` }} />
 
         {/* Top bar (Control stripe) - Hidden during print */}
-        <div className="no-print bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 mb-6 max-w-5xl mx-auto shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="no-print bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 mb-6 max-w-7xl mx-auto shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <span className="p-2 bg-slate-800 rounded-lg text-indigo-400">
               <Printer size={20} />
@@ -1553,12 +1553,12 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         </div>
 
         {/* Outer content container containing all printed sheets */}
-        <div className="max-w-5xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0">
+        <div className="max-w-7xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0">
           
           {printType === 'classes' ? (
             classesToPrint.map((cls, idx) => {
               return (
-                <div key={cls.id} className={`print-card pb-8 border-b border-slate-150 last:border-0 ${idx < classesToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
+                <div key={cls.id} className={`print-card pb-8 border-b border-slate-200 last:border-0 ${idx < classesToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
                   {/* Class Header */}
                   <div className="flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-4">
                     <div className="text-left">
@@ -1631,7 +1631,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                         <div key={dIdx} className="text-[10px] leading-tight">
                                           <span className="font-black text-slate-900 block tracking-tight text-[10.5px]">{it.subject}</span>
                                           <div className="flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1">
-                                            {it.teacherAbbr && <span className="bg-slate-100 border border-slate-150 px-1 rounded">{it.teacherAbbr}</span>}
+                                            {it.teacherAbbr && <span className="bg-slate-100 border border-slate-200 px-1 rounded">{it.teacherAbbr}</span>}
                                             {it.roomName && <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded">sala: {it.roomName}</span>}
                                           </div>
                                         </div>
@@ -1654,7 +1654,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           ) : (
             teachersToPrint.map((teacher, idx) => {
               return (
-                <div key={teacher.id} className={`print-card pb-8 border-b border-slate-150 last:border-0 ${idx < teachersToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
+                <div key={teacher.id} className={`print-card pb-8 border-b border-slate-200 last:border-0 ${idx < teachersToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
                   {/* Teacher Header */}
                   <div className="flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-4">
                     <div className="text-left">
@@ -1839,7 +1839,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       `}</style>
 
       {/* --- CONTROLS BOX (HIDDEN ON PRINT) --- */}
-      <div className="no-print bg-white border border-slate-200 rounded-2xl p-5 shadow-sm mb-6 max-w-5xl mx-auto">
+      <div className="no-print bg-white border border-slate-200 rounded-2xl p-5 shadow-sm mb-6 max-w-7xl mx-auto">
         {isInIframe && (
           <div className="mb-5 bg-amber-50 border border-amber-200 p-4 rounded-xl text-left">
             <div className="flex gap-3">
@@ -2105,7 +2105,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       </div>
 
       {/* --- PRINT AREA --- */}
-      <div className="print-container max-w-5xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0">
+      <div className="print-container max-w-7xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0">
         
         {/* ======================= CLASSES RENDERING ======================= */}
         {printType === 'classes' && classesToPrint.map((cls, idx) => {
