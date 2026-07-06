@@ -1113,18 +1113,7 @@ export default function PlanSal({
 
         const keyInCol = `${h}|${cKey}`;
 
-        // 1. Standard Room Check: a standard room model only expects maximum 1 lesson.
-        // If there are multiple entries or lessons, that is a local room conflict.
-        if (!isSport && slots.length > 1) {
-          const desc = `Lokalny konflikt: Więcej niż 1 przydział lekcji w tej samej standardowej sali`;
-          const existing = detected.get(keyInCol) || [];
-          if (!existing.includes(desc)) {
-            existing.push(desc);
-            detected.set(keyInCol, existing);
-          }
-        }
-
-        // 2. Class duplicates / Teacher duplicates in the SAME room at the same time
+        // 1. Check if the classes in this room are part of combined/integrated groups in the timetable (zajęcia międzyoddziałowe)
         const teachersInThisRoom = slots.map(s => s?.teacherAbbr?.trim().toUpperCase()).filter(Boolean);
         const classesInThisRoom: string[] = [];
         slots.forEach(s => {
@@ -1137,11 +1126,82 @@ export default function PlanSal({
           });
         });
 
+        const uniqueClasses = Array.from(new Set(classesInThisRoom));
+
+        let classesAreCombined = false;
+        if (uniqueClasses.length > 1) {
+          const hIdx = appState.planLekcji.hours.findIndex(hourObj => String(hourObj.num) === h);
+          if (hIdx !== -1) {
+            const classObjs = uniqueClasses.map(name => 
+              appState.planLekcji.classes.find(c => c.name.toUpperCase().trim() === name.toUpperCase().trim())
+            ).filter(Boolean);
+
+            if (classObjs.length === uniqueClasses.length) {
+              const targetClassIds = new Set(classObjs.map(c => c.id));
+              
+              // Helper to get assignments of class at hour h on activeDay
+              const getAssignmentsForClass = (classId: string) => {
+                const prefix = `${classId}|${activeDay}|${hIdx}`;
+                const asgIds: string[] = [];
+                Object.keys(appState.planLekcji.lessons || {}).forEach(k => {
+                  if (k === prefix || k.startsWith(prefix + '|')) {
+                    const lesson = appState.planLekcji.lessons[k];
+                    if (lesson && lesson.assignmentId) {
+                      asgIds.push(lesson.assignmentId);
+                    }
+                  }
+                });
+                return asgIds;
+              };
+
+              // Check if any assignment covers all target class IDs
+              for (const cls of classObjs) {
+                const asgIds = getAssignmentsForClass(cls.id);
+                for (const asgId of asgIds) {
+                  const asg = assignmentsMap.get(asgId);
+                  if (!asg) continue;
+
+                  const coveredClassIds = new Set<string>();
+                  coveredClassIds.add(asg.classId);
+                  if (asg.linkedClassIds) {
+                    asg.linkedClassIds.forEach(id => coveredClassIds.add(id));
+                  }
+
+                  let coversAll = true;
+                  for (const id of targetClassIds) {
+                    if (!coveredClassIds.has(id)) {
+                      coversAll = false;
+                      break;
+                    }
+                  }
+
+                  if (coversAll) {
+                    classesAreCombined = true;
+                    break;
+                  }
+                }
+                if (classesAreCombined) break;
+              }
+            }
+          }
+        }
+
+        // 2. Standard Room Check: a standard room model only expects maximum 1 lesson.
+        // If there are multiple entries or lessons, that is a local room conflict, unless they are combined classes.
+        if (!isSport && slots.length > 1 && !classesAreCombined) {
+          const desc = `Lokalny konflikt: Więcej niż 1 przydział lekcji w tej samej standardowej sali`;
+          const existing = detected.get(keyInCol) || [];
+          if (!existing.includes(desc)) {
+            existing.push(desc);
+            detected.set(keyInCol, existing);
+          }
+        }
+
+        // 3. Class duplicates / Teacher duplicates in the SAME room at the same time
         // If standard room:
-        // By definition, a standard room should not have multiple different teachers or different classes
+        // By definition, a standard room should not have multiple different teachers or different classes, unless they are combined groups in the timetable
         if (!isSport) {
           const uniqueTeachers = Array.from(new Set(teachersInThisRoom));
-          const uniqueClasses = Array.from(new Set(classesInThisRoom));
 
           if (uniqueTeachers.length > 1) {
             const desc = `Konflikt Sali: Dwóch różnych nauczycieli (${uniqueTeachers.join(', ')}) w tej samej sali w tym samym czasie!`;
@@ -1152,7 +1212,7 @@ export default function PlanSal({
             }
           }
 
-          if (uniqueClasses.length > 1) {
+          if (uniqueClasses.length > 1 && !classesAreCombined) {
             const desc = `Konflikt Sali: Dwie różne klasy (${uniqueClasses.join(', ')}) w tej samej sali w tym samym czasie!`;
             const existing = detected.get(keyInCol) || [];
             if (!existing.includes(desc)) {
