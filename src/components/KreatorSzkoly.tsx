@@ -2322,7 +2322,7 @@ export default function KreatorSzkoly({
                 onShowNotification={showNoti}
               />
             ) : (
-              <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+              <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
                 <div className="border-b border-slate-200 pb-4">
                   <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 1</span>
                   <h2 className="text-xl font-black text-slate-900 mt-2">🏫 Dane Szkoły i Rok Szkolny</h2>
@@ -2796,7 +2796,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 2: Buildings */}
           {activeStep === 2 && (
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 2</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">🏢 Budynki i Lokacje zewnętrzne</h2>
@@ -3000,7 +3000,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 3: Classrooms and specific/special purpose rooms */}
           {activeStep === 3 && (
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 3</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">📐 Pracownie i specyficzne sale</h2>
@@ -3289,7 +3289,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 4: Classes and Groups */}
           {activeStep === 4 && (
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 4</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">👥 Klasy i podgrupy wewnątrzklasowe</h2>
@@ -3406,7 +3406,7 @@ export default function KreatorSzkoly({
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Zdefiniowane klasy i ich podgrupy</h3>
                     <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.classes.length}</span>
                   </div>
-                  <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.classes.map((c) => {
                       const cGrps = appState.planLekcji.schoolGroups.filter(g => g.classId === c.id);
                       return (
@@ -3497,7 +3497,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 5: Subjects */}
           {activeStep === 5 && (
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 5</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">📚 Przedmioty szkolne i edukacyjne</h2>
@@ -3633,7 +3633,7 @@ export default function KreatorSzkoly({
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Planowany kanon przedmiotowy</h3>
                     <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.subjects.length}</span>
                   </div>
-                  <div className="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
+                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.subjects.map((sub) => (
                       <div key={sub.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
                         <div className="flex items-center gap-3">
@@ -3834,7 +3834,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 6: Teachers & limits */}
           {activeStep === 6 && (
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 6</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">🧑‍🏫 Kadra nauczycielska i limity godzin</h2>
@@ -4044,7 +4044,7 @@ export default function KreatorSzkoly({
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Planowana kadra pedagogiczna</h3>
                     <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.teachers.length}</span>
                   </div>
-                  <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.teachers.map((t) => {
                       const assignedHours = teacherTotalHoursMap[t.id] || 0;
                       const limitSum = (t.maxHours || 18) + (t.overtimeHours || 0);
@@ -4433,7 +4433,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 7: Corridor places & duty settings */}
           {activeStep === 7 && (
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 7</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">🚪 Dyżury korytarzowe</h2>
@@ -4551,7 +4551,7 @@ export default function KreatorSzkoly({
                     <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Planowane punkty dozorowania porządku</h3>
                     <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.dyzury.miejsca.length}</span>
                   </div>
-                  <div className="divide-y divide-slate-100 max-h-[480px] overflow-y-auto">
+                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.dyzury.miejsca.map(place => (
                       <div key={place.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
                         <div className="flex items-start gap-3 w-[80%]">
@@ -4625,7 +4625,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 8: Assignments / Pairing Teachers to Classes in Subjects */}
           {activeStep === 8 && (
-            <div className="max-w-5xl mx-auto space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 8</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">🔗 Przypisanie nauczycieli do klas (Przydziałylekcji)</h2>
@@ -4808,7 +4808,7 @@ export default function KreatorSzkoly({
                     <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.planLekcji.assignments.length} pozycji</span>
                   </div>
 
-                  <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto flex-1">
+                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto flex-1">
                     {appState.planLekcji.assignments.map((asg) => {
                       const cls = classesMap.get(asg.classId);
                       const t = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
@@ -4899,7 +4899,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 9: Defining Pupils / Students with special needs (IPET, NI, Rewalidacja) */}
           {activeStep === 9 && (
-            <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
+            <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 9</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">🎓 Definiowanie uczniów i potrzeb wspomagania</h2>
@@ -4986,7 +4986,7 @@ export default function KreatorSzkoly({
                       </span>
                     </div>
 
-                    <div className="divide-y divide-slate-100 max-h-[380px] overflow-y-auto">
+                    <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                       {(appState.planLekcji.specialStudents || []).map((student) => {
                         const isSelected = activeStudentId === student.id;
                         const cls = student.classId ? classesMap.get(student.classId) : null;
@@ -5257,7 +5257,7 @@ export default function KreatorSzkoly({
 
           {/* STEP 10: Summary & launch instructions */}
           {activeStep === 10 && (
-            <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+            <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
               <div className="border-b border-slate-200 pb-4 text-center">
                 <span className="bg-emerald-100 text-emerald-800 font-black text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 10: Finalizacja</span>
                 <h2 className="text-xl font-black text-slate-900 mt-2">🏁 Dane wprowadzone poprawnie!</h2>
