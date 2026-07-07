@@ -860,7 +860,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
   };
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden" id="page-dyzury">
+    <div className="flex flex-col flex-1 overflow-hidden px-0 mx-0" id="page-dyzury">
       {/* ── PASEK KONTROLI / ZAKŁADKI KRAJOWE ── */}
       <div className="bg-white border-b border-slate-200 p-4 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
         <div className="flex items-center gap-1">
@@ -916,7 +916,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-slate-50 p-6">
+      <div className="flex-1 overflow-auto bg-slate-50 p-6 px-0 mx-0">
         {/* ── INTERAKTYWNY HARMONOGRAM ── */}
         {activeTab === 'roster' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">

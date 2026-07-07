@@ -1753,7 +1753,7 @@ export default function PlanSal({
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex flex-col flex-1 overflow-hidden h-full" id="page-plan-sal">
+      <div className="flex flex-col flex-1 overflow-hidden h-full px-0 mx-0" id="page-plan-sal">
         {/* ── PASEK KONTROLI / DNIE ── */}
         <div className="bg-white border-b border-slate-200 p-4 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
           <div className="flex items-center gap-2">
@@ -1832,7 +1832,7 @@ export default function PlanSal({
         <div className="flex-1 flex overflow-hidden bg-slate-50">
           
           {/* Lewa strona: Siatka sal */}
-          <div className="flex-1 overflow-auto p-4 lg:p-6 custom-scrollbar">
+          <div className="flex-1 overflow-auto p-4 lg:p-6 px-0 mx-0 custom-scrollbar">
             {cols.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 font-medium text-xs shadow-xs max-w-md mx-auto select-none mt-8">
                 <div className="text-3xl mb-3">🚪</div>

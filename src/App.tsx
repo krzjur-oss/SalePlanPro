@@ -924,7 +924,7 @@ export default function App() {
       </header>
 
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden px-0 mx-0">
         {currentTab === 'kreator' && (
           <KreatorSzkoly
             appState={appState}

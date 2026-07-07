@@ -1060,195 +1060,197 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
   }, [activeStudentId, pl.specialAssignments]);
 
   return (
-    <div className="flex flex-col md:flex-row flex-1 overflow-hidden" id="page-plan-klas">
+    <div className="flex flex-col md:flex-row flex-1 overflow-hidden px-0 mx-0" id="page-plan-klas">
       {/* ── LEWY SIDEBAR (Nawigacja) ── */}
-      <aside className="w-full md:w-64 border-r border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none">
-        
-        {/* Zarządzanie Klasami */}
-        <div className="p-4 border-b border-slate-100">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">🏫 Lista Klas</span>
-          </div>
+      {!(viewMode === 'all' && activeTab === 'plan') && (
+        <aside className="w-full md:w-64 border-r border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none">
           
-          <form onSubmit={handleAddClass} className="flex flex-col gap-1.5 mb-3">
-            <input 
-              type="text" 
-              placeholder="np. 4A, 1B" 
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
-              value={newClassName}
-              onChange={(e) => setNewClassName(e.target.value)}
-            />
-            <input 
-              type="text" 
-              placeholder="Grupa (np. cała klasa, gr.1)" 
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
-              value={newClassGroup}
-              onChange={(e) => setNewClassGroup(e.target.value)}
-            />
-            <button type="submit" className="w-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs flex items-center justify-center gap-1">
-              <Plus size={14} /> Dodaj Klasę
-            </button>
-          </form>
-
-          {/* Panel Filtrów */}
-          <div className="mt-4 pt-3 border-t border-slate-100 space-y-3 pb-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
-                <Filter size={11} className="text-slate-400" /> Filtry Listy Klas
-              </span>
-              {(selectedGradeFilters.length > 0 || onlyWithUnassignedOnDay) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedGradeFilters([]);
-                    setOnlyWithUnassignedOnDay(false);
-                  }}
-                  className="text-[9px] text-rose-600 hover:text-rose-800 font-bold transition flex items-center gap-0.5"
-                >
-                  <X size={10} /> Wyczyść
-                </button>
-              )}
+          {/* Zarządzanie Klasami */}
+          <div className="p-4 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">🏫 Lista Klas</span>
             </div>
+            
+            <form onSubmit={handleAddClass} className="flex flex-col gap-1.5 mb-3">
+              <input 
+                type="text" 
+                placeholder="np. 4A, 1B" 
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
+                value={newClassName}
+                onChange={(e) => setNewClassName(e.target.value)}
+              />
+              <input 
+                type="text" 
+                placeholder="Grupa (np. cała klasa, gr.1)" 
+                className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
+                value={newClassGroup}
+                onChange={(e) => setNewClassGroup(e.target.value)}
+              />
+              <button type="submit" className="w-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs flex items-center justify-center gap-1">
+                <Plus size={14} /> Dodaj Klasę
+              </button>
+            </form>
 
-            {/* Roczniki Pills */}
-            {availableRoczniki.length > 0 && (
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 block select-none">Roczniki (Poziomy):</label>
-                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
-                  {availableRoczniki.map(r => {
-                    const isActive = selectedGradeFilters.includes(r);
-                    return (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => {
-                          if (isActive) {
-                            setSelectedGradeFilters(selectedGradeFilters.filter(item => item !== r));
-                          } else {
-                            setSelectedGradeFilters([...selectedGradeFilters, r]);
-                          }
-                        }}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
-                          isActive
-                            ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {isNaN(parseInt(r)) ? r : `Klasa ${r}`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Lekcje do przypisania w danym dniu */}
-            <div className="space-y-1.5 pt-1">
-              <label className="flex items-start gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer h-3 w-3"
-                  checked={onlyWithUnassignedOnDay}
-                  onChange={(e) => setOnlyWithUnassignedOnDay(e.target.checked)}
-                />
-                <span className="text-[10px] font-bold text-slate-600 leading-tight select-none">
-                  Lekcje do przypisania w dniu:
+            {/* Panel Filtrów */}
+            <div className="mt-4 pt-3 border-t border-slate-100 space-y-3 pb-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 select-none">
+                  <Filter size={11} className="text-slate-400" /> Filtry Listy Klas
                 </span>
-              </label>
-
-              {onlyWithUnassignedOnDay && (
-                <div className="pl-4.5">
-                  <select
-                    className="w-full px-2 py-1 border border-slate-200 bg-white rounded-md text-[10px] outline-none font-bold text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    value={unassignedDayFilter}
-                    onChange={(e) => setUnassignedDayFilter(Number(e.target.value))}
+                {(selectedGradeFilters.length > 0 || onlyWithUnassignedOnDay) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedGradeFilters([]);
+                      setOnlyWithUnassignedOnDay(false);
+                    }}
+                    className="text-[9px] text-rose-600 hover:text-rose-800 font-bold transition flex items-center gap-0.5"
                   >
-                    {DAYS.map((dayName, idx) => (
-                      <option key={idx} value={idx}>
-                        {dayName}
-                      </option>
-                    ))}
-                  </select>
+                    <X size={10} /> Wyczyść
+                  </button>
+                )}
+              </div>
+
+              {/* Roczniki Pills */}
+              {availableRoczniki.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-500 block select-none">Roczniki (Poziomy):</label>
+                  <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-0.5">
+                    {availableRoczniki.map(r => {
+                      const isActive = selectedGradeFilters.includes(r);
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => {
+                            if (isActive) {
+                              setSelectedGradeFilters(selectedGradeFilters.filter(item => item !== r));
+                            } else {
+                              setSelectedGradeFilters([...selectedGradeFilters, r]);
+                            }
+                          }}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                            isActive
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {isNaN(parseInt(r)) ? r : `Klasa ${r}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Lekcje do przypisania w danym dniu */}
+              <div className="space-y-1.5 pt-1">
+                <label className="flex items-start gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer h-3 w-3"
+                    checked={onlyWithUnassignedOnDay}
+                    onChange={(e) => setOnlyWithUnassignedOnDay(e.target.checked)}
+                  />
+                  <span className="text-[10px] font-bold text-slate-600 leading-tight select-none">
+                    Lekcje do przypisania w dniu:
+                  </span>
+                </label>
+
+                {onlyWithUnassignedOnDay && (
+                  <div className="pl-4.5">
+                    <select
+                      className="w-full px-2 py-1 border border-slate-200 bg-white rounded-md text-[10px] outline-none font-bold text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      value={unassignedDayFilter}
+                      onChange={(e) => setUnassignedDayFilter(Number(e.target.value))}
+                    >
+                      {DAYS.map((dayName, idx) => (
+                        <option key={idx} value={idx}>
+                          {dayName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1 mt-2">
+              {filteredClasses.length > 0 ? (
+                filteredClasses.map(c => {
+                  const count = Object.keys(pl.lessons).filter(k => k.startsWith(c.id + '|')).length;
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => { setActiveClassId(c.id); setActiveTab('plan'); }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between group cursor-pointer ${
+                        activeClassId === c.id && activeTab === 'plan'
+                          ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          setActiveClassId(c.id);
+                          setActiveTab('plan');
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden truncate">
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || '#cbd5e1' }} />
+                        <span className="truncate">{c.name} {c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] bg-slate-100 text-slate-500 group-hover:bg-slate-200 px-1.5 py-0.5 rounded font-mono">{count}h</span>
+                        <button 
+                          type="button"
+                          onClick={(e) => handleRemoveClass(c.id, e)}
+                          className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-0.5"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-3 text-center text-[10px] text-slate-400 font-medium border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
+                  Brak klas spełniających kryteria filtrów
                 </div>
               )}
             </div>
           </div>
 
-          <div className="space-y-1 mt-2">
-            {filteredClasses.length > 0 ? (
-              filteredClasses.map(c => {
-                const count = Object.keys(pl.lessons).filter(k => k.startsWith(c.id + '|')).length;
-                return (
-                  <div
-                    key={c.id}
-                    onClick={() => { setActiveClassId(c.id); setActiveTab('plan'); }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-between group cursor-pointer ${
-                      activeClassId === c.id && activeTab === 'plan'
-                        ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-600'
-                        : 'text-slate-600 hover:bg-slate-50'
-                    }`}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        setActiveClassId(c.id);
-                        setActiveTab('plan');
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-2 overflow-hidden truncate">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.color || '#cbd5e1' }} />
-                      <span className="truncate">{c.name} {c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] bg-slate-100 text-slate-500 group-hover:bg-slate-200 px-1.5 py-0.5 rounded font-mono">{count}h</span>
-                      <button 
-                        type="button"
-                        onClick={(e) => handleRemoveClass(c.id, e)}
-                        className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-0.5"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-3 text-center text-[10px] text-slate-400 font-medium border border-dashed border-slate-200 rounded-lg bg-slate-50/50">
-                Brak klas spełniających kryteria filtrów
-              </div>
-            )}
+          {/* Zakładki Nawigacji */}
+          <div className="p-2 border-b border-slate-100 bg-slate-50/50">
+            <button 
+              onClick={() => setActiveTab('assign')}
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${activeTab === 'assign' ? 'bg-slate-200 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              <Layers size={14} className="text-slate-400" />
+              <span>📋 Przypisania Godzin</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('teachers')}
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${activeTab === 'teachers' ? 'bg-slate-200 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              <User size={14} className="text-slate-400" />
+              <span>👤 Nauczyciele i Przedmioty</span>
+            </button>
+            <button 
+              onClick={() => setActiveTab('special')}
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${activeTab === 'special' ? 'bg-slate-200 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}
+            >
+              <BookOpen size={14} className="text-slate-400" />
+              <span>🌟 Nauczanie Specjalne</span>
+            </button>
           </div>
-        </div>
-
-        {/* Zakładki Nawigacji */}
-        <div className="p-2 border-b border-slate-100 bg-slate-50/50">
-          <button 
-            onClick={() => setActiveTab('assign')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${activeTab === 'assign' ? 'bg-slate-200 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            <Layers size={14} className="text-slate-400" />
-            <span>📋 Przypisania Godzin</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('teachers')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${activeTab === 'teachers' ? 'bg-slate-200 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            <User size={14} className="text-slate-400" />
-            <span>👤 Nauczyciele i Przedmioty</span>
-          </button>
-          <button 
-            onClick={() => setActiveTab('special')}
-            className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${activeTab === 'special' ? 'bg-slate-200 text-slate-900 font-semibold' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            <BookOpen size={14} className="text-slate-400" />
-            <span>🌟 Nauczanie Specjalne</span>
-          </button>
-        </div>
-      </aside>
+        </aside>
+      )}
 
       {/* ── STREFA CENTRALNA (Siatka układania) ── */}
-      <main className="flex-1 bg-slate-50 p-6 overflow-y-auto">
+      <main className="flex-1 bg-slate-50 p-6 px-0 mx-0 overflow-y-auto">
         {activeTab === 'plan' && (
           <div className="flex flex-col h-full animate-fade-in">
             {/* Header i Przyciski Akcji */}
