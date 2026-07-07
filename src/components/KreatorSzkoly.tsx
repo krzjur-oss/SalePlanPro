@@ -3410,13 +3410,13 @@ export default function KreatorSzkoly({
                     {appState.classes.map((c) => {
                       const cGrps = appState.planLekcji.schoolGroups.filter(g => g.classId === c.id);
                       return (
-                        <div key={c.id} className="p-4 hover:bg-slate-50/40">
-                          <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2">
-                              <span className="w-3.5 h-3.5 rounded-full border border-slate-200" style={{ backgroundColor: c.color }} />
-                              <span className="text-sm font-black text-slate-950 font-mono tracking-wider">Klasa {c.name}</span>
+                        <div key={c.id} className="p-4 hover:bg-slate-50/40 w-full min-w-0">
+                          <div className="flex justify-between items-center gap-4">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="w-3.5 h-3.5 rounded-full border border-slate-200 shrink-0" style={{ backgroundColor: c.color }} />
+                              <span className="text-sm font-black text-slate-950 font-mono tracking-wider truncate">Klasa {c.name}</span>
                             </div>
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 shrink-0">
                               <button 
                                 type="button"
                                 onClick={() => {
@@ -3635,24 +3635,24 @@ export default function KreatorSzkoly({
                   </div>
                   <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.subjects.map((sub) => (
-                      <div key={sub.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
-                        <div className="flex items-center gap-3">
-                          <span className="w-9 h-9 text-white font-mono font-black text-[10px] rounded-lg tracking-wider flex items-center justify-center border shadow-sm" style={{ backgroundColor: sub.color || '#cbd5e1' }}>
+                      <div key={sub.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span className="w-9 h-9 text-white font-mono font-black text-[10px] rounded-lg tracking-wider flex items-center justify-center border shadow-sm shrink-0" style={{ backgroundColor: sub.color || '#cbd5e1' }}>
                             {sub.short}
                           </span>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-black text-slate-900 leading-none">{sub.name}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-black text-slate-900 leading-none truncate" title={sub.name}>{sub.name}</span>
                               {sub.defaultGroupPattern && (
-                                <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[8.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[8.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">
                                   Grupa: {sub.defaultGroupPattern}
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Identyfikator planowy: {sub.id}</p>
+                            <p className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate">Identyfikator planowy: {sub.id}</p>
                           </div>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 shrink-0">
                           <button 
                             onClick={() => handleStartEditSubject(sub)}
                             className="p-1 px-2 text-slate-400 hover:text-indigo-600 rounded select-none cursor-pointer"
@@ -4050,43 +4050,43 @@ export default function KreatorSzkoly({
                       const limitSum = (t.maxHours || 18) + (t.overtimeHours || 0);
                       const exceed = assignedHours > limitSum;
                       return (
-                        <div key={t.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
-                          <div className="flex items-center gap-3">
-                            <span className="w-9 h-9 text-white font-mono font-black text-[11px] rounded-lg tracking-wide flex items-center justify-center border shadow-sm" style={{ backgroundColor: t.color || '#3b82f6' }}>
+                        <div key={t.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <span className="w-9 h-9 text-white font-mono font-black text-[11px] rounded-lg tracking-wide flex items-center justify-center border shadow-sm shrink-0" style={{ backgroundColor: t.color || '#3b82f6' }}>
                               {t.abbr}
                             </span>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-black text-slate-900 leading-none">{t.first} {t.last}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-black text-slate-900 leading-none truncate" title={`${t.first} ${t.last}`}>{t.first} {t.last}</span>
                                 {t.inactive && (
-                                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black uppercase tracking-wider">
+                                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0">
                                     🔴 Nieaktywny
                                   </span>
                                 )}
                               </div>
                               {t.inactive && t.inactiveComment && (
-                                <p className="text-[10px] text-rose-600 font-semibold italic mt-0.5">
+                                <p className="text-[10px] text-rose-600 font-semibold italic mt-0.5 break-words">
                                   Powód: {t.inactiveComment}
                                 </p>
                               )}
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                                <span className="text-[10px] text-slate-400 font-semibold">
+                                <span className="text-[10px] text-slate-400 font-semibold shrink-0">
                                   Pensum: {t.maxHours}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}
                                 </span>
-                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-black ${
+                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-black shrink-0 ${
                                   exceed ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
                                 }`}>
                                   Przydział: {assignedHours}h / {limitSum}h
                                 </span>
                                 {!t.inactive && t.substitutions && t.substitutions.length > 0 && (
-                                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded font-black border border-indigo-200" title={t.substitutions.join(', ')}>
+                                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded font-black border border-indigo-200 truncate shrink-0" title={t.substitutions.join(', ')}>
                                     🔀 Zastępstwa: {t.substitutions.length} lekcji
                                   </span>
                                 )}
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button 
                               onClick={() => handleStartEditTeacher(t)}
                               className="p-1 px-2 text-slate-400 hover:text-blue-600 rounded"
@@ -4553,27 +4553,27 @@ export default function KreatorSzkoly({
                   </div>
                   <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.dyzury.miejsca.map(place => (
-                      <div key={place.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50">
-                        <div className="flex items-start gap-3 w-[80%]">
+                      <div key={place.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
                           <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-100">
                             <Shield size={16} />
                           </span>
                           <div className="min-w-0 flex-1">
-                            <span className="text-xs font-bold text-slate-900 leading-none">{place.name}</span>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {place.floor && <span className="text-[10px] text-slate-400 font-semibold">{place.floor}</span>}
-                              <span className="bg-indigo-100 text-indigo-800 font-black px-1.5 py-0.2 rounded text-[9px] uppercase">
+                            <span className="text-xs font-bold text-slate-900 leading-none block truncate" title={place.name}>{place.name}</span>
+                            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                              {place.floor && <span className="text-[10px] text-slate-400 font-semibold shrink-0">{place.floor}</span>}
+                              <span className="bg-indigo-100 text-indigo-800 font-black px-1.5 py-0.2 rounded text-[9px] uppercase shrink-0">
                                 Potrzeba: {place.teachersNeeded || 1} {place.teachersNeeded === 1 ? 'nauczyciel' : 'nauczycieli'}
                               </span>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-semibold mt-1">{place.desc || '—'}</p>
+                            {place.desc && <p className="text-[10px] text-slate-400 font-semibold mt-1 break-words">{place.desc}</p>}
                             
                             {/* Connected classroom badges */}
                             {place.connectedRooms && place.connectedRooms.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1 mt-2">
-                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Przyległe sale:</span>
+                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider shrink-0">Przyległe sale:</span>
                                 {place.connectedRooms.map(rm => (
-                                  <span key={rm} className="px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[9px] font-mono font-bold animate-fade-in">
+                                  <span key={rm} className="px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[9px] font-mono font-bold animate-fade-in shrink-0">
                                     🚪 {rm}
                                   </span>
                                 ))}
@@ -4995,25 +4995,25 @@ export default function KreatorSzkoly({
                           <div 
                             key={student.id} 
                             onClick={() => setActiveStudentId(student.id)}
-                            className={`p-3 flex justify-between items-center cursor-pointer transition ${
+                            className={`p-3 flex justify-between items-center cursor-pointer transition w-full min-w-0 gap-3 ${
                               isSelected ? 'bg-blue-50/50 border-l-4 border-blue-600' : 'hover:bg-slate-50/45'
                             }`}
                           >
-                            <div className="min-w-0 pr-2">
-                              <span className={`text-xs font-bold leading-tight block ${isSelected ? 'text-blue-900' : 'text-slate-800'}`}>
+                            <div className="min-w-0 flex-1">
+                              <span className={`text-xs font-bold leading-tight block truncate ${isSelected ? 'text-blue-900' : 'text-slate-800'}`} title={`${student.firstName} ${student.lastName}`}>
                                 {student.firstName} {student.lastName}
                               </span>
                               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                 {cls ? (
-                                  <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[9px] font-bold">
+                                  <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0">
                                     Klasa: {cls.name}
                                   </span>
                                 ) : (
-                                  <span className="bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded text-[9px] font-bold border border-rose-100">
+                                  <span className="bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded text-[9px] font-bold border border-rose-100 shrink-0">
                                     Brak klasy
                                   </span>
                                 )}
-                                <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded uppercase ${
+                                <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded uppercase shrink-0 ${
                                   student.type === 'ni'
                                     ? 'bg-purple-100 text-purple-800'
                                     : student.type === 'rewa'
@@ -5037,6 +5037,7 @@ export default function KreatorSzkoly({
                                 type="button"
                                 onClick={(e) => handleRemoveStudent(student.id, e)}
                                 className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
+                                title="Usuń ucznia"
                               >
                                 <Trash2 size={13} />
                               </button>
