@@ -426,3 +426,21 @@ export function getDemoSchedData(): SchedData {
     },
   };
 }
+
+export function cleanFloorName(floorName: string, buildingName?: string): string {
+  if (!buildingName) return floorName;
+  const bNameLower = buildingName.toLowerCase().trim();
+  const fNameLower = floorName.toLowerCase().trim();
+  
+  if (fNameLower.startsWith(bNameLower)) {
+    let remaining = floorName.substring(buildingName.length).trim();
+    if (remaining.startsWith('–') || remaining.startsWith('-')) {
+      remaining = remaining.substring(1).trim();
+    }
+    if (remaining) {
+      return remaining.charAt(0).toUpperCase() + remaining.slice(1);
+    }
+  }
+  return floorName;
+}
+

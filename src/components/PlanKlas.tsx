@@ -37,6 +37,18 @@ interface PlanKlasProps {
 export default function PlanKlas({ appState, onChangeAppState, onTransfer }: PlanKlasProps) {
   const pl = appState.planLekcji;
 
+  const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg transition-transform z-[9999] ${
+      type === 'ok' ? 'border-emerald-500' : 'border-red-500'
+    }`;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+    }, 3500);
+  };
+
   const [activeClassId, setActiveClassId] = useState<string | null>(
     pl.classes.length > 0 ? pl.classes[0].id : null
   );
@@ -783,6 +795,45 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     }
 
     const allInvolved = asg ? [asg.classId, ...(asg.linkedClassIds || [])] : [classIdToUse];
+
+    // Real-time Room conflict detection
+    if (asg && asg.roomId) {
+      const targetRoom = pl.rooms.find(r => r.id === asg.roomId);
+      const roomName = targetRoom ? targetRoom.name : 'nieznanej';
+
+      const conflictingLessons: { classId: string; assignmentId: string }[] = [];
+      Object.entries(pl.lessons).forEach(([lessonKey, lessonVal]) => {
+        const parts = lessonKey.split('|');
+        if (parts.length >= 3) {
+          const cId = parts[0];
+          const d = parseInt(parts[1], 10);
+          const h = parseInt(parts[2], 10);
+
+          if (d === day && h === hour) {
+            // Check if it's NOT in our newly assigned classes, and has a different assignment ID
+            if (!allInvolved.includes(cId) && lessonVal.assignmentId !== assignId) {
+              const otherAsg = pl.assignments.find(a => a.id === lessonVal.assignmentId);
+              if (otherAsg && otherAsg.roomId === asg.roomId) {
+                conflictingLessons.push({ classId: cId, assignmentId: lessonVal.assignmentId });
+              }
+            }
+          }
+        }
+      });
+
+      if (conflictingLessons.length > 0) {
+        const otherClassNames = Array.from(new Set(conflictingLessons.map(cl => {
+          const c = pl.classes.find(cls => cls.id === cl.classId);
+          return c ? c.name : 'inna klasa';
+        })));
+        const currentClassName = allInvolved.map(clsId => pl.classes.find(cls => cls.id === clsId)?.name || 'bieżąca klasa').join(' + ');
+        notify(
+          `⚠️ Konflikt Sali: Próba przypisania sali ${roomName} dla ${currentClassName}, która w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęta przez klasy: ${otherClassNames.join(', ')}!`,
+          'err'
+        );
+      }
+    }
+
     allInvolved.forEach(clsId => {
       const lessonKey = `${clsId}|${day}|${hour}`;
       updatedLessons[lessonKey] = {

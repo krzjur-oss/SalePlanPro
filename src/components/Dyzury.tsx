@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState } from '../types';
-import { esc, colKey, flattenColumns } from '../utils';
+import { esc, colKey, flattenColumns, uid } from '../utils';
 import { 
   Shield, Timer, RefreshCcw, Trash2, Edit3, Plus, Settings, Check, HelpCircle 
 } from 'lucide-react';
@@ -1614,7 +1614,3 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
   );
 }
 
-export function uid(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-}

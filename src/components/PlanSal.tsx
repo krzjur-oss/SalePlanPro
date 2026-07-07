@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom, Class } from '../types';
-import { colKey, flattenColumns, esc, hexRgba, mergeClassNames } from '../utils';
+import { colKey, flattenColumns, esc, hexRgba, mergeClassNames, cleanFloorName } from '../utils';
 import { 
   Building2, MapPin, Grid, AlertTriangle, UserCheck, RefreshCw, Trash2, Edit, Grab, Sparkles, Filter, ChevronLeft, ChevronRight
 } from 'lucide-react';
@@ -13,23 +13,6 @@ interface PlanSalProps {
   onChangeAppState: (newState: AppState) => void;
   onChangeSchedData: (newData: SchedData) => void;
   onImportFromPlanKlas: () => void;
-}
-
-function cleanFloorName(floorName: string, buildingName?: string): string {
-  if (!buildingName) return floorName;
-  const bNameLower = buildingName.toLowerCase().trim();
-  const fNameLower = floorName.toLowerCase().trim();
-  
-  if (fNameLower.startsWith(bNameLower)) {
-    let remaining = floorName.substring(buildingName.length).trim();
-    if (remaining.startsWith('–') || remaining.startsWith('-')) {
-      remaining = remaining.substring(1).trim();
-    }
-    if (remaining) {
-      return remaining.charAt(0).toUpperCase() + remaining.slice(1);
-    }
-  }
-  return floorName;
 }
 
 export default function PlanSal({ 

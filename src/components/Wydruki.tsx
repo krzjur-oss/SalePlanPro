@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell } from '../types';
 import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X } from 'lucide-react';
+import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
 
 interface WydrukiProps {
   appState: AppState;
@@ -41,43 +42,6 @@ const getRoomCategory = (room: { name: string; desc?: string }): 'ogolne' | 'ind
 
   return 'ogolne';
 };
-
-function localFlattenColumns(floors: any[]) {
-  const cols: any[] = [];
-  if (!floors) return cols;
-  floors.forEach((floor, fi) =>
-    floor.segments?.forEach((seg: any, si: number) =>
-      seg.rooms?.forEach((room: any, ri: number) =>
-        cols.push({ floorIdx: fi, segIdx: si, roomIdx: ri, floor, seg, room })
-      )
-    )
-  );
-  return cols;
-}
-
-function localColKey(col: any) {
-  const n = (col.room.num || '').trim();
-  return n
-    ? `f${col.floorIdx}_s${col.segIdx}_${n}`
-    : `f${col.floorIdx}_s${col.segIdx}_r${col.roomIdx}`;
-}
-
-function localCleanFloorName(floorName: string, buildingName?: string): string {
-  if (!buildingName) return floorName;
-  const bNameLower = buildingName.toLowerCase().trim();
-  const fNameLower = floorName.toLowerCase().trim();
-  
-  if (fNameLower.startsWith(bNameLower)) {
-    let remaining = floorName.substring(buildingName.length).trim();
-    if (remaining.startsWith('–') || remaining.startsWith('-')) {
-      remaining = remaining.substring(1).trim();
-    }
-    if (remaining) {
-      return remaining.charAt(0).toUpperCase() + remaining.slice(1);
-    }
-  }
-  return floorName;
-}
 
 function getFloorGroups(categoryCols: any[], buildings: any[]) {
   const groups: { startIdx: number; span: number; name: string; buildingName?: string }[] = [];
