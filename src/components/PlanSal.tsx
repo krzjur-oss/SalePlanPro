@@ -1832,7 +1832,7 @@ export default function PlanSal({
         <div className="flex-1 flex overflow-hidden bg-slate-50">
           
           {/* Lewa strona: Siatka sal */}
-          <div className="flex-1 overflow-auto p-4 lg:p-6 px-0 mx-0 custom-scrollbar">
+          <div className="flex-1 overflow-auto p-4 md:p-5 custom-scrollbar">
             {cols.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-xl p-12 text-center text-slate-500 font-medium text-xs shadow-xs max-w-md mx-auto select-none mt-8">
                 <div className="text-3xl mb-3">🚪</div>

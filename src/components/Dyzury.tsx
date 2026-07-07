@@ -916,10 +916,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-slate-50 p-6 px-0 mx-0">
+      <div className="flex-1 overflow-auto bg-slate-50 p-4 md:p-5">
         {/* ── INTERAKTYWNY HARMONOGRAM ── */}
         {activeTab === 'roster' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-4 lg:col-span-3 min-w-[500px]">
               {dyz.miejsca.length > 0 ? (
                 <table className="w-full border-collapse">

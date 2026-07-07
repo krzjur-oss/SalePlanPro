@@ -1250,7 +1250,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       )}
 
       {/* ── STREFA CENTRALNA (Siatka układania) ── */}
-      <main className="flex-1 bg-slate-50 p-6 px-0 mx-0 overflow-y-auto">
+      <main className="flex-1 bg-slate-50 p-4 md:p-5 overflow-y-auto">
         {activeTab === 'plan' && (
           <div className="flex flex-col h-full animate-fade-in">
             {/* Header i Przyciski Akcji */}
