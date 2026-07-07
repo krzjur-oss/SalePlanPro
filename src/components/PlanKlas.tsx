@@ -41,6 +41,9 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     pl.classes.length > 0 ? pl.classes[0].id : null
   );
   const [activeTab, setActiveTab] = useState<'plan' | 'assign' | 'special' | 'teachers'>('plan');
+  const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
+  const [activeDayIndex, setActiveDayIndex] = useState<number>(0);
+  const [allViewSelectedClassId, setAllViewSelectedClassId] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
   const [draggedAssignId, setDraggedAssignId] = useState<string | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
@@ -751,8 +754,9 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     }
   };
 
-  const placeAssignmentOnCell = (assignId: string, day: number, hour: number) => {
-    if (!assignId || !activeClassId) return;
+  const placeAssignmentOnCell = (assignId: string, day: number, hour: number, targetClassId?: string) => {
+    const classIdToUse = targetClassId || activeClassId;
+    if (!assignId || !classIdToUse) return;
 
     const updatedLessons = { ...pl.lessons };
     
@@ -771,14 +775,14 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     if (asg) {
       const matchSpecialAsg = pl.specialAssignments.find(sa => {
         const student = pl.specialStudents.find(ss => ss.id === sa.studentId);
-        return student && student.classId === activeClassId && sa.subjectId === asg.subjectId && sa.withClass && sa.supportTeacherId;
+        return student && student.classId === classIdToUse && sa.subjectId === asg.subjectId && sa.withClass && sa.supportTeacherId;
       });
       if (matchSpecialAsg) {
         defaultSupportTeacherId = matchSpecialAsg.supportTeacherId || null;
       }
     }
 
-    const allInvolved = asg ? [asg.classId, ...(asg.linkedClassIds || [])] : [activeClassId];
+    const allInvolved = asg ? [asg.classId, ...(asg.linkedClassIds || [])] : [classIdToUse];
     allInvolved.forEach(clsId => {
       const lessonKey = `${clsId}|${day}|${hour}`;
       updatedLessons[lessonKey] = {
@@ -799,9 +803,9 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     });
   };
 
-  const handleDropOnCell = (day: number, hour: number) => {
+  const handleDropOnCell = (day: number, hour: number, targetClassId?: string) => {
     if (draggedAssignId) {
-      placeAssignmentOnCell(draggedAssignId, day, hour);
+      placeAssignmentOnCell(draggedAssignId, day, hour, targetClassId);
       setDraggedAssignId(null);
     }
   };
@@ -894,11 +898,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
             if (cell) {
               const dayStr = cell.getAttribute('data-day');
               const hourStr = cell.getAttribute('data-hour');
+              const targetClassId = cell.getAttribute('data-class-id') || undefined;
               if (dayStr !== null && hourStr !== null) {
                 const day = parseInt(dayStr, 10);
                 const hour = parseInt(hourStr, 10);
-                console.log('[TOUCH_DND] Dropping assignment inside cell:', { day, hour });
-                placeAssignmentOnCell(activeId, day, hour);
+                console.log('[TOUCH_DND] Dropping assignment inside cell:', { day, hour, targetClassId });
+                placeAssignmentOnCell(activeId, day, hour, targetClassId);
               }
             }
           }
@@ -1245,14 +1250,19 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       {/* ── STREFA CENTRALNA (Siatka układania) ── */}
       <main className="flex-1 bg-slate-50 p-6 overflow-y-auto">
         {activeTab === 'plan' && (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full animate-fade-in">
+            {/* Header i Przyciski Akcji */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-lg font-bold text-slate-900 select-none">
-                  {currentClass ? `Plan lekcji dla klasy ${currentClass.name}` : 'Plan lekcji klasowy'}
+                  {viewMode === 'all' 
+                    ? `Plan lekcji dla wszystkich klas (Dzień po dniu)`
+                    : currentClass ? `Plan lekcji dla klasy ${currentClass.name}` : 'Plan lekcji klasowy'}
                 </h1>
                 <p className="text-xs text-slate-500 mt-1 select-none">
-                  {currentClass ? `Zdefiniowano zajęcia klasy: ${currentClass.group || 'cała klasa'}. Przeciągaj lekcje ze skrytki po prawej stronie na siatkę.` : 'Wybierz klasę z lewego panelu, aby rozpocząć układanie planu.'}
+                  {viewMode === 'all'
+                    ? `Przeglądaj i układaj plan lekcji dla wszystkich klas jednocześnie. Wybierz dzień tygodnia poniżej.`
+                    : currentClass ? `Zdefiniowano zajęcia klasy: ${currentClass.group || 'cała klasa'}. Przeciągaj lekcje ze skrytki po prawej stronie na siatkę.` : 'Wybierz klasę z lewego panelu, aby rozpocząć układanie planu.'}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -1271,31 +1281,100 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
               </div>
             </div>
 
-            {/* Siatka tygodniowa */}
-            {currentClass ? (
+            {/* Przełącznik Widoku */}
+            <div className="flex items-center gap-2 mb-5 bg-slate-100 p-1 rounded-xl self-start">
+              <button
+                type="button"
+                onClick={() => setViewMode('single')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  viewMode === 'single'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                🏫 Widok jednej klasy (tydzień)
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('all')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  viewMode === 'all'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-500 hover:text-indigo-600'
+                }`}
+              >
+                📅 Wszystkie klasy (dzień po dniu)
+              </button>
+            </div>
+
+            {/* Selektor Dnia dla widoku wszystkich klas */}
+            {viewMode === 'all' && (
+              <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm mb-5 flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mr-1">Wybierz Dzień:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {DAYS.map((day, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setActiveDayIndex(idx)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                          activeDayIndex === idx
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                            : 'bg-slate-50 text-slate-650 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-500 font-semibold bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/65">
+                  Widok dla <strong className="text-slate-700 font-extrabold">{filteredClasses.length} klas</strong> na dzień: <strong className="text-indigo-700 font-black">{DAYS[activeDayIndex]}</strong>
+                </div>
+              </div>
+            )}
+
+            {/* TABELA PLANU */}
+            {viewMode === 'all' ? (
+              /* ==================== WIDOK WSZYSTKICH KLAS ==================== */
               <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto p-2">
                 <table className="min-w-full border-collapse">
                   <thead>
                     <tr>
-                      <th className="p-3 border-b border-r border-slate-200 text-xs font-bold text-slate-400 text-center w-24">Lekcja</th>
-                      {DAYS.map((day, i) => (
-                        <th key={i} className="p-3 border-b border-slate-200 text-xs font-bold text-slate-600 text-center min-w-[140px] select-none">
-                          {day}
+                      <th className="p-3 border-b border-r border-slate-200 text-xs font-bold text-slate-400 text-center w-24">Klasa</th>
+                      {pl.hours.map((h, i) => (
+                        <th key={i} className="p-3 border-b border-slate-200 text-xs font-bold text-slate-600 text-center min-w-[150px] select-none">
+                          <div className="font-extrabold text-slate-750">Lekcja {h.num}</div>
+                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{h.start}–{h.end}</div>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {pl.hours.map((h, hourIndex) => (
-                      <tr key={hourIndex} className="hover:bg-slate-50/50">
-                        {/* Godzina */}
-                        <td className="p-3 border-b border-r border-slate-200 text-center bg-slate-50/50 select-none">
-                          <span className="block font-bold text-slate-700">{h.num}</span>
-                          <span className="block text-[10px] text-slate-400 font-mono mt-0.5">{h.start}–{h.end}</span>
+                    {filteredClasses.map((cls) => (
+                      <tr key={cls.id} className="hover:bg-slate-50/50">
+                        {/* Kolumna Klasy */}
+                        <td className="p-3 border-b border-r border-slate-200 text-center bg-slate-50/50 select-none align-middle font-bold text-xs">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveClassId(cls.id);
+                              setViewMode('single');
+                            }}
+                            className="hover:underline text-left inline-flex flex-col items-center gap-1 group/btn"
+                            title="Przejdź do planu tygodniowego tej klasy"
+                          >
+                            <span className="w-3 h-3 rounded-full shadow-sm group-hover/btn:scale-110 transition" style={{ backgroundColor: cls.color || '#cbd5e1' }} />
+                            <span className="text-slate-800 font-extrabold tracking-tight text-center leading-none group-hover/btn:text-blue-600">{cls.name}</span>
+                            <span className="text-[8.5px] text-slate-400 font-normal leading-tight">{cls.group && cls.group !== 'cała klasa' ? cls.group : 'cała klasa'}</span>
+                          </button>
                         </td>
-                        {/* Dni */}
-                        {DAYS.map((_, dayIndex) => {
-                          const key = `${activeClassId}|${dayIndex}|${hourIndex}`;
+                        
+                        {/* Godziny lekcyjne w wybranym dniu */}
+                        {pl.hours.map((_, hourIndex) => {
+                          const dayIndex = activeDayIndex;
+                          const key = `${cls.id}|${dayIndex}|${hourIndex}`;
                           const lesson = pl.lessons[key];
                           const asg = lesson ? pl.assignments.find(a => a.id === lesson.assignmentId) : null;
                           const subj = asg ? subjectsMap.get(asg.subjectId) : null;
@@ -1306,7 +1385,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
 
                           return (
                             <td 
-                              key={dayIndex}
+                              key={hourIndex}
                               title={isConf ? confReasons.join('\n') : undefined}
                               className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top h-28 transition-all ${
                                 isConf ? 'bg-red-50/70 border-2 border-red-300' : ''
@@ -1314,13 +1393,14 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                               data-cell-type="plan-cell"
                               data-day={dayIndex}
                               data-hour={hourIndex}
+                              data-class-id={cls.id}
                               onDragOver={(e) => e.preventDefault()}
-                              onDrop={() => handleDropOnCell(dayIndex, hourIndex)}
+                              onDrop={() => handleDropOnCell(dayIndex, hourIndex, cls.id)}
                             >
                               {asg ? (() => {
                                 const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
                                 const specStudentsInThisClassAndSubj = pl.specialStudents.filter(ss => {
-                                  if (ss.classId !== activeClassId) return false;
+                                  if (ss.classId !== cls.id) return false;
                                   return pl.specialAssignments.some(sa => sa.studentId === ss.id && sa.subjectId === asg.subjectId && sa.withClass);
                                 });
 
@@ -1328,7 +1408,9 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                                   <div 
                                     onClick={() => {
                                       if (selectedAssignmentId) {
-                                        placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                        placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex, cls.id);
+                                      } else {
+                                        setAllViewSelectedClassId(cls.id);
                                       }
                                     }}
                                     draggable={!isTouchDevice}
@@ -1396,7 +1478,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
 
                                       {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
                                         <div className="text-[9px] text-indigo-850 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1 font-bold truncate flex items-center gap-0.5" title="Zajęcia łączone (grupa międzyoddziałowa)">
-                                          🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== currentClass?.name).join(' + ')}
+                                          🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== cls.name).join(' + ')}
                                         </div>
                                       )}
 
@@ -1474,13 +1556,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                                 <div 
                                   onClick={() => {
                                     if (selectedAssignmentId) {
-                                      placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                      placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex, cls.id);
+                                    } else {
+                                      setAllViewSelectedClassId(cls.id);
                                     }
                                   }}
                                   className={`h-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-all select-none min-h-[90px] ${
                                     selectedAssignmentId 
                                       ? 'border-indigo-300 bg-indigo-50/40 text-indigo-550 hover:bg-indigo-50/80 hover:border-indigo-400 cursor-pointer' 
-                                      : 'border-slate-200 text-slate-300 hover:border-blue-400 hover:text-blue-400 cursor-default'
+                                      : 'border-slate-200 text-slate-300 hover:border-blue-400 hover:text-blue-400 cursor-pointer'
                                   }`}
                                 >
                                   <span className="text-lg font-light">+</span>
@@ -1500,11 +1584,242 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                 </table>
               </div>
             ) : (
-              <div className="h-64 border border-dashed border-slate-200 bg-white rounded-xl flex flex-col items-center justify-center p-6 text-center select-none">
-                <span className="text-4xl">🤖</span>
-                <span className="text-slate-500 text-sm mt-2 font-semibold">Aktualnie nie wybrano klasy</span>
-                <span className="text-slate-400 text-xs mt-1">Sugerujemy wybrać jedną z klas z lewego panelu bocznego, aby przystąpić do budowy planu lekcji.</span>
-              </div>
+              /* ==================== WIDOK JEDNEJ KLASY ==================== */
+              currentClass ? (
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto p-2">
+                  <table className="min-w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="p-3 border-b border-r border-slate-200 text-xs font-bold text-slate-400 text-center w-24">Lekcja</th>
+                        {DAYS.map((day, i) => (
+                          <th key={i} className="p-3 border-b border-slate-200 text-xs font-bold text-slate-600 text-center min-w-[140px] select-none">
+                            {day}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pl.hours.map((h, hourIndex) => (
+                        <tr key={hourIndex} className="hover:bg-slate-50/50">
+                          {/* Godzina */}
+                          <td className="p-3 border-b border-r border-slate-200 text-center bg-slate-50/50 select-none">
+                            <span className="block font-bold text-slate-700">{h.num}</span>
+                            <span className="block text-[10px] text-slate-400 font-mono mt-0.5">{h.start}–{h.end}</span>
+                          </td>
+                          {/* Dni */}
+                          {DAYS.map((_, dayIndex) => {
+                            const key = `${activeClassId}|${dayIndex}|${hourIndex}`;
+                            const lesson = pl.lessons[key];
+                            const asg = lesson ? pl.assignments.find(a => a.id === lesson.assignmentId) : null;
+                            const subj = asg ? subjectsMap.get(asg.subjectId) : null;
+                            const teacher = asg && asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+                            const room = asg && asg.roomId ? roomsMap.get(asg.roomId) : null;
+                            const confReasons = conflicts.get(key) || [];
+                            const isConf = confReasons.length > 0;
+
+                            return (
+                              <td 
+                                key={dayIndex}
+                                title={isConf ? confReasons.join('\n') : undefined}
+                                className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top h-28 transition-all ${
+                                  isConf ? 'bg-red-50/70 border-2 border-red-300' : ''
+                                }`}
+                                data-cell-type="plan-cell"
+                                data-day={dayIndex}
+                                data-hour={hourIndex}
+                                data-class-id={activeClassId}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={() => handleDropOnCell(dayIndex, hourIndex)}
+                              >
+                                {asg ? (() => {
+                                  const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
+                                  const specStudentsInThisClassAndSubj = pl.specialStudents.filter(ss => {
+                                    if (ss.classId !== activeClassId) return false;
+                                    return pl.specialAssignments.some(sa => sa.studentId === ss.id && sa.subjectId === asg.subjectId && sa.withClass);
+                                  });
+
+                                  return (
+                                    <div 
+                                      onClick={() => {
+                                        if (selectedAssignmentId) {
+                                          placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                        }
+                                      }}
+                                      draggable={!isTouchDevice}
+                                      onDragStart={(e) => {
+                                        if (isTouchDevice) {
+                                          e.preventDefault();
+                                          return;
+                                        }
+                                        handleDragStart(asg.id, key);
+                                      }}
+                                      onTouchStart={(e) => handleTouchStart(e, asg.id, key)}
+                                      onTouchMove={(e) => handleTouchMove(e, asg.id)}
+                                      onTouchEnd={handleTouchEnd}
+                                      onContextMenu={(e) => e.preventDefault()}
+                                      className={`h-full min-h-[90px] rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
+                                        selectedAssignmentId 
+                                          ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
+                                          : 'hover:shadow-md'
+                                      } ${
+                                        isConf 
+                                          ? 'border-red-600 bg-red-50 text-red-900 shadow-sm'
+                                          : 'bg-white shadow-sm'
+                                      }`}
+                                      style={{
+                                        ...(isConf ? {} : { borderLeftColor: subj?.color || '#cbd5e1' }),
+                                        WebkitTouchCallout: 'none',
+                                        WebkitUserSelect: 'none',
+                                        KhtmlUserSelect: 'none',
+                                        MozUserSelect: 'none',
+                                        msUserSelect: 'none',
+                                        userSelect: 'none',
+                                        WebkitUserDrag: 'none'
+                                      }}
+                                    >
+                                      <div>
+                                        <div className="flex items-center justify-between gap-1">
+                                          <span className="text-xs font-bold truncate" style={isConf ? {} : { color: subj?.color }}>
+                                            {subj?.name}
+                                          </span>
+                                          <button 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleRemoveLesson(key);
+                                            }}
+                                            onTouchStart={(e) => e.stopPropagation()}
+                                            onTouchEnd={(e) => {
+                                              e.stopPropagation();
+                                              handleRemoveLesson(key);
+                                            }}
+                                            className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-6 h-6 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer"
+                                            title="Usuń lekcję z siatki"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                        <div className={`text-[10px] mt-0.5 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
+                                          👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
+                                        </div>
+
+                                        {suppTeacher && (
+                                          <div className="text-[10px] text-indigo-700 font-bold mt-1 truncate">
+                                            👥 Wspomaganie: {suppTeacher.first} {suppTeacher.last} ({suppTeacher.abbr})
+                                          </div>
+                                        )}
+
+                                        {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
+                                          <div className="text-[9px] text-indigo-850 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1 font-bold truncate flex items-center gap-0.5" title="Zajęcia łączone (grupa międzyoddziałowa)">
+                                            🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== currentClass?.name).join(' + ')}
+                                          </div>
+                                        )}
+
+                                        {/* Specjalni uczniowie */}
+                                        {specStudentsInThisClassAndSubj.length > 0 && (
+                                          <div className="mt-1.5 flex flex-wrap gap-1">
+                                            {specStudentsInThisClassAndSubj.map(ss => {
+                                              const typeLabel = ss.type === 'ni' ? 'NI' : ss.type === 'rewa' ? 'Rewa' : 'Wsp';
+                                              return (
+                                                <span 
+                                                  key={ss.id} 
+                                                  className="text-[9px] font-bold px-1 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded flex items-center gap-0.5"
+                                                  title={`${ss.firstName} ${ss.lastName} (${typeLabel}) - ma zajęcia z klasą`}
+                                                >
+                                                  🎓 {ss.lastName} {ss.firstName[0]}. ({typeLabel})
+                                                </span>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+
+                                        {/* Wybór nauczyciela wspomagającego */}
+                                        <div 
+                                          className="mt-1.5 pt-1 border-t border-slate-100" 
+                                          onClick={(e) => e.stopPropagation()}
+                                          onTouchStart={(e) => e.stopPropagation()}
+                                          onTouchEnd={(e) => e.stopPropagation()}
+                                        >
+                                          <select
+                                            title="Nauczyciel wspomagający"
+                                            className={`w-full text-[9px] font-semibold border rounded px-1.5 py-0.5 outline-none transition cursor-pointer ${
+                                              lesson.supportTeacherId 
+                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-bold' 
+                                                : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                                            }`}
+                                            value={lesson.supportTeacherId || ''}
+                                            onChange={(e) => {
+                                              const val = e.target.value || null;
+                                              const updatedLessons = { ...pl.lessons };
+                                              updatedLessons[key] = {
+                                                ...updatedLessons[key],
+                                                supportTeacherId: val
+                                              };
+                                              onChangeAppState({
+                                                ...appState,
+                                                planLekcji: {
+                                                  ...pl,
+                                                  lessons: updatedLessons
+                                                }
+                                              });
+                                            }}
+                                          >
+                                            <option value="">👥 Dodaj wspomagającego...</option>
+                                            {pl.teachers.map(t => (
+                                              <option key={t.id} value={t.id}>
+                                                Wspomaga: {t.first[0]}. {t.last} ({t.abbr})
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+
+                                        {isConf && (
+                                          <div className="text-[9px] text-red-600 font-bold bg-white/80 border border-red-200 p-1 rounded font-sans leading-tight mt-1 animate-pulse">
+                                            {confReasons[0]}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center justify-between text-[9px] text-slate-400 mt-2 font-mono">
+                                        <span className={isConf ? 'text-red-700 font-bold' : ''}>🚪 {room ? room.name : 'Bez sali'}</span>
+                                        {isConf && <span className="text-red-600 font-black tracking-tighter">⚠️ KOLIZJA</span>}
+                                      </div>
+                                    </div>
+                                  );
+                                })() : (
+                                  <div 
+                                    onClick={() => {
+                                      if (selectedAssignmentId) {
+                                        placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                      }
+                                    }}
+                                    className={`h-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-all select-none min-h-[90px] ${
+                                      selectedAssignmentId 
+                                        ? 'border-indigo-300 bg-indigo-50/40 text-indigo-550 hover:bg-indigo-50/80 hover:border-indigo-400 cursor-pointer' 
+                                        : 'border-slate-200 text-slate-300 hover:border-blue-400 hover:text-blue-400 cursor-default'
+                                    }`}
+                                  >
+                                    <span className="text-lg font-light">+</span>
+                                    {selectedAssignmentId && (
+                                      <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600 px-1.5 py-0.5 bg-white border border-indigo-200 rounded shadow-xs mt-1 animate-pulse">
+                                        Wstaw
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="h-64 border border-dashed border-slate-200 bg-white rounded-xl flex flex-col items-center justify-center p-6 text-center select-none">
+                  <span className="text-4xl">🤖</span>
+                  <span className="text-slate-500 text-sm mt-2 font-semibold">Aktualnie nie wybrano klasy</span>
+                  <span className="text-slate-400 text-xs mt-1">Sugerujemy wybrać jedną z klas z lewego panelu bocznego, aby przystąpić do budowy planu lekcji.</span>
+                </div>
+              )
             )}
           </div>
         )}
@@ -2743,14 +3058,42 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
       </main>
 
       {/* ── SKRYTKA LEKCJI DO UMIESZCZENIA (PO_PRAWEJ) ── */}
-      {activeTab === 'plan' && currentClass && (
+      {activeTab === 'plan' && (viewMode === 'all' || currentClass) && (
         <aside className="w-full md:w-64 border-l border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none">
-          <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">🗂️ Lekcje do umieszczenia</span>
-            <span className="text-[10px] text-slate-400 mt-1 block">Przeciągnij przedmiot na siatkę lub użyj ułatwienia dotykowego:</span>
-            <div className="mt-2.5 p-2 bg-indigo-50 border border-indigo-150 rounded-lg text-[9.5px] text-indigo-900 font-medium leading-normal">
+          <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+            <div>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">🗂️ Lekcje do umieszczenia</span>
+              <span className="text-[10px] text-slate-400 mt-1 block">Przeciągnij przedmiot na siatkę lub użyj ułatwienia dotykowego:</span>
+            </div>
+
+            {viewMode === 'all' && (
+              <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-150 space-y-2">
+                <div>
+                  <label className="block text-[9px] font-bold text-indigo-850 uppercase tracking-wider mb-1">Klasa (filtr przydziałów):</label>
+                  <select
+                    className="w-full px-2 py-1 bg-white border border-indigo-200 rounded text-xs font-semibold outline-none text-slate-800"
+                    value={allViewSelectedClassId || 'all'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAllViewSelectedClassId(val === 'all' ? null : val);
+                    }}
+                  >
+                    <option value="all">🌐 Wszystkie klasy ({pl.assignments.length})</option>
+                    {pl.classes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} {c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-[9.5px] text-indigo-900 leading-normal">
+                  💡 Kliknięcie komórki lub klasy w tabeli automatycznie filtruje przydziały do tej klasy!
+                </div>
+              </div>
+            )}
+
+            <div className="p-2 bg-indigo-50 border border-indigo-150 rounded-lg text-[9.5px] text-indigo-900 font-medium leading-normal">
               📱 <strong>Ekran dotykowy?</strong> Kliknij lekcję poniżej, a potem tapnij pole w siatce (puste lub zajęte) aby ją wstawić/podmienić. Ten sam przedmiot możesz wstawić w wiele miejsc!
             </div>
+            
             {selectedAssignmentId && (
               <div className="mt-2.5 p-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[9.5px] text-emerald-850 font-bold flex items-center justify-between">
                 <span>🎯 Aktywny pędzel: {subjectsMap.get(pl.assignments.find(as => as.id === selectedAssignmentId)?.subjectId || '')?.name}</span>
@@ -2785,9 +3128,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
               </div>
             </div>
 
-            {classAssignments.map(a => {
+            {(viewMode === 'all' 
+              ? (allViewSelectedClassId 
+                  ? pl.assignments.filter(a => a.classId === allViewSelectedClassId || (a.linkedClassIds && a.linkedClassIds.includes(allViewSelectedClassId)))
+                  : pl.assignments)
+              : classAssignments
+            ).map(a => {
               const s = subjectsMap.get(a.subjectId);
               const t = a.teacherId ? teachersMap.get(a.teacherId) : null;
+              const targetClass = classesMap.get(a.classId);
               const placed = placedHours[a.id] || 0;
               const limitAchieved = placed >= a.hoursPerWeek;
               const isSelected = selectedAssignmentId === a.id;
@@ -2814,8 +3163,8 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                     isSelected
                       ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/50 shadow'
                       : limitAchieved 
-                        ? 'bg-slate-50/70 border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300' 
-                        : 'bg-white border-slate-200 hover:border-blue-400 hover:shadow shadow-sm'
+                      ? 'bg-slate-50/70 border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300' 
+                      : 'bg-white border-slate-200 hover:border-blue-400 hover:shadow shadow-sm'
                   }`}
                   style={{
                     WebkitTouchCallout: 'none',
@@ -2833,8 +3182,13 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                     </div>
                   )}
                   <div className="flex items-center justify-between gap-1">
-                    <span className="font-bold text-xs truncate" style={{ color: s?.color }}>{s?.name}</span>
-                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
+                    <div className="flex flex-col truncate">
+                      <span className="font-bold text-xs truncate" style={{ color: s?.color }}>{s?.name}</span>
+                      {viewMode === 'all' && targetClass && (
+                        <span className="text-[9px] text-slate-400 font-extrabold mt-0.5">Klasa: {targetClass.name} {a.groupId ? `(gr)` : ''}</span>
+                      )}
+                    </div>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${
                       isSelected
                         ? 'bg-indigo-600 text-white'
                         : limitAchieved 
@@ -2855,8 +3209,13 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                 </div>
               );
             })}
-            {classAssignments.length === 0 && (
-              <div className="text-center p-6 text-slate-400 text-xs">Brak zdefiniowanych przypisań dla tej klasy. Dodaj je w zakładce „📋 Przypisania Godzin".</div>
+            {(viewMode === 'all' 
+              ? (allViewSelectedClassId 
+                  ? pl.assignments.filter(a => a.classId === allViewSelectedClassId || (a.linkedClassIds && a.linkedClassIds.includes(allViewSelectedClassId)))
+                  : pl.assignments)
+              : classAssignments
+            ).length === 0 && (
+              <div className="text-center p-6 text-slate-400 text-xs">Brak zdefiniowanych przydziałów. Dodaj je w zakładce „📋 Przypisania Godzin".</div>
             )}
           </div>
         </aside>
