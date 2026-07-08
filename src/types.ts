@@ -245,6 +245,8 @@ export interface PlanDyzuryState {
     autoBalance: boolean;
     maxPerTeacher: number;
     excludeTeachers: string[];
+    maxMinutesPerTeacher?: number;
+    maxConsecutiveDuties?: number;
   };
 }
 
@@ -258,6 +260,7 @@ export interface GeneratorSettings {
   includeSpecialNI: boolean;
   limitComputerLabs: boolean;
   customComputerLabsCount: number;
+  minAvailableSubstitutionTeachersPerSlot?: number;
 
   genPriorityHomerooms: boolean;
   genPriorityTeachers: boolean;

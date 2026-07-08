@@ -318,25 +318,44 @@ interface StatystykiProps {
       countMap[t.abbr] = 0;
     });
 
-    Object.values(appState.dyzury.harmonogram).forEach(entry => {
+    const minutesMap: { [abbr: string]: number } = {};
+
+    const getBreakDurationLocal = (p: any): number => {
+      if (!p || !p.start || !p.end) return 0;
+      const [sh, sm] = p.start.split(':').map(Number);
+      const [eh, em] = p.end.split(':').map(Number);
+      if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0;
+      const diff = (eh * 60 + em) - (sh * 60 + sm);
+      return diff < 0 ? diff + 24 * 60 : diff;
+    };
+
+    Object.entries(appState.dyzury.harmonogram).forEach(([key, entry]) => {
       if (entry && entry.teacherAbbr) {
-        // match by abbr
         const abbr = entry.teacherAbbr;
         countMap[abbr] = (countMap[abbr] || 0) + 1;
+
+        const parts = key.split('|'); // [miejsceId, day, przerwaNum]
+        const przerwaNum = parseInt(parts[2]);
+        const przerwa = appState.dyzury.przerwy.find(p => p.num === przerwaNum);
+        if (przerwa) {
+          minutesMap[abbr] = (minutesMap[abbr] || 0) + getBreakDurationLocal(przerwa);
+        }
       }
     });
 
-    const maxPerTeacher = appState.dyzury.settings.maxPerTeacher || 2;
+    const maxMinutesLimit = appState.dyzury.settings.maxMinutesPerTeacher || 60;
 
     return pl.teachers.map(t => {
       const count = countMap[t.abbr] || 0;
+      const mins = minutesMap[t.abbr] || 0;
       return {
         ...t,
         dutiesCount: count,
-        limit: maxPerTeacher,
-        isOverLimit: count > maxPerTeacher
+        dutiesMinutes: mins,
+        limit: maxMinutesLimit,
+        isOverLimit: mins > maxMinutesLimit
       };
-    }).sort((a, b) => b.dutiesCount - a.dutiesCount);
+    }).sort((a, b) => b.dutiesMinutes - a.dutiesMinutes);
   }, [pl.teachers, appState.dyzury]);
 
   // --- Calculation: Schedule Gaps ("Okienka") ---
@@ -1171,7 +1190,7 @@ interface StatystykiProps {
               <div className="space-y-4 text-xs font-medium text-slate-600">
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                   <span className="font-black text-slate-800 text-[10px] uppercase block">Dyrektorskie Limity:</span>
-                  <p>Maksymalny kontrakt dyżurów: <strong className="text-slate-900">{appState.dyzury.settings.maxPerTeacher}</strong> na osobę.</p>
+                  <p>Maksymalny czas dyżurów: <strong className="text-slate-900">{appState.dyzury.settings.maxMinutesPerTeacher || 60} min.</strong> na osobę.</p>
                   <p>Średni wymiar lekcyjny klasy: <strong className="text-slate-900">{(totalHoursScheduled / (totalClasses || 1)).toFixed(1)} h/tydz.</strong></p>
                 </div>
 
@@ -1258,20 +1277,21 @@ interface StatystykiProps {
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
               <div>
                 <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Obciążenie dyżurami nauczycielskimi</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Rozkład dyżurów na przerwach. Limit: {appState.dyzury.settings.maxPerTeacher} na nauczyciela.</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Rozkład dyżurów w minutach. Limit: {appState.dyzury.settings.maxMinutesPerTeacher || 60} min. na nauczyciela.</p>
               </div>
 
               <div className="space-y-4 max-h-[480px] overflow-y-auto pr-2 divide-y divide-slate-100">
                 {teacherDutiesStats.map(t => {
-                  const percent = t.limit > 0 ? (t.dutiesCount / t.limit) * 100 : 0;
+                  const percent = t.limit > 0 ? (t.dutiesMinutes / t.limit) * 100 : 0;
                   return (
                     <div key={t.id} className="pt-3 first:pt-0 space-y-1.5">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-extrabold text-slate-900">{t.last} {t.first} (<span className="font-mono text-purple-600 font-bold">{t.abbr}</span>)</span>
                         <div className="flex items-center gap-1 font-mono">
-                          <span className={`font-bold ${t.isOverLimit ? 'text-amber-600' : 'text-slate-900'}`}>{t.dutiesCount} dyżurów</span>
+                          <span className={`font-bold ${t.isOverLimit ? 'text-amber-600' : 'text-slate-900'}`}>{t.dutiesMinutes} min.</span>
                           <span className="text-slate-300">/</span>
-                          <span className="text-slate-400">{t.limit} lmt</span>
+                          <span className="text-slate-400">{t.limit} min.</span>
+                          <span className="text-[10px] text-slate-400">({t.dutiesCount} dyż.)</span>
                         </div>
                       </div>
 

@@ -29,6 +29,7 @@ export const DEFAULT_GENERATOR_SETTINGS: GeneratorSettings = {
   includeSpecialNI: true,
   limitComputerLabs: true,
   customComputerLabsCount: 1,
+  minAvailableSubstitutionTeachersPerSlot: 1,
   genPriorityHomerooms: true,
   genPriorityTeachers: true,
   genExcludeWF: true,
@@ -85,7 +86,9 @@ export default function UstawieniaGeneratorow({ appState, onChangeAppState }: Us
         settings: {
           autoBalance: true,
           maxPerTeacher: 2,
-          excludeTeachers: []
+          excludeTeachers: [],
+          maxMinutesPerTeacher: 60,
+          maxConsecutiveDuties: 2
         }
       }
     });
@@ -170,6 +173,24 @@ export default function UstawieniaGeneratorow({ appState, onChangeAppState }: Us
                 className="w-16 px-2 py-1 bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-lg text-center focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                 value={settings.maxGapsPerTeacher}
                 onChange={(e) => updateSettings({ maxGapsPerTeacher: Math.max(0, parseInt(e.target.value) || 0) })}
+              />
+            </div>
+
+            {/* minAvailableSubstitutionTeachersPerSlot */}
+            <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+              <div className="space-y-0.5 pr-4">
+                <label className="text-xs font-bold text-slate-800 block">🧑‍🏫 Minimalna rezerwa nauczycieli (zastępstwa)</label>
+                <span className="text-[10px] text-slate-500 block leading-tight">
+                  Liczba wolnych nauczycieli z okienkami na każdej godzinie lekcyjnej do dyspozycji dyrektora.
+                </span>
+              </div>
+              <input 
+                type="number" 
+                min={0}
+                max={10}
+                className="w-16 px-2 py-1 bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-lg text-center focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                value={settings.minAvailableSubstitutionTeachersPerSlot !== undefined ? settings.minAvailableSubstitutionTeachersPerSlot : 1}
+                onChange={(e) => updateSettings({ minAvailableSubstitutionTeachersPerSlot: Math.max(0, parseInt(e.target.value) || 0) })}
               />
             </div>
 
@@ -488,21 +509,40 @@ export default function UstawieniaGeneratorow({ appState, onChangeAppState }: Us
                 </label>
               </div>
 
-              {/* maxPerTeacher */}
+              {/* maxMinutesPerTeacher */}
               <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100">
                 <div className="space-y-0.5 pr-4">
-                  <label className="text-xs font-bold text-slate-800 block">Maksymalny limit dyżurów nauczyciela</label>
+                  <label className="text-xs font-bold text-slate-800 block">⏱️ Maksymalny czas dyżurów w tygodniu (minuty)</label>
                   <span className="text-[10px] text-slate-500 block leading-tight">
-                    Maksymalna dopuszczalna liczba dyżurów przydzielona jednemu nauczycielowi w całym tygodniu.
+                    Maksymalny łączny czas dyżurów w tygodniu przydzielony jednemu nauczycielowi (np. 60 minut).
+                  </span>
+                </div>
+                <input 
+                  type="number" 
+                  min={10}
+                  max={300}
+                  step={5}
+                  className="w-16 px-2 py-1 bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-lg text-center font-mono"
+                  value={appState.dyzury.settings.maxMinutesPerTeacher || 60}
+                  onChange={(e) => updateDutySettings({ maxMinutesPerTeacher: Math.max(10, parseInt(e.target.value) || 60) })}
+                />
+              </div>
+
+              {/* maxConsecutiveDuties */}
+              <div className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100">
+                <div className="space-y-0.5 pr-4">
+                  <label className="text-xs font-bold text-slate-800 block">🔄 Maksymalna liczba dyżurów pod rząd</label>
+                  <span className="text-[10px] text-slate-500 block leading-tight">
+                    Ile kolejnych przerw maksymalnie nauczyciel może spędzić na dyżurze (bez przerw wolnych).
                   </span>
                 </div>
                 <input 
                   type="number" 
                   min={1}
-                  max={20}
-                  className="w-16 px-2 py-1 bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-lg text-center"
-                  value={appState.dyzury.settings.maxPerTeacher || 2}
-                  onChange={(e) => updateDutySettings({ maxPerTeacher: Math.max(1, parseInt(e.target.value) || 2) })}
+                  max={5}
+                  className="w-16 px-2 py-1 bg-white border border-slate-200 text-slate-800 text-xs font-bold rounded-lg text-center font-mono"
+                  value={appState.dyzury.settings.maxConsecutiveDuties !== undefined ? appState.dyzury.settings.maxConsecutiveDuties : 2}
+                  onChange={(e) => updateDutySettings({ maxConsecutiveDuties: Math.max(1, parseInt(e.target.value) || 2) })}
                 />
               </div>
 

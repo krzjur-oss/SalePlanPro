@@ -38,6 +38,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
     const fromRooms = pl.rooms?.filter(r => r.type === 'informatyka').length || 0;
     return fromRooms > 0 ? fromRooms : 1;
   });
+  const [minAvailableSubstitutionTeachersPerSlot, setMinAvailableSubstitutionTeachersPerSlot] = useState<number>(() => appState.generatorSettings?.minAvailableSubstitutionTeachersPerSlot ?? 1);
 
   // Maintain custom role settings for teachers during this generator session
   const [teacherConfigs, setTeacherConfigs] = useState<Record<string, TeacherRoleConfig>>(() => {
@@ -359,6 +360,37 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
             }
           }
 
+          // Minimalna liczba wolnych nauczycieli na zastępstwa
+          if (unit.teacherId && minAvailableSubstitutionTeachersPerSlot > 0) {
+            const tempBusy = new Set(teacherBusy);
+            tempBusy.add(`${unit.teacherId}|${day}|${hour}`);
+
+            let availableSubs = 0;
+            pl.teachers.forEach(t => {
+              if (t.inactive) return;
+              if (tempBusy.has(`${t.id}|${day}|${hour}`)) return;
+              if (obeyAvailability && t.availability && t.availability.length > 0) {
+                if (!t.availability.includes(`${day}-${hour}`)) return;
+              }
+
+              let hasOtherLessonOnDay = false;
+              for (let h = 0; h < maxHoursCount; h++) {
+                if (h !== hour && tempBusy.has(`${t.id}|${day}|${h}`)) {
+                  hasOtherLessonOnDay = true;
+                  break;
+                }
+              }
+
+              if (hasOtherLessonOnDay) {
+                availableSubs++;
+              }
+            });
+
+            if (availableSubs < minAvailableSubstitutionTeachersPerSlot) {
+              score -= 300 * (minAvailableSubstitutionTeachersPerSlot - availableSubs);
+            }
+          }
+
           return score;
         };
 
@@ -615,7 +647,8 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
             allowDoubleBlocks,
             includeSpecialNI,
             limitComputerLabs,
-            customComputerLabsCount
+            customComputerLabsCount,
+            minAvailableSubstitutionTeachersPerSlot
           }
         });
 
@@ -972,7 +1005,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
                     </div>
                     {limitComputerLabs && (
                       <div className="flex items-center gap-3 mt-4 border-t border-slate-100 pt-3">
-                        <span className="text-[10.5px] text-slate-500 font-bold select-none whitespace-nowrap">Dostępne pracownie:</span>
+                        <span className="text-[10px] text-slate-500 font-bold select-none whitespace-nowrap">Dostępne pracownie:</span>
                         <input 
                           type="number"
                           min="1"
@@ -988,6 +1021,31 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
                         </span>
                       </div>
                     )}
+                  </div>
+
+                  {/* Minimalna liczba nauczycieli na zastępstwa doraźne */}
+                  <div className="p-4 border border-slate-200 rounded-2xl flex flex-col justify-between hover:border-blue-400 transition bg-slate-50/50">
+                    <div>
+                      <label className="text-xs font-black text-slate-800 flex items-center gap-1.5 select-none leading-none">
+                        🧑‍🏫 Rezerwa na zastępstwa doraźne
+                      </label>
+                      <p className="text-[10.5px] text-slate-450 font-medium leading-relaxed mt-1">
+                        Zapewnia, że na każdej godzinie lekcyjnej co najmniej określona liczba nauczycieli ma okienko (jest w szkole i nie prowadzi zajęć), aby dyrektor miał kogo wyznaczyć na zastępstwo.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 mt-4">
+                      <input 
+                        type="range"
+                        min="0"
+                        max="5"
+                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                        value={minAvailableSubstitutionTeachersPerSlot}
+                        onChange={(e) => setMinAvailableSubstitutionTeachersPerSlot(Number(e.target.value))}
+                      />
+                      <span className="text-xs font-black font-mono text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 shrink-0 leading-none">
+                        {minAvailableSubstitutionTeachersPerSlot === 0 ? 'Brak rezerwy (0)' : `Min. ${minAvailableSubstitutionTeachersPerSlot} nauczycieli`}
+                      </span>
+                    </div>
                   </div>
 
                 </div>

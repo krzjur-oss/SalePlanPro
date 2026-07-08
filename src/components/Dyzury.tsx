@@ -38,6 +38,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
   const [newBreakName, setNewBreakName] = useState('');
 
   const [maxDuties, setMaxDuties] = useState<number>(dyz.settings.maxPerTeacher || 3);
+  const [maxMinutesPerTeacher, setMaxMinutesPerTeacher] = useState<number>(() => dyz.settings.maxMinutesPerTeacher || 60);
+  const [maxConsecutiveDuties, setMaxConsecutiveDuties] = useState<number>(() => dyz.settings.maxConsecutiveDuties !== undefined ? dyz.settings.maxConsecutiveDuties : 2);
   const [excludeTeachers, setExcludeTeachers] = useState<string[]>(dyz.settings.excludeTeachers || []);
 
   const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number } | null>(null);
@@ -137,14 +139,19 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     }
 
     const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
+    const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
     eligibleTeachers.forEach(t => {
       const hours = teacherHours[t.abbr] || 0;
       const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
-      maxMins[t.abbr] = Math.max(15, Math.ceil(avgMinutesForFullTime * prop));
+      if (dyz.settings.autoBalance !== false) {
+        maxMins[t.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * prop)));
+      } else {
+        maxMins[t.abbr] = maxMinsLimit;
+      }
     });
 
     return maxMins;
-  }, [eligibleTeachers, teacherHours, dyz.przerwy, dyz.miejsca]);
+  }, [eligibleTeachers, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance]);
 
 
 
@@ -455,6 +462,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     miejsca: MiejsceDyzuru[],
     przerwy: Przerwa[]
   ): boolean => {
+    const maxConsecutive = dyz.settings.maxConsecutiveDuties !== undefined ? dyz.settings.maxConsecutiveDuties : 2;
+
     const sortedBreaks = [...przerwy].sort((a, b) => {
       const [ah, am] = a.start.split(':').map(Number);
       const [bh, bm] = b.start.split(':').map(Number);
@@ -469,15 +478,15 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
       return hasDuty;
     });
 
-    for (let i = 0; i <= sortedBreaks.length - 3; i++) {
-      if (dutyInSortedIndices[i] && dutyInSortedIndices[i + 1] && dutyInSortedIndices[i + 2]) {
-        const dur1 = getBreakDuration(sortedBreaks[i]);
-        const dur2 = getBreakDuration(sortedBreaks[i + 1]);
-        const dur3 = getBreakDuration(sortedBreaks[i + 2]);
-
-        if (dur1 <= 10 && dur2 <= 10 && dur3 <= 10) {
+    let consecutiveCount = 0;
+    for (let i = 0; i < dutyInSortedIndices.length; i++) {
+      if (dutyInSortedIndices[i]) {
+        consecutiveCount++;
+        if (consecutiveCount > maxConsecutive) {
           return true; // Violation
         }
+      } else {
+        consecutiveCount = 0;
       }
     }
     return false;
@@ -572,9 +581,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
     // Target/Max minutes for each teacher
     const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
     const teacherMaxMinutes: { [abbr: string]: number } = {};
+    const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
     eligibleTeachers.forEach(t => {
       // Set a baseline minimum of at least 15 mins so they can be assigned at least once if needed
-      teacherMaxMinutes[t.abbr] = Math.max(15, Math.ceil(avgMinutesForFullTime * teacherProportions[t.abbr]));
+      if (dyz.settings.autoBalance !== false) {
+        teacherMaxMinutes[t.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * teacherProportions[t.abbr])));
+      } else {
+        teacherMaxMinutes[t.abbr] = maxMinsLimit;
+      }
     });
 
     // Track assigned minutes for each teacher
@@ -1314,25 +1328,48 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
               </h3>
 
               <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Limit tygodniowy dyżurów na nauczyciela</label>
-                  <div className="flex gap-2 items-center">
-                    <input 
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={maxDuties}
-                      onChange={(e) => setMaxDuties(Number(e.target.value))}
-                      className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none w-20"
-                    />
+                <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">⏱️ Maksymalny czas dyżurów w tygodniu</label>
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="number"
+                        min="10"
+                        max="300"
+                        step="5"
+                        value={maxMinutesPerTeacher}
+                        onChange={(e) => setMaxMinutesPerTeacher(Number(e.target.value))}
+                        className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none w-24 font-bold text-slate-800 font-mono"
+                      />
+                      <span className="text-xs text-slate-500 font-semibold">minut</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Łączny limit czasu dyżurów przydzielany nauczycielowi w skali tygodnia.</span>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-3">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">🔄 Maksymalna liczba dyżurów pod rząd</label>
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="number"
+                        min="1"
+                        max="5"
+                        value={maxConsecutiveDuties}
+                        onChange={(e) => setMaxConsecutiveDuties(Number(e.target.value))}
+                        className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none w-24 font-bold text-slate-800 font-mono"
+                      />
+                      <span className="text-xs text-slate-500 font-semibold">przerw(y) pod rząd</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Maksymalny limit przerw pod rząd, na których nauczyciel może pełnić dyżur.</span>
+                  </div>
+
+                  <div className="pt-2">
                     <button 
                       onClick={handleSaveSettings}
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm"
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition"
                     >
-                      Aktualizuj Limit
+                      Zapisz Parametry
                     </button>
                   </div>
-                  <span className="text-[10px] text-slate-400 mt-1 block">Rekomendowane: 2-3 dyżury tygodniowo (optymalne obciążenie).</span>
                 </div>
 
                 <div className="border-t border-slate-100 pt-4 select-none">
