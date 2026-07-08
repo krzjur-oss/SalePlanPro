@@ -4923,7 +4923,7 @@ export default function KreatorSzkoly({
                           type="number" 
                           required
                           min={1}
-                          max={15}
+                          max={40}
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-center text-slate-800"
                           value={newAsgHours}
                           onChange={(e) => setNewAsgHours(parseInt(e.target.value) || 2)}
@@ -5470,7 +5470,7 @@ export default function KreatorSzkoly({
                                   type="number"
                                   required
                                   min={1}
-                                  max={15}
+                                  max={40}
                                   className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-center text-slate-800"
                                   value={newStudHours}
                                   onChange={(e) => setNewStudHours(Math.max(1, parseInt(e.target.value) || 1))}
@@ -5849,7 +5849,7 @@ export default function KreatorSzkoly({
                       type="number"
                       required
                       min={1}
-                      max={15}
+                      max={40}
                       className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-center text-slate-800"
                       value={editStudHours}
                       onChange={(e) => setEditStudHours(Math.max(1, parseInt(e.target.value) || 1))}
