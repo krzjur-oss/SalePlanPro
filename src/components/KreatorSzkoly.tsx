@@ -530,11 +530,11 @@ export default function KreatorSzkoly({
   
   // Quick bell scheduler generator state
   const [genStart, setGenStart] = useState('08:00');
-  const [genLessonMin, setGenLessonMin] = useState(45);
-  const [genBreakMin, setGenBreakMin] = useState(10);
-  const [genLongBreakMin, setGenLongBreakMin] = useState(20);
-  const [genLongBreakAfter, setGenLongBreakAfter] = useState(3);
-  const [genCount, setGenCount] = useState(7);
+  const [genLessonMin, setGenLessonMin] = useState<number | ''>(45);
+  const [genBreakMin, setGenBreakMin] = useState<number | ''>(10);
+  const [genLongBreakMin, setGenLongBreakMin] = useState<number | ''>(20);
+  const [genLongBreakAfter, setGenLongBreakAfter] = useState<number | ''>(3);
+  const [genCount, setGenCount] = useState<number | ''>(7);
   const [syncBreaks, setSyncBreaks] = useState(true);
 
   const handleGenerateHours = (e: React.FormEvent) => {
@@ -546,11 +546,17 @@ export default function KreatorSzkoly({
       m = 0;
     }
     
-    for (let i = 1; i <= genCount; i++) {
+    const count = genCount === '' ? 7 : genCount;
+    const lessonMin = genLessonMin === '' ? 45 : genLessonMin;
+    const breakMin = genBreakMin === '' ? 10 : genBreakMin;
+    const longBreakMin = genLongBreakMin === '' ? 20 : genLongBreakMin;
+    const longBreakAfter = genLongBreakAfter === '' ? 3 : genLongBreakAfter;
+
+    for (let i = 1; i <= count; i++) {
       const startHourStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
       
       // Add lesson duration
-      let totalMins = h * 60 + m + genLessonMin;
+      let totalMins = h * 60 + m + lessonMin;
       let endH = Math.floor(totalMins / 60) % 24;
       let endM = totalMins % 60;
       const endHourStr = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
@@ -562,15 +568,15 @@ export default function KreatorSzkoly({
       });
       
       // Calculate next start time
-      if (i < genCount) {
-        const currentBreak = (i === genLongBreakAfter) ? genLongBreakMin : genBreakMin;
+      if (i < count) {
+        const currentBreak = (i === longBreakAfter) ? longBreakMin : breakMin;
         let nextTotalMins = totalMins + currentBreak;
         h = Math.floor(nextTotalMins / 60) % 24;
         m = nextTotalMins % 60;
       }
     }
     setHoursList(result);
-    showNoti(`Wygenerowano pomyślnie ${genCount} godzin lekcyjnych!`);
+    showNoti(`Wygenerowano pomyślnie ${count} godzin lekcyjnych!`);
   };
 
   const handleUpdateHourTime = (num: number, field: 'start' | 'end', val: string) => {
@@ -1508,8 +1514,8 @@ export default function KreatorSzkoly({
   const [newTFirst, setNewTFirst] = useState('');
   const [newTLast, setNewTLast] = useState('');
   const [newTAbbr, setNewTAbbr] = useState('');
-  const [newTMaxHours, setNewTMaxHours] = useState(18);
-  const [newTOvertimeHours, setNewTOvertimeHours] = useState(0);
+  const [newTMaxHours, setNewTMaxHours] = useState<number | ''>(18);
+  const [newTOvertimeHours, setNewTOvertimeHours] = useState<number | ''>(0);
   const [isTAbbrManual, setIsTAbbrManual] = useState(false);
   const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
   const [newTColor, setNewTColor] = useState(() => PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706');
@@ -1608,8 +1614,8 @@ export default function KreatorSzkoly({
             first: newTFirst.trim(),
             last: newTLast.trim(),
             abbr: formattedAbbr,
-            maxHours: Number(newTMaxHours),
-            overtimeHours: Number(newTOvertimeHours) || undefined,
+            maxHours: newTMaxHours === '' ? 18 : Number(newTMaxHours),
+            overtimeHours: newTOvertimeHours === '' ? 0 : Number(newTOvertimeHours) || undefined,
             color: newTColor,
             availability: newTAvailability,
             inactive: newTInactive,
@@ -1649,8 +1655,8 @@ export default function KreatorSzkoly({
         first: newTFirst.trim(),
         last: newTLast.trim(),
         abbr: formattedAbbr,
-        maxHours: Number(newTMaxHours),
-        overtimeHours: Number(newTOvertimeHours) || undefined,
+        maxHours: newTMaxHours === '' ? 18 : Number(newTMaxHours),
+        overtimeHours: newTOvertimeHours === '' ? 0 : Number(newTOvertimeHours) || undefined,
         color: newTColor,
         inactive: newTInactive,
         inactiveComment: newTInactiveComment.trim(),
@@ -1711,7 +1717,7 @@ export default function KreatorSzkoly({
   const [newCorridorName, setNewCorridorName] = useState('');
   const [newCorridorFloor, setNewCorridorFloor] = useState('');
   const [newCorridorDesc, setNewCorridorDesc] = useState('');
-  const [newCorridorCount, setNewCorridorCount] = useState(1);
+  const [newCorridorCount, setNewCorridorCount] = useState<number | ''>(1);
   const [newCorridorConnectedRooms, setNewCorridorConnectedRooms] = useState<string[]>([]);
   const [editingCorridorId, setEditingCorridorId] = useState<string | null>(null);
 
@@ -1743,7 +1749,7 @@ export default function KreatorSzkoly({
         name: newCorridorName.trim(),
         floor: newCorridorFloor.trim() || undefined,
         desc: newCorridorDesc.trim() || undefined,
-        teachersNeeded: newCorridorCount,
+        teachersNeeded: newCorridorCount === '' ? 1 : Number(newCorridorCount),
         connectedRooms: newCorridorConnectedRooms
       };
 
@@ -1768,7 +1774,7 @@ export default function KreatorSzkoly({
         name: newCorridorName.trim(),
         floor: newCorridorFloor.trim() || undefined,
         desc: newCorridorDesc.trim() || undefined,
-        teachersNeeded: newCorridorCount,
+        teachersNeeded: newCorridorCount === '' ? 1 : Number(newCorridorCount),
         connectedRooms: newCorridorConnectedRooms
       };
 
@@ -1809,7 +1815,7 @@ export default function KreatorSzkoly({
   const [newAsgSubject, setNewAsgSubject] = useState('');
   const [newAsgRoom, setNewAsgRoom] = useState('');
   const [newAsgGroup, setNewAsgGroup] = useState('');
-  const [newAsgHours, setNewAsgHours] = useState(2);
+  const [newAsgHours, setNewAsgHours] = useState<number | ''>(2);
   const [newAsgBlockSize, setNewAsgBlockSize] = useState<number>(1); // default single 1h
   const [newAsgLinkedClasses, setNewAsgLinkedClasses] = useState<string[]>([]);
   const [editingAsgId, setEditingAsgId] = useState<string | null>(null);
@@ -1849,7 +1855,7 @@ export default function KreatorSzkoly({
             subjectId: newAsgSubject,
             roomId: newAsgRoom || null,
             groupId: newAsgGroup || null,
-            hoursPerWeek: newAsgHours,
+            hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
             preferredBlockSize: newAsgBlockSize,
             linkedClassIds: newAsgLinkedClasses.length > 0 ? newAsgLinkedClasses : undefined
           };
@@ -1884,7 +1890,7 @@ export default function KreatorSzkoly({
         subjectId: newAsgSubject,
         roomId: newAsgRoom || null,
         groupId: newAsgGroup || null,
-        hoursPerWeek: newAsgHours,
+        hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
         preferredBlockSize: newAsgBlockSize,
         linkedClassIds: newAsgLinkedClasses.length > 0 ? newAsgLinkedClasses : undefined
       };
@@ -1976,11 +1982,11 @@ export default function KreatorSzkoly({
 
   const [editStudSubjId, setEditStudSubjId] = useState('');
   const [editStudTeachId, setEditStudTeachId] = useState('');
-  const [editStudHours, setEditStudHours] = useState(2);
+  const [editStudHours, setEditStudHours] = useState<number | ''>(2);
 
   const [newStudSubjId, setNewStudSubjId] = useState('');
   const [newStudTeachId, setNewStudTeachId] = useState('');
-  const [newStudHours, setNewStudHours] = useState(2);
+  const [newStudHours, setNewStudHours] = useState<number | ''>(2);
 
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2072,7 +2078,7 @@ export default function KreatorSzkoly({
       studentId: activeStudentId,
       subjectId: newStudSubjId,
       teacherId: newStudTeachId || null,
-      hoursPerWeek: newStudHours,
+      hoursPerWeek: newStudHours === '' ? 2 : Number(newStudHours),
       withClass: false
     };
 
@@ -2171,7 +2177,7 @@ export default function KreatorSzkoly({
       studentId: editingStudentId,
       subjectId: editStudSubjId,
       teacherId: editStudTeachId || null,
-      hoursPerWeek: editStudHours,
+      hoursPerWeek: editStudHours === '' ? 2 : Number(editStudHours),
       withClass: false
     };
 
@@ -2777,7 +2783,7 @@ export default function KreatorSzkoly({
                           min={1}
                           required
                           value={genLessonMin}
-                          onChange={(e) => setGenLessonMin(parseInt(e.target.value) || 45)}
+                          onChange={(e) => setGenLessonMin(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center"
                         />
                       </div>
@@ -2788,7 +2794,7 @@ export default function KreatorSzkoly({
                           min={0}
                           required
                           value={genBreakMin}
-                          onChange={(e) => setGenBreakMin(parseInt(e.target.value) || 10)}
+                          onChange={(e) => setGenBreakMin(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center"
                         />
                       </div>
@@ -2800,7 +2806,7 @@ export default function KreatorSzkoly({
                           max={15}
                           required
                           value={genCount}
-                          onChange={(e) => setGenCount(parseInt(e.target.value) || 7)}
+                          onChange={(e) => setGenCount(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center"
                         />
                       </div>
@@ -2814,7 +2820,7 @@ export default function KreatorSzkoly({
                           min={0}
                           required
                           value={genLongBreakMin}
-                          onChange={(e) => setGenLongBreakMin(parseInt(e.target.value) || 20)}
+                          onChange={(e) => setGenLongBreakMin(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center"
                         />
                       </div>
@@ -2825,7 +2831,7 @@ export default function KreatorSzkoly({
                           min={1}
                           required
                           value={genLongBreakAfter}
-                          onChange={(e) => setGenLongBreakAfter(parseInt(e.target.value) || 3)}
+                          onChange={(e) => setGenLongBreakAfter(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 text-center"
                         />
                       </div>
@@ -3979,7 +3985,7 @@ export default function KreatorSzkoly({
                           placeholder="18"
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-semibold text-slate-800"
                           value={newTMaxHours}
-                          onChange={(e) => setNewTMaxHours(parseInt(e.target.value) || 18)}
+                          onChange={(e) => setNewTMaxHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                         />
                       </div>
                       <div className="space-y-1">
@@ -3992,7 +3998,7 @@ export default function KreatorSzkoly({
                           placeholder="0"
                           className="w-full px-3 py-1.5 border border-indigo-100 bg-indigo-50/35 rounded-lg text-xs outline-none font-semibold text-indigo-800"
                           value={newTOvertimeHours}
-                          onChange={(e) => setNewTOvertimeHours(parseInt(e.target.value) || 0)}
+                          onChange={(e) => setNewTOvertimeHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                         />
                       </div>
                     </div>
@@ -4287,7 +4293,7 @@ export default function KreatorSzkoly({
                                   placeholder="18"
                                   className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-semibold text-slate-800 focus:border-blue-500"
                                   value={newTMaxHours}
-                                  onChange={(e) => setNewTMaxHours(parseInt(e.target.value) || 18)}
+                                  onChange={(e) => setNewTMaxHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                                 />
                               </div>
                               <div className="space-y-1">
@@ -4300,7 +4306,7 @@ export default function KreatorSzkoly({
                                   placeholder="0"
                                   className="w-full px-3 py-1.5 border border-indigo-150 bg-indigo-50/20 rounded-lg text-xs outline-none font-semibold text-indigo-800 focus:border-indigo-500"
                                   value={newTOvertimeHours}
-                                  onChange={(e) => setNewTOvertimeHours(parseInt(e.target.value) || 0)}
+                                  onChange={(e) => setNewTOvertimeHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                                 />
                               </div>
                             </div>
@@ -4554,7 +4560,7 @@ export default function KreatorSzkoly({
                           max={4}
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-blue-600"
                           value={newCorridorCount}
-                          onChange={(e) => setNewCorridorCount(Math.max(1, parseInt(e.target.value) || 1))}
+                          onChange={(e) => setNewCorridorCount(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
                         />
                       </div>
                     </div>
@@ -4926,7 +4932,7 @@ export default function KreatorSzkoly({
                           max={40}
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-center text-slate-800"
                           value={newAsgHours}
-                          onChange={(e) => setNewAsgHours(parseInt(e.target.value) || 2)}
+                          onChange={(e) => setNewAsgHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                         />
                       </div>
                     </div>
@@ -5473,7 +5479,7 @@ export default function KreatorSzkoly({
                                   max={40}
                                   className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-center text-slate-800"
                                   value={newStudHours}
-                                  onChange={(e) => setNewStudHours(Math.max(1, parseInt(e.target.value) || 1))}
+                                  onChange={(e) => setNewStudHours(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
                                 />
                               </div>
 
@@ -5852,7 +5858,7 @@ export default function KreatorSzkoly({
                       max={40}
                       className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-center text-slate-800"
                       value={editStudHours}
-                      onChange={(e) => setEditStudHours(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e) => setEditStudHours(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
                     />
                   </div>
 
