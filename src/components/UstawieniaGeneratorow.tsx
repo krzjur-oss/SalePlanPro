@@ -35,6 +35,8 @@ export const DEFAULT_GENERATOR_SETTINGS: GeneratorSettings = {
   genExcludeWF: true,
   genAutoPlaceWF: true,
   genClearExisting: true,
+  forceOptionalToExtremes: true,
+  optionalSubjectIds: [],
 };
 
 export default function UstawieniaGeneratorow({ appState, onChangeAppState }: UstawieniaGeneratorowProps) {
@@ -366,6 +368,102 @@ export default function UstawieniaGeneratorow({ appState, onChangeAppState }: Us
                 />
               </div>
             )}
+
+            {/* forceOptionalToExtremes - Priorytet dla religii i przedmiotów opcjonalnych */}
+            <div className="space-y-2 border-t border-slate-100 pt-4">
+              <div className="flex items-start gap-3 p-3 bg-slate-50/50 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
+                <input 
+                  type="checkbox" 
+                  id="set_forceOptionalToExtremes"
+                  className="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                  checked={settings.forceOptionalToExtremes !== false}
+                  onChange={(e) => updateSettings({ forceOptionalToExtremes: e.target.checked })}
+                />
+                <label htmlFor="set_forceOptionalToExtremes" className="cursor-pointer select-none space-y-0.5 flex-1">
+                  <span className="text-xs font-bold text-slate-800 block">⛪ Priorytet dla przedmiotów opcjonalnych (Religia, Etyka, WDŻ, mniejszości)</span>
+                  <span className="text-[10px] text-slate-500 block leading-tight">
+                    Algorytm będzie dążył do umieszczenia tych lekcji wyłącznie na początku lub na końcu dnia klasy (pierwsza lub ostatnia godzina lekcyjna). Zapobiega to okienkom u uczniów nieuczestniczących w tych zajęciach.
+                  </span>
+                </label>
+              </div>
+
+              {settings.forceOptionalToExtremes !== false && (
+                <div className="ml-7 p-3 bg-blue-50/30 border border-blue-100 rounded-xl space-y-2 animate-in slide-in-from-top-1 duration-150">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-extrabold text-slate-700 uppercase tracking-wider block">Wybierz przedmioty o najwyższym priorytecie skrajów dnia:</span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const autoDetected = appState.planLekcji.subjects
+                            .filter(s => {
+                              const nameLower = s.name.toLowerCase();
+                              return (
+                                nameLower.includes('relig') ||
+                                nameLower.includes('etyk') ||
+                                nameLower.includes('mniejsz') ||
+                                nameLower.includes('wdż') ||
+                                nameLower.includes('wdz')
+                              );
+                            })
+                            .map(s => s.id);
+                          updateSettings({ optionalSubjectIds: autoDetected });
+                        }}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition cursor-pointer uppercase"
+                      >
+                        Auto-Wybór
+                      </button>
+                      <span className="text-slate-300 text-[10px]">|</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allSubjectIds = appState.planLekcji.subjects.map(s => s.id);
+                          const currentSelected = settings.optionalSubjectIds || [];
+                          const isAllSelected = currentSelected.length === allSubjectIds.length;
+                          updateSettings({ optionalSubjectIds: isAllSelected ? [] : allSubjectIds });
+                        }}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition cursor-pointer uppercase"
+                      >
+                        {(settings.optionalSubjectIds || []).length === appState.planLekcji.subjects.length ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[9.5px] text-slate-500 leading-normal">
+                    Zaznaczone przedmioty będą automatycznie spychane na początek lub koniec dnia klasy, jeśli klasa ma zaplanowane inne lekcje.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-white border border-slate-200 rounded-lg custom-scrollbar font-sans">
+                    {appState.planLekcji.subjects.map(sub => {
+                      const currentSelected = settings.optionalSubjectIds || [];
+                      const isChecked = currentSelected.includes(sub.id);
+                      return (
+                        <label 
+                          key={sub.id} 
+                          className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer select-none text-[11px]"
+                        >
+                          <input 
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              let nextSelected: string[];
+                              if (e.target.checked) {
+                                nextSelected = [...currentSelected, sub.id];
+                              } else {
+                                nextSelected = currentSelected.filter(id => id !== sub.id);
+                              }
+                              updateSettings({ optionalSubjectIds: nextSelected });
+                            }}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                          />
+                          <span className="truncate font-medium text-slate-700" title={sub.name}>
+                            {sub.name} <span className="text-[9.5px] text-slate-450 font-mono">({sub.short})</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
           </div>
         </div>

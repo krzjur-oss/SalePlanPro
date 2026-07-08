@@ -267,6 +267,9 @@ export interface GeneratorSettings {
   genExcludeWF: boolean;
   genAutoPlaceWF: boolean;
   genClearExisting: boolean;
+
+  forceOptionalToExtremes?: boolean;
+  optionalSubjectIds?: string[];
 }
 
 export interface AppState {

@@ -40,6 +40,26 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
   });
   const [minAvailableSubstitutionTeachersPerSlot, setMinAvailableSubstitutionTeachersPerSlot] = useState<number>(() => appState.generatorSettings?.minAvailableSubstitutionTeachersPerSlot ?? 1);
 
+  const [forceOptionalToExtremes, setForceOptionalToExtremes] = useState<boolean>(() => appState.generatorSettings?.forceOptionalToExtremes ?? true);
+  const [optionalSubjectIds, setOptionalSubjectIds] = useState<string[]>(() => {
+    if (appState.generatorSettings?.optionalSubjectIds) {
+      return appState.generatorSettings.optionalSubjectIds;
+    }
+    // Default matching names containing religia, etyka, mniejszość, wdż, wdżwr
+    return pl.subjects
+      .filter(s => {
+        const nameLower = s.name.toLowerCase();
+        return (
+          nameLower.includes('relig') ||
+          nameLower.includes('etyk') ||
+          nameLower.includes('mniejsz') ||
+          nameLower.includes('wdż') ||
+          nameLower.includes('wdz')
+        );
+      })
+      .map(s => s.id);
+  });
+
   // Maintain custom role settings for teachers during this generator session
   const [teacherConfigs, setTeacherConfigs] = useState<Record<string, TeacherRoleConfig>>(() => {
     const configs: Record<string, TeacherRoleConfig> = {};
@@ -266,15 +286,48 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
 
           // Extremes avoidance
           if (avoidExtremes) {
-            const appliesToSubject = !avoidExtremesSubjectIds || avoidExtremesSubjectIds.length === 0 || avoidExtremesSubjectIds.includes(unit.subjectId);
-            if (appliesToSubject) {
-              // Hour 0 is heavily penalized
-              if (hour === 0) {
-                score -= 100;
+            const isOptionalSubject = forceOptionalToExtremes && optionalSubjectIds.includes(unit.subjectId);
+            if (!isOptionalSubject) {
+              const appliesToSubject = !avoidExtremesSubjectIds || avoidExtremesSubjectIds.length === 0 || avoidExtremesSubjectIds.includes(unit.subjectId);
+              if (appliesToSubject) {
+                // Hour 0 is heavily penalized
+                if (hour === 0) {
+                  score -= 100;
+                }
+                // Hours after 6 are penalized
+                if (hour >= 6) {
+                  score -= (hour - 5) * 40;
+                }
               }
-              // Hours after 6 are penalized
-              if (hour >= 6) {
-                score -= (hour - 5) * 40;
+            }
+          }
+
+          // Force optional subjects to extremes (beginning/end of class schedule)
+          if (forceOptionalToExtremes && optionalSubjectIds.includes(unit.subjectId)) {
+            let dayMin = 99;
+            let dayMax = -1;
+
+            for (let h = 0; h < maxHoursCount; h++) {
+              if (classBusy.has(`${unit.classId}|${day}|${h}`)) {
+                dayMin = Math.min(dayMin, h);
+                dayMax = Math.max(dayMax, h);
+              }
+            }
+
+            if (dayMax !== -1) {
+              // If class already has lessons scheduled on this day, we want this to be on the outer boundary
+              if (hour === dayMin - 1 || hour === dayMax + 1) {
+                score += 800; // Big bonus for edge of day
+              } else if (hour >= dayMin && hour <= dayMax) {
+                score -= 1200; // HEAVY PENALTY for scheduling optional subject in the middle of a class day
+              } else {
+                score -= 300; // Isolated from current day lessons
+              }
+            } else {
+              // First lesson being scheduled for this class on this day.
+              // Prefer absolute boundaries of the lesson slots (e.g. first slot 0/1 or last slot >= 5)
+              if (hour === 0 || hour === 1 || hour >= 5) {
+                score += 300;
               }
             }
           }
@@ -648,7 +701,9 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
             includeSpecialNI,
             limitComputerLabs,
             customComputerLabsCount,
-            minAvailableSubstitutionTeachersPerSlot
+            minAvailableSubstitutionTeachersPerSlot,
+            forceOptionalToExtremes,
+            optionalSubjectIds
           }
         });
 
@@ -1046,6 +1101,74 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
                         {minAvailableSubstitutionTeachersPerSlot === 0 ? 'Brak rezerwy (0)' : `Min. ${minAvailableSubstitutionTeachersPerSlot} nauczycieli`}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Religia i przedmioty opcjonalne na skrajach dnia */}
+                  <div className="p-4 border border-slate-200 rounded-2xl flex flex-col gap-3 bg-slate-50/50">
+                    <div className="flex items-start gap-3 hover:text-indigo-600 transition cursor-pointer" onClick={() => setForceOptionalToExtremes(!forceOptionalToExtremes)}>
+                      <input 
+                        type="checkbox"
+                        checked={forceOptionalToExtremes}
+                        onChange={() => {}}
+                        className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 pointer-events-none"
+                      />
+                      <div>
+                        <span className="text-xs font-black text-slate-800 block select-none">⛪ Przedmioty opcjonalne (np. Religia, Etyka) na skrajach dnia klasy</span>
+                        <p className="text-[10.5px] text-slate-450 font-medium leading-relaxed mt-1 select-none">
+                          Automatycznie planuje wybrane przedmioty na pierwszej lub ostatniej lekcji danej klasy. Zapobiega to okienkom u uczniów nieuczestniczących w tych lekcjach.
+                        </p>
+                      </div>
+                    </div>
+
+                    {forceOptionalToExtremes && (
+                      <div className="ml-7 p-3 bg-indigo-50/30 border border-indigo-100 rounded-xl space-y-2 animate-in slide-in-from-top-1 duration-150">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10.5px] font-extrabold text-slate-700 uppercase tracking-wider block">Wybierz przedmioty objęte regułą:</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const allSubjectIds = pl.subjects.map(s => s.id);
+                              const isAllSelected = (optionalSubjectIds || []).length === allSubjectIds.length;
+                              setOptionalSubjectIds(isAllSelected ? [] : allSubjectIds);
+                            }}
+                            className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition cursor-pointer uppercase font-mono"
+                          >
+                            {(optionalSubjectIds || []).length === pl.subjects.length ? 'Odznacz wszystkie' : 'Zaznacz wszystkie'}
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto p-1 bg-white border border-slate-200 rounded-lg custom-scrollbar">
+                          {pl.subjects.map(sub => {
+                            const isChecked = (optionalSubjectIds || []).includes(sub.id);
+                            return (
+                              <label 
+                                key={sub.id} 
+                                className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer select-none text-[11px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input 
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    let nextSelected: string[];
+                                    if (e.target.checked) {
+                                      nextSelected = [...(optionalSubjectIds || []), sub.id];
+                                    } else {
+                                      nextSelected = (optionalSubjectIds || []).filter(id => id !== sub.id);
+                                    }
+                                    setOptionalSubjectIds(nextSelected);
+                                  }}
+                                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                                />
+                                <span className="truncate font-medium text-slate-700" title={sub.name}>
+                                  {sub.name} <span className="text-[9.5px] text-slate-450 font-mono">({sub.short})</span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                 </div>
