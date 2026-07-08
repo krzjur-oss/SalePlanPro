@@ -35,7 +35,7 @@ export function DraggableItem({ id, data, children, disabled }: DraggableProps) 
       style={style}
       {...listeners}
       {...attributes}
-      className={`relative touch-none select-none cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-40 scale-95 shadow-md border-dashed' : ''}`}
+      className={`relative touch-none select-none ${disabled ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} ${isDragging ? 'opacity-40 scale-95 shadow-md border-dashed' : ''}`}
     >
       {children}
     </div>

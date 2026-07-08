@@ -32,9 +32,10 @@ interface PlanKlasProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
   onTransfer: () => void;
+  presentationMode?: boolean;
 }
 
-export default function PlanKlas({ appState, onChangeAppState, onTransfer }: PlanKlasProps) {
+export default function PlanKlas({ appState, onChangeAppState, onTransfer, presentationMode = false }: PlanKlasProps) {
   const pl = appState.planLekcji;
 
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
@@ -53,6 +54,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
     pl.classes.length > 0 ? pl.classes[0].id : null
   );
   const [activeTab, setActiveTab] = useState<'plan' | 'assign' | 'special' | 'teachers'>('plan');
+
+  React.useEffect(() => {
+    if (presentationMode && activeTab !== 'plan') {
+      setActiveTab('plan');
+    }
+  }, [presentationMode, activeTab]);
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
   const [activeDayIndex, setActiveDayIndex] = useState<number>(0);
   const [allViewSelectedClassId, setAllViewSelectedClassId] = useState<string | null>(null);
@@ -1113,7 +1120,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
   return (
     <div className="flex flex-col md:flex-row flex-1 overflow-hidden px-0 mx-0" id="page-plan-klas">
       {/* ── LEWY SIDEBAR (Nawigacja) ── */}
-      {!(viewMode === 'all' && activeTab === 'plan') && (
+      {!presentationMode && !(viewMode === 'all' && activeTab === 'plan') && (
         <aside className="w-full md:w-64 border-r border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none">
           
           {/* Zarządzanie Klasami */}
@@ -1318,20 +1325,22 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer }: Pla
                     : currentClass ? `Zdefiniowano zajęcia klasy: ${currentClass.group || 'cała klasa'}. Przeciągaj lekcje ze skrytki po prawej stronie na siatkę.` : 'Wybierz klasę z lewego panelu, aby rozpocząć układanie planu.'}
                 </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button 
-                  onClick={() => setShowGenerator(true)}
-                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
-                >
-                  <Sparkles size={14} /> Autogenerator planu lekcji
-                </button>
-                <button 
-                  onClick={onTransfer}
-                  className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
-                >
-                  <RefreshCw size={14} /> Przenieś do planu sal (Etap 2)
-                </button>
-              </div>
+              {!presentationMode && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button 
+                    onClick={() => setShowGenerator(true)}
+                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
+                  >
+                    <Sparkles size={14} /> Autogenerator planu lekcji
+                  </button>
+                  <button 
+                    onClick={onTransfer}
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
+                  >
+                    <RefreshCw size={14} /> Przenieś do planu sal (Etap 2)
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Przełącznik Widoku */}

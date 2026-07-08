@@ -13,6 +13,7 @@ interface PlanSalProps {
   onChangeAppState: (newState: AppState) => void;
   onChangeSchedData: (newData: SchedData) => void;
   onImportFromPlanKlas: () => void;
+  presentationMode?: boolean;
 }
 
 export default function PlanSal({ 
@@ -20,7 +21,8 @@ export default function PlanSal({
   schedData, 
   onChangeAppState, 
   onChangeSchedData,
-  onImportFromPlanKlas
+  onImportFromPlanKlas,
+  presentationMode = false
 }: PlanSalProps) {
   const [activeDay, setActiveDay] = useState<number>(0);
   const [activeRoomCategory, setActiveRoomCategory] = useState<'main' | 'individual' | 'sport'>('main');
@@ -1275,6 +1277,7 @@ export default function PlanSal({
   // ── HANDLING MODAL ACTIONS ──
 
   const handleOpenEdit = (hour: string, cKey: string, slotIdx?: number) => {
+    if (presentationMode) return;
     const raw = currentDayData[hour]?.[cKey];
     let cell: SchedCell | null = null;
     if (Array.isArray(raw)) {
@@ -1439,6 +1442,7 @@ export default function PlanSal({
   };
 
   const handleAddWFSlot = (hour: string, cKey: string) => {
+    if (presentationMode) return;
     const yearKey = appState.yearKey;
     const newSchedData = { ...schedData };
     if (!newSchedData[yearKey]) newSchedData[yearKey] = {};
@@ -1477,6 +1481,7 @@ export default function PlanSal({
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (presentationMode) return;
     const { active, over } = event;
     if (!over) return;
 
@@ -1755,21 +1760,23 @@ export default function PlanSal({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setShowGenerator(true)}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold text-indigo-750 bg-indigo-50 border border-indigo-200 hover:bg-indigo-150 flex items-center gap-1.5 transition-all shadow-xs"
-            >
-              <Sparkles size={14} className="text-indigo-650 animate-pulse" /> Inteligentny Generator Sal
-            </button>
-            <button
-              onClick={onImportFromPlanKlas}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 flex items-center gap-1.5 transition-all"
-            >
-              <RefreshCw size={14} /> Synchronizuj z Planem Klas (Etap 1)
-            </button>
-          </div>
+          {!presentationMode && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowGenerator(true)}
+                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-indigo-750 bg-indigo-50 border border-indigo-200 hover:bg-indigo-150 flex items-center gap-1.5 transition-all shadow-xs"
+              >
+                <Sparkles size={14} className="text-indigo-650 animate-pulse" /> Inteligentny Generator Sal
+              </button>
+              <button
+                onClick={onImportFromPlanKlas}
+                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 flex items-center gap-1.5 transition-all"
+              >
+                <RefreshCw size={14} /> Synchronizuj z Planem Klas (Etap 1)
+              </button>
+            </div>
+          )}
         </div>
 
         {/* ── PASEK KATEGORII SAL ── */}
@@ -2204,7 +2211,7 @@ export default function PlanSal({
           </div>
 
           {/* Prawa strona: sidebar lekcji z Planu Klas */}
-          {renderSidebar()}
+          {!presentationMode && renderSidebar()}
 
         </div>
 

@@ -14,9 +14,11 @@ import Statystyki from './components/Statystyki';
 import OProgramie from './components/OProgramie';
 import UstawieniaGeneratorow from './components/UstawieniaGeneratorow';
 import SnapshotManager from './components/SnapshotManager';
+import BackupPasswordModal from './components/BackupPasswordModal';
+import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff
 } from 'lucide-react';
 
 function sortAppState(resolved: AppState): AppState {
@@ -185,6 +187,12 @@ export default function App() {
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
+  // States for optional backup encryption
+  const [showBackupPasswordModal, setShowBackupPasswordModal] = useState(false);
+  const [backupPasswordMode, setBackupPasswordMode] = useState<'export' | 'import'>('export');
+  const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
+  const [backupModalError, setBackupModalError] = useState('');
+
   const handleUpdateAppState = (newState: AppState | ((prev: AppState) => AppState)) => {
     setAppState(prev => {
       const resolved = typeof newState === 'function' ? newState(prev) : newState;
@@ -201,6 +209,7 @@ export default function App() {
   const [redoStack, setRedoStack] = useState<SchedData[]>([]);
 
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isPresentationMode, setIsPresentationMode] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
 
   useEffect(() => {
@@ -321,6 +330,12 @@ export default function App() {
   // ── KEYBOARD SHORTCUTS FOR UNDO / REDO ──
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isPresentationMode) {
+        setIsPresentationMode(false);
+        notify('Wyłączono tryb prezentacji', 'info');
+        return;
+      }
+
       const activeEl = document.activeElement;
       if (activeEl) {
         const tagName = activeEl.tagName.toLowerCase();
@@ -350,7 +365,7 @@ export default function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [undoStack, redoStack, schedData]);
+  }, [undoStack, redoStack, schedData, isPresentationMode]);
 
   // ── BRIDGING/IMPORT SESSIONS FROM ETAP 1 TO ETAP 2 ──
   const handleImportFromPlanKlas = () => {
@@ -602,42 +617,94 @@ export default function App() {
 
   // ── JSON BACKUPS ACTIONS ──
   const handleExportBackup = () => {
-    const backup = {
+    setBackupPasswordMode('export');
+    setBackupModalError('');
+    setShowBackupPasswordModal(true);
+  };
+
+  const handleExecuteExport = async (password?: string) => {
+    const backupObj = {
       version: '3.0.0',
       appState,
       schedData,
       timestamp: new Date().toISOString()
     };
-    downloadFile(JSON.stringify(backup, null, 2), `saleplan-plan-szkoly-${appState.school.short.toLowerCase() || 'v3'}.json`, 'application/json');
-    notify('Wyeksportowano archiwum JSON', 'ok');
+    
+    const rawJson = JSON.stringify(backupObj, null, 2);
+    const fileName = `saleplan-plan-szkoly-${appState.school.short.toLowerCase() || 'v3'}`;
+
+    try {
+      if (password) {
+        const encrypted = await encryptText(rawJson, password);
+        downloadFile(encrypted, `${fileName}-secured.json`, 'application/json');
+        notify('Wyeksportowano zabezpieczone hasłem archiwum JSON', 'ok');
+      } else {
+        downloadFile(rawJson, `${fileName}.json`, 'application/json');
+        notify('Wyeksportowano archiwum JSON', 'ok');
+      }
+      setShowBackupPasswordModal(false);
+    } catch (err) {
+      notify('Błąd podczas eksportowania kopii', 'err');
+    }
   };
 
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Reset so same file can be selected again
+    e.target.value = '';
+
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = JSON.parse(evt.target?.result as string);
-        if (data.appState && data.schedData) {
-          pushToUndo(schedData);
-          handleUpdateAppState(data.appState);
-          setSchedData(data.schedData);
-          notify('Pomyślnie wczytano archiwum lekcyjne!', 'ok');
-          addEventLog(
-            'import',
-            'Wczytano kopię zapasową JSON (plik)',
-            `Pomyślnie przywrócono stan planu lekcji i konfigurację dla szkoły "${data.appState.school?.name || ''}".`
-          );
-        } else {
-          notify('Błędny format pliku archiwum', 'err');
+    reader.onload = async (evt) => {
+      const rawContent = evt.target?.result as string;
+      if (!rawContent) return;
+
+      if (isEncryptedBackup(rawContent)) {
+        setPendingEncryptedContent(rawContent);
+        setBackupPasswordMode('import');
+        setBackupModalError('');
+        setShowBackupPasswordModal(true);
+      } else {
+        try {
+          const data = JSON.parse(rawContent);
+          processImportedBackup(data);
+        } catch (err) {
+          notify('Błąd odczytu pliku kopii - niepoprawny format JSON', 'err');
         }
-      } catch (err) {
-        notify('Błąd odczytu pliku kopii', 'err');
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleExecuteDecryptAndImport = async (password: string) => {
+    if (!pendingEncryptedContent) return;
+    try {
+      const decrypted = await decryptText(pendingEncryptedContent, password);
+      const data = JSON.parse(decrypted);
+      processImportedBackup(data);
+      
+      setShowBackupPasswordModal(false);
+      setPendingEncryptedContent(null);
+    } catch (err: any) {
+      setBackupModalError(err.message || 'Niepoprawne hasło lub błąd odszyfrowywania.');
+    }
+  };
+
+  const processImportedBackup = (data: any) => {
+    if (data.appState && data.schedData) {
+      pushToUndo(schedData);
+      handleUpdateAppState(data.appState);
+      setSchedData(data.schedData);
+      notify('Pomyślnie wczytano archiwum lekcyjne!', 'ok');
+      addEventLog(
+        'import',
+        'Wczytano kopię zapasową JSON (plik)',
+        `Pomyślnie przywrócono stan planu lekcji i konfigurację dla szkoły "${data.appState.school?.name || ''}".`
+      );
+    } else {
+      notify('Błędny format pliku archiwum', 'err');
+    }
   };
 
   const handleResetTimetable = () => {
@@ -653,10 +720,10 @@ export default function App() {
     );
   };
 
-  const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
+  const notify = (msg: string, type: 'ok' | 'err' | 'info' = 'ok') => {
     const toast = document.createElement('div');
     toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg z-[9999] ${
-      type === 'ok' ? 'border-emerald-500' : 'border-red-500'
+      type === 'ok' ? 'border-emerald-500' : type === 'info' ? 'border-amber-500' : 'border-red-500'
     }`;
     toast.textContent = msg;
     document.body.appendChild(toast);
@@ -669,7 +736,8 @@ export default function App() {
     <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
       
       {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY ── */}
-      <header className="bg-slate-900 text-white px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between shadow-md select-none shrink-0 border-b border-slate-950">
+      {!isPresentationMode && (
+        <header className="bg-slate-900 text-white px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between shadow-md select-none shrink-0 border-b border-slate-950">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 rounded-lg p-2 text-white flex items-center justify-center font-black">
             SP
@@ -878,6 +946,18 @@ export default function App() {
             >
               {isFullscreen ? <Minimize2 size={15} className="text-amber-400" /> : <Maximize2 size={15} />}
             </button>
+            <button 
+              onClick={() => {
+                setIsPresentationMode(!isPresentationMode);
+                notify(isPresentationMode ? 'Wyłączono tryb prezentacji' : 'Włączono tryb prezentacji (Esc aby wyjść)', 'info');
+              }}
+              className={`p-1.5 rounded-lg transition select-none cursor-pointer ${
+                isPresentationMode ? 'text-amber-400 bg-slate-800 hover:bg-slate-750' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+              title={isPresentationMode ? "Wyjdź z trybu prezentacji" : "Włącz tryb prezentacji (Prezentacja)"}
+            >
+              {isPresentationMode ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
           </div>
 
           <button 
@@ -922,6 +1002,7 @@ export default function App() {
           </button>
         </div>
       </header>
+      )}
 
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
       <div className="flex-1 flex overflow-hidden px-0 mx-0">
@@ -942,6 +1023,7 @@ export default function App() {
               handleImportFromPlanKlas();
               setCurrentTab('plan_sal');
             }}
+            presentationMode={isPresentationMode}
           />
         )}
         {currentTab === 'plan_sal' && (
@@ -951,6 +1033,7 @@ export default function App() {
             onChangeAppState={handleUpdateAppState} 
             onChangeSchedData={handleUpdateSchedData} 
             onImportFromPlanKlas={handleImportFromPlanKlas}
+            presentationMode={isPresentationMode}
           />
         )}
         {currentTab === 'dyzury' && (
@@ -958,6 +1041,7 @@ export default function App() {
             appState={appState} 
             onChangeAppState={handleUpdateAppState} 
             schedData={schedData}
+            presentationMode={isPresentationMode}
           />
         )}
         {currentTab === 'wydruki' && (
@@ -986,7 +1070,8 @@ export default function App() {
       </div>
 
       {/* ── STOPKA STATYSTYCZNA LICENCJI ── */}
-      <footer className="bg-slate-900 border-t border-slate-950 text-slate-500 py-3 px-6 flex flex-col md:flex-row justify-between items-center gap-3.5 text-[10px] select-none shrink-0 font-medium">
+      {!isPresentationMode && (
+        <footer className="bg-slate-900 border-t border-slate-950 text-slate-500 py-3 px-6 flex flex-col md:flex-row justify-between items-center gap-3.5 text-[10px] select-none shrink-0 font-medium">
         <div className="flex items-center gap-3">
           <span>Licencja: Edukacyjna (Zastrzeżona) · Offline Client-side App</span>
           <span className="text-slate-750 font-bold">|</span>
@@ -1037,6 +1122,24 @@ export default function App() {
           </div>
         </div>
       </footer>
+      )}
+
+      {/* Floating Presentation Mode Exit Indicator */}
+      {isPresentationMode && (
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 bg-slate-900/95 hover:bg-slate-900 backdrop-blur-md px-4 py-2.5 rounded-full shadow-2xl border border-slate-800 text-white animate-fade-in">
+          <span className="text-[11px] text-slate-300 font-bold uppercase tracking-wider">Tryb Prezentacji</span>
+          <span className="text-slate-700">|</span>
+          <button
+            onClick={() => {
+              setIsPresentationMode(false);
+              notify('Wyłączono tryb prezentacji', 'info');
+            }}
+            className="flex items-center gap-1.5 text-xs font-black text-amber-400 hover:text-amber-300 uppercase cursor-pointer"
+          >
+            <EyeOff size={14} /> Wyjdź (Esc)
+          </button>
+        </div>
+      )}
 
       <SnapshotManager
         isOpen={showSnapshotManager}
@@ -1048,6 +1151,28 @@ export default function App() {
         onRestoreSnapshot={handleRestoreSnapshotState}
         isRestoring={isRestoring}
         onRestoringChange={setIsRestoring}
+      />
+
+      <BackupPasswordModal
+        isOpen={showBackupPasswordModal}
+        onClose={() => {
+          setShowBackupPasswordModal(false);
+          setPendingEncryptedContent(null);
+        }}
+        mode={backupPasswordMode}
+        onSubmit={(password) => {
+          if (backupPasswordMode === 'export') {
+            handleExecuteExport(password);
+          } else {
+            handleExecuteDecryptAndImport(password);
+          }
+        }}
+        onSkip={() => {
+          if (backupPasswordMode === 'export') {
+            handleExecuteExport();
+          }
+        }}
+        errorMsg={backupModalError}
       />
 
       {isRestoring && (

@@ -17,12 +17,19 @@ interface DyzuryProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
   schedData: any;
+  presentationMode?: boolean;
 }
 
-export default function Dyzury({ appState, onChangeAppState, schedData }: DyzuryProps) {
+export default function Dyzury({ appState, onChangeAppState, schedData, presentationMode = false }: DyzuryProps) {
   const dyz = appState.dyzury;
 
   const [activeTab, setActiveTab] = useState<'roster' | 'places' | 'breaks'>('roster');
+
+  React.useEffect(() => {
+    if (presentationMode && activeTab !== 'roster') {
+      setActiveTab('roster');
+    }
+  }, [presentationMode, activeTab]);
   const [activeDay, setActiveDay] = useState<number>(0);
   const [draggedTeacher, setDraggedTeacher] = useState<{ miejsceId: string; przerwa: number } | null>(null);
 
@@ -741,10 +748,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
 
   // Drag & drop swapping
   const handleDragStart = (mId: string, prw: number) => {
+    if (presentationMode) return;
     setDraggedTeacher({ miejsceId: mId, przerwa: prw });
   };
 
   const handleDropOnSlot = (dstMId: string, dstPrw: number) => {
+    if (presentationMode) return;
     if (!draggedTeacher) return;
     const { miejsceId: srcMId, przerwa: srcPrw } = draggedTeacher;
 
@@ -775,6 +784,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
 
   // Direct Assign Modal
   const openDirectAssign = (miejsceId: string, przerwa: number) => {
+    if (presentationMode) return;
     setEditingSlot({ miejsceId, przerwa });
     const key = `${miejsceId}|${activeDay}|${przerwa}`;
     const entry = dyz.harmonogram[key];
@@ -884,18 +894,22 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
           >
             📋 Harmonogram Dzienny
           </button>
-          <button 
-            onClick={() => setActiveTab('places')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'places' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            🚪 Miejsca Dyżurowania
-          </button>
-          <button 
-            onClick={() => setActiveTab('breaks')}
-            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'breaks' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
-          >
-            ⏱ Przerwy i Limity
-          </button>
+          {!presentationMode && (
+            <>
+              <button 
+                onClick={() => setActiveTab('places')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'places' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                🚪 Miejsca Dyżurowania
+              </button>
+              <button 
+                onClick={() => setActiveTab('breaks')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'breaks' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                ⏱ Przerwy i Limity
+              </button>
+            </>
+          )}
         </div>
 
         {activeTab === 'roster' && (
@@ -914,27 +928,31 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button 
-            onClick={handleAutoSuggest}
-            className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center gap-1"
-          >
-            <RefreshCcw size={14} /> Auto-sugestia dyżurów
-          </button>
-          <button 
-            onClick={handleClearDuties}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
-          >
-            Wyczyść Wszystko
-          </button>
-        </div>
+        {!presentationMode && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button 
+              onClick={handleAutoSuggest}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center gap-1"
+            >
+              <RefreshCcw size={14} /> Auto-sugestia dyżurów
+            </button>
+            <button 
+              onClick={handleClearDuties}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
+            >
+              Wyczyść Wszystko
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto bg-slate-50 p-4 md:p-5">
         {/* ── INTERAKTYWNY HARMONOGRAM ── */}
         {activeTab === 'roster' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-4 lg:col-span-3 min-w-[500px]">
+            <div className={`bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-4 min-w-[500px] ${
+              presentationMode ? 'lg:col-span-4' : 'lg:col-span-3'
+            }`}>
               {dyz.miejsca.length > 0 ? (
                 <table className="w-full border-collapse">
                   <thead>
@@ -969,10 +987,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                             >
                               {duty?.teacherAbbr ? (
                                 <div 
-                                  draggable
+                                  draggable={!presentationMode}
                                   onDragStart={() => handleDragStart(place.id, p.num)}
                                   onClick={() => openDirectAssign(place.id, p.num)}
-                                  className={`p-2.5 rounded-lg border-l-4 shadow-sm cursor-grab active:cursor-grabbing hover:shadow transition relative flex flex-col justify-center items-center ${
+                                  className={`p-2.5 rounded-lg border-l-4 shadow-sm transition relative flex flex-col justify-center items-center ${
+                                    presentationMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:shadow'
+                                  } ${
                                     duty.locked 
                                       ? 'bg-slate-50 border-slate-600 text-slate-900 font-bold'
                                       : 'bg-emerald-50/50 border-emerald-500 text-emerald-950 font-semibold'
@@ -985,6 +1005,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
                                   {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
                                   {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
                                 </div>
+                              ) : presentationMode ? (
+                                <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>
                               ) : (
                                 <button 
                                   onClick={() => openDirectAssign(place.id, p.num)}
@@ -1006,50 +1028,52 @@ export default function Dyzury({ appState, onChangeAppState, schedData }: Dyzury
             </div>
 
             {/* Panel statystyk dyżurów */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 select-none">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">📊 Bilans dyżurów nauczycielskich</h3>
-              <p className="text-[11px] text-slate-400 leading-normal">Poniższa lista prezentuje sumaryczną liczbę i czas dyżurów w bieżącym tygodniu zbalansowaną proporcjonalnie do wymiaru godzin lekcyjnych nauczyciela.</p>
-              
-              <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
-                {appState.teachers.map(t => {
-                  const dc = teacherDutyCounts[t.abbr] || 0;
-                  const dm = teacherDutyMinutes[t.abbr] || 0;
-                  const maxMins = teacherMaxMinutes[t.abbr] || 0;
-                  const hours = teacherHours[t.abbr] || 0;
-                  const isOver = dm > maxMins;
-                  const isExcluded = excludedSet.has(t.abbr);
+            {!presentationMode && (
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 select-none">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">📊 Bilans dyżurów nauczycielskich</h3>
+                <p className="text-[11px] text-slate-400 leading-normal">Poniższa lista prezentuje sumaryczną liczbę i czas dyżurów w bieżącym tygodniu zbalansowaną proporcjonalnie do wymiaru godzin lekcyjnych nauczyciela.</p>
+                
+                <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
+                  {appState.teachers.map(t => {
+                    const dc = teacherDutyCounts[t.abbr] || 0;
+                    const dm = teacherDutyMinutes[t.abbr] || 0;
+                    const maxMins = teacherMaxMinutes[t.abbr] || 0;
+                    const hours = teacherHours[t.abbr] || 0;
+                    const isOver = dm > maxMins;
+                    const isExcluded = excludedSet.has(t.abbr);
 
-                  return (
-                    <div key={t.id} className="py-2.5 flex items-center justify-between gap-4 text-xs font-semibold">
-                      <div className="flex flex-col min-w-0">
-                        <span className={`truncate ${isExcluded ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
-                          {t.first} {t.last}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          Siatka: {hours}h lekcyjnych (etat: {hours >= 18 ? '1.00' : (hours / 18).toFixed(2)})
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {isExcluded ? (
-                          <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Zwolniony</span>
-                        ) : (
-                          <span className={`px-2 py-1 rounded font-mono font-bold text-[10px] flex flex-col items-end border ${
-                            isOver 
-                              ? 'bg-red-50 text-red-700 border-red-200 font-extrabold'
-                              : dm >= maxMins
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : 'bg-slate-50 text-slate-500 border-slate-100'
-                          }`}>
-                            <span className="font-bold">{dc} dyżurów</span>
-                            <span className="text-[9px] text-slate-400 font-normal mt-0.5">{dm} / {maxMins} min</span>
+                    return (
+                      <div key={t.id} className="py-2.5 flex items-center justify-between gap-4 text-xs font-semibold">
+                        <div className="flex flex-col min-w-0">
+                          <span className={`truncate ${isExcluded ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
+                            {t.first} {t.last}
                           </span>
-                        )}
+                          <span className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            Siatka: {hours}h lekcyjnych (etat: {hours >= 18 ? '1.00' : (hours / 18).toFixed(2)})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isExcluded ? (
+                            <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Zwolniony</span>
+                          ) : (
+                            <span className={`px-2 py-1 rounded font-mono font-bold text-[10px] flex flex-col items-end border ${
+                              isOver 
+                                ? 'bg-red-50 text-red-700 border-red-200 font-extrabold'
+                                : dm >= maxMins
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-slate-50 text-slate-500 border-slate-100'
+                            }`}>
+                              <span className="font-bold">{dc} dyżurów</span>
+                              <span className="text-[9px] text-slate-400 font-normal mt-0.5">{dm} / {maxMins} min</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
