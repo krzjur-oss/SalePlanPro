@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@theme {
+  --color-indigo-650: #493ee2;
+  --color-emerald-650: #058760;
+  --color-slate-650: #3d4b5f;
+  --color-red-650: #cc2121;
+  
+  --color-indigo-150: #d3dcfe;
+  --color-slate-150: #ebf0f4;
+  --color-slate-350: #b0bed0;
+  --color-slate-450: #7c8ca0;
+  --color-indigo-450: #7279f4;
+  --color-amber-150: #fdebab;
+  --color-emerald-150: #bbf3d7;
+  --color-rose-150: #ffd8dc;
+}
