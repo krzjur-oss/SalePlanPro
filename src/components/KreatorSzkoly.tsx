@@ -1812,6 +1812,9 @@ export default function KreatorSzkoly({
   const [newAsgHours, setNewAsgHours] = useState(2);
   const [newAsgBlockSize, setNewAsgBlockSize] = useState<number>(1); // default single 1h
   const [newAsgLinkedClasses, setNewAsgLinkedClasses] = useState<string[]>([]);
+  const [editingAsgId, setEditingAsgId] = useState<string | null>(null);
+  const [assignmentFormMode, setAssignmentFormMode] = useState<'class' | 'teacher'>('class');
+  const [asgListGrouping, setAsgListGrouping] = useState<'flat' | 'class' | 'teacher'>('flat');
 
   const autoSelectGroupForAssignment = (clsId: string, subjId: string) => {
     if (!clsId || !subjId) return;
@@ -1835,34 +1838,106 @@ export default function KreatorSzkoly({
       return;
     }
 
-    const newAsg: Assignment = {
-      id: 'a_' + uid(),
-      classId: newAsgClass,
-      teacherId: newAsgTeacher || null,
-      subjectId: newAsgSubject,
-      roomId: newAsgRoom || null,
-      groupId: newAsgGroup || null,
-      hoursPerWeek: newAsgHours,
-      preferredBlockSize: newAsgBlockSize,
-      linkedClassIds: newAsgLinkedClasses.length > 0 ? newAsgLinkedClasses : undefined
-    };
+    if (editingAsgId) {
+      // Edit existing assignment
+      const updatedAssignments = appState.planLekcji.assignments.map(asg => {
+        if (asg.id === editingAsgId) {
+          return {
+            ...asg,
+            classId: newAsgClass,
+            teacherId: newAsgTeacher || null,
+            subjectId: newAsgSubject,
+            roomId: newAsgRoom || null,
+            groupId: newAsgGroup || null,
+            hoursPerWeek: newAsgHours,
+            preferredBlockSize: newAsgBlockSize,
+            linkedClassIds: newAsgLinkedClasses.length > 0 ? newAsgLinkedClasses : undefined
+          };
+        }
+        return asg;
+      });
 
-    onChangeAppState({
-      ...appState,
-      planLekcji: {
-        ...appState.planLekcji,
-        assignments: [...appState.planLekcji.assignments, newAsg]
-      }
-    });
+      onChangeAppState({
+        ...appState,
+        planLekcji: {
+          ...appState.planLekcji,
+          assignments: updatedAssignments
+        }
+      });
 
+      setEditingAsgId(null);
+      setNewAsgClass('');
+      setNewAsgTeacher('');
+      setNewAsgSubject('');
+      setNewAsgRoom('');
+      setNewAsgGroup('');
+      setNewAsgHours(2);
+      setNewAsgBlockSize(1);
+      setNewAsgLinkedClasses([]);
+      showNoti('Zaktualizowano przydział lekcyjny');
+    } else {
+      // Add new assignment
+      const newAsg: Assignment = {
+        id: 'a_' + uid(),
+        classId: newAsgClass,
+        teacherId: newAsgTeacher || null,
+        subjectId: newAsgSubject,
+        roomId: newAsgRoom || null,
+        groupId: newAsgGroup || null,
+        hoursPerWeek: newAsgHours,
+        preferredBlockSize: newAsgBlockSize,
+        linkedClassIds: newAsgLinkedClasses.length > 0 ? newAsgLinkedClasses : undefined
+      };
+
+      onChangeAppState({
+        ...appState,
+        planLekcji: {
+          ...appState.planLekcji,
+          assignments: [...appState.planLekcji.assignments, newAsg]
+        }
+      });
+
+      setNewAsgClass('');
+      setNewAsgTeacher('');
+      setNewAsgSubject('');
+      setNewAsgRoom('');
+      setNewAsgGroup('');
+      setNewAsgHours(2);
+      setNewAsgBlockSize(1);
+      setNewAsgLinkedClasses([]);
+      showNoti('Dodano przydział lekcyjny');
+    }
+  };
+
+  const handleStartEditAssignment = (asg: Assignment) => {
+    setEditingAsgId(asg.id);
+    setNewAsgClass(asg.classId);
+    setNewAsgTeacher(asg.teacherId || '');
+    setNewAsgSubject(asg.subjectId);
+    setNewAsgRoom(asg.roomId || '');
+    setNewAsgGroup(asg.groupId || '');
+    setNewAsgHours(asg.hoursPerWeek);
+    setNewAsgBlockSize(asg.preferredBlockSize !== undefined ? asg.preferredBlockSize : 1);
+    setNewAsgLinkedClasses(asg.linkedClassIds || []);
+    showNoti('Edycja przydziału - uzupełniono formularz', 'info');
+  };
+
+  const handleCancelEditAssignment = () => {
+    setEditingAsgId(null);
+    setNewAsgClass('');
+    setNewAsgTeacher('');
+    setNewAsgSubject('');
     setNewAsgRoom('');
+    setNewAsgGroup('');
     setNewAsgHours(2);
     setNewAsgBlockSize(1);
     setNewAsgLinkedClasses([]);
-    showNoti('Dodano przydział lekcyjny');
   };
 
   const handleRemoveAssignment = (id: string) => {
+    if (editingAsgId === id) {
+      handleCancelEditAssignment();
+    }
     onChangeAppState({
       ...appState,
       planLekcji: {
@@ -4636,80 +4711,197 @@ export default function KreatorSzkoly({
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {/* Form pairing */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit space-y-3">
-                  <h3 className="text-xs font-black text-slate-900 mb-2 uppercase tracking-wider">Dodaj Nowy Przydział</h3>
-                  <form onSubmit={handleAddAssignment} className="space-y-4">
-                    
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold block">1. Oddział Szkolny (Klasa) *</label>
-                      <select 
-                        required
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                        value={newAsgClass}
-                        onChange={(e) => {
-                          const clsId = e.target.value;
-                          setNewAsgClass(clsId);
-                          setNewAsgGroup(''); // reset group first
-                          autoSelectGroupForAssignment(clsId, newAsgSubject);
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit space-y-4">
+                  <div className="border-b border-slate-100 pb-2">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                      {editingAsgId ? '📝 Edycja Przydziału' : 'Dodaj Nowy Przydział'}
+                    </h3>
+                  </div>
+
+                  {/* Mode switcher (only when NOT editing, to avoid losing state during edit) */}
+                  {!editingAsgId && (
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentFormMode('class');
+                          handleCancelEditAssignment();
                         }}
+                        className={`flex-1 py-1.5 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          assignmentFormMode === 'class'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
                       >
-                        <option value="">Wybierz klasę...</option>
-                        {appState.classes.map(c => (
-                          <option key={c.id} value={c.id}>Oddział {c.name}</option>
-                        ))}
-                      </select>
+                        🏫 Tryb Klasowy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentFormMode('teacher');
+                          handleCancelEditAssignment();
+                        }}
+                        className={`flex-1 py-1.5 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          assignmentFormMode === 'teacher'
+                            ? 'bg-white text-slate-900 shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        🧑‍🏫 Tryb Nauczycielski
+                      </button>
                     </div>
+                  )}
 
-                    {/* Conditional inner groups */}
-                    {newAsgClass && appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).length > 0 && (
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">Opcjonalna podgrupa</label>
-                        <select 
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-blue-600 font-bold"
-                          value={newAsgGroup}
-                          onChange={(e) => setNewAsgGroup(e.target.value)}
-                        >
-                          <option value="">Uczy całą klasę</option>
-                          {appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).map(g => (
-                            <option key={g.id} value={g.id}>Grupa: {g.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                  <form onSubmit={handleAddAssignment} className="space-y-4">
+                    {assignmentFormMode === 'class' ? (
+                      <>
+                        {/* CLASS MODE FIELDS */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold block">1. Oddział Szkolny (Klasa) *</label>
+                          <select 
+                            required
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
+                            value={newAsgClass}
+                            onChange={(e) => {
+                              const clsId = e.target.value;
+                              setNewAsgClass(clsId);
+                              setNewAsgGroup(''); // reset group first
+                              autoSelectGroupForAssignment(clsId, newAsgSubject);
+                            }}
+                          >
+                            <option value="">Wybierz klasę...</option>
+                            {appState.classes.map(c => (
+                              <option key={c.id} value={c.id}>Oddział {c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Conditional inner groups */}
+                        {newAsgClass && appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).length > 0 && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-bold block">Opcjonalna podgrupa</label>
+                            <select 
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-blue-600 font-bold"
+                              value={newAsgGroup}
+                              onChange={(e) => setNewAsgGroup(e.target.value)}
+                            >
+                              <option value="">Uczy całą klasę</option>
+                              {appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).map(g => (
+                                <option key={g.id} value={g.id}>Grupa: {g.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-bold block">2. Nauczyciel</label>
+                            <select 
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                              value={newAsgTeacher}
+                              onChange={(e) => setNewAsgTeacher(e.target.value)}
+                            >
+                              <option value="">Brak (Wakat)</option>
+                              {appState.teachers.map(t => (
+                                <option key={t.id} value={t.id}>{t.first[0]}. {t.last} ({t.abbr})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-bold block">3. Przedmiot *</label>
+                            <select 
+                              required
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                              value={newAsgSubject}
+                              onChange={(e) => {
+                                const subjId = e.target.value;
+                                setNewAsgSubject(subjId);
+                                autoSelectGroupForAssignment(newAsgClass, subjId);
+                              }}
+                            >
+                              <option value="">Wybierz...</option>
+                              {appState.subjects.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* TEACHER MODE FIELDS */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold block">1. Nauczyciel *</label>
+                          <select 
+                            required
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
+                            value={newAsgTeacher}
+                            onChange={(e) => setNewAsgTeacher(e.target.value)}
+                          >
+                            <option value="">Wybierz nauczyciela...</option>
+                            {appState.teachers.map(t => (
+                              <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold block">2. Oddział Szkolny (Klasa) *</label>
+                          <select 
+                            required
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                            value={newAsgClass}
+                            onChange={(e) => {
+                              const clsId = e.target.value;
+                              setNewAsgClass(clsId);
+                              setNewAsgGroup(''); // reset group first
+                              autoSelectGroupForAssignment(clsId, newAsgSubject);
+                            }}
+                          >
+                            <option value="">Wybierz klasę...</option>
+                            {appState.classes.map(c => (
+                              <option key={c.id} value={c.id}>Oddział {c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Conditional inner groups */}
+                        {newAsgClass && appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).length > 0 && (
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-slate-400 font-bold block">Opcjonalna podgrupa</label>
+                            <select 
+                              className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-blue-600 font-bold"
+                              value={newAsgGroup}
+                              onChange={(e) => setNewAsgGroup(e.target.value)}
+                            >
+                              <option value="">Uczy całą klasę</option>
+                              {appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).map(g => (
+                                <option key={g.id} value={g.id}>Grupa: {g.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold block">3. Przedmiot *</label>
+                          <select 
+                            required
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                            value={newAsgSubject}
+                            onChange={(e) => {
+                              const subjId = e.target.value;
+                              setNewAsgSubject(subjId);
+                              autoSelectGroupForAssignment(newAsgClass, subjId);
+                            }}
+                          >
+                            <option value="">Wybierz przedmiot...</option>
+                            {appState.subjects.map(s => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
                     )}
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">2. Nauczyciel</label>
-                        <select 
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                          value={newAsgTeacher}
-                          onChange={(e) => setNewAsgTeacher(e.target.value)}
-                        >
-                          <option value="">Brak (Wakat)</option>
-                          {appState.teachers.map(t => (
-                            <option key={t.id} value={t.id}>{t.first[0]}. {t.last} ({t.abbr})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">3. Przedmiot *</label>
-                        <select 
-                          required
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                          value={newAsgSubject}
-                          onChange={(e) => {
-                            const subjId = e.target.value;
-                            setNewAsgSubject(subjId);
-                            autoSelectGroupForAssignment(newAsgClass, subjId);
-                          }}
-                        >
-                          <option value="">Wybierz...</option>
-                          {appState.subjects.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
@@ -4795,93 +4987,243 @@ export default function KreatorSzkoly({
                       )}
                     </div>
 
-                    <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow mt-3 flex items-center justify-center gap-1.5 transition">
-                      <Plus size={14} /> Przypisz lekcję
-                    </button>
+                    {editingAsgId ? (
+                      <div className="flex gap-2 mt-3">
+                        <button 
+                          type="button" 
+                          onClick={handleCancelEditAssignment}
+                          className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition cursor-pointer"
+                        >
+                          Anuluj
+                        </button>
+                        <button 
+                          type="submit" 
+                          className="flex-[2] py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle size={14} /> Zapisz zmiany
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow mt-3 flex items-center justify-center gap-1.5 transition cursor-pointer">
+                        <Plus size={14} /> Przypisz lekcję
+                      </button>
+                    )}
                   </form>
                 </div>
 
                 {/* Assignments List grid */}
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm lg:col-span-2 overflow-hidden flex flex-col">
-                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Aktualna siatka przydziałów etatowych</h3>
-                    <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.planLekcji.assignments.length} pozycji</span>
+                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Siatka Przydziałów Etatowych</h3>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Suma pozycji: {appState.planLekcji.assignments.length}</p>
+                    </div>
+
+                    {/* Grouping Toggle */}
+                    <div className="flex gap-0.5 bg-slate-200/60 p-0.5 rounded-lg border border-slate-200 w-fit self-end">
+                      <button
+                        type="button"
+                        onClick={() => setAsgListGrouping('flat')}
+                        className={`px-2.5 py-1 rounded-md text-[9.5px] font-bold transition cursor-pointer ${
+                          asgListGrouping === 'flat' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Płaska lista
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAsgListGrouping('class')}
+                        className={`px-2.5 py-1 rounded-md text-[9.5px] font-bold transition cursor-pointer ${
+                          asgListGrouping === 'class' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Klasami
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAsgListGrouping('teacher')}
+                        className={`px-2.5 py-1 rounded-md text-[9.5px] font-bold transition cursor-pointer ${
+                          asgListGrouping === 'teacher' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Nauczycielami
+                      </button>
+                    </div>
                   </div>
 
                   <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto flex-1">
-                    {appState.planLekcji.assignments.map((asg) => {
-                      const cls = classesMap.get(asg.classId);
-                      const t = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                      const s = subjectsMap.get(asg.subjectId);
-                      const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                      const grp = asg.groupId ? groupsMap.get(asg.groupId) : null;
+                    {(() => {
+                      const renderAsgRow = (asg: Assignment) => {
+                        const cls = classesMap.get(asg.classId);
+                        const t = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+                        const s = subjectsMap.get(asg.subjectId);
+                        const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
+                        const grp = asg.groupId ? groupsMap.get(asg.groupId) : null;
 
-                      if (!cls || !s) return null;
+                        if (!cls || !s) return null;
 
-                      return (
-                        <div key={asg.id} className="p-3.5 hover:bg-slate-50/50 flex justify-between items-center">
-                          <div className="flex items-center gap-3">
-                            <span className="w-10 h-10 text-[10px] font-black text-white font-mono rounded-xl shadow-sm border flex items-center justify-center shrink-0" style={{ backgroundColor: cls.color || '#cbd5e1' }}>
-                              {cls.name}
-                            </span>
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-black text-slate-900">{s.name}</span>
-                                {grp && (
-                                  <span className="bg-blue-100 text-blue-700 font-extrabold px-1.5 py-0.2 rounded text-[8px] uppercase">{grp.name}</span>
-                                )}
-                                {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
-                                  <span className="bg-indigo-55 bg-indigo-50 text-indigo-750 border border-indigo-150 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase flex items-center gap-0.5">
-                                    👥 Międzyoddziałowy: {[cls.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(Boolean).join(' + ')}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
-                                  <GraduationCap size={11} /> Nauczyciel: {t ? `${t.first[0]}. ${t.last} (${t.abbr})` : 'WAKAT'}
-                                </span>
-                                {room && (
+                        const isCurrentlyEditing = editingAsgId === asg.id;
+
+                        return (
+                          <div key={asg.id} className={`p-3.5 hover:bg-slate-50/50 flex justify-between items-center transition-colors ${isCurrentlyEditing ? 'bg-indigo-50/50 border-l-4 border-indigo-500' : ''}`}>
+                            <div className="flex items-center gap-3">
+                              <span className="w-10 h-10 text-[10px] font-black text-white font-mono rounded-xl shadow-sm border flex items-center justify-center shrink-0" style={{ backgroundColor: cls.color || '#cbd5e1' }}>
+                                {cls.name}
+                              </span>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs font-black text-slate-900">{s.name}</span>
+                                  {grp && (
+                                    <span className="bg-blue-100 text-blue-700 font-extrabold px-1.5 py-0.2 rounded text-[8px] uppercase">{grp.name}</span>
+                                  )}
+                                  {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
+                                    <span className="bg-indigo-55 bg-indigo-50 text-indigo-750 border border-indigo-150 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase flex items-center gap-0.5">
+                                      👥 Międzyoddziałowy: {[cls.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(Boolean).join(' + ')}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                   <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
-                                    <MapPin size={11} /> Sala {room.name}
+                                    <GraduationCap size={11} /> Nauczyciel: {t ? `${t.first[0]}. ${t.last} (${t.abbr})` : 'WAKAT'}
                                   </span>
-                                )}
-                                <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[9px] font-black">
-                                  Wymiar: {asg.hoursPerWeek}h/tyg
-                                </span>
-                                {asg.preferredBlockSize !== undefined && (
-                                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                                    asg.preferredBlockSize === 2 
-                                      ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                                      : asg.preferredBlockSize === 3
-                                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                        : asg.preferredBlockSize === 1
-                                          ? 'bg-slate-50 text-slate-500 border border-slate-200'
-                                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  }`}>
-                                    {asg.preferredBlockSize === 2 
-                                      ? '🧱 Blok 2h'
-                                      : asg.preferredBlockSize === 3
-                                        ? '🧱 Blok 3h'
-                                        : asg.preferredBlockSize === 1
-                                          ? '📄 Lekcje 1h'
-                                          : '🔄 Dowolny rozkład'}
+                                  {room && (
+                                    <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
+                                      <MapPin size={11} /> Sala {room.name}
+                                    </span>
+                                  )}
+                                  <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[9px] font-black">
+                                    Wymiar: {asg.hoursPerWeek}h/tyg
                                   </span>
-                                )}
+                                  {asg.preferredBlockSize !== undefined && (
+                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                      asg.preferredBlockSize === 2 
+                                        ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                        : asg.preferredBlockSize === 3
+                                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                          : asg.preferredBlockSize === 1
+                                            ? 'bg-slate-50 text-slate-500 border border-slate-200'
+                                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    }`}>
+                                      {asg.preferredBlockSize === 2 
+                                        ? '🧱 Blok 2h'
+                                        : asg.preferredBlockSize === 3
+                                          ? '🧱 Blok 3h'
+                                          : asg.preferredBlockSize === 1
+                                            ? '📄 Lekcje 1h'
+                                            : '🔄 Dowolny rozkład'}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
+                            <div className="flex items-center gap-1 shrink-0 ml-4">
+                              <button 
+                                onClick={() => handleStartEditAssignment(asg)}
+                                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                                  isCurrentlyEditing 
+                                    ? 'text-indigo-600 bg-indigo-100 font-bold' 
+                                    : 'text-slate-400 hover:text-indigo-600 hover:bg-slate-100'
+                                }`}
+                                title="Edytuj przydział"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button 
+                                onClick={() => handleRemoveAssignment(asg.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                                title="Usuń przydział"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
-                          <button 
-                            onClick={() => handleRemoveAssignment(asg.id)}
-                            className="p-1 px-2 text-slate-400 hover:text-red-500 rounded transition-colors"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {appState.planLekcji.assignments.length === 0 && (
-                      <p className="p-10 text-center text-xs text-slate-400">Brak zarejestrowanych przydziałów. Stwórz kolejny po lewej!</p>
-                    )}
+                        );
+                      };
+
+                      if (appState.planLekcji.assignments.length === 0) {
+                        return (
+                          <p className="p-10 text-center text-xs text-slate-400">Brak zarejestrowanych przydziałów. Stwórz kolejny po lewej!</p>
+                        );
+                      }
+
+                      if (asgListGrouping === 'class') {
+                        return appState.classes.map(cls => {
+                          const classAsgs = appState.planLekcji.assignments.filter(a => a.classId === cls.id);
+                          if (classAsgs.length === 0) return null;
+                          const totalHours = classAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0);
+
+                          return (
+                            <div key={cls.id} className="border-b border-slate-100 last:border-none">
+                              <div className="bg-slate-50/75 px-4 py-2 flex justify-between items-center border-y border-slate-100 select-none">
+                                <span className="flex items-center gap-2">
+                                  <span className="w-6 h-6 text-[10px] font-black text-white rounded-md flex items-center justify-center shrink-0 shadow-xs" style={{ backgroundColor: cls.color || '#475569' }}>
+                                    {cls.name}
+                                  </span>
+                                  <span className="text-xs font-black text-slate-800">Oddział {cls.name}</span>
+                                </span>
+                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full shrink-0">
+                                  Suma: {totalHours}h/tyg
+                                </span>
+                              </div>
+                              <div className="divide-y divide-slate-100">
+                                {classAsgs.map(asg => renderAsgRow(asg))}
+                              </div>
+                            </div>
+                          );
+                        });
+                      }
+
+                      if (asgListGrouping === 'teacher') {
+                        const teachersWithWakat = [
+                          ...appState.teachers,
+                          { id: '', first: 'Wakat', last: '(Brak obsady)', abbr: 'WAKAT', maxHours: 0 }
+                        ];
+
+                        return teachersWithWakat.map(t => {
+                          const teacherAsgs = appState.planLekcji.assignments.filter(a => !t.id ? !a.teacherId : a.teacherId === t.id);
+                          if (teacherAsgs.length === 0) return null;
+                          const totalHours = teacherAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0);
+                          const limit = t.maxHours || 18;
+                          const overtime = (t as any).overtimeHours || 0;
+                          const totalLimit = limit + overtime;
+                          const isOverLimit = t.id && totalHours > totalLimit;
+
+                          return (
+                            <div key={t.id || 'wakat'} className="border-b border-slate-100 last:border-none">
+                              <div className="bg-slate-50/75 px-4 py-2 flex justify-between items-center border-y border-slate-100 select-none">
+                                <span className="flex items-center gap-2">
+                                  <span className="w-6 h-6 bg-blue-50 border border-blue-200 text-blue-600 rounded-md text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    🧑‍🏫
+                                  </span>
+                                  <span className="text-xs font-black text-slate-800">
+                                    {!t.id ? 'Wakaty (Brak obsady)' : `${t.first} ${t.last} (${t.abbr})`}
+                                  </span>
+                                </span>
+                                {t.id ? (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 border ${
+                                    isOverLimit 
+                                      ? 'bg-rose-50 text-rose-700 border-rose-200 font-extrabold animate-pulse' 
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  }`}>
+                                    Lekcje: {totalHours}h / pensum: {limit}{overtime > 0 ? `+${overtime}` : ''}h
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full shrink-0">
+                                    Wakaty: {totalHours}h/tyg
+                                  </span>
+                                )}
+                              </div>
+                              <div className="divide-y divide-slate-100">
+                                {teacherAsgs.map(asg => renderAsgRow(asg))}
+                              </div>
+                            </div>
+                          );
+                        });
+                      }
+
+                      // Default or flat
+                      return appState.planLekcji.assignments.map((asg) => renderAsgRow(asg));
+                    })()}
                   </div>
                 </div>
               </div>
