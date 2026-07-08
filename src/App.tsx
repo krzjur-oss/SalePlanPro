@@ -16,9 +16,10 @@ import UstawieniaGeneratorow from './components/UstawieniaGeneratorow';
 import SnapshotManager from './components/SnapshotManager';
 import BackupPasswordModal from './components/BackupPasswordModal';
 import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight
 } from 'lucide-react';
 
 function sortAppState(resolved: AppState): AppState {
@@ -183,6 +184,32 @@ export default function App() {
   };
 
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
+  const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
+
+  const CURRENT_VERSION = '3.0.0';
+  const [showVersionToast, setShowVersionToast] = useState(false);
+
+  useEffect(() => {
+    const lastSeen = localStorage.getItem('saleplan_last_seen_version');
+    if (lastSeen !== CURRENT_VERSION) {
+      const timer = setTimeout(() => {
+        setShowVersionToast(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleDismissVersionToast = () => {
+    localStorage.setItem('saleplan_last_seen_version', CURRENT_VERSION);
+    setShowVersionToast(false);
+  };
+
+  const handleOpenChangelog = () => {
+    localStorage.setItem('saleplan_last_seen_version', CURRENT_VERSION);
+    setShowVersionToast(false);
+    setOProgramieTab('changelog');
+    setCurrentTab('o_programie');
+  };
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -899,7 +926,7 @@ export default function App() {
                   <div className="border-t border-slate-800/60 my-1 pb-1" />
 
                   <button
-                    onClick={() => { setCurrentTab('o_programie'); setHamburgerOpen(false); }}
+                    onClick={() => { setCurrentTab('o_programie'); setOProgramieTab('info'); setHamburgerOpen(false); }}
                     className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                       currentTab === 'o_programie'
                         ? 'bg-sky-600/10 border-l-4 border-sky-500 text-white font-extrabold pl-2'
@@ -1065,7 +1092,7 @@ export default function App() {
           />
         )}
         {currentTab === 'o_programie' && (
-          <OProgramie />
+          <OProgramie initialTab={oProgramieTab} />
         )}
       </div>
 
@@ -1189,6 +1216,57 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* ── TOAST WYKRYCIA NOWEJ WERSJI ── */}
+      <AnimatePresence>
+        {showVersionToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-[9000] max-w-sm bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-800 p-4 font-sans"
+            id="version-changelog-toast"
+          >
+            <div className="flex gap-3">
+              <div className="bg-amber-500 text-slate-950 p-2 rounded-xl shrink-0 flex items-center justify-center h-10 w-10 shadow-lg shadow-amber-500/20">
+                <Sparkles size={18} className="animate-pulse" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] bg-amber-500/25 text-amber-300 font-extrabold font-mono uppercase px-2 py-0.5 rounded-full tracking-wider">
+                    Dostępna aktualizacja
+                  </span>
+                  <button 
+                    onClick={handleDismissVersionToast}
+                    className="text-slate-400 hover:text-white transition cursor-pointer"
+                    title="Zamknij"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.0.0!</h4>
+                <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
+                  Zaimplementowano Tryb Prezentacji, usprawniono drag & drop oraz zaktualizowano moduły oświatowe.
+                </p>
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    onClick={handleOpenChangelog}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg shadow-xs hover:shadow-xs transition cursor-pointer flex items-center gap-1"
+                  >
+                    Zobacz historię zmian <ChevronRight size={12} />
+                  </button>
+                  <button
+                    onClick={handleDismissVersionToast}
+                    className="text-slate-400 hover:text-slate-300 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition hover:bg-slate-800 cursor-pointer"
+                  >
+                    Pomiń
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

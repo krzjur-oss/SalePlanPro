@@ -1,9 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  Info, User, FileText, Shield, Award, HelpCircle, Heart, HeartHandshake, CheckCircle2, ChevronRight, Mail, ExternalLink, Globe, KeyRound, Github
+  Info, User, FileText, Shield, Award, HelpCircle, Heart, HeartHandshake, CheckCircle2, ChevronRight, Mail, ExternalLink, Globe, KeyRound, Github, History
 } from 'lucide-react';
+import Changelog from './Changelog';
 
-export default function OProgramie() {
+interface OProgramieProps {
+  initialTab?: 'info' | 'changelog';
+}
+
+export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
+  const [activeTab, setActiveTab] = useState<'info' | 'changelog'>(initialTab);
+
+  React.useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
   return (
     <div className="flex-1 bg-slate-50 overflow-y-auto p-6 md:p-8" id="page-o-programie">
       <div className="max-w-7xl mx-auto space-y-8 animate-fade-in pb-12">
@@ -28,7 +39,32 @@ export default function OProgramie() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* ZAKŁADKI / TABS SELECTOR */}
+        <div className="flex border-b border-slate-200 gap-1 select-none">
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'info'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Info size={14} /> Informacje i regulaminy
+          </button>
+          <button
+            onClick={() => setActiveTab('changelog')}
+            className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+              activeTab === 'changelog'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <History size={14} /> Historia zmian i wersje
+          </button>
+        </div>
+
+        {activeTab === 'info' ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* LEWA KOLUMNA: NAWIGACJA SZYBKA LUB STATYSTYKI */}
           <div className="space-y-6 md:col-span-1">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-5 space-y-4">
@@ -94,11 +130,11 @@ export default function OProgramie() {
                     <Github size={12} className="text-slate-400" /> github.com/KrzJur-oss/SalePlanPro
                   </a>
                   <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                    <Globe size={12} className="text-slate-400" /> Rzeszów / Warszawa, Polska
+                    <Globe size={12} className="text-slate-400" /> Tarnowskie Góry, woj. śląskie, Polska
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed pt-1.5 border-t border-slate-100 italic">
-                  Pasjonat systemów optymalizacji czasu pracy w jednostkach oświatowych i algorytmiki harmonogramowania.
+                  Nie wiem, czy jestem zdeklarowanym pasjonatem systemów harmonogramowania, ale za to bardzo cenię porządek oraz uwielbiam ułatwiać sobie i innym codzienną pracę administracyjną.
                 </p>
               </div>
             </div>
@@ -206,6 +242,9 @@ export default function OProgramie() {
 
           </div>
         </div>
+        ) : (
+          <Changelog />
+        )}
 
         {/* STOPKA O PROGRAMIE */}
         <div className="text-center text-[10px] text-slate-400 font-bold border-t border-slate-200 pt-5 flex items-center justify-center gap-3">
