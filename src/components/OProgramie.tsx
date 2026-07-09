@@ -134,8 +134,40 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed pt-1.5 border-t border-slate-100 italic">
-                  Nie wiem, czy jestem zdeklarowanym pasjonatem systemów harmonogramowania, ale za to bardzo cenię porządek oraz uwielbiam ułatwiać sobie i innym codzienną pracę administracyjną.
+                  Czynnie pracujący nauczyciel, pasjonat programowania oraz ułatwiania sobie i innym życia.
                 </p>
+                <div className="pt-2.5 border-t border-slate-100 space-y-1.5">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                    Inne moje programy:
+                  </span>
+                  <a 
+                    href="https://krzjur-oss.github.io/IABK/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between text-[11px] text-slate-600 hover:text-blue-600 transition font-semibold"
+                  >
+                    <span className="truncate">1. Interaktywny Atlas Budowy Komputera</span>
+                    <ExternalLink size={10} className="text-slate-400 shrink-0 ml-1" />
+                  </a>
+                  <a 
+                    href="https://krzjur-oss.github.io/Dziennik_Losowania_v2/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between text-[11px] text-slate-600 hover:text-blue-600 transition font-semibold"
+                  >
+                    <span className="truncate">2. Dziennik losowania</span>
+                    <ExternalLink size={10} className="text-slate-400 shrink-0 ml-1" />
+                  </a>
+                  <a 
+                    href="https://krzjur-oss.github.io/Dziennik_pupila/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between text-[11px] text-slate-600 hover:text-blue-600 transition font-semibold"
+                  >
+                    <span className="truncate">3. Dziennik Pupila</span>
+                    <ExternalLink size={10} className="text-slate-400 shrink-0 ml-1" />
+                  </a>
+                </div>
               </div>
             </div>
 
