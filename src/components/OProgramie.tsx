@@ -35,7 +35,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
           </div>
           <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md font-bold text-4xl select-none z-10">
             SP
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1">v3.0</span>
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.2.0</span>
           </div>
         </div>
 

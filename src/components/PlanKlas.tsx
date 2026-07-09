@@ -79,7 +79,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
   const [newTeacherLast, setNewTeacherLast] = useState('');
   const [newTeacherAbbr, setNewTeacherAbbr] = useState('');
   const [isTeacherAbbrManual, setIsTeacherAbbrManual] = useState(false);
-  const [newTeacherMaxHours, setNewTeacherMaxHours] = useState(18);
+  const [newTeacherMaxHours, setNewTeacherMaxHours] = useState<number | ''>(18);
   const [newTeacherOvertimeHours, setNewTeacherOvertimeHours] = useState(0);
   const [editingTeacherId, setEditingTeacherId] = useState<string | null>(null);
   const [newTeacherAvailability, setNewTeacherAvailability] = useState<string[]>([]);
@@ -454,7 +454,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
     setNewTeacherLast(t.last);
     setNewTeacherAbbr(t.abbr);
     setIsTeacherAbbrManual(true);
-    setNewTeacherMaxHours(t.maxHours || 18);
+    setNewTeacherMaxHours(t.maxHours ?? 18);
     setNewTeacherOvertimeHours(t.overtimeHours || 0);
     setNewTeacherColor(t.color || '#3b82f6');
 
@@ -522,7 +522,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
             last: newTeacherLast.trim(),
             abbr: formattedAbbr,
             color: newTeacherColor,
-            maxHours: Number(newTeacherMaxHours),
+            maxHours: newTeacherMaxHours === '' ? 18 : Number(newTeacherMaxHours),
             overtimeHours: Number(newTeacherOvertimeHours) || undefined,
             availability: newTeacherAvailability
           };
@@ -558,7 +558,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
         last: newTeacherLast.trim(),
         abbr: formattedAbbr,
         color: newTeacherColor,
-        maxHours: Number(newTeacherMaxHours),
+        maxHours: newTeacherMaxHours === '' ? 18 : Number(newTeacherMaxHours),
         overtimeHours: Number(newTeacherOvertimeHours) || undefined
       };
 
@@ -2152,12 +2152,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                     <input 
                       type="number" 
                       required
-                      min={1}
+                      min={0}
                       max={40}
                       placeholder="18"
                       className="w-full px-3 py-1 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-semibold text-slate-800"
                       value={newTeacherMaxHours}
-                      onChange={(e) => setNewTeacherMaxHours(parseInt(e.target.value) || 18)}
+                      onChange={(e) => setNewTeacherMaxHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                     />
                   </div>
                   <div>
@@ -2202,7 +2202,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                         )}
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                        <span>Pensum: {t.maxHours || 18}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}</span>
+                        <span>Pensum: {t.maxHours ?? 18}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}</span>
                         {t.inactive && t.inactiveComment && (
                           <span className="text-rose-600 font-semibold italic">({t.inactiveComment})</span>
                         )}
@@ -2449,12 +2449,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                               <input 
                                 type="number" 
                                 required
-                                min={1}
+                                min={0}
                                 max={40}
                                 placeholder="18"
                                 className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-semibold text-slate-800 focus:border-blue-500"
                                 value={newTeacherMaxHours}
-                                onChange={(e) => setNewTeacherMaxHours(parseInt(e.target.value) || 18)}
+                                onChange={(e) => setNewTeacherMaxHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                               />
                             </div>
                             <div className="space-y-1">

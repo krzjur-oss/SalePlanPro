@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.2.0',
+      date: 'Lipiec 2026',
+      title: 'Szybka zbiorcza edycja pensum, pasek wyszukiwania nauczycieli i natychmiastowy autozapis',
+      description: 'Najnowsza wersja koncentruje się na znacznym przyspieszeniu zarządzania pensum całej kadry nauczycielskiej jednocześnie, wprowadzeniu błyskawicznego wyszukiwania w bazie kadrowej oraz bezkompromisowym bezpieczeństwie danych dzięki natychmiastowemu autozapisowi przy przełączaniu modułów.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Dodano dynamiczną tabelę do szybkiej edycji pensum (etatów) oraz nadgodzin wszystkich nauczycieli jednocześnie w Kroku 6 Kreatora Szkoły.', badgeText: 'HIT' },
+        { type: 'feature', text: 'Wdrożono inteligentne filtry kategorii kadry (Wszyscy, Kadra kierownicza, Obniżone pensum, Standard, Nieaktywni) z licznikami w czasie rzeczywistym.', badgeText: 'Kadra' },
+        { type: 'feature', text: 'Dodano szablony jednego kliknięcia (Dyrektor 0h, Wicedyrektor 12h, Obniżone 15h, Etat 18h) do błyskawicznego nadawania pensum.', badgeText: 'Błyskawiczne' },
+        { type: 'feature', text: 'Dodano responsywny pasek wyszukiwania nad tabelą szybkiej edycji pensum, umożliwiający błyskawiczne znajdowanie nauczycieli w dużej bazie kadrowej.', badgeText: 'Szukaj' },
+        { type: 'improvement', text: 'Wprowadzono mechanizm wymuszający natychmiastowy, bezpośredni zapis stanu do localStorage przy każdym przełączeniu modułu/zakładki w bocznej nawigacji, całkowicie eliminując ryzyko utraty danych.', badgeText: 'Bezpieczeństwo' },
+        { type: 'improvement', text: 'Dodano w czasie rzeczywistym podsumowanie statystyczne w stopce szybkiej edycji (średnie pensum w szkole, całkowita suma nadgodzin, licznik odfiltrowanych osób).', badgeText: 'Statystyka' }
+      ]
+    },
+    {
       version: 'v3.1.0',
       date: 'Lipiec 2026',
       title: 'Wykresy zapotrzebowania na dyżury, funkcje administracyjne kadry oraz przestrzenie przejściowe',
       description: 'Aktualizacja wprowadzająca zaawansowaną analitykę "godzin szczytu" dyżurów za pomocą biblioteki recharts, możliwość oznaczania ról administracyjnych kadry pedagogicznej oraz graficzne oznaczenie korytarzy i schodów o charakterze przejściowym.',
-      badge: 'Najnowsza',
       changes: [
         { type: 'feature', text: 'Dodano interaktywny wykres słupkowy (Recharts) w zakładce Statystyki, wizualizujący zapotrzebowanie na dyżury z podziałem na poszczególne przerwy w celu identyfikacji godzin szczytu.', badgeText: 'HIT' },
         { type: 'feature', text: 'Wprowadzono funkcjonalność oznaczania ról administracyjnych nauczycieli (np. Dyrektor, Wicedyrektor, Kierownik) w kroku 6 Kreatora Szkoły.', badgeText: 'Kadra' },

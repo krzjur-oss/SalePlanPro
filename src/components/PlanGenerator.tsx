@@ -1203,7 +1203,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
                           <tr key={t.id} className="hover:bg-slate-50/50">
                             <td className="p-3">
                               <div className="font-extrabold text-slate-900">{t.first} {t.last}</div>
-                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">Abbr: {t.abbr} | Pensum: {t.maxHours || 18}h</div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">Abbr: {t.abbr} | Pensum: {t.maxHours ?? 18}h</div>
                             </td>
                             <td className="p-3">
                               <select

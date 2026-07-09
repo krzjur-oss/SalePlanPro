@@ -347,6 +347,23 @@ export default function App() {
     };
   }, [appState, schedData]);
 
+  // Force instant save on tab switch
+  useEffect(() => {
+    if (isInitialMount.current) return;
+    
+    try {
+      setSaveStatus('saving');
+      localStorage.setItem('saleplan_v3_app_state', JSON.stringify(stateRef.current.appState));
+      localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(stateRef.current.schedData));
+      pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+      setSaveStatus('saved');
+      addEventLog('other', 'Automatyczny zapis przy zmianie zakładki', `Zapisano stan programu przy przełączeniu na zakładkę "${currentTab}".`);
+    } catch (e) {
+      console.error('Błąd natychmiastowego zapisu przy zmianie zakładki', e);
+      setSaveStatus('saved');
+    }
+  }, [currentTab]);
+
   // Unload fallback to secure any unsaved drafts instantly
   useEffect(() => {
     const handleBeforeUnload = () => {

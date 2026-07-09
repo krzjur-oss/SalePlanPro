@@ -6,7 +6,7 @@ import {
 import { 
   Building as BuildingIcon, School as SchoolIcon, Users, BookOpen, GraduationCap, ShieldAlert, BadgePlus,
   Trash2, Landmark, CheckCircle, ArrowRight, ArrowLeft, Plus, Users2, HelpCircle, Eye, Shield, MapPin, Sparkles, Layers,
-  Edit3, RefreshCw, X, Calendar, FileSpreadsheet, Upload
+  Edit3, RefreshCw, X, Calendar, FileSpreadsheet, Upload, Search
 } from 'lucide-react';
 import { uid, genAbbr, ensureUniqueAbbr, subjectAbbr } from '../utils';
 import SioImport from './SioImport';
@@ -1526,6 +1526,52 @@ export default function KreatorSzkoly({
   const [newTIsAdministrative, setNewTIsAdministrative] = useState(false);
   const [newTAdministrativeRole, setNewTAdministrativeRole] = useState('');
 
+  const [pensumSearchQuery, setPensumSearchQuery] = useState('');
+  const [pensumFilter, setPensumFilter] = useState<'all' | 'administrative' | 'reduced' | 'standard' | 'inactive'>('all');
+
+  const handleUpdateTeacherHours = (teacherId: string, field: 'maxHours' | 'overtimeHours', value: number) => {
+    const nextT = appState.teachers.map(t => {
+      if (t.id === teacherId) {
+        return {
+          ...t,
+          [field]: Math.max(0, Math.min(40, value))
+        };
+      }
+      return t;
+    });
+
+    onChangeAppState({
+      ...appState,
+      teachers: nextT,
+      planLekcji: {
+        ...appState.planLekcji,
+        teachers: nextT
+      }
+    });
+  };
+
+  const handleBatchSetHours = (teacherId: string, maxHours: number, overtimeHours?: number) => {
+    const nextT = appState.teachers.map(t => {
+      if (t.id === teacherId) {
+        return {
+          ...t,
+          maxHours: maxHours,
+          overtimeHours: overtimeHours !== undefined ? overtimeHours : t.overtimeHours
+        };
+      }
+      return t;
+    });
+
+    onChangeAppState({
+      ...appState,
+      teachers: nextT,
+      planLekcji: {
+        ...appState.planLekcji,
+        teachers: nextT
+      }
+    });
+  };
+
   // Trigger auto abbr
   const updateTAbbrAuto = (f: string, l: string) => {
     if (!isTAbbrManual) {
@@ -1540,7 +1586,7 @@ export default function KreatorSzkoly({
     setNewTLast(t.last);
     setNewTAbbr(t.abbr);
     setIsTAbbrManual(true);
-    setNewTMaxHours(t.maxHours || 18);
+    setNewTMaxHours(t.maxHours ?? 18);
     setNewTOvertimeHours(t.overtimeHours || 0);
     setNewTColor(t.color || '#d97706');
     setNewTInactive(t.inactive || false);
@@ -2215,6 +2261,40 @@ export default function KreatorSzkoly({
   const subjectsMap = useMemo(() => new Map(appState.subjects.map(s => [s.id, s])), [appState.subjects]);
   const roomsMap = useMemo(() => new Map(appState.planLekcji.rooms.map(r => [r.id, r])), [appState.planLekcji.rooms]);
   const groupsMap = useMemo(() => new Map(appState.planLekcji.schoolGroups.map(g => [g.id, g])), [appState.planLekcji.schoolGroups]);
+
+  const filteredTeachersForQuickEdit = useMemo(() => {
+    return appState.teachers.filter(t => {
+      const fullName = `${t.first} ${t.last} ${t.abbr}`.toLowerCase();
+      const matchesSearch = fullName.includes(pensumSearchQuery.toLowerCase());
+      
+      if (!matchesSearch) return false;
+      
+      if (pensumFilter === 'administrative') return t.isAdministrative;
+      if (pensumFilter === 'reduced') return (t.maxHours ?? 18) < 18;
+      if (pensumFilter === 'standard') return (t.maxHours ?? 18) === 18;
+      if (pensumFilter === 'inactive') return t.inactive;
+      
+      return true;
+    });
+  }, [appState.teachers, pensumSearchQuery, pensumFilter]);
+
+  const pensumCounts = useMemo(() => {
+    let all = 0;
+    let administrative = 0;
+    let reduced = 0;
+    let standard = 0;
+    let inactive = 0;
+
+    appState.teachers.forEach(t => {
+      all++;
+      if (t.isAdministrative) administrative++;
+      if ((t.maxHours ?? 18) < 18) reduced++;
+      if ((t.maxHours ?? 18) === 18) standard++;
+      if (t.inactive) inactive++;
+    });
+
+    return { all, administrative, reduced, standard, inactive };
+  }, [appState.teachers]);
 
   // --- Real-time statistics summaries for assignments ---
   const teacherTotalHoursMap = useMemo(() => {
@@ -4172,7 +4252,7 @@ export default function KreatorSzkoly({
                   <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.teachers.map((t) => {
                       const assignedHours = teacherTotalHoursMap[t.id] || 0;
-                      const limitSum = (t.maxHours || 18) + (t.overtimeHours || 0);
+                      const limitSum = (t.maxHours ?? 18) + (t.overtimeHours || 0);
                       const exceed = assignedHours > limitSum;
                       return (
                         <div key={t.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
@@ -4238,6 +4318,318 @@ export default function KreatorSzkoly({
                     {appState.teachers.length === 0 && (
                       <p className="p-10 text-center text-xs text-slate-400">Brak zarejestrowanych nauczycieli.</p>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* ⚡ Szybkie zarządzanie pensum wszystkich nauczycieli */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-200 bg-slate-50">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                        ⚡ Szybka zbiorcza edycja pensum i wyjątków kadry
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Błyskawiczna edycja wymiaru godzin (pensum) oraz nadgodzin dla całej kadry. Idealne rozwiązanie dla dyrekcji (0h), wicedyrektorów (np. 12h), osób z obniżonym pensum ze względu na stan zdrowia lub niepełnosprawność oraz do wprowadzania nadgodzin bez edycji pojedynczych profili.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Wyszukiwarka i filtry tabów */}
+                  <div className="mt-4 flex flex-col sm:flex-row gap-3 items-center justify-between bg-white p-2 rounded-xl border border-slate-100">
+                    <div className="relative w-full sm:max-w-xs">
+                      <input
+                        type="text"
+                        placeholder="Szukaj nauczyciela..."
+                        className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-slate-50 font-medium text-slate-800"
+                        value={pensumSearchQuery}
+                        onChange={(e) => setPensumSearchQuery(e.target.value)}
+                      />
+                      <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 w-full sm:w-auto">
+                      <button
+                        onClick={() => setPensumFilter('all')}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 ${
+                          pensumFilter === 'all'
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        Wszyscy
+                        <span className="bg-slate-200 text-slate-800 text-[9px] px-1.5 py-0.2 rounded font-black">
+                          {pensumCounts.all}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setPensumFilter('administrative')}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 ${
+                          pensumFilter === 'administrative'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-50 text-blue-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        💼 Kadra kierownicza
+                        <span className="bg-blue-100 text-blue-800 text-[9px] px-1.5 py-0.2 rounded font-black">
+                          {pensumCounts.administrative}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setPensumFilter('reduced')}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 ${
+                          pensumFilter === 'reduced'
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-slate-50 text-amber-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        ♿ Obniżone pensum (&lt;18h)
+                        <span className="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.2 rounded font-black">
+                          {pensumCounts.reduced}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setPensumFilter('standard')}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 ${
+                          pensumFilter === 'standard'
+                            ? 'bg-slate-600 text-white'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        🏫 Standard (18h)
+                        <span className="bg-slate-100 text-slate-700 text-[9px] px-1.5 py-0.2 rounded font-black">
+                          {pensumCounts.standard}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setPensumFilter('inactive')}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 ${
+                          pensumFilter === 'inactive'
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-slate-50 text-rose-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        🔴 Nieaktywni
+                        <span className="bg-rose-100 text-rose-800 text-[9px] px-1.5 py-0.2 rounded font-black">
+                          {pensumCounts.inactive}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/50">
+                        <th className="p-3 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider w-1/4">Nauczyciel</th>
+                        <th className="p-3 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider w-1/5">Rola / Status</th>
+                        <th className="p-3 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider w-1/5">Pensum (etat)</th>
+                        <th className="p-3 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider w-1/5">Nadgodziny</th>
+                        <th className="p-3 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider w-1/4 text-center">Szablony godzin (jedno kliknięcie)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredTeachersForQuickEdit.map((t) => {
+                        const assigned = teacherTotalHoursMap[t.id] || 0;
+                        const maxH = t.maxHours ?? 18;
+                        const otH = t.overtimeHours ?? 0;
+                        const isOver = assigned > (maxH + otH);
+
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-50/30 transition-colors">
+                            {/* Nauczyciel */}
+                            <td className="p-3">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-7 h-7 text-white font-mono font-black text-[9.5px] rounded-md tracking-wide flex items-center justify-center border shadow-sm shrink-0" style={{ backgroundColor: t.color || '#3b82f6' }}>
+                                  {t.abbr}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-black text-slate-900 truncate">
+                                    {t.first} {t.last}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 font-semibold">
+                                    Inicjały: {t.abbr}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Rola / Status */}
+                            <td className="p-3">
+                              <div className="flex flex-col gap-1 items-start">
+                                {t.isAdministrative ? (
+                                  <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0" title={t.administrativeRole}>
+                                    💼 {t.administrativeRole || 'Administracja'}
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0">
+                                    🏫 Nauczyciel
+                                  </span>
+                                )}
+                                {t.inactive ? (
+                                  <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0" title={t.inactiveComment}>
+                                    🔴 Nieaktywny
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0">
+                                    🟢 Aktywny
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Pensum (Input) */}
+                            <td className="p-3">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateTeacherHours(t.id, 'maxHours', maxH - 1)}
+                                  className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-bold"
+                                  disabled={maxH <= 0}
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  className="w-12 text-center border border-slate-200 rounded py-0.5 text-xs font-bold bg-slate-50 focus:bg-white"
+                                  min={0}
+                                  max={40}
+                                  value={maxH}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? '' : parseInt(e.target.value);
+                                    if (typeof val === 'number') {
+                                      handleUpdateTeacherHours(t.id, 'maxHours', val);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateTeacherHours(t.id, 'maxHours', maxH + 1)}
+                                  className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-bold"
+                                  disabled={maxH >= 40}
+                                >
+                                  +
+                                </button>
+                                <span className="text-[10px] text-slate-400 font-bold">godz.</span>
+                              </div>
+                              <div className="mt-1 flex items-center gap-1">
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+                                  isOver ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
+                                }`}>
+                                  Przydział: {assigned}h / {maxH + otH}h
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* Nadgodziny */}
+                            <td className="p-3">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateTeacherHours(t.id, 'overtimeHours', otH - 1)}
+                                  className="w-5 h-5 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-bold"
+                                  disabled={otH <= 0}
+                                >
+                                  -
+                                </button>
+                                <input
+                                  type="number"
+                                  className="w-12 text-center border border-indigo-200 rounded py-0.5 text-xs font-bold bg-indigo-50/30 focus:bg-white"
+                                  min={0}
+                                  max={40}
+                                  value={otH}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? '' : parseInt(e.target.value);
+                                    if (typeof val === 'number') {
+                                      handleUpdateTeacherHours(t.id, 'overtimeHours', val);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateTeacherHours(t.id, 'overtimeHours', otH + 1)}
+                                  className="w-5 h-5 flex items-center justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-bold"
+                                  disabled={otH >= 40}
+                                >
+                                  +
+                                </button>
+                                <span className="text-[10px] text-indigo-500 font-bold">godz.</span>
+                              </div>
+                            </td>
+
+                            {/* Szablony godzin */}
+                            <td className="p-3">
+                              <div className="flex flex-wrap gap-1 justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleBatchSetHours(t.id, 0, 0)}
+                                  className="px-2 py-1 text-[9.5px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-200 transition"
+                                  title="Dyrektor / Pełne zniżenie do 0 godzin"
+                                >
+                                  Dyrektor (0h)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBatchSetHours(t.id, 12, 0)}
+                                  className="px-2 py-1 text-[9.5px] font-black bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-100 transition"
+                                  title="Obniżone pensum wicedyrektora (12h)"
+                                >
+                                  Wicedyrektor (12h)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBatchSetHours(t.id, 15, 0)}
+                                  className="px-2 py-1 text-[9.5px] font-black bg-amber-50 hover:bg-amber-100 text-amber-700 rounded border border-amber-100 transition"
+                                  title="Pensum obniżone z tyt. zdrowotnego / niepełnosprawności (15h)"
+                                >
+                                  Obniżone (15h)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBatchSetHours(t.id, 18, 0)}
+                                  className="px-2 py-1 text-[9.5px] font-black bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded border border-emerald-100 transition"
+                                  title="Standardowe pełne pensum nauczyciela tablicowego (18h)"
+                                >
+                                  Etat (18h)
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {filteredTeachersForQuickEdit.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="p-8 text-center text-xs text-slate-400">
+                            Brak nauczycieli spełniających wybrane kryteria wyszukiwania.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Stopka tabeli z podsumowaniem */}
+                <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row gap-3 justify-between items-center text-[11px] text-slate-500 font-bold">
+                  <div>
+                    Wyświetlono <span className="font-extrabold text-slate-700">{filteredTeachersForQuickEdit.length}</span> z <span className="font-extrabold text-slate-700">{appState.teachers.length}</span> nauczycieli.
+                  </div>
+                  <div className="flex gap-4">
+                    <span>Średnie pensum: <span className="font-extrabold text-slate-700">
+                      {appState.teachers.length > 0 
+                        ? (appState.teachers.reduce((sum, t) => sum + (t.maxHours ?? 18), 0) / appState.teachers.length).toFixed(1)
+                        : 0
+                      }h
+                    </span></span>
+                    <span>Suma wszystkich nadgodzin: <span className="font-extrabold text-slate-700">
+                      {appState.teachers.reduce((sum, t) => sum + (t.overtimeHours ?? 0), 0)}h
+                    </span></span>
                   </div>
                 </div>
               </div>
@@ -5266,7 +5658,7 @@ export default function KreatorSzkoly({
                           const teacherAsgs = appState.planLekcji.assignments.filter(a => !t.id ? !a.teacherId : a.teacherId === t.id);
                           if (teacherAsgs.length === 0) return null;
                           const totalHours = teacherAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0);
-                          const limit = t.maxHours || 18;
+                          const limit = t.maxHours ?? 18;
                           const overtime = (t as any).overtimeHours || 0;
                           const totalLimit = limit + overtime;
                           const isOverLimit = t.id && totalHours > totalLimit;

@@ -248,7 +248,7 @@ interface StatystykiProps {
 
     return pl.teachers.map(t => {
       const scheduled = hoursScheduled[t.id] || 0;
-      const max = t.maxHours || 18;
+      const max = t.maxHours ?? 18;
       const ratio = max > 0 ? (scheduled / max) * 100 : 0;
       return {
         ...t,
