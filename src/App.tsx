@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog
+  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion
 } from './types';
 import { 
   getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
@@ -120,6 +120,17 @@ export default function App() {
     return [];
   });
 
+  const [autosaveVersions, setAutosaveVersions] = useState<AutosaveVersion[]>(() => {
+    const saved = localStorage.getItem('saleplan_v3_autosave_versions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return [];
+  });
+
   const [historyLogs, setHistoryLogs] = useState<AppEventLog[]>(() => {
     const saved = localStorage.getItem('saleplan_v3_history_logs');
     if (saved) {
@@ -181,6 +192,42 @@ export default function App() {
       );
     }
     setSnapshots(newSnaps);
+  };
+
+  const pushAutosaveVersion = (newAppState: AppState, newSchedData: SchedData) => {
+    try {
+      const saved = localStorage.getItem('saleplan_v3_autosave_versions');
+      let versions: AutosaveVersion[] = [];
+      if (saved) {
+        try {
+          versions = JSON.parse(saved);
+          if (!Array.isArray(versions)) versions = [];
+        } catch (e) {}
+      }
+
+      // Check if state actually changed from the last version
+      if (versions.length > 0) {
+        const last = versions[0];
+        const currentHash = JSON.stringify({ appState: newAppState, schedData: newSchedData });
+        const lastHash = JSON.stringify({ appState: last.appState, schedData: last.schedData });
+        if (currentHash === lastHash) {
+          return; // No real change, don't duplicate
+        }
+      }
+
+      const newVersion: AutosaveVersion = {
+        id: `autosave-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        appState: JSON.parse(JSON.stringify(newAppState)),
+        schedData: JSON.parse(JSON.stringify(newSchedData)),
+      };
+
+      const nextVersions = [newVersion, ...versions].slice(0, 3);
+      localStorage.setItem('saleplan_v3_autosave_versions', JSON.stringify(nextVersions));
+      setAutosaveVersions(nextVersions);
+    } catch (e) {
+      console.error('Błąd podczas wersjonowania autozapisu:', e);
+    }
   };
 
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
@@ -286,6 +333,7 @@ export default function App() {
         try {
           localStorage.setItem('saleplan_v3_app_state', JSON.stringify(stateRef.current.appState));
           localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(stateRef.current.schedData));
+          pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
           setSaveStatus('saved');
         } catch (e) {
           console.error('Błąd zapisu autozapisu', e);
@@ -1178,6 +1226,7 @@ export default function App() {
         onRestoreSnapshot={handleRestoreSnapshotState}
         isRestoring={isRestoring}
         onRestoringChange={setIsRestoring}
+        autosaveVersions={autosaveVersions}
       />
 
       <BackupPasswordModal

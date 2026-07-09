@@ -1,5 +1,5 @@
 import React, { useState, useMemo, Component, ErrorInfo, ReactNode } from 'react';
-import { AppState, SchedData, SnapshotEntry } from '../types';
+import { AppState, SchedData, SnapshotEntry, AutosaveVersion } from '../types';
 import { 
   Camera, Trash2, Download, Upload, Clock, Bookmark, X, Check, Search, FileText, AlertTriangle, Loader2, Info, BarChart2, TrendingUp, TrendingDown 
 } from 'lucide-react';
@@ -15,6 +15,7 @@ interface SnapshotManagerProps {
   onRestoreSnapshot: (restoredAppState: AppState, restoredSchedData: SchedData) => void;
   isRestoring?: boolean;
   onRestoringChange?: (isRestoring: boolean) => void;
+  autosaveVersions?: AutosaveVersion[];
 }
 
 
@@ -202,7 +203,8 @@ function SnapshotManagerInner({
   onChangeSnapshots,
   onRestoreSnapshot,
   isRestoring: propIsRestoring,
-  onRestoringChange
+  onRestoringChange,
+  autosaveVersions = []
 }: SnapshotManagerProps) {
   const [localIsRestoring, setLocalIsRestoring] = useState(false);
   const isRestoring = propIsRestoring !== undefined ? propIsRestoring : localIsRestoring;
@@ -229,6 +231,7 @@ function SnapshotManagerInner({
   const [showLessonComparison, setShowLessonComparison] = useState(false);
   const [comparisonTab, setComparisonTab] = useState<'classes' | 'teachers' | 'days'>('classes');
   const [comparisonSearchQuery, setComparisonSearchQuery] = useState('');
+  const [managerTab, setManagerTab] = useState<'manual' | 'autosave'>('manual');
 
   // Reset comparison state when chosen snapshot changes
   React.useEffect(() => {
@@ -237,9 +240,23 @@ function SnapshotManagerInner({
 
   // Memoized matching snapshot
   const selectedSnapshot = useMemo(() => {
-    if (!selectedSnapshotId || !Array.isArray(snapshots)) return null;
+    if (!selectedSnapshotId) return null;
+    if (selectedSnapshotId.startsWith('autosave-') && Array.isArray(autosaveVersions)) {
+      const foundAutosave = autosaveVersions.find(v => v && v.id === selectedSnapshotId);
+      if (foundAutosave) {
+        return {
+          id: foundAutosave.id,
+          name: `Autozapis z dnia ${new Date(foundAutosave.timestamp).toLocaleDateString('pl-PL')} ${new Date(foundAutosave.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`,
+          comment: `Stan roboczy systemu zachowany automatycznie podczas edycji siatki godzin.`,
+          createdAt: foundAutosave.timestamp,
+          appState: foundAutosave.appState,
+          schedData: foundAutosave.schedData,
+        } as SnapshotEntry;
+      }
+    }
+    if (!Array.isArray(snapshots)) return null;
     return snapshots.find(s => s && s.id === selectedSnapshotId) || null;
-  }, [snapshots, selectedSnapshotId]);
+  }, [snapshots, selectedSnapshotId, autosaveVersions]);
 
   if (!isOpen) return null;
 
@@ -457,6 +474,50 @@ function SnapshotManagerInner({
     });
   };
 
+  // Revert/Restore an autosave version
+  const handleRestoreAutosave = (version: AutosaveVersion) => {
+    if (!version) return;
+    let formattedDate = 'nieznanej daty';
+    try {
+      if (version.timestamp) {
+        const stamp = new Date(version.timestamp);
+        if (!isNaN(stamp.getTime())) {
+          formattedDate = stamp.toLocaleString('pl-PL');
+        }
+      }
+    } catch (e) {}
+
+    setConfirmConfig({
+      title: 'Przywrócenie z autozapisu',
+      message: `Czy na pewno chcesz przywrócić plan do automatycznego punktu kontrolnego z dnia: ${formattedDate}? Obecny stan planu zostanie zastąpiony!`,
+      onConfirm: () => {
+        setConfirmConfig(null);
+        if (version.appState && version.schedData) {
+          setIsRestoring(true);
+          setTimeout(() => {
+            try {
+              onRestoreSnapshot(version.appState, version.schedData);
+              onClose();
+            } catch (err) {
+              console.error('Błąd podczas przywracania autozapisu', err);
+              setAlertConfig({
+                title: 'Błąd przywracania',
+                message: 'Wystąpił nieoczekiwany błąd podczas przywracania danych.'
+              });
+            } finally {
+              setIsRestoring(false);
+            }
+          }, 500);
+        } else {
+          setAlertConfig({
+            title: 'Brak danych',
+            message: 'Ta automatyczna kopia nie zawiera poprawnych danych.'
+          });
+        }
+      }
+    });
+  };
+
   // Delete snapshot
   const handleDelete = (id: string, name: string) => {
     if (!id) return;
@@ -605,9 +666,46 @@ function SnapshotManagerInner({
 
         {/* Main Area */}
         <div className="flex-1 p-5 overflow-y-auto space-y-5 custom-scrollbar min-h-0 bg-slate-50/50">
-          
-          {/* Create Button & Search Line */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs select-none shrink-0">
+
+          {/* TAB SELECTOR */}
+          <div className="flex border-b border-slate-200 gap-1 select-none shrink-0 mb-1">
+            <button
+              type="button"
+              onClick={() => {
+                setManagerTab('manual');
+                setSelectedSnapshotId(null);
+              }}
+              className={`px-5 py-2.5 text-[11px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+                managerTab === 'manual'
+                  ? 'border-violet-600 text-violet-600 font-extrabold'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Camera size={14} /> Punkty ręczne ({filteredSnapshots.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setManagerTab('autosave');
+                setSelectedSnapshotId(null);
+              }}
+              className={`px-5 py-2.5 text-[11px] font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 relative ${
+                managerTab === 'autosave'
+                  ? 'border-violet-600 text-violet-600 font-extrabold'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Clock size={14} /> Wersje autozapisu ({autosaveVersions.length})
+              {autosaveVersions.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+              )}
+            </button>
+          </div>
+
+          {managerTab === 'manual' && (
+            <div className="space-y-5">
+              {/* Create Button & Search Line */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs select-none shrink-0">
             <div className="relative flex-1">
               <span className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
                 <Search size={14} />
@@ -705,6 +803,8 @@ function SnapshotManagerInner({
                   </button>
                 </div>
               </form>
+            </div>
+          )}
             </div>
           )}
 
@@ -1074,11 +1174,139 @@ function SnapshotManagerInner({
             </div>
           )}
 
+          {/* Historia Autozapisów (Wersjonowanie) */}
+          {managerTab === 'autosave' && (
+            <div className="space-y-4">
+              <div className="bg-slate-900 text-white rounded-xl p-4 border border-slate-800 shadow-md space-y-3 select-none">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-500 text-slate-950 rounded-lg">
+                    <Clock size={15} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black tracking-tight text-slate-100 font-sans">Automatyczne wersje bezpieczeństwa</h4>
+                    <p className="text-[10px] text-slate-400 font-medium leading-relaxed font-sans mt-0.5">
+                      System automatycznie rejestruje i przechowuje do 3 ostatnich unikalnych stanów roboczych Twojego planu lekcji podczas każdej modyfikacji. Dzięki temu Twoja praca jest zawsze zabezpieczona przed przypadkowym odświeżeniem strony, awarią przeglądarki czy błędną edycją! Kliknij dowolną wersję, aby podglądnąć statystyki i porównać ją ze stanem obecnym.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider select-none">
+                  Kopie automatyczne ({autosaveVersions.length})
+                </span>
+
+                {autosaveVersions && autosaveVersions.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {autosaveVersions.map((version, index) => {
+                      if (!version) return null;
+                      
+                      let dateStr = 'Brak daty';
+                      try {
+                        if (version.timestamp) {
+                          const stamp = new Date(version.timestamp);
+                          if (!isNaN(stamp.getTime())) {
+                            dateStr = `${stamp.toLocaleDateString('pl-PL')} ${stamp.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+                          }
+                        }
+                      } catch (e) {}
+
+                      const verLessons = countLessons(version.schedData);
+                      const verTeachers = version.appState.teachers?.length || version.appState.planLekcji?.teachers?.length || 0;
+                      const verClasses = version.appState.classes?.length || version.appState.planLekcji?.classes?.length || 0;
+                      
+                      const isSelected = selectedSnapshotId === version.id;
+
+                      return (
+                        <div 
+                          key={version.id || index}
+                          onClick={() => setSelectedSnapshotId(isSelected ? null : version.id)}
+                          className={`transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl cursor-pointer ${
+                            isSelected 
+                              ? 'bg-amber-50/90 border-2 border-amber-500 shadow-md ring-1 ring-amber-500/15' 
+                              : 'bg-white border border-slate-200 hover:border-amber-400 hover:shadow-xs group'
+                          }`}
+                        >
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {isSelected && (
+                                <span className="bg-amber-500 text-slate-950 rounded-full p-0.5 flex items-center justify-center shrink-0">
+                                  <Check size={8} className="stroke-[4]" />
+                                </span>
+                              )}
+                              <span className={`text-xs font-black transition-colors ${isSelected ? 'text-amber-950 font-extrabold font-sans' : 'text-slate-900 group-hover:text-amber-700 font-sans'}`}>
+                                Stan automatyczny #{index + 1}
+                              </span>
+                              <span className={`border font-black px-1.5 py-0.5 rounded text-[8px] uppercase font-mono tracking-wider ${
+                                isSelected 
+                                  ? 'bg-amber-100 text-amber-800 border-amber-200/60' 
+                                  : 'bg-slate-100 text-slate-600 border-slate-200/60'
+                              }`}>
+                                {version.appState?.yearLabel || 'Plan'}
+                              </span>
+                              <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono font-medium border border-slate-200/40">
+                                Autozapis
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[10px] text-slate-400 font-semibold select-none">
+                              <span className="flex items-center gap-0.5 whitespace-nowrap text-slate-500 font-bold font-sans">
+                                <Clock size={11} className={isSelected ? 'text-amber-500' : 'text-slate-400'} />
+                                📅 {dateStr}
+                              </span>
+                              <span className="text-slate-250 font-black">|</span>
+                              <span className={`${isSelected ? 'text-amber-800' : 'text-slate-500'}`}>
+                                lekcje: <strong>{verLessons}</strong>
+                              </span>
+                              <span className="text-slate-250 font-black">|</span>
+                              <span className={isSelected ? 'text-slate-600' : 'text-slate-500'}>
+                                klasy: <strong>{verClasses}</strong>
+                              </span>
+                              <span className="text-slate-250 font-black">|</span>
+                              <span className={isSelected ? 'text-slate-600' : 'text-slate-500'}>
+                                naucz.: <strong>{verTeachers}</strong>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 self-end md:self-center shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleRestoreAutosave(version); }}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold transition cursor-pointer flex items-center gap-1 border border-none ${
+                                isSelected 
+                                  ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs' 
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-700'
+                              }`}
+                              title="Przywróć tę automatyczną wersję bezpieczeństwa"
+                            >
+                              <Check size={11} className="stroke-[3]" />
+                              <span>Przywróć tę wersję</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-white border border-dashed border-slate-200 rounded-xl p-8 text-center text-xs text-slate-400 select-none">
+                    <Clock size={20} className="mx-auto text-slate-300 mb-2" />
+                    <div className="space-y-1">
+                      <p className="font-bold text-slate-500">Brak wersji autozapisu.</p>
+                      <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">Dokonaj jakiejkolwiek zmiany w planie lekcji, a system automatycznie zachowa poprzedni stan w tej sekcji.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* List of Snapshots */}
-          <div className="space-y-2.5">
-            <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider select-none">
-              Zapisane punkty przywracania ({filteredSnapshots.length})
-            </span>
+          {managerTab === 'manual' && (
+            <div className="space-y-2.5">
+              <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider select-none">
+                Zapisane punkty przywracania ({filteredSnapshots.length})
+              </span>
 
             {filteredSnapshots.length > 0 ? (
               <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
@@ -1214,6 +1442,7 @@ function SnapshotManagerInner({
               </div>
             )}
           </div>
+          )}
 
         </div>
 

@@ -310,6 +310,13 @@ export interface SnapshotEntry {
   };
 }
 
+export interface AutosaveVersion {
+  id: string;
+  timestamp: string;
+  appState: AppState;
+  schedData: SchedData;
+}
+
 export interface UndoEntry {
   label: string;
   yearKey: string;
