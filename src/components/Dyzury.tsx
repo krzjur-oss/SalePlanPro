@@ -45,9 +45,18 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const [newBreakName, setNewBreakName] = useState('');
 
   const [maxDuties, setMaxDuties] = useState<number>(dyz.settings.maxPerTeacher || 3);
+  const [autoBalance, setAutoBalance] = useState<boolean>(() => dyz.settings.autoBalance !== false);
   const [maxMinutesPerTeacher, setMaxMinutesPerTeacher] = useState<number>(() => dyz.settings.maxMinutesPerTeacher || 60);
   const [maxConsecutiveDuties, setMaxConsecutiveDuties] = useState<number>(() => dyz.settings.maxConsecutiveDuties !== undefined ? dyz.settings.maxConsecutiveDuties : 2);
   const [excludeTeachers, setExcludeTeachers] = useState<string[]>(dyz.settings.excludeTeachers || []);
+
+  React.useEffect(() => {
+    setAutoBalance(dyz.settings.autoBalance !== false);
+    setMaxMinutesPerTeacher(dyz.settings.maxMinutesPerTeacher || 60);
+    setMaxConsecutiveDuties(dyz.settings.maxConsecutiveDuties !== undefined ? dyz.settings.maxConsecutiveDuties : 2);
+    setMaxDuties(dyz.settings.maxPerTeacher || 3);
+    setExcludeTeachers(dyz.settings.excludeTeachers || []);
+  }, [dyz.settings]);
 
   const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number } | null>(null);
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
@@ -159,6 +168,63 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     return maxMins;
   }, [eligibleTeachers, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance]);
+
+  // Memoized duty demand statistics
+  const demandStats = useMemo(() => {
+    let totalMinutesNeeded = 0;
+    dyz.przerwy.forEach(przerwa => {
+      const duration = getBreakDuration(przerwa);
+      dyz.miejsca.forEach(miejsce => {
+        totalMinutesNeeded += duration * (miejsce.teachersNeeded || 1);
+      });
+    });
+    // weekly demand (multiplied by 5 school days)
+    const weeklyMinutesNeeded = totalMinutesNeeded * 5;
+
+    // Total active/eligible teachers
+    const teachersCount = eligibleTeachers.length;
+
+    // Total teaching hours of eligible teachers
+    let totalTeachingHours = 0;
+    eligibleTeachers.forEach(t => {
+      totalTeachingHours += teacherHours[t.abbr] || 0;
+    });
+
+    // Sum of proportions (FTE equivalent sum)
+    const fullTimeHours = 18;
+    let sumProportions = 0;
+    eligibleTeachers.forEach(t => {
+      const hours = teacherHours[t.abbr] || 0;
+      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+      sumProportions += prop;
+    });
+    if (sumProportions === 0) sumProportions = 1;
+
+    // Average minutes of duty for a full-time teacher to cover everything
+    const avgMinutesForFullTime = weeklyMinutesNeeded / sumProportions;
+
+    // Total currently assigned duty minutes
+    let totalAssignedMinutes = 0;
+    Object.entries(dyz.harmonogram).forEach(([key, entry]) => {
+      if (entry.teacherAbbr) {
+        const parts = key.split('|');
+        const przerwaNum = parseInt(parts[2]);
+        const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
+        if (przerwa) {
+          totalAssignedMinutes += getBreakDuration(przerwa);
+        }
+      }
+    });
+
+    return {
+      weeklyMinutesNeeded,
+      teachersCount,
+      totalTeachingHours,
+      avgMinutesForFullTime: Math.round(avgMinutesForFullTime),
+      totalAssignedMinutes,
+      coveragePercent: weeklyMinutesNeeded > 0 ? Math.round((totalAssignedMinutes / weeklyMinutesNeeded) * 100) : 0
+    };
+  }, [dyz.przerwy, dyz.miejsca, dyz.harmonogram, eligibleTeachers, teacherHours]);
 
 
 
@@ -862,8 +928,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       dyzury: {
         ...dyz,
         settings: {
-          autoBalance: true,
+          ...dyz.settings,
+          autoBalance,
           maxPerTeacher: maxDuties,
+          maxMinutesPerTeacher,
+          maxConsecutiveDuties,
           excludeTeachers
         }
       }
@@ -1353,6 +1422,23 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
               <div className="space-y-4">
                 <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100 space-y-3">
+                  {/* autoBalance checkbox */}
+                  <div className="flex items-start gap-2.5 p-2.5 bg-violet-50/50 border border-violet-100 rounded-lg hover:bg-violet-50 transition select-none">
+                    <input 
+                      type="checkbox" 
+                      id="opt_autoBalance"
+                      className="mt-0.5 rounded border-violet-300 text-violet-600 focus:ring-violet-500 h-4 w-4 cursor-pointer"
+                      checked={autoBalance}
+                      onChange={(e) => setAutoBalance(e.target.checked)}
+                    />
+                    <label htmlFor="opt_autoBalance" className="cursor-pointer select-none space-y-0.5 flex-1">
+                      <span className="text-[11px] font-extrabold text-violet-900 block">Automatyczne bilansowanie dyżurów</span>
+                      <span className="text-[9px] text-violet-700/80 block leading-tight font-medium">
+                        Dostosowuje limit dyżurów nauczycieli proporcjonalnie do ich etatu (godzin lekcyjnych), zabezpieczając przed przeciążeniem.
+                      </span>
+                    </label>
+                  </div>
+
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">⏱️ Maksymalny czas dyżurów w tygodniu</label>
                     <div className="flex gap-2 items-center">
@@ -1389,10 +1475,52 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   <div className="pt-2">
                     <button 
                       onClick={handleSaveSettings}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition"
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm transition cursor-pointer"
                     >
                       Zapisz Parametry
                     </button>
+                  </div>
+                </div>
+
+                {/* Statystyka Zapotrzebowania na Dyżury */}
+                <div className="border-t border-slate-100 pt-3">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5 select-none">
+                    📊 Statystyka zapotrzebowania i bilans dyżurów
+                  </h4>
+                  <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 space-y-2.5 text-xs">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2 bg-white rounded-lg border border-slate-100">
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase leading-none">Potrzebne dyżury</span>
+                        <span className="block text-sm font-extrabold text-slate-800 font-mono mt-1">{demandStats.weeklyMinutesNeeded} min</span>
+                        <span className="text-[9px] text-slate-400 font-medium block mt-0.5 leading-none">w skali tygodnia</span>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-slate-100">
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase leading-none">Przydzielone dyżury</span>
+                        <span className={`block text-sm font-extrabold font-mono mt-1 ${demandStats.coveragePercent >= 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {demandStats.totalAssignedMinutes} min ({demandStats.coveragePercent}%)
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-medium block mt-0.5 leading-none font-sans">obsadzone przerw</span>
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 bg-indigo-50/50 border border-indigo-100/50 rounded-lg space-y-1.5 text-[11px] leading-relaxed">
+                      <div className="flex justify-between font-semibold text-slate-700">
+                        <span>Liczba uprawnionych nauczycieli:</span>
+                        <span className="font-mono text-slate-950">{demandStats.teachersCount}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-slate-700">
+                        <span>Suma godzin lekcyjnych:</span>
+                        <span className="font-mono text-slate-950">{demandStats.totalTeachingHours} godz.</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-indigo-900 border-t border-indigo-150/40 pt-1.5">
+                        <span>Średnie obciążenie (1 etat):</span>
+                        <span className="font-mono font-extrabold text-indigo-700">{demandStats.avgMinutesForFullTime} min / tydz.</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[9px] text-slate-400 leading-relaxed font-medium">
+                      *Średnie obciążenie wyznacza ile minut dyżurów przypada na jednego nauczyciela pełnoetatowego (18h lekcji) w celu obsadzenia 100% stanowisk.
+                    </p>
                   </div>
                 </div>
 
