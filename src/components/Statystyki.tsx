@@ -1764,20 +1764,40 @@ interface StatystykiProps {
                 </p>
               </div>
 
-              {historyLogs.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić cały dziennik zdarzeń?')) {
-                      onClearHistoryLogs();
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-650 font-black border border-red-200 hover:border-red-300 rounded-xl text-[11px] uppercase tracking-wider cursor-pointer transition shadow-xs"
-                >
-                  <Trash2 size={13} className="text-red-600" />
-                  Wyczyść dziennik
-                </button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {errorLogs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić wszystkie logi błędów systemowych z pamięci przeglądarki?')) {
+                        localStorage.removeItem('saleplan_v3_error_logs');
+                        setErrorLogs([]);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-650 font-black border border-rose-200 hover:border-rose-300 rounded-xl text-[11px] uppercase tracking-wider cursor-pointer transition shadow-xs"
+                    id="clear-system-error-logs-btn"
+                  >
+                    <ShieldAlert size={13} className="text-rose-600" />
+                    Usuń błędy systemowe ({errorLogs.length})
+                  </button>
+                )}
+
+                {historyLogs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić cały dziennik zdarzeń?')) {
+                        onClearHistoryLogs();
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-650 font-black border border-red-200 hover:border-red-300 rounded-xl text-[11px] uppercase tracking-wider cursor-pointer transition shadow-xs"
+                    id="clear-history-logs-btn"
+                  >
+                    <Trash2 size={13} className="text-red-600" />
+                    Wyczyść dziennik
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* QUICK STATS CARDS (Interactive filters) */}
