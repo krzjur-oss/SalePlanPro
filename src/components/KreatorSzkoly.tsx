@@ -1523,6 +1523,8 @@ export default function KreatorSzkoly({
   const [newTInactive, setNewTInactive] = useState(false);
   const [newTInactiveComment, setNewTInactiveComment] = useState('');
   const [newTSubstitutions, setNewTSubstitutions] = useState<string[]>([]);
+  const [newTIsAdministrative, setNewTIsAdministrative] = useState(false);
+  const [newTAdministrativeRole, setNewTAdministrativeRole] = useState('');
 
   // Trigger auto abbr
   const updateTAbbrAuto = (f: string, l: string) => {
@@ -1544,6 +1546,8 @@ export default function KreatorSzkoly({
     setNewTInactive(t.inactive || false);
     setNewTInactiveComment(t.inactiveComment || '');
     setNewTSubstitutions(t.substitutions || []);
+    setNewTIsAdministrative(t.isAdministrative || false);
+    setNewTAdministrativeRole(t.administrativeRole || '');
 
     // Load or generate list of available slots
     if (t.availability) {
@@ -1574,6 +1578,8 @@ export default function KreatorSzkoly({
     setNewTInactive(false);
     setNewTInactiveComment('');
     setNewTSubstitutions([]);
+    setNewTIsAdministrative(false);
+    setNewTAdministrativeRole('');
     const nextColor = PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706';
     setNewTColor(nextColor);
   };
@@ -1620,7 +1626,9 @@ export default function KreatorSzkoly({
             availability: newTAvailability,
             inactive: newTInactive,
             inactiveComment: newTInactiveComment.trim(),
-            substitutions: newTSubstitutions
+            substitutions: newTSubstitutions,
+            isAdministrative: newTIsAdministrative,
+            administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined
           };
         }
         return t;
@@ -1645,6 +1653,8 @@ export default function KreatorSzkoly({
       setNewTInactive(false);
       setNewTInactiveComment('');
       setNewTSubstitutions([]);
+      setNewTIsAdministrative(false);
+      setNewTAdministrativeRole('');
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti('Zaktualizowano dane nauczyciela');
@@ -1660,7 +1670,9 @@ export default function KreatorSzkoly({
         color: newTColor,
         inactive: newTInactive,
         inactiveComment: newTInactiveComment.trim(),
-        substitutions: newTSubstitutions
+        substitutions: newTSubstitutions,
+        isAdministrative: newTIsAdministrative,
+        administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined
       };
 
       const nextT = [...appState.teachers, newTeacher];
@@ -1683,6 +1695,8 @@ export default function KreatorSzkoly({
       setNewTInactive(false);
       setNewTInactiveComment('');
       setNewTSubstitutions([]);
+      setNewTIsAdministrative(false);
+      setNewTAdministrativeRole('');
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti(`Dodano nauczyciela: ${newTeacher.first} ${newTeacher.last}`);
@@ -4032,6 +4046,36 @@ export default function KreatorSzkoly({
                       )}
                     </div>
 
+                    <div className="bg-slate-100/50 p-2.5 rounded-lg border border-slate-200 space-y-2 mt-1">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                          checked={newTIsAdministrative}
+                          onChange={(e) => {
+                            setNewTIsAdministrative(e.target.checked);
+                            if (!e.target.checked) {
+                              setNewTAdministrativeRole('');
+                            }
+                          }}
+                        />
+                        <span className="text-xs font-black text-blue-700">💼 Rola administracyjna</span>
+                      </label>
+                      {newTIsAdministrative && (
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-slate-500 font-bold">Stanowisko / Rola w szkole</label>
+                          <input 
+                            type="text" 
+                            required
+                            placeholder="np. Dyrektor, Wicedyrektor, Kierownik"
+                            className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-medium text-slate-800"
+                            value={newTAdministrativeRole}
+                            onChange={(e) => setNewTAdministrativeRole(e.target.value)}
+                          />
+                        </div>
+                      )}
+                    </div>
+
                     {!newTInactive && inactiveTeachersLessonsList.length > 0 && (
                       <div className="bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100 space-y-2 mt-1 text-[11px]">
                         <span className="font-bold text-indigo-800 flex items-center gap-1">
@@ -4139,6 +4183,11 @@ export default function KreatorSzkoly({
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-xs font-black text-slate-900 leading-none truncate" title={`${t.first} ${t.last}`}>{t.first} {t.last}</span>
+                                {t.isAdministrative && (
+                                  <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0 flex items-center gap-1" title={t.administrativeRole || 'Funkcja administracyjna'}>
+                                    💼 {t.administrativeRole || 'Dyrektor / Administracja'}
+                                  </span>
+                                )}
                                 {t.inactive && (
                                   <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0">
                                     🔴 Nieaktywny
@@ -4351,6 +4400,34 @@ export default function KreatorSzkoly({
                                     className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none"
                                     value={newTInactiveComment}
                                     onChange={(e) => setNewTInactiveComment(e.target.value)}
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="bg-slate-100/65 p-3 rounded-xl border border-slate-200/60 space-y-2 mt-2 col-span-2">
+                              <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                                  checked={newTIsAdministrative}
+                                  onChange={(e) => {
+                                    setNewTIsAdministrative(e.target.checked);
+                                    if (!e.target.checked) setNewTAdministrativeRole('');
+                                  }}
+                                />
+                                <span className="text-xs font-black text-blue-700">💼 Rola administracyjna</span>
+                              </label>
+                              {newTIsAdministrative && (
+                                <div className="space-y-1">
+                                  <label className="text-[9px] text-slate-500 font-bold">Stanowisko / Rola w szkole</label>
+                                  <input 
+                                    type="text" 
+                                    required
+                                    placeholder="np. Dyrektor, Wicedyrektor, Kierownik"
+                                    className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-medium text-slate-800 focus:border-blue-500"
+                                    value={newTAdministrativeRole}
+                                    onChange={(e) => setNewTAdministrativeRole(e.target.value)}
                                   />
                                 </div>
                               )}
