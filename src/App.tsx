@@ -233,7 +233,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.0.0';
+  const CURRENT_VERSION = '3.1.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
 
   useEffect(() => {
@@ -699,7 +699,7 @@ export default function App() {
 
   const handleExecuteExport = async (password?: string) => {
     const backupObj = {
-      version: '3.0.0',
+      version: '3.1.0',
       appState,
       schedData,
       timestamp: new Date().toISOString()
@@ -1293,9 +1293,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.0.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.1.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Zaimplementowano Tryb Prezentacji, usprawniono drag & drop oraz zaktualizowano moduły oświatowe.
+                  Zaimplementowano wykres zapotrzebowania na dyżury (Recharts), role administracyjne nauczycieli i przestrzenie przejściowe.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

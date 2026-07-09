@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.1.0',
+      date: 'Lipiec 2026',
+      title: 'Wykresy zapotrzebowania na dyżury, funkcje administracyjne kadry oraz przestrzenie przejściowe',
+      description: 'Aktualizacja wprowadzająca zaawansowaną analitykę "godzin szczytu" dyżurów za pomocą biblioteki recharts, możliwość oznaczania ról administracyjnych kadry pedagogicznej oraz graficzne oznaczenie korytarzy i schodów o charakterze przejściowym.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Dodano interaktywny wykres słupkowy (Recharts) w zakładce Statystyki, wizualizujący zapotrzebowanie na dyżury z podziałem na poszczególne przerwy w celu identyfikacji godzin szczytu.', badgeText: 'HIT' },
+        { type: 'feature', text: 'Wprowadzono funkcjonalność oznaczania ról administracyjnych nauczycieli (np. Dyrektor, Wicedyrektor, Kierownik) w kroku 6 Kreatora Szkoły.', badgeText: 'Kadra' },
+        { type: 'improvement', text: 'Dodano graficzne wyróżnienie ("Przejściowy 🚶‍♂️") dla miejsc dyżurowania o charakterze przejściowym (łączniki, szatnie, przejścia) w module Dyżurów.', badgeText: 'Wizualne' },
+        { type: 'improvement', text: 'Dodano filtry analizy dyżurów według dni tygodnia (oraz widok zbiorczy całego tygodnia) wraz ze szczegółowymi wskaźnikami KPI (pokrycie, wakaty).', badgeText: 'Analityka' },
+        { type: 'fix', text: 'Naprawiono błąd dopasowania pięter przy weryfikacji i walidacji aktywności korytarzy w harmonogramie dyżurów.' }
+      ]
+    },
+    {
       version: 'v3.0.0',
       date: 'Lipiec 2026',
       title: 'Wdrożenie trybu prezentacji, optymalizacja drag & drop oraz ulepszenia administracyjne',
       description: 'Główna aktualizacja koncentrująca się na ułatwieniu demonstrowania planu lekcji i dyżurów, poprawie ergonomii pracy oraz znacznym zwiększeniu wydajności przy renderowaniu dużych siatek godzinowych.',
-      badge: 'Najnowsza',
       changes: [
         { type: 'feature', text: 'Dodano pełnoekranowy "Tryb Prezentacji" (Eye / EyeOff), który ukrywa boczne panele nawigacyjne, ułatwiając wyświetlanie planu na rzutnikach lub dużych ekranach.', badgeText: 'HIT' },
         { type: 'improvement', text: 'Zablokowano możliwość edycji i przeciągania elementów (lekcji i nauczycieli) w trybie prezentacji, zapobiegając przypadkowym zmianom.', badgeText: 'Bezpieczeństwo' },
