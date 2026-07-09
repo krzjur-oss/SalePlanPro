@@ -1,10 +1,13 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppState, SchedData, AppEventLog, DyzurEntry, AppErrorLog } from '../types';
 import { 
-  BarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, TrendingUp, Info, HelpCircle,
+  BarChart as LucideBarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, TrendingUp, Info, HelpCircle,
   Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw, RefreshCw, XCircle, ShieldAlert
 } from 'lucide-react';
-import { getStorageSize, formatBytes } from '../utils';
+import { getStorageSize, formatBytes, colKey, flattenColumns } from '../utils';
+import { 
+  BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from 'recharts';
 
 interface StatystykiProps {
   appState: AppState;
@@ -18,6 +21,7 @@ interface StatystykiProps {
   const [isScanning, setIsScanning] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   const [logFilterType, setLogFilterType] = useState<string>('all');
+  const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'all'>('all');
 
   const [errorLogs, setErrorLogs] = useState<AppErrorLog[]>(() => {
     const saved = localStorage.getItem('saleplan_v3_error_logs');
@@ -357,6 +361,159 @@ interface StatystykiProps {
       };
     }).sort((a, b) => b.dutiesMinutes - a.dutiesMinutes);
   }, [pl.teachers, appState.dyzury]);
+
+  // --- Calculation: Break-wise Duty Demand & Peak Hours ---
+  const breakDemandStats = useMemo(() => {
+    const dyzury = appState.dyzury;
+    if (!dyzury) return [];
+    const przerwy = dyzury.przerwy || [];
+    const miejsca = dyzury.miejsca || [];
+    const harmonogram = dyzury.harmonogram || {};
+
+    const checkPlaceActive = (miejsce: any, dayIdx: number, przerwa: any): boolean => {
+      if (!dyzury.settings?.skipDutyIfNoClassesOnCorridor) return true;
+
+      const yk = appState.yearKey;
+      const hourBeforeKey = String(przerwa.num);
+      const hourAfterKey = String(przerwa.num + 1);
+
+      const dayData = schedData[yk]?.[dayIdx] || {};
+      const hourBeforeData = dayData[hourBeforeKey] || {};
+      const hourAfterData = dayData[hourAfterKey] || {};
+
+      let roomsToCheck: string[] = miejsce.connectedRooms || [];
+
+      if (miejsce.isTransitional || roomsToCheck.length === 0) {
+        if (miejsce.floor) {
+          const cols = flattenColumns(appState.floors || []);
+          roomsToCheck = cols
+            .filter(col => col.floor?.name === miejsce.floor)
+            .map(col => col.room.num);
+        }
+        
+        if (roomsToCheck.length === 0) {
+          const hasAnyLessonInSchool = 
+            Object.values(hourBeforeData).some(cell => {
+              const cells = Array.isArray(cell) ? cell : [cell];
+              return cells.some((c: any) => c?.teacherAbbr);
+            }) ||
+            Object.values(hourAfterData).some(cell => {
+              const cells = Array.isArray(cell) ? cell : [cell];
+              return cells.some((c: any) => c?.teacherAbbr);
+            });
+          return hasAnyLessonInSchool;
+        }
+      }
+
+      const cols = flattenColumns(appState.floors || []);
+      const targetColKeys = cols
+        .filter(col => roomsToCheck.includes(col.room.num))
+        .map(col => colKey(col));
+
+      if (targetColKeys.length === 0) return false;
+
+      const hasClassBefore = targetColKeys.some(cKey => {
+        const cell = hourBeforeData[cKey];
+        if (!cell) return false;
+        const cells = Array.isArray(cell) ? cell : [cell];
+        return cells.some((c: any) => c?.teacherAbbr);
+      });
+
+      const hasClassAfter = targetColKeys.some(cKey => {
+        const cell = hourAfterData[cKey];
+        if (!cell) return false;
+        const cells = Array.isArray(cell) ? cell : [cell];
+        return cells.some((c: any) => c?.teacherAbbr);
+      });
+
+      return hasClassBefore || hasClassAfter;
+    };
+
+    return przerwy.map(przerwa => {
+      let totalDemand = 0;
+      let totalAssigned = 0;
+
+      const daysToCalculate = selectedDayFilter === 'all' ? [0, 1, 2, 3, 4] : [selectedDayFilter];
+
+      daysToCalculate.forEach(dayIdx => {
+        miejsca.forEach(miejsce => {
+          if (checkPlaceActive(miejsce, dayIdx, przerwa)) {
+            totalDemand += (miejsce.teachersNeeded || 1);
+
+            const key = `${miejsce.id}|${dayIdx}|${przerwa.num}`;
+            if (harmonogram[key]?.teacherAbbr) {
+              totalAssigned += 1;
+            }
+          }
+        });
+      });
+
+      const label = `${przerwa.name || `P. ${przerwa.num}`} (${przerwa.start}-${przerwa.end})`;
+
+      return {
+        id: przerwa.num,
+        name: label,
+        shortName: przerwa.name || `Przerwa ${przerwa.num}`,
+        times: `${przerwa.start}-${przerwa.end}`,
+        demand: totalDemand,
+        assigned: totalAssigned,
+        deficit: Math.max(0, totalDemand - totalAssigned),
+        occupancyRatio: totalDemand > 0 ? Math.round((totalAssigned / totalDemand) * 100) : 0
+      };
+    }).sort((a, b) => a.id - b.id);
+  }, [appState.dyzury, appState.floors, appState.yearKey, schedData, selectedDayFilter]);
+
+  // Stats for the select filter
+  const chartSummary = useMemo(() => {
+    let totalDemand = 0;
+    let totalAssigned = 0;
+    let peakBreakName = 'Brak';
+    let maxDemand = 0;
+
+    breakDemandStats.forEach(b => {
+      totalDemand += b.demand;
+      totalAssigned += b.assigned;
+      if (b.demand > maxDemand) {
+        maxDemand = b.demand;
+        peakBreakName = `${b.shortName} (${b.times})`;
+      }
+    });
+
+    const coverage = totalDemand > 0 ? Math.round((totalAssigned / totalDemand) * 100) : 100;
+    const deficit = Math.max(0, totalDemand - totalAssigned);
+
+    return { totalDemand, totalAssigned, deficit, coverage, peakBreakName };
+  }, [breakDemandStats]);
+
+  const CustomChartTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900 border border-slate-850 text-white rounded-xl p-3 shadow-lg space-y-1.5 max-w-xs text-xs">
+          <p className="font-extrabold text-indigo-300 uppercase tracking-wide border-b border-slate-800 pb-1">{data.name}</p>
+          <div className="space-y-1">
+            <div className="flex justify-between gap-6">
+              <span className="text-slate-400">Wymagane dyżury:</span>
+              <span className="font-mono font-bold text-white">{data.demand}</span>
+            </div>
+            <div className="flex justify-between gap-6">
+              <span className="text-slate-400">Obsadzone dyżury:</span>
+              <span className="font-mono font-bold text-emerald-400">
+                {data.assigned} <span className="text-[10px] text-slate-500">({data.occupancyRatio}%)</span>
+              </span>
+            </div>
+            <div className="flex justify-between gap-6 border-t border-slate-800 pt-1 mt-1">
+              <span className="text-slate-400">Brakująca obsada:</span>
+              <span className={`font-mono font-bold ${data.deficit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {data.deficit}
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   // --- Calculation: Schedule Gaps ("Okienka") ---
   const gapsStats = useMemo(() => {
@@ -1234,7 +1391,159 @@ interface StatystykiProps {
 
         {/* ======================= TAB: TEACHERS CONTENT ======================= */}
         {activeTab === 'teachers' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-6">
+            
+            {/* Chart Card */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                      <LucideBarChart size={16} />
+                    </div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Rozkład Zapotrzebowania na Dyżury</h3>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase">Analiza przerw pod kątem zagęszczenia dyżurów ("godziny szczytu")</p>
+                </div>
+
+                {/* Day selector */}
+                <div className="flex bg-slate-100 p-0.5 rounded-lg select-none">
+                  <button
+                    onClick={() => setSelectedDayFilter('all')}
+                    className={`px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider rounded-md transition cursor-pointer ${
+                      selectedDayFilter === 'all' 
+                        ? 'bg-white text-slate-900 shadow-xs font-black' 
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Tydzień
+                  </button>
+                  {['Pon', 'Wt', 'Śr', 'Czw', 'Pt'].map((day, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedDayFilter(idx)}
+                      className={`px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider rounded-md transition cursor-pointer ${
+                        selectedDayFilter === idx 
+                          ? 'bg-white text-slate-900 shadow-xs font-black' 
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* KPI indicators inside the chart card */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <div className="bg-slate-50/50 border border-slate-150 rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-2 bg-rose-50 text-rose-500 rounded-lg">
+                    <span className="text-sm">🔥</span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Godzina szczytu</span>
+                    <span className="text-xs font-extrabold text-slate-800 truncate block" title={chartSummary.peakBreakName}>
+                      {chartSummary.peakBreakName}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50/50 border border-slate-150 rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg">
+                    <span className="text-sm">⏱️</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Wymagane dyżury</span>
+                    <span className="text-xs font-black text-slate-800 font-mono">
+                      {chartSummary.totalDemand} <span className="text-[10px] text-slate-400 font-normal">obsad</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50/50 border border-slate-150 rounded-xl p-3 flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${chartSummary.coverage === 100 ? 'bg-emerald-50 text-emerald-500' : 'bg-amber-50 text-amber-500'}`}>
+                    <span className="text-sm">🛡️</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Pokrycie dyżurów</span>
+                    <span className={`text-xs font-black font-mono ${chartSummary.coverage === 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {chartSummary.coverage}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50/50 border border-slate-150 rounded-xl p-3 flex items-center gap-3">
+                  <div className="p-2 bg-amber-50 text-amber-500 rounded-lg">
+                    <span className="text-sm">⚠️</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase block">Nieobsadzone</span>
+                    <span className={`text-xs font-black font-mono ${chartSummary.deficit > 0 ? 'text-rose-600 font-black' : 'text-slate-700'}`}>
+                      {chartSummary.deficit} <span className="text-[10px] text-slate-400 font-normal">wakatów</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* The Recharts Bar Chart */}
+              {breakDemandStats.length === 0 ? (
+                <div className="py-12 text-center text-xs text-slate-400 italic font-semibold">
+                  Brak zdefiniowanych przerw lub miejsc dyżurów. Przejdź do zakładki "Dyżury", aby je dodać.
+                </div>
+              ) : (
+                <div className="w-full h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart
+                      data={breakDemandStats}
+                      margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="shortName" 
+                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                        axisLine={{ stroke: '#cbd5e1' }}
+                        tickLine={false}
+                      />
+                      <YAxis 
+                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                        axisLine={{ stroke: '#cbd5e1' }}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip content={<CustomChartTooltip />} cursor={{ fill: '#f8fafc' }} />
+                      <Legend 
+                        verticalAlign="top" 
+                        height={36} 
+                        iconType="circle"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: 11, fontWeight: 700, color: '#334155' }}
+                      />
+                      <Bar 
+                        dataKey="demand" 
+                        name="Wymagane dyżury (zapotrzebowanie)" 
+                        fill="#6366f1" 
+                        radius={[4, 4, 0, 0]} 
+                        maxBarSize={45}
+                      />
+                      <Bar 
+                        dataKey="assigned" 
+                        name="Obsadzone dyżury" 
+                        fill="#10b981" 
+                        radius={[4, 4, 0, 0]} 
+                        maxBarSize={45}
+                      />
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* Informative footer */}
+              <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-3 text-[10px] text-blue-800 leading-relaxed font-medium">
+                💡 <strong>Wskazówka:</strong> Godziny szczytu ("szczyty słupków") pokazują przerwy o największym zagęszczeniu zajęć lekcyjnych na korytarzach szkolnych. Dopasuj liczbę dyżurów i obsadę w sekcji "Dyżury", aby zapewnić optymalne bezpieczeństwo uczniów w tych okresach.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Lesson Loads */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
@@ -1313,6 +1622,7 @@ interface StatystykiProps {
             </div>
 
           </div>
+        </div>
         )}
 
         {/* ======================= TAB: ROOMS CONTENT ======================= */}

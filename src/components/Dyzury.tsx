@@ -39,6 +39,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const [newPlaceDesc, setNewPlaceDesc] = useState('');
   const [newPlaceTeachersNeeded, setNewPlaceTeachersNeeded] = useState<number>(1);
   const [newPlaceConnectedRooms, setNewPlaceConnectedRooms] = useState<string[]>([]);
+  const [newPlaceIsTransitional, setNewPlaceIsTransitional] = useState<boolean>(false);
 
   const [newBreakStart, setNewBreakStart] = useState('');
   const [newBreakEnd, setNewBreakEnd] = useState('');
@@ -49,6 +50,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const [maxMinutesPerTeacher, setMaxMinutesPerTeacher] = useState<number>(() => dyz.settings.maxMinutesPerTeacher || 60);
   const [maxConsecutiveDuties, setMaxConsecutiveDuties] = useState<number>(() => dyz.settings.maxConsecutiveDuties !== undefined ? dyz.settings.maxConsecutiveDuties : 2);
   const [excludeTeachers, setExcludeTeachers] = useState<string[]>(dyz.settings.excludeTeachers || []);
+  const [excludeAfterLastLesson, setExcludeAfterLastLesson] = useState<boolean>(() => !!dyz.settings.excludeAfterLastLesson);
+  const [skipDutyIfNoClassesOnCorridor, setSkipDutyIfNoClassesOnCorridor] = useState<boolean>(() => !!dyz.settings.skipDutyIfNoClassesOnCorridor);
 
   React.useEffect(() => {
     setAutoBalance(dyz.settings.autoBalance !== false);
@@ -56,6 +59,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     setMaxConsecutiveDuties(dyz.settings.maxConsecutiveDuties !== undefined ? dyz.settings.maxConsecutiveDuties : 2);
     setMaxDuties(dyz.settings.maxPerTeacher || 3);
     setExcludeTeachers(dyz.settings.excludeTeachers || []);
+    setExcludeAfterLastLesson(!!dyz.settings.excludeAfterLastLesson);
+    setSkipDutyIfNoClassesOnCorridor(!!dyz.settings.skipDutyIfNoClassesOnCorridor);
   }, [dyz.settings]);
 
   const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number } | null>(null);
@@ -244,7 +249,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
             desc: newPlaceDesc.trim() || undefined,
             floor: newPlaceFloor.trim() || undefined,
             teachersNeeded: newPlaceTeachersNeeded,
-            connectedRooms: newPlaceConnectedRooms
+            connectedRooms: newPlaceConnectedRooms,
+            isTransitional: newPlaceIsTransitional
           };
         }
         return m;
@@ -264,6 +270,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       setNewPlaceDesc('');
       setNewPlaceTeachersNeeded(1);
       setNewPlaceConnectedRooms([]);
+      setNewPlaceIsTransitional(false);
       notify('Zaktualizowano miejsce dyżuru');
     } else {
       // Add new
@@ -273,7 +280,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
         desc: newPlaceDesc.trim() || undefined,
         floor: newPlaceFloor.trim() || undefined,
         teachersNeeded: newPlaceTeachersNeeded,
-        connectedRooms: newPlaceConnectedRooms
+        connectedRooms: newPlaceConnectedRooms,
+        isTransitional: newPlaceIsTransitional
       };
 
       onChangeAppState({
@@ -289,6 +297,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       setNewPlaceDesc('');
       setNewPlaceTeachersNeeded(1);
       setNewPlaceConnectedRooms([]);
+      setNewPlaceIsTransitional(false);
       notify('Dodano miejsce dyżuru');
     }
   };
@@ -300,6 +309,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     setNewPlaceDesc(place.desc || '');
     setNewPlaceTeachersNeeded(place.teachersNeeded || 1);
     setNewPlaceConnectedRooms(place.connectedRooms || []);
+    setNewPlaceIsTransitional(!!place.isTransitional);
     notify(`Edycja miejsca: ${place.name}`);
   };
 
@@ -310,6 +320,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     setNewPlaceDesc('');
     setNewPlaceTeachersNeeded(1);
     setNewPlaceConnectedRooms([]);
+    setNewPlaceIsTransitional(false);
   };
 
   const handleRemovePlace = (id: string) => {
@@ -593,6 +604,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const lastTimeslot = appState.timeslots?.find(t => t.num === maxHour);
 
     if (!firstTimeslot || !lastTimeslot) {
+      if (dyz.settings.excludeAfterLastLesson) {
+        return przerwa.num >= minHour - 1 && przerwa.num < maxHour;
+      }
       return przerwa.num >= minHour - 1 && przerwa.num <= maxHour;
     }
 
@@ -607,11 +621,83 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const breakStartMins = toMins(przerwa.start);
     const breakEndMins = toMins(przerwa.end);
 
+    if (dyz.settings.excludeAfterLastLesson) {
+      // Exclude break if it starts at or after their last class ends
+      if (breakStartMins >= dayEndMins) {
+        return false;
+      }
+    }
+
     const isBetween = breakStartMins >= dayStartMins && breakEndMins <= dayEndMins;
     const isDirectlyBefore = breakEndMins === dayStartMins || (breakEndMins > dayStartMins - 30 && breakEndMins <= dayStartMins);
     const isDirectlyAfter = breakStartMins === dayEndMins || (breakStartMins >= dayEndMins && breakStartMins < dayEndMins + 30);
 
+    if (dyz.settings.excludeAfterLastLesson) {
+      return isBetween || isDirectlyBefore;
+    }
+
     return isBetween || isDirectlyBefore || isDirectlyAfter || (przerwa.num >= minHour - 1 && przerwa.num <= maxHour);
+  };
+
+  const isPlaceActiveForBreak = (miejsce: MiejsceDyzuru, dayIdx: number, przerwa: Przerwa): boolean => {
+    if (!dyz.settings.skipDutyIfNoClassesOnCorridor) return true;
+
+    const yk = appState.yearKey;
+    const hourBeforeKey = String(przerwa.num);
+    const hourAfterKey = String(przerwa.num + 1);
+
+    const dayData = schedData[yk]?.[dayIdx] || {};
+    const hourBeforeData = dayData[hourBeforeKey] || {};
+    const hourAfterData = dayData[hourAfterKey] || {};
+
+    let roomsToCheck: string[] = miejsce.connectedRooms || [];
+
+    // If transitional, or if there are no connected rooms, fallback to floor rooms
+    if (miejsce.isTransitional || roomsToCheck.length === 0) {
+      if (miejsce.floor) {
+        const cols = flattenColumns(appState.floors);
+        roomsToCheck = cols
+          .filter(col => col.floor?.name === miejsce.floor)
+          .map(col => col.room.num);
+      }
+      
+      // If still no rooms to check, we check if there is ANY lesson in the school
+      if (roomsToCheck.length === 0) {
+        const hasAnyLessonInSchool = 
+          Object.values(hourBeforeData).some(cell => {
+            const cells = Array.isArray(cell) ? cell : [cell];
+            return cells.some((c: any) => c?.teacherAbbr);
+          }) ||
+          Object.values(hourAfterData).some(cell => {
+            const cells = Array.isArray(cell) ? cell : [cell];
+            return cells.some((c: any) => c?.teacherAbbr);
+          });
+        return hasAnyLessonInSchool;
+      }
+    }
+
+    const cols = flattenColumns(appState.floors);
+    const targetColKeys = cols
+      .filter(col => roomsToCheck.includes(col.room.num))
+      .map(col => colKey(col));
+
+    if (targetColKeys.length === 0) return false;
+
+    const hasClassBefore = targetColKeys.some(cKey => {
+      const cell = hourBeforeData[cKey];
+      if (!cell) return false;
+      const cells = Array.isArray(cell) ? cell : [cell];
+      return cells.some((c: any) => c?.teacherAbbr);
+    });
+
+    const hasClassAfter = targetColKeys.some(cKey => {
+      const cell = hourAfterData[cKey];
+      if (!cell) return false;
+      const cells = Array.isArray(cell) ? cell : [cell];
+      return cells.some((c: any) => c?.teacherAbbr);
+    });
+
+    return hasClassBefore || hasClassAfter;
   };
 
   // ── AUTO-SUGESTIA DYŻURÓW (Smart duty optimizer with connected rooms preference) ──
@@ -730,6 +816,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
           const breakDur = getBreakDuration(przerwa);
 
           for (const miejsce of dyz.miejsca) {
+            if (!isPlaceActiveForBreak(miejsce, day, przerwa)) continue;
+
             const key = `${miejsce.id}|${day}|${przerwa.num}`;
 
             // Skip if already filled
@@ -933,7 +1021,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
           maxPerTeacher: maxDuties,
           maxMinutesPerTeacher,
           maxConsecutiveDuties,
-          excludeTeachers
+          excludeTeachers,
+          excludeAfterLastLesson,
+          skipDutyIfNoClassesOnCorridor
         }
       }
     });
@@ -1046,11 +1136,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                           const key = `${place.id}|${activeDay}|${p.num}`;
                           const duty = dyz.harmonogram[key];
                           const t = duty?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === duty.teacherAbbr) : null;
+                          const isActive = isPlaceActiveForBreak(place, activeDay, p);
 
                           return (
                             <td 
                               key={place.id} 
-                              className="p-1.5 text-center align-middle"
+                              className={`p-1.5 text-center align-middle transition-colors duration-150 ${!isActive ? 'bg-slate-50/40' : ''}`}
                               onDragOver={(e) => e.preventDefault()}
                               onDrop={() => handleDropOnSlot(place.id, p.num)}
                             >
@@ -1065,17 +1156,27 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                                     duty.locked 
                                       ? 'bg-slate-50 border-slate-600 text-slate-900 font-bold'
                                       : 'bg-emerald-50/50 border-emerald-500 text-emerald-950 font-semibold'
-                                  }`}
+                                  } ${!isActive ? 'opacity-75 border-slate-300' : ''}`}
                                 >
                                   <span className="text-xs tracking-wider font-mono">{duty.teacherAbbr}</span>
                                   <span className="text-[9px] text-slate-400 truncate max-w-[80px] font-medium mt-0.5">
                                     {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
                                   </span>
+                                  {!isActive && <span className="absolute bottom-1 right-1 text-[8px] opacity-75" title="Brak lekcji na tym korytarzu">💤</span>}
                                   {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
                                   {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
                                 </div>
                               ) : presentationMode ? (
                                 <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>
+                              ) : !isActive ? (
+                                <button 
+                                  onClick={() => openDirectAssign(place.id, p.num)}
+                                  className="w-full py-1 border border-dashed border-slate-150 bg-slate-50/30 hover:border-blue-200 hover:bg-blue-50/20 rounded-lg text-slate-300 hover:text-blue-500 transition cursor-pointer text-[9px] flex flex-col items-center justify-center min-h-[42px]"
+                                  title="Na tym korytarzu nie odbywają się teraz lekcje (dyżur niewymagany)"
+                                >
+                                  <span className="font-bold text-slate-300 leading-none">+</span>
+                                  <span className="text-[7px] text-slate-400 font-semibold leading-none mt-0.5">wolne</span>
+                                </button>
                               ) : (
                                 <button 
                                   onClick={() => openDirectAssign(place.id, p.num)}
@@ -1223,6 +1324,23 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   )}
                 </div>
 
+                {/* isTransitional checkbox */}
+                <div className="flex items-start gap-2 px-1 py-1.5 border-t border-slate-100 mt-1.5 select-none">
+                  <input 
+                    type="checkbox" 
+                    id="newPlace_isTransitional"
+                    className="mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                    checked={newPlaceIsTransitional}
+                    onChange={(e) => setNewPlaceIsTransitional(e.target.checked)}
+                  />
+                  <label htmlFor="newPlace_isTransitional" className="cursor-pointer select-none space-y-0.5 flex-1">
+                    <span className="text-[10px] font-bold text-slate-700 block">Korytarz przejściowy (łącznik, szatnia)</span>
+                    <span className="text-[8.5px] text-slate-500 leading-tight block">
+                      Brak stałych zajęć w powiązanych salach. Aktywność i zapotrzebowanie będą sprawdzane na podstawie wszystkich sal z przypisanego piętra.
+                    </span>
+                  </label>
+                </div>
+
                 {editingPlaceId ? (
                   <div className="flex gap-2 mt-2">
                     <button 
@@ -1268,7 +1386,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   {dyz.miejsca.map(place => (
                     <tr key={place.id} className="hover:bg-slate-50/50 border-b border-slate-100 last:border-b-0">
                       <td className="p-3 text-xs text-slate-800">
-                        <div className="font-bold">{place.name}</div>
+                        <div className="font-bold flex items-center gap-1.5 flex-wrap">
+                          <span>{place.name}</span>
+                          {place.isTransitional && (
+                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-150/70 rounded-full text-[8px] font-extrabold uppercase tracking-wider" title="Łącznik / Szatnia / Przejście">
+                              Przejściowy 🚶‍♂️
+                            </span>
+                          )}
+                        </div>
                         {place.connectedRooms && place.connectedRooms.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {place.connectedRooms.map(rm => (
@@ -1435,6 +1560,40 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                       <span className="text-[11px] font-extrabold text-violet-900 block">Automatyczne bilansowanie dyżurów</span>
                       <span className="text-[9px] text-violet-700/80 block leading-tight font-medium">
                         Dostosowuje limit dyżurów nauczycieli proporcjonalnie do ich etatu (godzin lekcyjnych), zabezpieczając przed przeciążeniem.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* excludeAfterLastLesson checkbox */}
+                  <div className="flex items-start gap-2.5 p-2.5 bg-sky-50/50 border border-sky-100 rounded-lg hover:bg-sky-50 transition select-none">
+                    <input 
+                      type="checkbox" 
+                      id="opt_excludeAfterLastLesson"
+                      className="mt-0.5 rounded border-sky-300 text-sky-600 focus:ring-sky-500 h-4 w-4 cursor-pointer"
+                      checked={excludeAfterLastLesson}
+                      onChange={(e) => setExcludeAfterLastLesson(e.target.checked)}
+                    />
+                    <label htmlFor="opt_excludeAfterLastLesson" className="cursor-pointer select-none space-y-0.5 flex-1">
+                      <span className="text-[11px] font-extrabold text-sky-900 block">Wyklucz dyżury po ostatniej lekcji</span>
+                      <span className="text-[9px] text-sky-700/80 block leading-tight font-medium">
+                        Nauczyciel nie otrzyma dyżuru na przerwę rozpoczynającą się po zakończeniu jego ostatniej lekcji w danym dniu.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* skipDutyIfNoClassesOnCorridor checkbox */}
+                  <div className="flex items-start gap-2.5 p-2.5 bg-amber-50/40 border border-amber-100/80 rounded-lg hover:bg-amber-50/70 transition select-none">
+                    <input 
+                      type="checkbox" 
+                      id="opt_skipDutyIfNoClassesOnCorridor"
+                      className="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 h-4 w-4 cursor-pointer"
+                      checked={skipDutyIfNoClassesOnCorridor}
+                      onChange={(e) => setSkipDutyIfNoClassesOnCorridor(e.target.checked)}
+                    />
+                    <label htmlFor="opt_skipDutyIfNoClassesOnCorridor" className="cursor-pointer select-none space-y-0.5 flex-1">
+                      <span className="text-[11px] font-extrabold text-amber-900 block">Wyłącz dyżur, gdy brak lekcji na korytarzu</span>
+                      <span className="text-[9px] text-amber-700/80 block leading-tight font-medium">
+                        Automatycznie zwalnia z dyżuru na danej przerwie, jeśli w powiązanych salach (lub na piętrze dla miejsc przejściowych) nie ma akurat zajęć.
                       </span>
                     </label>
                   </div>

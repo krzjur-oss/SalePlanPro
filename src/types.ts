@@ -218,6 +218,7 @@ export interface MiejsceDyzuru {
   floor?: string;
   teachersNeeded?: number;
   connectedRooms?: string[];
+  isTransitional?: boolean;
 }
 
 export interface Przerwa {
@@ -247,6 +248,8 @@ export interface PlanDyzuryState {
     excludeTeachers: string[];
     maxMinutesPerTeacher?: number;
     maxConsecutiveDuties?: number;
+    excludeAfterLastLesson?: boolean;
+    skipDutyIfNoClassesOnCorridor?: boolean;
   };
 }
 
