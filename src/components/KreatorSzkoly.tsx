@@ -3994,7 +3994,7 @@ export default function KreatorSzkoly({
                         <input 
                           type="number" 
                           required
-                          min={1}
+                          min={0}
                           max={40}
                           placeholder="18"
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-semibold text-slate-800"
@@ -4337,7 +4337,7 @@ export default function KreatorSzkoly({
                                 <input 
                                   type="number" 
                                   required
-                                  min={1}
+                                  min={0}
                                   max={40}
                                   placeholder="18"
                                   className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-semibold text-slate-800 focus:border-blue-500"
