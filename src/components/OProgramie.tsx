@@ -167,6 +167,15 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                     <span className="truncate">3. Dziennik Pupila</span>
                     <ExternalLink size={10} className="text-slate-400 shrink-0 ml-1" />
                   </a>
+                  <a 
+                    href="https://krzjur-oss.github.io/jak/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between text-[11px] text-slate-600 hover:text-blue-600 transition font-semibold"
+                  >
+                    <span className="truncate">4. SCANVENTORY</span>
+                    <ExternalLink size={10} className="text-slate-400 shrink-0 ml-1" />
+                  </a>
                 </div>
               </div>
             </div>
