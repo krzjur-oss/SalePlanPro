@@ -35,7 +35,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
           </div>
           <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md font-bold text-4xl select-none z-10">
             SP
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.2.0</span>
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.2.1</span>
           </div>
         </div>
 
@@ -168,7 +168,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                     <ExternalLink size={10} className="text-slate-400 shrink-0 ml-1" />
                   </a>
                   <a 
-                    href="https://krzjur-oss.github.io/jak/"
+                    href="https://krzjur-oss.github.io/isk/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-between text-[11px] text-slate-600 hover:text-blue-600 transition font-semibold"

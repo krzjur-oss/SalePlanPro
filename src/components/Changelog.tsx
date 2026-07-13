@@ -24,11 +24,23 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.2.1',
+      date: 'Lipiec 2026',
+      title: 'Zarządzanie rejestrem błędów diagnostycznych oraz rozbudowa portfolio projektów autorskich',
+      description: 'Aktualizacja wprowadza możliwość bezpośredniego usuwania logów diagnostycznych z pamięci przeglądarki z poziomu panelu Statystyk oraz rozszerza wykaz polecanych, przydatnych aplikacji oświatowych i użytkowych w zakładce O programie.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Dodano dedykowany przycisk czyszczenia rejestru błędów systemowych z pamięci lokalnej przeglądarki (localStorage) w module Statystyk (Dziennik Błędów).', badgeText: 'Logi' },
+        { type: 'feature', text: 'Dodano aplikację SCANVENTORY (https://krzjur-oss.github.io/isk/) do wykazu innych programów autorskich w zakładce informacyjnej.', badgeText: 'Projekty' },
+        { type: 'feature', text: 'Dodano grę edukacyjną Szkoła Myszki (https://krzjur-oss.github.io/Szkola-myszki/) do sekcji oprogramowania wspierającego uczniów i nauczycieli.', badgeText: 'Projekty' },
+        { type: 'improvement', text: 'Wdrożono okno dialogowe z potwierdzeniem chęci usunięcia logów diagnostycznych w celu zabezpieczenia przed przypadkowym skasowaniem wpisów.', badgeText: 'Bezpieczeństwo' }
+      ]
+    },
+    {
       version: 'v3.2.0',
       date: 'Lipiec 2026',
       title: 'Szybka zbiorcza edycja pensum, pasek wyszukiwania nauczycieli i natychmiastowy autozapis',
       description: 'Najnowsza wersja koncentruje się na znacznym przyspieszeniu zarządzania pensum całej kadry nauczycielskiej jednocześnie, wprowadzeniu błyskawicznego wyszukiwania w bazie kadrowej oraz bezkompromisowym bezpieczeństwie danych dzięki natychmiastowemu autozapisowi przy przełączaniu modułów.',
-      badge: 'Najnowsza',
       changes: [
         { type: 'feature', text: 'Dodano dynamiczną tabelę do szybkiej edycji pensum (etatów) oraz nadgodzin wszystkich nauczycieli jednocześnie w Kroku 6 Kreatora Szkoły.', badgeText: 'HIT' },
         { type: 'feature', text: 'Wdrożono inteligentne filtry kategorii kadry (Wszyscy, Kadra kierownicza, Obniżone pensum, Standard, Nieaktywni) z licznikami w czasie rzeczywistym.', badgeText: 'Kadra' },

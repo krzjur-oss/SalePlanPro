@@ -1098,67 +1098,78 @@ export default function App() {
 
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
       <div className="flex-1 flex overflow-hidden px-0 mx-0">
-        {currentTab === 'kreator' && (
-          <KreatorSzkoly
-            appState={appState}
-            onChangeAppState={handleUpdateAppState}
-            onNavigateToTab={(tab) => setCurrentTab(tab)}
-            archive={archive}
-            onChangeArchive={handleUpdateArchive}
-          />
-        )}
-        {currentTab === 'plan_klas' && (
-          <PlanKlas 
-            appState={appState} 
-            onChangeAppState={handleUpdateAppState} 
-            onTransfer={() => {
-              handleImportFromPlanKlas();
-              setCurrentTab('plan_sal');
-            }}
-            presentationMode={isPresentationMode}
-          />
-        )}
-        {currentTab === 'plan_sal' && (
-          <PlanSal 
-            appState={appState} 
-            schedData={schedData} 
-            onChangeAppState={handleUpdateAppState} 
-            onChangeSchedData={handleUpdateSchedData} 
-            onImportFromPlanKlas={handleImportFromPlanKlas}
-            presentationMode={isPresentationMode}
-          />
-        )}
-        {currentTab === 'dyzury' && (
-          <Dyzury 
-            appState={appState} 
-            onChangeAppState={handleUpdateAppState} 
-            schedData={schedData}
-            presentationMode={isPresentationMode}
-          />
-        )}
-        {currentTab === 'wydruki' && (
-          <Wydruki 
-            appState={appState} 
-            schedData={schedData}
-          />
-        )}
-        {currentTab === 'statystyki' && (
-          <Statystyki 
-            appState={appState} 
-            schedData={schedData}
-            historyLogs={historyLogs}
-            onClearHistoryLogs={() => setHistoryLogs([])}
-          />
-        )}
-        {currentTab === 'ustawienia_generatorow' && (
-          <UstawieniaGeneratorow 
-            appState={appState} 
-            onChangeAppState={handleUpdateAppState} 
-          />
-        )}
-        {currentTab === 'o_programie' && (
-          <OProgramie initialTab={oProgramieTab} />
-        )}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.18, ease: 'easeInOut' }}
+            className="flex-1 flex overflow-hidden"
+          >
+            {currentTab === 'kreator' && (
+              <KreatorSzkoly
+                appState={appState}
+                onChangeAppState={handleUpdateAppState}
+                onNavigateToTab={(tab) => setCurrentTab(tab)}
+                archive={archive}
+                onChangeArchive={handleUpdateArchive}
+              />
+            )}
+            {currentTab === 'plan_klas' && (
+              <PlanKlas 
+                appState={appState} 
+                onChangeAppState={handleUpdateAppState} 
+                onTransfer={() => {
+                  handleImportFromPlanKlas();
+                  setCurrentTab('plan_sal');
+                }}
+                presentationMode={isPresentationMode}
+              />
+            )}
+            {currentTab === 'plan_sal' && (
+              <PlanSal 
+                appState={appState} 
+                schedData={schedData} 
+                onChangeAppState={handleUpdateAppState} 
+                onChangeSchedData={handleUpdateSchedData} 
+                onImportFromPlanKlas={handleImportFromPlanKlas}
+                presentationMode={isPresentationMode}
+              />
+            )}
+            {currentTab === 'dyzury' && (
+              <Dyzury 
+                appState={appState} 
+                onChangeAppState={handleUpdateAppState} 
+                schedData={schedData}
+                presentationMode={isPresentationMode}
+              />
+            )}
+            {currentTab === 'wydruki' && (
+              <Wydruki 
+                appState={appState} 
+                schedData={schedData}
+              />
+            )}
+            {currentTab === 'statystyki' && (
+              <Statystyki 
+                appState={appState} 
+                schedData={schedData}
+                historyLogs={historyLogs}
+                onClearHistoryLogs={() => setHistoryLogs([])}
+              />
+            )}
+            {currentTab === 'ustawienia_generatorow' && (
+              <UstawieniaGeneratorow 
+                appState={appState} 
+                onChangeAppState={handleUpdateAppState} 
+              />
+            )}
+            {currentTab === 'o_programie' && (
+              <OProgramie initialTab={oProgramieTab} />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* ── STOPKA STATYSTYCZNA LICENCJI ── */}
