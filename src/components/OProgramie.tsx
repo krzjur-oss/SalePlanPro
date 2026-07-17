@@ -116,8 +116,8 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                     KJ
                   </div>
                   <div>
-                    <p className="font-extrabold text-slate-800">Krzysztof J. (KrzJur)</p>
-                    <p className="text-[10px] text-slate-400 font-semibold uppercase leading-none mt-0.5">Full Stack Developer</p>
+                    <p className="font-extrabold text-slate-800">mgr Krzysztof Jureczek</p>
+                    <p className="text-[10px] text-slate-400 font-semibold uppercase leading-none mt-0.5">Full Stack Developer & Nauczyciel</p>
                   </div>
                 </div>
                 <div className="pt-2 space-y-1.5">
@@ -125,12 +125,18 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                     href="https://github.com/KrzJur-oss/SalePlanPro"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-[11px] text-slate-500 hover:text-blue-600 transition"
+                    className="flex items-center gap-2 text-[11px] text-slate-500 hover:text-blue-600 transition font-medium"
                   >
-                    <Github size={12} className="text-slate-400" /> github.com/KrzJur-oss/SalePlanPro
+                    <Github size={12} className="text-slate-400" /> github.com/KrzJur-oss
                   </a>
-                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                    <Globe size={12} className="text-slate-400" /> Tarnowskie Góry, woj. śląskie, Polska
+                  <a 
+                    href="mailto:kjureczek@proton.me"
+                    className="flex items-center gap-2 text-[11px] text-slate-500 hover:text-blue-600 transition font-medium"
+                  >
+                    <Mail size={12} className="text-slate-400" /> kjureczek@proton.me
+                  </a>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
+                    <Globe size={12} className="text-slate-400" /> Tarnowskie Góry, Śląskie, Polska
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 leading-relaxed pt-1.5 border-t border-slate-100 italic">
@@ -238,35 +244,97 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
             {/* 2. REGULAMIN KORZYSTANIA */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-6 space-y-4">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2 border-b border-slate-100 pb-3">
-                <FileText size={16} className="text-indigo-500" /> ⚖️ Regulamin korzystania z programu
+                <FileText size={16} className="text-indigo-500" /> ⚖️ Regulamin i Polityka Prywatności
               </h3>
-              <div className="text-xs text-slate-600 space-y-4 leading-relaxed">
+              <div className="text-xs text-slate-600 space-y-4 leading-relaxed bg-slate-50/50 p-4 border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
+                <div className="text-center pb-3 border-b border-slate-200">
+                  <h4 className="font-black text-slate-800 text-sm">Regulamin i Polityka Prywatności aplikacji „SalePlan Pro”</h4>
+                  <p className="text-[10px] text-slate-500 mt-1 font-bold">Wersja v3.2.1 · Obowiązuje od 13 lipca 2026 r.</p>
+                </div>
+
                 <div className="space-y-1.5">
                   <h4 className="font-extrabold text-slate-700">§ 1. Postanowienia ogólne</h4>
-                  <p>
-                    Niniejsze oprogramowanie jest udostępniane na zasadach określonych w niniejszym regulaminie jako bezpłatny asystent planowania i organizowania pracy placówek oświatowych. Użytkowanie programu jest dobrowolne.
-                  </p>
-                </div>
-                
-                <div className="space-y-1.5">
-                  <h4 className="font-extrabold text-slate-700">§ 2. Zasady korzystania i dane</h4>
-                  <p>
-                    Aplikacja przetwarza i zapisuje dane (nazwy szkół, imiona i nazwiska nauczycieli, plany lekcji) wyłącznie lokalnie na urządzeniu Użytkownika. Administrator ani autor oprogramowania nie zbiera, nie kopiuje ani nie przechowuje danych wprowadzanych przez użytkowników na serwerach zewnętrznych.
-                  </p>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Niniejszy Regulamin określa zasady korzystania z aplikacji <strong>„SalePlan Pro”</strong> (dalej: „Aplikacja”), dostępnej pod bieżącym adresem internetowym.</li>
+                    <li>Właścicielem, twórcą i jedynym autorem Aplikacji jest <strong>mgr Krzysztof Jureczek</strong> (dalej: „Autor”).</li>
+                    <li>Aplikacja dystrybuowana jest na warunkach <strong>Wolnej Licencji Domowo-Edukacyjnej (Zastrzeżonej) — WLDE</strong>. Regulamin i Licencja stanowią całość i obowiązują łącznie.</li>
+                    <li>Korzystanie z Aplikacji oznacza pełną akceptację niniejszego Regulaminu oraz Licencji.</li>
+                  </ol>
                 </div>
 
                 <div className="space-y-1.5">
-                  <h4 className="font-extrabold text-slate-700">§ 3. Ograniczenie odpowiedzialności</h4>
-                  <p>
-                    Użytkownik przed wdrożeniem wygenerowanego i ułożonego w programie planu lekcji ma obowiązek manualnej weryfikacji poprawności ułożenia zajęć pod kątem polskiego prawa oświatowego oraz BHP szkoły. Autor nie ponosi odpowiedzialności za jakiekolwiek błędy w organizacji pracy placówki wynikające bezpośrednio lub pośrednio ze stosowania oprogramowania.
-                  </p>
+                  <h4 className="font-extrabold text-slate-700">§ 2. Przeznaczenie Aplikacji</h4>
+                  <p>Aplikacja przeznaczona jest wyłącznie do:</p>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li><strong>Użytku domowego / prywatnego</strong> — korzystanie przez osoby fizyczne w celach własnych, w tym rozrywkowych i samokształceniowych.</li>
+                    <li><strong>Użytku edukacyjnego</strong> — wykorzystanie w placówkach oświatowych (przedszkola, szkoły, uczelnie, świetlice, placówki opiekuńczo-wychowawcze i terapeutyczne) w ramach zajęć dydaktycznych i organizacyjnych.</li>
+                  </ol>
+                  <p className="italic text-[11px] text-slate-500">Wszelkie inne zastosowania, w tym komercyjne, wymagają uprzedniej pisemnej zgody Autora.</p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <h4 className="font-extrabold text-slate-700">§ 4. Wersje i kopie zapasowe</h4>
-                  <p>
-                    Ponieważ pamięć podręczna przeglądarki może ulec wyczyszczeniu podczas reinstallacji lub czyszczenia systemu operacyjnego, zaleca się regularne pobieranie i eksportowanie kopii zapasowej planów do zewnętrznych plików JSON.
-                  </p>
+                  <h4 className="font-extrabold text-slate-700">§ 3. Zasady korzystania</h4>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Aplikacja jest całkowicie bezpłatna dla zakresu wskazanego w § 2.</li>
+                    <li>Aplikacja nie zawiera reklam, mikropłatności ani płatnych subskrypcji.</li>
+                    <li>Użytkownik zobowiązuje się korzystać z Aplikacji zgodnie z jej przeznaczeniem oraz obowiązującym prawem.</li>
+                    <li>Zabronione jest podejmowanie działań mogących zakłócić działanie Aplikacji lub narazić innych użytkowników na szkodę.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 4. Prawa autorskie i licencja</h4>
+                  <p>Wszelkie prawa do Aplikacji — kod źródłowy, interfejs graficzny, projekt wizualny, treści i dokumentacja — należą wyłącznie do Autora i są chronione prawem autorskim.</p>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden my-2 text-[11px]">
+                    <div className="flex bg-slate-100 font-bold border-b border-slate-200">
+                      <div className="w-1/4 p-2 border-r border-slate-200 text-center">Status</div>
+                      <div className="w-3/4 p-2">Zakres uprawnień</div>
+                    </div>
+                    <div className="flex border-b border-slate-100">
+                      <div className="w-1/4 p-2 border-r border-slate-200 font-bold text-red-600 text-center">❌ Zabronione</div>
+                      <div className="w-3/4 p-2">Kopiowanie, modyfikowanie, dekompilowanie, rozpowszechnianie, sprzedaż lub komercjalizacja Aplikacji bądź jej części bez pisemnej zgody Autora.</div>
+                    </div>
+                    <div className="flex">
+                      <div className="w-1/4 p-2 border-r border-slate-200 font-bold text-emerald-600 text-center">✅ Dozwolone</div>
+                      <div className="w-3/4 p-2">Korzystanie z Aplikacji zgodnie z jej przeznaczeniem (§ 2) oraz udostępnianie linku do Aplikacji innym osobom.</div>
+                    </div>
+                  </div>
+                  <p>Szczegółowe warunki licencyjne określa sekcja Licencji poniżej. W sprawach zgody na inne wykorzystanie prosimy o kontakt z Autorem.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 5. Dane i prywatność (RODO/GDPR)</h4>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Aplikacja <strong>nie wymaga rejestracji ani logowania</strong> i nie zbiera danych osobowych na zewnętrznych serwerach.</li>
+                    <li>Dane wprowadzane do Aplikacji (w tym plany lekcji, wykazy nauczycieli, gabinetów i dyżurów) przechowywane są <strong>wyłącznie lokalnie w pamięci przeglądarki użytkownika</strong> (<code>localStorage</code>) i nigdy nie opuszczają jego urządzenia.</li>
+                    <li>Administratorem danych osobowych wprowadzanych do programu (jeśli dotyczy) jest wyłącznie Użytkownik końcowy (np. szkoła, nauczyciel, opiekun) — Autor nie ma technicznego dostępu do tych danych.</li>
+                    <li>Aplikacja nie używa plików cookie, narzędzi analitycznych ani reklamowych systemów śledzenia.</li>
+                    <li>Użytkownik może w każdej chwili usunąć swoje dane, czyszcząc dane przeglądarki lub korzystając z funkcji czyszczenia w statystykach / resetu bazy.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 6. Odpowiedzialność</h4>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Aplikacja udostępniana jest w stanie „takim, jakim jest” (<em>as is</em>), bez jakichkolwiek gwarancji.</li>
+                    <li>Autor nie ponosi odpowiedzialności za utratę danych, błędy działania, awarie sprzętu lub szkody wynikające z korzystania bądź niemożności korzystania z Aplikacji.</li>
+                    <li>Zaleca się regularne tworzenie kopii zapasowych danych poprzez eksport bazy danych do pliku JSON.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 7. Zmiany Regulaminu</h4>
+                  <p>Autor zastrzega sobie prawo do zmiany Regulaminu oraz aktualizacji Aplikacji bez uprzedzenia. Dalsze korzystanie z Aplikacji po opublikowaniu zmian oznacza ich akceptację.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 8. Postanowienia końcowe</h4>
+                  <p>W sprawach nieuregulowanych niniejszym Regulaminem zastosowanie mają przepisy prawa polskiego, w szczególności Kodeksu cywilnego oraz ustawy o prawie autorskim i prawach pokrewnych.</p>
+                  <p className="font-semibold text-[11px] text-slate-700">Kontakt: kjureczek@proton.me · github.com/krzjur-oss</p>
+                </div>
+
+                <div className="text-center pt-2 border-t border-slate-200 text-[10px] text-slate-400 font-bold">
+                  © 2026 Krzysztof Jureczek · Wszelkie prawa zastrzeżone
                 </div>
               </div>
             </div>
@@ -274,19 +342,86 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
             {/* 3. LICENCJA */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-6 space-y-4">
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Award size={16} className="text-emerald-500" /> 📄 Darmowa Licencja Edukacyjna (Zastrzeżona)
+                <Award size={16} className="text-emerald-500" /> 📄 Licencja Użytkowania Oprogramowania (WLDE)
               </h3>
-              <div className="text-xs text-slate-600 space-y-3 leading-relaxed bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-56 overflow-y-auto">
-                <p className="font-bold text-slate-800 border-b border-slate-200 pb-1.5">Warunki licencyjne SalePlan Pro v3:</p>
-                <p><strong>1. Dozwolony użytek:</strong> Licencja udziela bezpłatnego, niewyłącznego prawa do korzystania z Oprogramowania na terenie i na potrzeby placówek oświatowych (np. szkół i przedszkoli).</p>
-                <p><strong>2. Zastrzeżenie praw i zakazy:</strong> Użytkownik ani osoby trzecie nie mają prawa do:</p>
-                <ul className="list-disc pl-4 space-y-1">
-                  <li>kopiowania i powielania kodu źródłowego poza potrzebami własnymi placówki,</li>
-                  <li>dystrybuowania, rozpowszechniania lub udostępniania kodu bez zgody autora,</li>
-                  <li>modyfikowania, zmieniania kodu źródłowego lub tworzenia projektów zależnych,</li>
-                  <li>komercjalizacji, sprzedaży lub czerpania korzyści majątkowych z oprogramowania.</li>
-                </ul>
-                <p className="pt-2"><strong>3. Brak gwarancji:</strong> Oprogramowanie dostarczane jest w stanie "takim, jakie jest" (AS IS). Autor nie odpowiada za ewentualne błędy i skutki ich wystąpienia.</p>
+              <div className="text-xs text-slate-600 space-y-4 leading-relaxed bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
+                <div className="text-center pb-3 border-b border-slate-200">
+                  <h4 className="font-black text-slate-800 text-sm">Wolna Licencja Domowo-Edukacyjna (Zastrzeżona) — WLDE</h4>
+                  <p className="text-[11px] font-bold text-slate-700 mt-1">Projekt: SalePlan Pro (wersja v3.2.1 i wyższe)</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Właściciel praw autorskich i twórca: mgr Krzysztof Jureczek</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Copyright © 2026 Krzysztof Jureczek. Wszelkie prawa zastrzeżone.</p>
+                  <p className="text-[10px] text-slate-500 mt-1 font-semibold">Kontakt: kjureczek@proton.me · GitHub: github.com/krzjur-oss</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-800 uppercase text-[10px] tracking-wider text-slate-500">Preambuła</h4>
+                  <p className="italic text-slate-600">
+                    Niniejsza licencja ma na celu zabezpieczenie niekomercyjnego charakteru projektu <strong>„SalePlan Pro”</strong>. Intencją Autora jest bezpłatne udostępnienie aplikacji do użytku domowego (prywatnego) oraz placówkom edukacyjnym, przy jednoczesnym pełnym zachowaniu praw autorskich, integralności kodu źródłowego oraz zakazie jakiejkolwiek komercjalizacji, kopiowania, modyfikacji i rozpowszechniania Oprogramowania bez pisemnej zgody Autora.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 1. Definicje</h4>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li><strong>Oprogramowanie</strong> – aplikacja „SalePlan Pro” wraz z całym kodem źródłowym, plikami wykonywalnymi, grafiką, zasobami multimedialnymi oraz dokumentacją.</li>
+                    <li><strong>Autor / Licencjodawca</strong> – mgr Krzysztof Jureczek, jedyny twórca i wyłączny dysponent autorskich praw majątkowych i osobistych do Oprogramowania.</li>
+                    <li><strong>Użytkownik / Licencjobiorca</strong> – każda osoba fizyczna korzystająca z Oprogramowania w celach domowych/prywatnych, a także każda szkoła, przedszkole, uczelnia lub inna placówka oświatowo-wychowawcza korzystająca z Oprogramowania w celach dydaktycznych i organizacyjnych.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 2. Dozwolony użytek (Bezpłatny)</h4>
+                  <p>Autor udziela Użytkownikowi bezpłatnej, niewyłącznej, nieprzenoszalnej i ograniczonej licencji na korzystanie z Oprogramowania wyłącznie w następujących celach:</p>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li><strong>Użytek domowy / prywatny</strong> – instalowanie i uruchamianie Oprogramowania przez osoby fizyczne na własny, niekomercyjny użytek, w tym cele rozrywkowe i samokształceniowe.</li>
+                    <li><strong>Użytek edukacyjny</strong> – wykorzystanie Oprogramowania w placówkach oświatowych (przedszkola, szkoły podstawowe i ponadpodstawowe, uczelnie wyższe, świetlice, placówki opiekuńczo-wychowawcze i terapeutyczne) na zajęciach, lekcjach, wykładach, kołach zainteresowań oraz do wewnętrznej organizacji zajęć.</li>
+                    <li><strong>Instalacja lokalna</strong> – uruchamianie i przechowywanie Oprogramowania (w tym w trybie offline/PWA) na urządzeniach własnych Użytkownika lub placówki.</li>
+                    <li><strong>Prezentacje niekomercyjne</strong> – publiczne demonstrowanie działania Oprogramowania w celach popularyzacji nauki i technologii, pod warunkiem wskazania autorstwa.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 3. Zakazy i ograniczenia</h4>
+                  <p>Wszelkie działania wykraczające poza § 2 wymagają uprzedniej, pisemnej zgody Autora. W szczególności <strong>surowo zabrania się</strong>:</p>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li><strong>Kopiowania kodu</strong> – kopiowania, powielania, pobierania w celu redystrybucji, dekompilacji lub inżynierii wstecznej kodu źródłowego lub skompilowanych plików Oprogramowania.</li>
+                    <li><strong>Modyfikacji</strong> – wprowadzania jakichkolwiek zmian w kodzie źródłowym, interfejsie, grafice, logotypach, treściach lub innych zasobach Oprogramowania.</li>
+                    <li><strong>Rozpowszechniania</strong> – dystrybuowania, udostępniania, sublicencjonowania, wynajmu, publikowania kopii lub „forków” Oprogramowania osobom trzecim, w tym poprzez repozytoria (GitHub, GitLab), sklepy z aplikacjami lub inne serwery pobierania.</li>
+                    <li><strong>Sprzedaży i komercjalizacji</strong> – sprzedaży, pobierania jakichkolwiek opłat (bezpośrednich lub pośrednich) za dostęp, instalację lub użytkowanie Oprogramowania, umieszczania go w płatnych pakietach, za bramkami płatniczymi, w serwisach z reklamami czerpiącymi zysk z ruchu użytkowników, ani wykorzystywania go do świadczenia odpłatnych usług.</li>
+                    <li><strong>Usuwania oznaczeń autorskich</strong> – usuwania, ukrywania lub modyfikowania informacji o Autorze, prawach autorskich, logotypach oraz odnośników do niniejszej licencji.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 4. Własność intelektualna i integralność</h4>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Oprogramowanie oraz wszelkie związane z nim prawa autorskie i prawa własności intelektualnej stanowią wyłączną własność Autora.</li>
+                    <li>Niniejsza licencja nie przenosi na Użytkownika żadnych praw własności do Oprogramowania — udziela wyłącznie prawa do bezpłatnego korzystania zgodnie z § 2.</li>
+                    <li>Użytkownik zobowiązuje się zachować w niezmienionym stanie wszystkie oznaczenia praw autorskich i informacje o Autorze zawarte w Oprogramowaniu.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 5. Wyłączenie odpowiedzialności (As Is)</h4>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Oprogramowanie dostarczane jest w stanie, w jakim się znajduje („AS IS”), bez jakichkolwiek gwarancji, wyraźnych lub dorozumianych, w tym gwarancji przydatności do określonego celu czy nieprzerwanego, bezbłędnego działania.</li>
+                    <li>Autor nie ponosi odpowiedzialności za jakiekolwiek szkody bezpośrednie, pośrednie lub następcze wynikłe z użytkowania lub niemożności użytkowania Oprogramowania, w tym utratę danych.</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 6. Rozwiązanie licencji</h4>
+                  <p>Naruszenie któregokolwiek z warunków niniejszej licencji skutkuje jej natychmiastowym i automatycznym wygaśnięciem. Użytkownik zobowiązany jest wówczas do trwałego usunięcia wszystkich kopii Oprogramowania ze swoich nośników i systemów.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <h4 className="font-extrabold text-slate-700">§ 7. Postanowienia końcowe</h4>
+                  <p>W sprawach nieuregulowanych niniejszą licencją zastosowanie mają przepisy ustawy z dnia 4 lutego 1994 r. o prawie autorskim i prawach pokrewnych oraz Kodeksu cywilnego RP. Wszelkie spory rozstrzyga sąd właściwy dla siedziby Licencjodawcy.</p>
+                </div>
+
+                <div className="text-right pt-2 border-t border-slate-200 text-[10px] text-slate-400 font-bold">
+                  Tarnowskie Góry, Śląskie, lipiec 2026 r.
+                </div>
               </div>
             </div>
 
