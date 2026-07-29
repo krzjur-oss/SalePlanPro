@@ -35,7 +35,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
           </div>
           <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md font-bold text-4xl select-none z-10">
             SP
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.2.1</span>
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.3.0</span>
           </div>
         </div>
 
@@ -249,7 +249,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
               <div className="text-xs text-slate-600 space-y-4 leading-relaxed bg-slate-50/50 p-4 border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
                 <div className="text-center pb-3 border-b border-slate-200">
                   <h4 className="font-black text-slate-800 text-sm">Regulamin i Polityka Prywatności aplikacji „SalePlan Pro”</h4>
-                  <p className="text-[10px] text-slate-500 mt-1 font-bold">Wersja v3.2.1 · Obowiązuje od 13 lipca 2026 r.</p>
+                  <p className="text-[10px] text-slate-500 mt-1 font-bold">Wersja v3.3.0 · Obowiązuje od 29 lipca 2026 r.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -347,7 +347,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
               <div className="text-xs text-slate-600 space-y-4 leading-relaxed bg-slate-50 p-4 border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
                 <div className="text-center pb-3 border-b border-slate-200">
                   <h4 className="font-black text-slate-800 text-sm">Wolna Licencja Domowo-Edukacyjna (Zastrzeżona) — WLDE</h4>
-                  <p className="text-[11px] font-bold text-slate-700 mt-1">Projekt: SalePlan Pro (wersja v3.2.1 i wyższe)</p>
+                  <p className="text-[11px] font-bold text-slate-700 mt-1">Projekt: SalePlan Pro (wersja v3.3.0 i wyższe)</p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Właściciel praw autorskich i twórca: mgr Krzysztof Jureczek</p>
                   <p className="text-[10px] text-slate-400 mt-0.5">Copyright © 2026 Krzysztof Jureczek. Wszelkie prawa zastrzeżone.</p>
                   <p className="text-[10px] text-slate-500 mt-1 font-semibold">Kontakt: kjureczek@proton.me · GitHub: github.com/krzjur-oss</p>

@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.3.0',
+      date: 'Lipiec 2026',
+      title: 'Optymalizacja wydajności, podział kodu (Code Splitting) oraz porządki w zależnościach',
+      description: 'Główna aktualizacja optymalizacyjna wprowadzająca dynamiczne ładowanie modułów (React.lazy / Suspense), zaawansowany podział paczek (manualChunks w Rollup/Vite), redukcję nieużywanych pakietów oraz czyszczenie logów produkcyjnych.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'improvement', text: 'Wdrożono leniwe ładowanie modułów (React.lazy + Suspense) dla wszystkich głównych zakładek aplikacji (Kreator, Plan Klas, Plan Sal, Dyżury, Wydruki, Statystyki, Ustawienia, O programie, Menedżer snapshotów), znacznie przyspieszając wstępne ładowanie strony.', badgeText: 'Wydajność' },
+        { type: 'improvement', text: 'Skonfigurowano podział paczek produkcyjnych (Code Splitting / manualChunks) w Vite dla zewnętrznych bibliotek (Recharts, Lucide, Motion, React), redukując rozmiar głównego pliku JS poniżej 500 kB.', badgeText: 'Vite' },
+        { type: 'improvement', text: 'Usunięto nieużywane zależności z package.json (express, dotenv, @google/genai, sharp) oraz zaktualizowano plik lockfile, zmniejszając rozmiar instalacji projektu.', badgeText: 'Pakiety' },
+        { type: 'security', text: 'Owinięto bloki logowania i diagnostyki snapshotów warunkiem import.meta.env.DEV, eliminując zbędne komunikaty w konsoli na środowisku produkcyjnym.', badgeText: 'Bezpieczeństwo' },
+        { type: 'fix', text: 'Zaktualizowano dane kontaktowe w pliku licencji (kjureczek@proton.me oraz organizacja GitHub krzjur-oss) oraz poprawiono konfigurację weryfikacyjną GitHub Actions (node-version: 20).', badgeText: 'Poprawka' }
+      ]
+    },
+    {
       version: 'v3.2.1',
       date: 'Lipiec 2026',
       title: 'Zarządzanie rejestrem błędów diagnostycznych oraz rozbudowa portfolio projektów autorskich',
       description: 'Aktualizacja wprowadza możliwość bezpośredniego usuwania logów diagnostycznych z pamięci przeglądarki z poziomu panelu Statystyk oraz rozszerza wykaz polecanych, przydatnych aplikacji oświatowych i użytkowych w zakładce O programie.',
-      badge: 'Najnowsza',
       changes: [
         { type: 'feature', text: 'Dodano dedykowany przycisk czyszczenia rejestru błędów systemowych z pamięci lokalnej przeglądarki (localStorage) w module Statystyk (Dziennik Błędów).', badgeText: 'Logi' },
         { type: 'feature', text: 'Dodano aplikację SCANVENTORY (https://krzjur-oss.github.io/isk/) do wykazu innych programów autorskich w zakładce informacyjnej.', badgeText: 'Projekty' },
