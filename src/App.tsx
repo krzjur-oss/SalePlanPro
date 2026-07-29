@@ -1,20 +1,21 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { 
   AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion
 } from './types';
 import { 
   getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
 } from './utils';
-import PlanKlas from './components/PlanKlas';
-import PlanSal from './components/PlanSal';
-import Dyzury from './components/Dyzury';
-import KreatorSzkoly from './components/KreatorSzkoly';
-import Wydruki from './components/Wydruki';
-import Statystyki from './components/Statystyki';
-import OProgramie from './components/OProgramie';
-import UstawieniaGeneratorow from './components/UstawieniaGeneratorow';
-import SnapshotManager from './components/SnapshotManager';
 import BackupPasswordModal from './components/BackupPasswordModal';
+
+const PlanKlas = lazy(() => import('./components/PlanKlas'));
+const PlanSal = lazy(() => import('./components/PlanSal'));
+const KreatorSzkoly = lazy(() => import('./components/KreatorSzkoly'));
+const Wydruki = lazy(() => import('./components/Wydruki'));
+const Statystyki = lazy(() => import('./components/Statystyki'));
+const SnapshotManager = lazy(() => import('./components/SnapshotManager'));
+const Dyzury = lazy(() => import('./components/Dyzury'));
+const OProgramie = lazy(() => import('./components/OProgramie'));
+const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
 import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -634,11 +635,15 @@ export default function App() {
 
   const handleRestoreSnapshotState = (restoredAppState: AppState, restoredSchedData: SchedData) => {
     const startTime = performance.now();
-    console.group('⏱️ Rozpoczęcie procedury przywracania stanu z punktu przywracania (Snapshot)');
+    if (import.meta.env.DEV) {
+      console.group('⏱️ Rozpoczęcie procedury przywracania stanu z punktu przywracania (Snapshot)');
+    }
     
     if (!validateSnapshotData(restoredAppState, restoredSchedData)) {
-      console.error('❌ Walidacja spójności danych przywracanego punktu nie powiodła się.');
-      console.groupEnd();
+      if (import.meta.env.DEV) {
+        console.error('❌ Walidacja spójności danych przywracanego punktu nie powiodła się.');
+        console.groupEnd();
+      }
       throw new Error('Walidacja spójności danych nie powiodła się.');
     }
 
@@ -677,17 +682,19 @@ export default function App() {
       }
     }
 
-    console.log('📊 Przywracane struktury danych i obiekty:');
-    console.log(`- Klasy: ${classesCount}`);
-    console.log(`- Nauczyciele: ${teachersCount}`);
-    console.log(`- Sale lekcyjne: ${roomsCount}`);
-    console.log(`- Przedmioty: ${subjectsCount}`);
-    console.log(`- Przydziały (Assignments): ${assignmentsCount}`);
-    console.log(`- Obsadzone lekcje (Lessons): ${lessonsCount}`);
-    console.log(`- Uczniowie ze spec. potrzebami: ${specialStudentsCount}`);
-    console.log(`- Specjalne przydziały / lekcje: ${specialAssignmentsCount} / ${specialLessonsCount}`);
-    console.log(`- Miejsca dyżurów / zaplanowane dyżury: ${dutyPlacesCount} / ${dutyScheduleCount}`);
-    console.log(`- Komórki harmonogramu (SchedData): ${schedCellsCount}`);
+    if (import.meta.env.DEV) {
+      console.log('📊 Przywracane struktury danych i obiekty:');
+      console.log(`- Klasy: ${classesCount}`);
+      console.log(`- Nauczyciele: ${teachersCount}`);
+      console.log(`- Sale lekcyjne: ${roomsCount}`);
+      console.log(`- Przedmioty: ${subjectsCount}`);
+      console.log(`- Przydziały (Assignments): ${assignmentsCount}`);
+      console.log(`- Obsadzone lekcje (Lessons): ${lessonsCount}`);
+      console.log(`- Uczniowie ze spec. potrzebami: ${specialStudentsCount}`);
+      console.log(`- Specjalne przydziały / lekcje: ${specialAssignmentsCount} / ${specialLessonsCount}`);
+      console.log(`- Miejsca dyżurów / zaplanowane dyżury: ${dutyPlacesCount} / ${dutyScheduleCount}`);
+      console.log(`- Komórki harmonogramu (SchedData): ${schedCellsCount}`);
+    }
 
     // Save active schedule into undo history so the user can easily revert a restore action if needed
     pushToUndo(schedData);
@@ -695,9 +702,11 @@ export default function App() {
     setSchedData(restoredSchedData);
 
     const duration = performance.now() - startTime;
-    console.log(`✅ Synchronizacja stanów i struktur zakończona pomyślnie.`);
-    console.log(`⏱️ Czas procesowania logicznego: ${duration.toFixed(2)} ms`);
-    console.groupEnd();
+    if (import.meta.env.DEV) {
+      console.log(`✅ Synchronizacja stanów i struktur zakończona pomyślnie.`);
+      console.log(`⏱️ Czas procesowania logicznego: ${duration.toFixed(2)} ms`);
+      console.groupEnd();
+    }
 
     notify('Przywrócono stan planu do wybranego punktu przywracania', 'ok');
     addEventLog(
@@ -1107,67 +1116,74 @@ export default function App() {
             transition={{ duration: 0.18, ease: 'easeInOut' }}
             className="flex-1 flex overflow-hidden"
           >
-            {currentTab === 'kreator' && (
-              <KreatorSzkoly
-                appState={appState}
-                onChangeAppState={handleUpdateAppState}
-                onNavigateToTab={(tab) => setCurrentTab(tab)}
-                archive={archive}
-                onChangeArchive={handleUpdateArchive}
-              />
-            )}
-            {currentTab === 'plan_klas' && (
-              <PlanKlas 
-                appState={appState} 
-                onChangeAppState={handleUpdateAppState} 
-                onTransfer={() => {
-                  handleImportFromPlanKlas();
-                  setCurrentTab('plan_sal');
-                }}
-                presentationMode={isPresentationMode}
-              />
-            )}
-            {currentTab === 'plan_sal' && (
-              <PlanSal 
-                appState={appState} 
-                schedData={schedData} 
-                onChangeAppState={handleUpdateAppState} 
-                onChangeSchedData={handleUpdateSchedData} 
-                onImportFromPlanKlas={handleImportFromPlanKlas}
-                presentationMode={isPresentationMode}
-              />
-            )}
-            {currentTab === 'dyzury' && (
-              <Dyzury 
-                appState={appState} 
-                onChangeAppState={handleUpdateAppState} 
-                schedData={schedData}
-                presentationMode={isPresentationMode}
-              />
-            )}
-            {currentTab === 'wydruki' && (
-              <Wydruki 
-                appState={appState} 
-                schedData={schedData}
-              />
-            )}
-            {currentTab === 'statystyki' && (
-              <Statystyki 
-                appState={appState} 
-                schedData={schedData}
-                historyLogs={historyLogs}
-                onClearHistoryLogs={() => setHistoryLogs([])}
-              />
-            )}
-            {currentTab === 'ustawienia_generatorow' && (
-              <UstawieniaGeneratorow 
-                appState={appState} 
-                onChangeAppState={handleUpdateAppState} 
-              />
-            )}
-            {currentTab === 'o_programie' && (
-              <OProgramie initialTab={oProgramieTab} />
-            )}
+            <Suspense fallback={
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400 gap-2">
+                <RefreshCw size={24} className="animate-spin text-indigo-500" />
+                <span className="text-xs font-semibold">Ładowanie modułu...</span>
+              </div>
+            }>
+              {currentTab === 'kreator' && (
+                <KreatorSzkoly
+                  appState={appState}
+                  onChangeAppState={handleUpdateAppState}
+                  onNavigateToTab={(tab) => setCurrentTab(tab)}
+                  archive={archive}
+                  onChangeArchive={handleUpdateArchive}
+                />
+              )}
+              {currentTab === 'plan_klas' && (
+                <PlanKlas 
+                  appState={appState} 
+                  onChangeAppState={handleUpdateAppState} 
+                  onTransfer={() => {
+                    handleImportFromPlanKlas();
+                    setCurrentTab('plan_sal');
+                  }}
+                  presentationMode={isPresentationMode}
+                />
+              )}
+              {currentTab === 'plan_sal' && (
+                <PlanSal 
+                  appState={appState} 
+                  schedData={schedData} 
+                  onChangeAppState={handleUpdateAppState} 
+                  onChangeSchedData={handleUpdateSchedData} 
+                  onImportFromPlanKlas={handleImportFromPlanKlas}
+                  presentationMode={isPresentationMode}
+                />
+              )}
+              {currentTab === 'dyzury' && (
+                <Dyzury 
+                  appState={appState} 
+                  onChangeAppState={handleUpdateAppState} 
+                  schedData={schedData}
+                  presentationMode={isPresentationMode}
+                />
+              )}
+              {currentTab === 'wydruki' && (
+                <Wydruki 
+                  appState={appState} 
+                  schedData={schedData}
+                />
+              )}
+              {currentTab === 'statystyki' && (
+                <Statystyki 
+                  appState={appState} 
+                  schedData={schedData}
+                  historyLogs={historyLogs}
+                  onClearHistoryLogs={() => setHistoryLogs([])}
+                />
+              )}
+              {currentTab === 'ustawienia_generatorow' && (
+                <UstawieniaGeneratorow 
+                  appState={appState} 
+                  onChangeAppState={handleUpdateAppState} 
+                />
+              )}
+              {currentTab === 'o_programie' && (
+                <OProgramie initialTab={oProgramieTab} />
+              )}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </div>
@@ -1244,18 +1260,20 @@ export default function App() {
         </div>
       )}
 
-      <SnapshotManager
-        isOpen={showSnapshotManager}
-        onClose={() => setShowSnapshotManager(false)}
-        appState={appState}
-        schedData={schedData}
-        snapshots={snapshots}
-        onChangeSnapshots={handleChangeSnapshots}
-        onRestoreSnapshot={handleRestoreSnapshotState}
-        isRestoring={isRestoring}
-        onRestoringChange={setIsRestoring}
-        autosaveVersions={autosaveVersions}
-      />
+      <Suspense fallback={null}>
+        <SnapshotManager
+          isOpen={showSnapshotManager}
+          onClose={() => setShowSnapshotManager(false)}
+          appState={appState}
+          schedData={schedData}
+          snapshots={snapshots}
+          onChangeSnapshots={handleChangeSnapshots}
+          onRestoreSnapshot={handleRestoreSnapshotState}
+          isRestoring={isRestoring}
+          onRestoringChange={setIsRestoring}
+          autosaveVersions={autosaveVersions}
+        />
+      </Suspense>
 
       <BackupPasswordModal
         isOpen={showBackupPasswordModal}
