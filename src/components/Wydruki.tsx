@@ -10,6 +10,15 @@ interface WydrukiProps {
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const getRoomCategory = (room: { name: string; desc?: string }): 'ogolne' | 'indywidualne' | 'sportowe' => {
   const name = room.name.toLowerCase();
   const desc = (room.desc || '').toLowerCase();
@@ -677,14 +686,14 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               cellContent = lessonsInRoom.map(it => `
                 <div style="margin-bottom: 4px; line-height: 1.15;">
                   <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; padding: 1px 4px; border-radius: 4px; font-size: ${clsFontSize}; display: inline-block;">
-                    ${it.className}
+                    ${escapeHtml(it.className)}
                   </span>
-                  <div style="font-size: ${subjFontSize}; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: ${maxSubjWidth}; margin-top: 1px;" title="${it.subject}">
-                    ${it.subject}
+                  <div style="font-size: ${subjFontSize}; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: ${maxSubjWidth}; margin-top: 1px;" title="${escapeHtml(it.subject)}">
+                    ${escapeHtml(it.subject)}
                   </div>
                   ${it.teacherAbbr ? `
                     <span style="background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; padding: 1px 3px; border-radius: 3px; font-size: ${tAbbrFontSize}; font-weight: bold; display: inline-block; margin-top: 1px;">
-                      ${it.teacherAbbr}
+                      ${escapeHtml(it.teacherAbbr)}
                     </span>` : ''}
                 </div>
               `).join('');
@@ -700,8 +709,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           rowsHtml += `
             <tr>
               <td style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px; width: 70px;">
-                <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${hour.num}</div>
-                <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${hour.start}-${hour.end}</div>
+                <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${escapeHtml(hour.num)}</div>
+                <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${escapeHtml(hour.start)}-${escapeHtml(hour.end)}</div>
               </td>
               ${roomsCellsHtml}
             </tr>
@@ -712,7 +721,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           <div class="category-section" style="page-break-inside: avoid; break-inside: avoid; margin-bottom: 24px;">
             <div style="background-color: #f1f5f9; border-left: 4px solid #0f172a; padding: 6px 10px; margin-bottom: 8px; font-weight: bold; font-size: 11px; color: #1e293b; display: flex; align-items: center; gap: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
               <span style="font-size: 13px;">${cat.icon}</span>
-              <span style="letter-spacing: 0.03em;">${cat.name.toUpperCase()} (Sal: ${catRoomsCount})</span>
+              <span style="letter-spacing: 0.03em;">${escapeHtml(cat.name.toUpperCase())} (Sal: ${catRoomsCount})</span>
             </div>
             
             <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; margin-bottom: 12px; table-layout: fixed;">
@@ -724,7 +733,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   </th>
                   ${floorGroups.map(g => `
                     <th colspan="${g.span}" style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; font-size: 10px; font-weight: bold; background-color: #f8fafc; color: #334155;">
-                      📍 ${localCleanFloorName(g.name, g.buildingName)}
+                      📍 ${escapeHtml(localCleanFloorName(g.name, g.buildingName))}
                     </th>
                   `).join('')}
                 </tr>
@@ -735,7 +744,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   </th>
                   ${segmentGroups.map(g => `
                     <th colspan="${g.span}" style="border: 1px solid #cbd5e1; padding: 3px; text-align: center; font-size: 9px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase;">
-                      🧩 ${g.name}
+                      🧩 ${escapeHtml(g.name)}
                     </th>
                   `).join('')}
                 </tr>
@@ -748,8 +757,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                     const roomDesc = col.room.sub || 'sala ogólna';
                     return `
                       <th style="border: 1px solid #cbd5e1; padding: ${thPadding}; text-align: center; font-size: 11px; font-weight: 950; min-width: ${colMinWidth}; color: #020617;">
-                        <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">🚪 ${col.room.num}</span>
-                        ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: lowercase;">(${roomDesc})</span>` : ''}
+                        <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">🚪 ${escapeHtml(col.room.num)}</span>
+                        ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: lowercase;">(${escapeHtml(roomDesc)})</span>` : ''}
                       </th>
                     `;
                   }).join('')}
@@ -767,7 +776,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         <div class="day-sheet" style="page-break-after: always; margin-bottom: 30px;">
           <div style="background-color: #0f172a; color: #ffffff; padding: 10px 14px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
             <span style="font-size: 12px; font-weight: 950; letter-spacing: 0.05em;">
-              📅 ${DAYS_NAMES[dayIdx].toUpperCase()} — PŁACHTA OBŁOŻENIA GABINETÓW
+              📅 ${escapeHtml(DAYS_NAMES[dayIdx].toUpperCase())} — PŁACHTA OBŁOŻENIA GABINETÓW
             </span>
             <span style="font-size: 9px; font-weight: bold; font-family: monospace; opacity: 0.85;">
               Wydruk podzielony na kategorie (Razem sal: ${roomsToPrint.length})
@@ -934,7 +943,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         <div class="header">
           <div class="header-title">
             <h1>PŁACHTA MATRYCOWA OBŁOŻENIA GABINETÓW</h1>
-            <p>${appState.school.name} — Rok szkolny ${appState.yearLabel}</p>
+            <p>${escapeHtml(appState.school.name)} — Rok szkolny ${escapeHtml(appState.yearLabel)}</p>
           </div>
           <div class="meta-info">
             SYSTEM GENERACYJNY SalePlan Pro<br>
@@ -966,9 +975,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             const initialScale = document.getElementById('scale-selector')?.value || '1.0';
             adjustScale(initialScale);
             
-            setTimeout(() => {
-              window.print();
-            }, 550);
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                window.print();
+              });
+            });
           });
         </script>
       </body>
@@ -979,7 +990,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const openRoomsPrintPreview = () => {
     try {
       const htmlContent = generateRoomsMatrixHtml();
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open('', '_blank', 'noopener');
       if (printWindow) {
         printWindow.document.write(htmlContent);
         printWindow.document.close();
@@ -1013,10 +1024,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           if (entry?.teacherAbbr) {
             cellContent = `
               <div style="font-weight: 900; background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 4px 8px; border-radius: 6px; font-size: 11px; display: inline-block; min-width: 45px; text-align: center;">
-                ${entry.teacherAbbr}
+                ${escapeHtml(entry.teacherAbbr)}
               </div>
-              <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 3px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${t ? `${t.first} ${t.last}` : ''}">
-                ${t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
+              <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 3px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${t ? escapeHtml(`${t.first} ${t.last}`) : ''}">
+                ${t ? `${escapeHtml(t.first.slice(0, 1))}. ${escapeHtml(t.last)}` : 'Dyżur'}
               </div>
             `;
           }
@@ -1031,8 +1042,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         rowsHtml += `
           <tr>
             <td style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; background-color: #f8fafc; font-weight: bold; font-size: 10.5px; width: 140px;">
-              <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${p.name || `Przerwa ${p.num}`}</div>
-              <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 2px; font-family: monospace;">⏱️ ${p.start} - ${p.end}</div>
+              <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${escapeHtml(p.name || `Przerwa ${p.num}`)}</div>
+              <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 2px; font-family: monospace;">⏱️ ${escapeHtml(p.start)} - ${escapeHtml(p.end)}</div>
             </td>
             ${colsHtml}
           </tr>
@@ -1042,7 +1053,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       daysHtml += `
         <div class="day-section" style="page-break-inside: avoid; break-inside: avoid; margin-bottom: 32px;">
           <div style="background-color: #0f172a; color: #fff; padding: 8px 14px; margin-bottom: 12px; font-weight: 900; font-size: 11.5px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-            <span style="letter-spacing: 0.05em; text-transform: uppercase;">📅 ${DAYS_NAMES[dayIdx]} — HARMONOGRAM DYŻURÓW</span>
+            <span style="letter-spacing: 0.05em; text-transform: uppercase;">📅 ${escapeHtml(DAYS_NAMES[dayIdx])} — HARMONOGRAM DYŻURÓW</span>
             <span style="font-size: 8.5px; font-family: monospace; font-weight: bold; opacity: 0.8; text-transform: uppercase;">PODZIAŁ NA REJONY / MIEJSCA DYŻUROWAŃ</span>
           </div>
 
@@ -1055,8 +1066,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   <th style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 11px; font-weight: 900; color: #334155; width: 140px;">PRZERWA / GODZINA</th>
                   ${places.map(place => `
                     <th style="border: 1px solid #cbd5e1; padding: 8px 6px; text-align: center; font-size: 10.5px; font-weight: 900; color: #1e293b; background-color: #f8fafc;">
-                      <div style="font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 10.5px;">📍 ${place.name}</div>
-                      ${place.floor ? `<div style="font-size: 8px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">${place.floor}</div>` : ''}
+                      <div style="font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 10.5px;">📍 ${escapeHtml(place.name)}</div>
+                      ${place.floor ? `<div style="font-size: 8px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">${escapeHtml(place.floor)}</div>` : ''}
                     </th>
                   `).join('')}
                 </tr>
@@ -1229,7 +1240,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         <div class="header">
           <div class="header-title">
             <h1>PLAN I HARMONOGRAM DYŻURÓW NAUCZYCIELSKICH</h1>
-            <p>${appState.school.name} — Rok szkolny ${appState.yearLabel}</p>
+            <p>${escapeHtml(appState.school.name)} — Rok szkolny ${escapeHtml(appState.yearLabel)}</p>
           </div>
           <div class="meta-info">
             SYSTEM GENERACYJNY SalePlan Pro<br>
@@ -1261,9 +1272,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             const initialScale = document.getElementById('scale-selector')?.value || '1.0';
             adjustScale(initialScale);
             
-            setTimeout(() => {
-              window.print();
-            }, 550);
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                window.print();
+              });
+            });
           });
         </script>
       </body>
@@ -1274,7 +1287,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const openDutiesPrintPreview = () => {
     try {
       const htmlContent = generateDutiesHtml();
-      const printWindow = window.open('', '_blank');
+      const printWindow = window.open('', '_blank', 'noopener');
       if (printWindow) {
         printWindow.document.write(htmlContent);
         printWindow.document.close();
