@@ -202,7 +202,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                 <span className="text-xs font-black uppercase tracking-wider">Bezpieczeństwo danych</span>
               </div>
               <p className="text-[11px] text-slate-600 leading-relaxed">
-                SalePlan Pro działa w filozofii <strong>Offline First</strong>. Wszystkie wprowadzane dane, bazy roczne oraz archiwa są przechowywane wyłącznie w pamięci Twojej przeglądarki (localStorage). Żadne dane wrażliwe nie opuszczają Twojego urządzenia.
+                SalePlan Pro działa w filozofii <strong>Offline First</strong>. Wszystkie wprowadzane dane, bazy roczne oraz archiwa są przechowywane w wydajnej, lokalnej bazie przeglądarki (<strong>IndexedDB</strong> – bez limitu 5 MB). Żadne dane wrażliwe nie opuszczają Twojego urządzenia.
               </p>
             </div>
           </div>
@@ -306,7 +306,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                   <h4 className="font-extrabold text-slate-700">§ 5. Dane i prywatność (RODO/GDPR)</h4>
                   <ol className="list-decimal pl-4 space-y-1">
                     <li>Aplikacja <strong>nie wymaga rejestracji ani logowania</strong> i nie zbiera danych osobowych na zewnętrznych serwerach.</li>
-                    <li>Dane wprowadzane do Aplikacji (w tym plany lekcji, wykazy nauczycieli, gabinetów i dyżurów) przechowywane są <strong>wyłącznie lokalnie w pamięci przeglądarki użytkownika</strong> (<code>localStorage</code>) i nigdy nie opuszczają jego urządzenia.</li>
+                    <li>Dane wprowadzane do Aplikacji (w tym plany lekcji, wykazy nauczycieli, gabinetów i dyżurów) przechowywane są <strong>wyłącznie lokalnie w pamięci przeglądarki użytkownika</strong> (baza danych <code>IndexedDB</code> z mechanizmem automatycznej migracji) i nigdy nie opuszczają jego urządzenia.</li>
                     <li>Administratorem danych osobowych wprowadzanych do programu (jeśli dotyczy) jest wyłącznie Użytkownik końcowy (np. szkoła, nauczyciel, opiekun) — Autor nie ma technicznego dostępu do tych danych.</li>
                     <li>Aplikacja nie używa plików cookie, narzędzi analitycznych ani reklamowych systemów śledzenia.</li>
                     <li>Użytkownik może w każdej chwili usunąć swoje dane, czyszcząc dane przeglądarki lub korzystając z funkcji czyszczenia w statystykach / resetu bazy.</li>

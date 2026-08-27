@@ -4,6 +4,7 @@ import {
   Camera, Trash2, Download, Upload, Clock, Bookmark, X, Check, Search, FileText, AlertTriangle, Loader2, Info, BarChart2, TrendingUp, TrendingDown 
 } from 'lucide-react';
 import { downloadFile, formatBytes } from '../utils';
+import { removeStorageItem, STORAGE_KEYS } from '../services/dbStorage';
 
 interface SnapshotManagerProps {
   isOpen: boolean;
@@ -94,10 +95,10 @@ export default function SnapshotManager(props: SnapshotManagerProps) {
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     if (confirm("Czy na pewno chcesz bezpowrotnie usunąć i wyczyścić pamięć podręczną punktów przywracania?\nTa czynność nie usunie aktywnego planu, skasuje jedynie wcześniejsze migawki.")) {
                       try {
-                        localStorage.removeItem('saleplan_v3_snapshots');
+                        await removeStorageItem(STORAGE_KEYS.SNAPSHOTS);
                         props.onChangeSnapshots([]);
                         resetError();
                         props.onClose();

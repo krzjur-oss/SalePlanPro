@@ -5,6 +5,7 @@ import {
   Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw, RefreshCw, XCircle, ShieldAlert
 } from 'lucide-react';
 import { getStorageSize, formatBytes, colKey, flattenColumns } from '../utils';
+import { STORAGE_KEYS, getStorageItemSync, removeStorageItem, getStorageItem } from '../services/dbStorage';
 import { 
   BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
@@ -24,12 +25,9 @@ interface StatystykiProps {
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'all'>('all');
 
   const [errorLogs, setErrorLogs] = useState<AppErrorLog[]>(() => {
-    const saved = localStorage.getItem('saleplan_v3_error_logs');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {}
+    const saved = getStorageItemSync<AppErrorLog[]>(STORAGE_KEYS.ERROR_LOGS);
+    if (saved && Array.isArray(saved)) {
+      return saved;
     }
     return [];
   });
@@ -1768,9 +1766,9 @@ interface StatystykiProps {
                 {errorLogs.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić wszystkie logi błędów systemowych z pamięci przeglądarki?')) {
-                        localStorage.removeItem('saleplan_v3_error_logs');
+                        await removeStorageItem(STORAGE_KEYS.ERROR_LOGS);
                         setErrorLogs([]);
                       }
                     }}
@@ -2044,9 +2042,9 @@ interface StatystykiProps {
 
                 {errorLogs.length > 0 && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić cały dziennik błędów diagnostycznych?')) {
-                        localStorage.removeItem('saleplan_v3_error_logs');
+                        await removeStorageItem(STORAGE_KEYS.ERROR_LOGS);
                         setErrorLogs([]);
                       }
                     }}

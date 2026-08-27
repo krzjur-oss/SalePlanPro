@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.4.0',
+      date: 'Sierpień 2026',
+      title: 'Migracja silnika bazy danych na IndexedDB – zniesienie limitu 5 MB dla dużych szkół',
+      description: 'Przełomowa modernizacja warstwy przechowywania danych. Dotychczasowy magazyn localStorage z limitem 5 MB został zastąpiony zaawansowanym adapterem IndexedDB o niemal nieograniczonej pojemności (setki megabajtów / gigabajty), zapewniając płynną pracę największym placówkom oświatowym z setkami oddziałów i rozbudowaną historią autozapisów.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Wdrożono asynchroniczny silnik IndexedDB jako główne źródło prawdy (Source of Truth) dla stanu aplikacji, siatki lekcji, archiwum rocznego, punktów przywracania (snapshotów) oraz logów audytowych.', badgeText: 'Baza Danych' },
+        { type: 'feature', text: 'Wprowadzono automatyczną, bezstratną migrację danych z dotychczasowego localStorage do IndexedDB przy pierwszym uruchomieniu po aktualizacji.', badgeText: 'Migracja' },
+        { type: 'feature', text: 'Dodano dynamiczny wskaźnik stanu bazy IndexedDB w stopce aplikacji z podglądem zajętości oraz informacją o dostępnej przestrzeni bez ograniczeń.', badgeText: 'UI' },
+        { type: 'improvement', text: 'Zwiększono liczbę bezpiecznych wersji autozapisu w locie oraz rozbudowano przestrzeń na punkty przywracania stanu bez obaw o przekroczenie limitów przeglądarki.', badgeText: 'Wydajność' },
+        { type: 'security', text: 'Zachowano 100% filozofię Offline-First: żadne dane szkolne, osobowe czy harmonogramy nie opuszczają urządzenia i nie są wysyłane do chmury.', badgeText: 'RODO/GDPR' }
+      ]
+    },
+    {
       version: 'v3.3.0',
       date: 'Lipiec 2026',
       title: 'Optymalizacja wydajności, podział kodu (Code Splitting) oraz porządki w zależnościach',
       description: 'Główna aktualizacja optymalizacyjna wprowadzająca dynamiczne ładowanie modułów (React.lazy / Suspense), zaawansowany podział paczek (manualChunks w Rollup/Vite), redukcję nieużywanych pakietów oraz czyszczenie logów produkcyjnych.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'improvement', text: 'Wdrożono leniwe ładowanie modułów (React.lazy + Suspense) dla wszystkich głównych zakładek aplikacji (Kreator, Plan Klas, Plan Sal, Dyżury, Wydruki, Statystyki, Ustawienia, O programie, Menedżer snapshotów), znacznie przyspieszając wstępne ładowanie strony.', badgeText: 'Wydajność' },
         { type: 'improvement', text: 'Skonfigurowano podział paczek produkcyjnych (Code Splitting / manualChunks) w Vite dla zewnętrznych bibliotek (Recharts, Lucide, Motion, React), redukując rozmiar głównego pliku JS poniżej 500 kB.', badgeText: 'Vite' },

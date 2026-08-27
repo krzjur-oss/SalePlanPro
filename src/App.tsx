@@ -5,6 +5,10 @@ import {
 import { 
   getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
 } from './utils';
+import {
+  STORAGE_KEYS, getStorageItem, getStorageItemSync, setStorageItem, removeStorageItem,
+  clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics
+} from './services/dbStorage';
 import BackupPasswordModal from './components/BackupPasswordModal';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
@@ -20,7 +24,7 @@ import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, Database
 } from 'lucide-react';
 
 function sortAppState(resolved: AppState): AppState {
@@ -87,72 +91,123 @@ function sortAppState(resolved: AppState): AppState {
 export default function App() {
   // ── HOOKS STATE ──
   const [appState, setAppState] = useState<AppState>(() => {
-    const saved = localStorage.getItem('saleplan_v3_app_state');
+    const saved = getStorageItemSync<AppState>(STORAGE_KEYS.APP_STATE);
     if (saved) {
-      try { return sortAppState(JSON.parse(saved)); } catch (e) { console.error('Error loading state', e); }
+      try { return sortAppState(saved); } catch (e) { console.error('Error loading state', e); }
     }
     return sortAppState(getDemoAppState());
   });
 
   const [schedData, setSchedData] = useState<SchedData>(() => {
-    const saved = localStorage.getItem('saleplan_v3_sched_data');
+    const saved = getStorageItemSync<SchedData>(STORAGE_KEYS.SCHED_DATA);
     if (saved) {
-      try { return JSON.parse(saved); } catch (e) { console.error('Error loading sched', e); }
+      try { return saved; } catch (e) { console.error('Error loading sched', e); }
     }
     return getDemoSchedData();
   });
 
   const [archive, setArchive] = useState<ArchiveEntry[]>(() => {
-    const saved = localStorage.getItem('saleplan_v3_archive');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { }
+    const saved = getStorageItemSync<ArchiveEntry[]>(STORAGE_KEYS.ARCHIVE);
+    if (saved && Array.isArray(saved)) {
+      return saved;
     }
     return [];
   });
 
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>(() => {
-    const saved = localStorage.getItem('saleplan_v3_snapshots');
-    if (saved) {
-      try { 
-        const parsed = JSON.parse(saved); 
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) { }
+    const saved = getStorageItemSync<SnapshotEntry[]>(STORAGE_KEYS.SNAPSHOTS);
+    if (saved && Array.isArray(saved)) {
+      return saved;
     }
     return [];
   });
 
   const [autosaveVersions, setAutosaveVersions] = useState<AutosaveVersion[]>(() => {
-    const saved = localStorage.getItem('saleplan_v3_autosave_versions');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {}
+    const saved = getStorageItemSync<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS);
+    if (saved && Array.isArray(saved)) {
+      return saved;
     }
     return [];
   });
 
   const [historyLogs, setHistoryLogs] = useState<AppEventLog[]>(() => {
-    const saved = localStorage.getItem('saleplan_v3_history_logs');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch (e) {}
+    const saved = getStorageItemSync<AppEventLog[]>(STORAGE_KEYS.HISTORY_LOGS);
+    if (saved && Array.isArray(saved)) {
+      return saved;
     }
     return [
       {
         id: 'init-system',
         timestamp: new Date().toISOString(),
         actionType: 'other',
-        description: 'Zainicjalizowano dziennik pracy programu',
-        details: 'Dziennik jest gotowy do monitorowania operacji użytkownika.'
+        description: 'Zainicjalizowano dziennik pracy programu (Baza IndexedDB)',
+        details: 'System korzysta z wysokopojemnej bazy IndexedDB bez limitu 5 MB.'
       }
     ];
   });
 
+  const [storageStats, setStorageStats] = useState<StorageStatistics>({
+    usedBytes: getStorageSize(),
+    quotaBytes: 1024 * 1024 * 1024,
+    availableBytes: 1024 * 1024 * 1024,
+    percentage: 0.1,
+    isIndexedDB: true,
+    formattedUsed: formatBytes(getStorageSize()),
+    formattedQuota: 'Pojemność nieograniczona'
+  });
+
+  const refreshStorageStats = async () => {
+    try {
+      const stats = await getDetailedStorageStats();
+      setStorageStats(stats);
+    } catch (e) {}
+  };
+
+  // Asynchronous storage migration and deep load on mount
   useEffect(() => {
-    localStorage.setItem('saleplan_v3_history_logs', JSON.stringify(historyLogs));
+    let isMounted = true;
+    const initStorage = async () => {
+      try {
+        await migrateFromLocalStorage();
+        
+        const idbState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+        if (idbState && isMounted) {
+          setAppState(sortAppState(idbState));
+        }
+        const idbSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
+        if (idbSched && isMounted) {
+          setSchedData(idbSched);
+        }
+        const idbArchive = await getStorageItem<ArchiveEntry[]>(STORAGE_KEYS.ARCHIVE);
+        if (idbArchive && isMounted && Array.isArray(idbArchive)) {
+          setArchive(idbArchive);
+        }
+        const idbSnaps = await getStorageItem<SnapshotEntry[]>(STORAGE_KEYS.SNAPSHOTS);
+        if (idbSnaps && isMounted && Array.isArray(idbSnaps)) {
+          setSnapshots(idbSnaps);
+        }
+        const idbAutosaves = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS);
+        if (idbAutosaves && isMounted && Array.isArray(idbAutosaves)) {
+          setAutosaveVersions(idbAutosaves);
+        }
+        const idbLogs = await getStorageItem<AppEventLog[]>(STORAGE_KEYS.HISTORY_LOGS);
+        if (idbLogs && isMounted && Array.isArray(idbLogs) && idbLogs.length > 0) {
+          setHistoryLogs(idbLogs);
+        }
+
+        const stats = await getDetailedStorageStats();
+        if (isMounted) setStorageStats(stats);
+      } catch (e) {
+        console.warn('Inicjalizacja IndexedDB zakończona z ostrzeżeniem:', e);
+      }
+    };
+
+    initStorage();
+    return () => { isMounted = false; };
+  }, []);
+
+  useEffect(() => {
+    setStorageItem(STORAGE_KEYS.HISTORY_LOGS, historyLogs);
   }, [historyLogs]);
 
   const addEventLog = (actionType: AppEventLog['actionType'], description: string, details?: string) => {
@@ -195,16 +250,10 @@ export default function App() {
     setSnapshots(newSnaps);
   };
 
-  const pushAutosaveVersion = (newAppState: AppState, newSchedData: SchedData) => {
+  const pushAutosaveVersion = async (newAppState: AppState, newSchedData: SchedData) => {
     try {
-      const saved = localStorage.getItem('saleplan_v3_autosave_versions');
-      let versions: AutosaveVersion[] = [];
-      if (saved) {
-        try {
-          versions = JSON.parse(saved);
-          if (!Array.isArray(versions)) versions = [];
-        } catch (e) {}
-      }
+      const saved = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS) || autosaveVersions;
+      let versions: AutosaveVersion[] = Array.isArray(saved) ? saved : [];
 
       // Check if state actually changed from the last version
       if (versions.length > 0) {
@@ -223,8 +272,8 @@ export default function App() {
         schedData: JSON.parse(JSON.stringify(newSchedData)),
       };
 
-      const nextVersions = [newVersion, ...versions].slice(0, 3);
-      localStorage.setItem('saleplan_v3_autosave_versions', JSON.stringify(nextVersions));
+      const nextVersions = [newVersion, ...versions].slice(0, 5); // Extended from 3 to 5 versions thanks to IndexedDB
+      await setStorageItem(STORAGE_KEYS.AUTOSAVE_VERSIONS, nextVersions);
       setAutosaveVersions(nextVersions);
     } catch (e) {
       console.error('Błąd podczas wersjonowania autozapisu:', e);
@@ -234,26 +283,29 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.1.0';
+  const CURRENT_VERSION = '3.4.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
 
   useEffect(() => {
-    const lastSeen = localStorage.getItem('saleplan_last_seen_version');
-    if (lastSeen !== CURRENT_VERSION) {
-      const timer = setTimeout(() => {
-        setShowVersionToast(true);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
+    const checkVersion = async () => {
+      const lastSeen = await getStorageItem<string>(STORAGE_KEYS.LAST_SEEN_VERSION) || getStorageItemSync<string>(STORAGE_KEYS.LAST_SEEN_VERSION);
+      if (lastSeen !== CURRENT_VERSION) {
+        const timer = setTimeout(() => {
+          setShowVersionToast(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    };
+    checkVersion();
   }, []);
 
   const handleDismissVersionToast = () => {
-    localStorage.setItem('saleplan_last_seen_version', CURRENT_VERSION);
+    setStorageItem(STORAGE_KEYS.LAST_SEEN_VERSION, CURRENT_VERSION);
     setShowVersionToast(false);
   };
 
   const handleOpenChangelog = () => {
-    localStorage.setItem('saleplan_last_seen_version', CURRENT_VERSION);
+    setStorageItem(STORAGE_KEYS.LAST_SEEN_VERSION, CURRENT_VERSION);
     setShowVersionToast(false);
     setOProgramieTab('changelog');
     setCurrentTab('o_programie');
@@ -330,12 +382,13 @@ export default function App() {
     const handler = setTimeout(() => {
       setSaveStatus('saving');
       // Elegant micro-delay to allow visual status feedback
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
-          localStorage.setItem('saleplan_v3_app_state', JSON.stringify(stateRef.current.appState));
-          localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(stateRef.current.schedData));
-          pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+          await setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
+          await setStorageItem(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
+          await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
           setSaveStatus('saved');
+          refreshStorageStats();
         } catch (e) {
           console.error('Błąd zapisu autozapisu', e);
           setSaveStatus('saved');
@@ -352,25 +405,29 @@ export default function App() {
   useEffect(() => {
     if (isInitialMount.current) return;
     
-    try {
-      setSaveStatus('saving');
-      localStorage.setItem('saleplan_v3_app_state', JSON.stringify(stateRef.current.appState));
-      localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(stateRef.current.schedData));
-      pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
-      setSaveStatus('saved');
-      addEventLog('other', 'Automatyczny zapis przy zmianie zakładki', `Zapisano stan programu przy przełączeniu na zakładkę "${currentTab}".`);
-    } catch (e) {
-      console.error('Błąd natychmiastowego zapisu przy zmianie zakładki', e);
-      setSaveStatus('saved');
-    }
+    const saveOnTabSwitch = async () => {
+      try {
+        setSaveStatus('saving');
+        await setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
+        await setStorageItem(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
+        await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+        setSaveStatus('saved');
+        refreshStorageStats();
+        addEventLog('other', 'Automatyczny zapis przy zmianie zakładki', `Zapisano stan programu w bazie IndexedDB przy przełączeniu na zakładkę "${currentTab}".`);
+      } catch (e) {
+        console.error('Błąd natychmiastowego zapisu przy zmianie zakładki', e);
+        setSaveStatus('saved');
+      }
+    };
+    saveOnTabSwitch();
   }, [currentTab]);
 
   // Unload fallback to secure any unsaved drafts instantly
   useEffect(() => {
     const handleBeforeUnload = () => {
       try {
-        localStorage.setItem('saleplan_v3_app_state', JSON.stringify(stateRef.current.appState));
-        localStorage.setItem('saleplan_v3_sched_data', JSON.stringify(stateRef.current.schedData));
+        setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
+        setStorageItem(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
       } catch (e) {
         console.error('Błąd zapisu przy opuszczeniu strony', e);
       }
@@ -383,12 +440,12 @@ export default function App() {
 
   // Sync archive immediately (low frequency, separate key)
   useEffect(() => {
-    localStorage.setItem('saleplan_v3_archive', JSON.stringify(archive));
+    setStorageItem(STORAGE_KEYS.ARCHIVE, archive).then(refreshStorageStats);
   }, [archive]);
 
   // Sync snapshots immediately
   useEffect(() => {
-    localStorage.setItem('saleplan_v3_snapshots', JSON.stringify(snapshots));
+    setStorageItem(STORAGE_KEYS.SNAPSHOTS, snapshots).then(refreshStorageStats);
   }, [snapshots]);
 
   // ── UNDO / REDO STATE HANDLERS ──
@@ -808,15 +865,19 @@ export default function App() {
     }
   };
 
-  const handleResetTimetable = () => {
+  const handleResetTimetable = async () => {
     if (!confirm('Czy jesteś PEWIEN, że chcesz zresetować cały plan lekcji, czyścić gabinety oraz dyżury?')) return;
     pushToUndo(schedData);
     handleUpdateAppState(getDemoAppState());
     setSchedData({});
+    await clearAllStorage();
+    await setStorageItem(STORAGE_KEYS.APP_STATE, getDemoAppState());
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, {});
+    refreshStorageStats();
     notify('Zresetowano całą konfigurację programu', 'ok');
     addEventLog(
       'reset',
-      'Zresetowano konfigurację i wyczyszczono plan',
+      'Zresetowano konfigurację i wyczyszczono plan (Baza IndexedDB)',
       'Wycofano wszystkie dane do stanu demonstracyjnego (demo).'
     );
   };
@@ -1214,30 +1275,37 @@ export default function App() {
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-          {/* Przebieg wykorzystania pamięci localStorage */}
-          <div className="flex items-center gap-2.5 w-full sm:w-64 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800/80">
-            <span className="text-slate-400 font-bold shrink-0">Baza (localStorage):</span>
-            <div className="relative flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+          {/* Przebieg wykorzystania pamięci IndexedDB */}
+          <div 
+            className="flex items-center gap-2.5 w-full sm:w-auto bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800/80 shadow-xs cursor-pointer hover:border-slate-700 transition"
+            title="Aplikacja korzysta z lokalnej bazy IndexedDB zdejmującej limit 5 MB. Dane przechowywane są w 100% lokalnie na Twoim komputerze."
+            onClick={refreshStorageStats}
+          >
+            <div className="flex items-center gap-1.5 text-indigo-400 font-bold shrink-0 text-xs">
+              <Database size={13} className="text-indigo-400" />
+              <span>Baza (IndexedDB):</span>
+            </div>
+            <div className="relative w-24 sm:w-28 h-2 bg-slate-800 rounded-full overflow-hidden">
               <div 
                 className={`h-full rounded-full transition-all duration-500 ${
-                  (getStorageSize() / (5 * 1024 * 1024)) > 0.8 
+                  storageStats.percentage > 80 
                     ? 'bg-red-500' 
-                    : (getStorageSize() / (5 * 1024 * 1024)) > 0.5 
+                    : storageStats.percentage > 50 
                       ? 'bg-amber-500' 
-                      : 'bg-indigo-500'
+                      : 'bg-emerald-500'
                 }`}
-                style={{ width: `${Math.min(100, Math.max(1, (getStorageSize() / (5 * 1024 * 1024)) * 100))}%` }}
+                style={{ width: `${Math.min(100, Math.max(8, storageStats.percentage))}%` }}
               />
             </div>
-            <span className="text-slate-300 font-mono font-extrabold shrink-0">
-              {((getStorageSize() / (5 * 1024 * 1024)) * 100).toFixed(1)}%
+            <span className="text-slate-300 font-mono font-extrabold shrink-0 text-xs">
+              {storageStats.formattedUsed}
             </span>
           </div>
           
-          <div className="flex items-center gap-2 text-slate-400">
-            <span>zajęte: <strong className="font-extrabold text-slate-300">{formatBytes(getStorageSize())}</strong> z 5.0 MB</span>
+          <div className="flex items-center gap-2 text-slate-400 text-xs">
+            <span>Pojemność: <strong className="font-extrabold text-emerald-400">Bez limitu 5MB</strong> ({storageStats.formattedQuota} wolne)</span>
             <span className="text-slate-700 font-bold">|</span>
-            <span>Wykorzystano lokacje korytarzy i gabinety przedmiotowe</span>
+            <span className="hidden sm:inline">Offline First (100% bezpieczeństwo danych)</span>
           </div>
         </div>
       </footer>
