@@ -310,7 +310,7 @@ export default function PlanSal({
                     teacherId: lesson.teacherId,
                     subjectId: lesson.subjectId,
                     roomId: lesson.suggestedRoomId,
-                    groupId: null,
+                    groupId: lesson.groupId || null,
                     suggestedRoom: lesson.suggestedRoomName
                   }
                 };
@@ -511,7 +511,7 @@ export default function PlanSal({
               teacherId: chosenLesson.teacherId,
               subjectId: chosenLesson.subjectId,
               roomId: chosenLesson.suggestedRoomId,
-              groupId: null,
+              groupId: chosenLesson.groupId || null,
               suggestedRoom: chosenLesson.suggestedRoomName
             }
           };

@@ -482,6 +482,78 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const teachersMap = useMemo(() => new Map(pl.teachers.map(t => [t.id, t])), [pl.teachers]);
   const subjectsMap = useMemo(() => new Map(pl.subjects.map(s => [s.id, s])), [pl.subjects]);
   const roomsMap = useMemo(() => new Map(pl.rooms.map(r => [r.id, r])), [pl.rooms]);
+  const groupsMap = useMemo(() => new Map((pl.schoolGroups || []).map(g => [g.id, g])), [pl.schoolGroups]);
+
+  // Helper to format subject short code cleanly (e.g. "ang", "mat", "pol")
+  const getSubjectShort = (subjectNameOrId: string, subjectObj?: any): string => {
+    if (subjectObj && subjectObj.short && String(subjectObj.short).trim()) {
+      return String(subjectObj.short).trim();
+    }
+    const found = pl.subjects.find(s => s.id === subjectNameOrId || s.name.toLowerCase().trim() === String(subjectNameOrId).toLowerCase().trim());
+    if (found && found.short && found.short.trim()) {
+      return found.short.trim();
+    }
+    const appFound = appState.subjects.find(s => s.id === subjectNameOrId || s.name.toLowerCase().trim() === String(subjectNameOrId).toLowerCase().trim());
+    if (appFound && appFound.short && appFound.short.trim()) {
+      return appFound.short.trim();
+    }
+    const name = found?.name || appFound?.name || subjectNameOrId || '';
+    if (!name) return '';
+    if (name.length <= 4) return name;
+    const lower = name.toLowerCase();
+    if (lower.includes('angielsk')) return 'ang';
+    if (lower.includes('polsk')) return 'pol';
+    if (lower.includes('matemat')) return 'mat';
+    if (lower.includes('fizyk')) return 'fiz';
+    if (lower.includes('chem')) return 'chem';
+    if (lower.includes('biolog')) return 'biol';
+    if (lower.includes('geograf')) return 'geogr';
+    if (lower.includes('histor')) return 'hist';
+    if (lower.includes('informat')) return 'inf';
+    if (lower.includes('fizyczn') || lower.includes('w-f') || lower.includes('wf')) return 'WF';
+    if (lower.includes('relig')) return 'rel';
+    if (lower.includes('muzyk')) return 'muz';
+    if (lower.includes('plastyk')) return 'plas';
+    if (lower.includes('technik')) return 'tech';
+    if (lower.includes('niemieck')) return 'niem';
+    if (lower.includes('hiszpań') || lower.includes('hiszpan')) return 'hiszp';
+    if (lower.includes('francusk')) return 'franc';
+    if (lower.includes('rosyjsk')) return 'ros';
+    if (lower.includes('etyk')) return 'etyka';
+    if (lower.includes('godzina wychowawcza') || lower.includes('zajęcia z wychowawcą')) return 'GW';
+    if (lower.includes('edukacja wczesnoszkolna')) return 'EW';
+    if (lower.includes('edukacja dla bezpieczeństwa')) return 'EDB';
+    if (lower.includes('wiedza o społeczeństwie')) return 'WOS';
+    if (lower.includes('historia i teraźniejszość')) return 'HIT';
+    return name.slice(0, 4);
+  };
+
+  // Helper to format group short representation cleanly (e.g. "G1", "G2", "chł", "dz")
+  const getGroupShort = (groupIdOrName?: string | null): string => {
+    if (!groupIdOrName) return '';
+    const trimmed = String(groupIdOrName).trim();
+    if (!trimmed) return '';
+    const grpObj = (pl.schoolGroups || []).find(g => g.id === trimmed || g.name.toLowerCase() === trimmed.toLowerCase());
+    const name = grpObj ? grpObj.name.trim() : trimmed;
+
+    if (/^g\s*\d+$/i.test(name)) {
+      return name.toUpperCase().replace(/\s+/, '');
+    }
+    const mGrupa = name.match(/^grupa\s*(\d+|[a-zA-Z]+)/i);
+    if (mGrupa) {
+      return `G${mGrupa[1].toUpperCase()}`;
+    }
+    const mGr = name.match(/^gr\.?\s*(\d+|[a-zA-Z]+)/i);
+    if (mGr) {
+      return `G${mGr[1].toUpperCase()}`;
+    }
+    if (/^\d+$/.test(name)) {
+      return `G${name}`;
+    }
+    if (name.toLowerCase() === 'chłopcy' || name.toLowerCase() === 'chlopcy') return 'chł';
+    if (name.toLowerCase() === 'dziewczęta' || name.toLowerCase() === 'dziewczeta') return 'dz';
+    return name;
+  };
 
   // Resolve hours list
   const hoursList = useMemo(() => {
@@ -599,7 +671,15 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     hourNum: number,
     hourIdx: number
   ) => {
-    const lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
+    const lessonsInRoom: Array<{ 
+      subject: string; 
+      subjectShort: string; 
+      className: string; 
+      groupName?: string;
+      groupShort?: string;
+      teacherAbbr?: string;
+      displayText: string;
+    }> = [];
 
     if (scheduleVersion === 'etap1') {
       const seenAsg = new Set<string>();
@@ -608,6 +688,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         const classId = parts[0];
         const dIdx = parseInt(parts[1], 10);
         const hrIdx = parseInt(parts[2], 10);
+        const keyGroupId = parts[3] || null;
 
         if (dIdx === dayIdx && hrIdx === hourIdx) {
           const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
@@ -616,19 +697,38 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             const isMatch = asg.roomId === col.room.id || 
                             (metaRoom && metaRoom.name.toLowerCase().trim() === col.room.num.toLowerCase().trim());
             if (isMatch) {
-              if (seenAsg.has(asg.id)) return;
-              seenAsg.add(asg.id);
-              const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+              const uniqueKey = `${asg.id}-${classId}-${asg.groupId || keyGroupId || ''}`;
+              if (seenAsg.has(uniqueKey)) return;
+              seenAsg.add(uniqueKey);
+
+              const subjObj = subjectsMap.get(asg.subjectId) || pl.subjects.find(s => s.id === asg.subjectId);
+              const subjectName = subjObj?.name || 'Przedmiot';
+              const subjectShort = subjObj?.short || getSubjectShort(asg.subjectId, subjObj);
+
               let clsName = classesMap.get(classId)?.name || 'Klasa';
               if (asg.linkedClassIds && asg.linkedClassIds.length > 0) {
                 const linkedNames = asg.linkedClassIds.map(id => classesMap.get(id)?.name).filter(Boolean);
                 clsName = [clsName, ...linkedNames].join('+');
               }
-              const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
+
+              const rawGroupId = asg.groupId || keyGroupId;
+              const grpObj = rawGroupId ? (pl.schoolGroups.find(g => g.id === rawGroupId) || groupsMap.get(rawGroupId)) : null;
+              const groupName = grpObj ? grpObj.name : rawGroupId || undefined;
+              const groupShort = getGroupShort(groupName);
+
+              const tAbbr = asg.teacherId ? (teachersMap.get(asg.teacherId)?.abbr || '') : '';
+
+              const partsFormatted = [clsName, subjectShort, groupShort, tAbbr].filter(Boolean);
+              const displayText = partsFormatted.join(' ');
+
               lessonsInRoom.push({
-                subject,
+                subject: subjectName,
+                subjectShort,
                 className: clsName,
-                teacherAbbr: tAbbr
+                groupName,
+                groupShort,
+                teacherAbbr: tAbbr,
+                displayText
               });
             }
           }
@@ -640,10 +740,54 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
       slots.forEach(cell => {
         if (!cell) return;
+        const rawClass = cell.className || cell.classes?.join('+') || 'Klasa';
+
+        const subjObj = (cell._bridgeMeta?.subjectId ? (subjectsMap.get(cell._bridgeMeta.subjectId) || pl.subjects.find(s => s.id === cell._bridgeMeta?.subjectId)) : null) ||
+                        pl.subjects.find(s => s.name.toLowerCase().trim() === (cell.subject || '').toLowerCase().trim());
+        const subjectName = cell.subject || subjObj?.name || 'Przedmiot';
+        const subjectShort = subjObj?.short || getSubjectShort(cell.subject, subjObj);
+
+        let rawGroup = cell._bridgeMeta?.groupId;
+        if (!rawGroup && cell._bridgeMeta?.classId && cell._bridgeMeta?.subjectId) {
+          const matchingAsg = pl.assignments.find(a => 
+            a.classId === cell._bridgeMeta?.classId && 
+            a.subjectId === cell._bridgeMeta?.subjectId &&
+            (!cell._bridgeMeta?.teacherId || a.teacherId === cell._bridgeMeta?.teacherId)
+          );
+          if (matchingAsg?.groupId) {
+            rawGroup = matchingAsg.groupId;
+          }
+        }
+        if (!rawGroup && cell.note) {
+          const noteMatch = cell.note.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2)\b/i);
+          if (noteMatch) {
+            rawGroup = noteMatch[0];
+          }
+        }
+        if (!rawGroup) {
+          const classMatch = rawClass.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2)\b/i);
+          if (classMatch) {
+            rawGroup = classMatch[0];
+          }
+        }
+
+        const grpObj = rawGroup ? (pl.schoolGroups.find(g => g.id === rawGroup) || groupsMap.get(rawGroup)) : null;
+        const groupName = grpObj ? grpObj.name : rawGroup || undefined;
+        const groupShort = getGroupShort(groupName);
+
+        const tAbbr = cell.teacherAbbr || '';
+
+        const partsFormatted = [rawClass, subjectShort, groupShort, tAbbr].filter(Boolean);
+        const displayText = partsFormatted.join(' ');
+
         lessonsInRoom.push({
-          subject: cell.subject,
-          className: cell.className || cell.classes?.join('+') || 'Klasa',
-          teacherAbbr: cell.teacherAbbr
+          subject: subjectName,
+          subjectShort,
+          className: rawClass,
+          groupName,
+          groupShort,
+          teacherAbbr: tAbbr,
+          displayText
         });
       });
     }
@@ -683,8 +827,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             thPadding = '3px 1px';
             tdPadding = '3px 1px';
             clsFontSize = '7.5px';
-            subjFontSize = '7px';
-            tAbbrFontSize = '6.5px';
+            subjFontSize = '7.5px';
+            tAbbrFontSize = '7px';
             headerNameFontSize = '8.5px';
             headerDescFontSize = '6.5px';
             showHeaderDesc = false;
@@ -692,8 +836,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             thPadding = '4px 2px';
             tdPadding = '4px 2px';
             clsFontSize = '8.5px';
-            subjFontSize = '8px';
-            tAbbrFontSize = '7.5px';
+            subjFontSize = '8.5px';
+            tAbbrFontSize = '8px';
             headerNameFontSize = '10px';
             headerDescFontSize = '7.5px';
           }
@@ -707,23 +851,31 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               let cellContent = '<span style="color: #cbd5e1; font-weight: bold; font-family: monospace;">-</span>';
               if (lessonsInRoom.length > 0) {
                 cellContent = lessonsInRoom.map(it => `
-                  <div style="margin-bottom: 3px; line-height: 1.15;">
-                    <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; color: #78350f; padding: 1px 4px; border-radius: 3px; font-size: ${clsFontSize}; display: inline-block;">
-                      ${escapeHtml(it.className)}
-                    </span>
-                    <div style="font-size: ${subjFontSize}; font-weight: bold; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;" title="${escapeHtml(it.subject)}">
-                      ${escapeHtml(it.subject)}
+                  <div style="margin-bottom: 3px; line-height: 1.15; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;" title="${escapeHtml(it.displayText)} (${escapeHtml(it.subject)})">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 2px;">
+                      <span style="background-color: #fef3c7; border: 1px solid #fde68a; color: #78350f; padding: 0.5px 3px; border-radius: 2px; font-weight: 900; font-size: ${clsFontSize}; display: inline-block;">
+                        ${escapeHtml(it.className)}
+                      </span>
+                      ${it.groupShort ? `
+                        <span style="background-color: #ede9fe; border: 1px solid #ddd6fe; color: #5b21b6; padding: 0.5px 2.5px; border-radius: 2px; font-size: ${tAbbrFontSize}; font-weight: 900; display: inline-block;">
+                          ${escapeHtml(it.groupShort)}
+                        </span>` : ''}
+                    </div>
+                    <div style="color: #0f172a; font-weight: 800; font-size: ${subjFontSize}; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                      ${escapeHtml(it.subjectShort || it.subject)}
                     </div>
                     ${it.teacherAbbr ? `
-                      <span style="background-color: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; padding: 0.5px 3px; border-radius: 2px; font-size: ${tAbbrFontSize}; font-weight: bold; display: inline-block; margin-top: 1px;">
-                        ${escapeHtml(it.teacherAbbr)}
-                      </span>` : ''}
+                      <div>
+                        <span style="background-color: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; padding: 0.5px 3px; border-radius: 2px; font-size: ${tAbbrFontSize}; font-weight: 900; font-family: monospace; display: inline-block;">
+                          ${escapeHtml(it.teacherAbbr)}
+                        </span>
+                      </div>` : ''}
                   </div>
                 `).join('');
               }
 
               roomsCellsHtml += `
-                <td style="border: 1px solid #94a3b8; padding: ${tdPadding}; text-align: center; vertical-align: top; background: #fff; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
+                <td style="border: 1px solid #94a3b8; padding: ${tdPadding}; text-align: center; vertical-align: middle; background: #fff; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
                   ${cellContent}
                 </td>
               `;
@@ -1638,23 +1790,30 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                       <td
                                         key={cIdx}
                                         style={{ width: `calc((100% - 52px) / ${catRoomsCount})` }}
-                                        className="border border-slate-300 p-1.5 align-top text-center bg-white min-h-[44px]"
+                                        className="border border-slate-300 p-1.5 align-middle text-center bg-white min-h-[44px]"
                                       >
                                         {lessonsInRoom.length > 0 ? (
-                                          <div className="space-y-1">
+                                          <div className="space-y-1.5">
                                             {lessonsInRoom.map((it, lIdx) => (
-                                              <div key={lIdx} className="leading-tight">
-                                                <span className="font-black text-slate-950 block text-[10px] bg-amber-100/90 border border-amber-300/90 rounded px-1.5 py-0.5 inline-block mb-0.5">
-                                                  {it.className}
-                                                </span>
+                                              <div key={lIdx} className="leading-tight flex flex-col items-center justify-center gap-0.5" title={`${it.displayText} (${it.subject})`}>
+                                                <div className="flex items-center justify-center gap-1">
+                                                  <span className="font-black text-slate-950 text-[10px] bg-amber-100/90 border border-amber-300/90 rounded px-1.5 py-0.5 inline-block">
+                                                    {it.className}
+                                                  </span>
+                                                  {it.groupShort && (
+                                                    <span className="bg-purple-100 text-purple-900 border border-purple-200 px-1 py-0.2 rounded text-[8px] font-black inline-block">
+                                                      {it.groupShort}
+                                                    </span>
+                                                  )}
+                                                </div>
                                                 <span
-                                                  className="text-[9px] text-slate-800 block font-bold truncate max-w-full mx-auto"
+                                                  className="text-[9.5px] text-slate-900 font-extrabold truncate max-w-full"
                                                   title={it.subject}
                                                 >
-                                                  {it.subject}
+                                                  {it.subjectShort || it.subject}
                                                 </span>
                                                 {it.teacherAbbr && (
-                                                  <span className="bg-slate-100 text-slate-800 border border-slate-300 px-1 py-0.2 rounded text-[8px] font-bold inline-block mt-0.5">
+                                                  <span className="bg-slate-100 text-slate-800 border border-slate-300 px-1 py-0.2 rounded text-[8px] font-mono font-bold inline-block">
                                                     {it.teacherAbbr}
                                                   </span>
                                                 )}
@@ -2699,63 +2858,29 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
                                           {/* Rooms cells */}
                                           {cat.cols.map((col, cIdx) => {
-                                            let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
-
-                                            if (scheduleVersion === 'etap1') {
-                                              // Search assignments matching room in stage 1
-                                              Object.entries(pl.lessons).forEach(([key, lesson]) => {
-                                                const parts = key.split('|');
-                                                const classId = parts[0];
-                                                const dIdx = parseInt(parts[1], 10);
-                                                const hrIdx = parseInt(parts[2], 10);
-
-                                                if (dIdx === dayIdx && hrIdx === hIdx) {
-                                                  const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                                  if (asg) {
-                                                    const metaRoom = pl.rooms.find(r => r.id === asg.roomId);
-                                                    const isMatch = asg.roomId === col.room.id || 
-                                                                    (metaRoom && metaRoom.name.toLowerCase().trim() === col.room.num.toLowerCase().trim());
-                                                    if (isMatch) {
-                                                      const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-                                                      const clsName = classesMap.get(classId)?.name || 'Klasa';
-                                                      const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
-                                                      lessonsInRoom.push({
-                                                        subject,
-                                                        className: clsName,
-                                                        teacherAbbr: tAbbr
-                                                      });
-                                                    }
-                                                  }
-                                                }
-                                              });
-                                            } else {
-                                              const cKey = localColKey(col);
-                                              const rawCell = schedData[appState.yearKey]?.[dayIdx]?.[hour.num]?.[cKey];
-                                              const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
-                                              slots.forEach(cell => {
-                                                if (!cell) return;
-                                                lessonsInRoom.push({
-                                                  subject: cell.subject,
-                                                  className: cell.className || cell.classes?.join('+') || 'Klasa',
-                                                  teacherAbbr: cell.teacherAbbr
-                                                });
-                                              });
-                                            }
+                                            const lessonsInRoom = getRoomLessons(col, dayIdx, hour.num, hIdx);
 
                                             return (
-                                              <td key={cIdx} className="border border-slate-300 p-1.5 align-top text-center min-h-[50px] bg-white">
+                                              <td key={cIdx} className="border border-slate-300 p-1.5 align-middle text-center min-h-[50px] bg-white">
                                                 {lessonsInRoom.length > 0 ? (
-                                                  <div className="space-y-1">
+                                                  <div className="space-y-1.5">
                                                     {lessonsInRoom.map((it, dIdx) => (
-                                                      <div key={dIdx} className="text-[10px] leading-tight">
-                                                        <span className="font-extrabold text-slate-900 block text-[10.5px] bg-amber-100/70 border border-amber-200/80 rounded px-1.5 py-0.5 inline-block mb-0.5">
-                                                          {it.className}
-                                                        </span>
-                                                        <span className="text-[9px] text-slate-700 block font-bold truncate max-w-[100px] mx-auto" title={it.subject}>
-                                                          {it.subject}
+                                                      <div key={dIdx} className="text-[10px] leading-tight flex flex-col items-center justify-center gap-0.5" title={`${it.displayText} (${it.subject})`}>
+                                                        <div className="flex items-center justify-center gap-1">
+                                                          <span className="font-extrabold text-slate-900 text-[10.5px] bg-amber-100/70 border border-amber-200/80 rounded px-1.5 py-0.5 inline-block">
+                                                            {it.className}
+                                                          </span>
+                                                          {it.groupShort && (
+                                                            <span className="bg-purple-100 text-purple-900 border border-purple-200 px-1 py-0.2 rounded text-[8.5px] font-black inline-block">
+                                                              {it.groupShort}
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                        <span className="text-[9.5px] text-slate-800 font-extrabold truncate max-w-full" title={it.subject}>
+                                                          {it.subjectShort || it.subject}
                                                         </span>
                                                         {it.teacherAbbr && (
-                                                          <span className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-1.5 rounded text-[8.5px] font-bold inline-block mt-0.5">
+                                                          <span className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold inline-block">
                                                             {it.teacherAbbr}
                                                           </span>
                                                         )}
