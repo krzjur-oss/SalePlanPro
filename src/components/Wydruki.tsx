@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell } from '../types';
-import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X } from 'lucide-react';
+import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
 
 interface WydrukiProps {
@@ -110,6 +110,14 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [isPrintFriendlyWeeklyMode, setIsPrintFriendlyWeeklyMode] = useState<boolean>(false);
   const [weeklyPageOrientation, setWeeklyPageOrientation] = useState<'portrait' | 'landscape'>('landscape');
   
+  // Rooms dedicated print friendly & scaling states
+  const [isRoomsPrintFriendlyMode, setIsRoomsPrintFriendlyMode] = useState<boolean>(false);
+  const [roomsPageOrientation, setRoomsPageOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [roomsMaxColsPerPage, setRoomsMaxColsPerPage] = useState<number>(12);
+  const [roomsSelectedDay, setRoomsSelectedDay] = useState<number | 'all'>('all');
+  const [roomsSelectedCategory, setRoomsSelectedCategory] = useState<string>('all');
+  const [roomsPrintScale, setRoomsPrintScale] = useState<number>(1.0);
+  
   // State for in-app interactive duties print preview modal
   const [isDutiesModalOpen, setIsDutiesModalOpen] = useState<boolean>(false);
   const [dutiesModalScale, setDutiesModalScale] = useState<number>(1.0);
@@ -125,7 +133,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
   // Dynamic viewport scaling manager for mobile/tablet print and preview containers
   useEffect(() => {
-    if (isPrintFriendlyWeeklyMode) {
+    if (isPrintFriendlyWeeklyMode || isRoomsPrintFriendlyMode) {
       let viewportMeta = document.querySelector('meta[name="viewport"]');
       const originalContent = viewportMeta ? viewportMeta.getAttribute('content') : '';
       
@@ -135,20 +143,30 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         document.head.appendChild(viewportMeta);
       }
       
-      const targetWidth = weeklyPageOrientation === 'landscape' ? '1024' : '768';
+      const orientation = isRoomsPrintFriendlyMode ? roomsPageOrientation : weeklyPageOrientation;
+      const targetWidth = orientation === 'landscape' ? '1120' : '794';
       viewportMeta.setAttribute('content', `width=${targetWidth}, initial-scale=0.8, shrink-to-fit=no`);
       
       const styleEl = document.createElement('style');
       styleEl.id = 'print-mobile-viewport-adjustments';
       styleEl.innerHTML = `
         @media print {
-          html, body {
-            width: ${targetWidth}px !important;
-            min-width: ${targetWidth}px !important;
+          @page {
+            size: ${orientation};
+            margin: 6mm 8mm;
           }
-          #weekly-print-overlay {
-            width: ${targetWidth}px !important;
-            min-width: ${targetWidth}px !important;
+          html, body {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+          #weekly-print-overlay, #rooms-print-overlay {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
           }
         }
       `;
@@ -166,7 +184,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         if (tempStyle) tempStyle.remove();
       };
     }
-  }, [isPrintFriendlyWeeklyMode, weeklyPageOrientation]);
+  }, [isPrintFriendlyWeeklyMode, weeklyPageOrientation, isRoomsPrintFriendlyMode, roomsPageOrientation]);
 
   const pl = appState.planLekcji;
 
@@ -564,228 +582,233 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     window.print();
   };
 
+  // Helper to chunk columns for printing
+  const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+    if (!size || size <= 0 || arr.length <= size) return [arr];
+    const res: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) {
+      res.push(arr.slice(i, i + size));
+    }
+    return res;
+  };
+
+  // Helper to retrieve lessons for room and hour cleanly
+  const getRoomLessons = (
+    col: any,
+    dayIdx: number,
+    hourNum: number,
+    hourIdx: number
+  ) => {
+    const lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
+
+    if (scheduleVersion === 'etap1') {
+      const seenAsg = new Set<string>();
+      Object.entries(pl.lessons).forEach(([key, lesson]) => {
+        const parts = key.split('|');
+        const classId = parts[0];
+        const dIdx = parseInt(parts[1], 10);
+        const hrIdx = parseInt(parts[2], 10);
+
+        if (dIdx === dayIdx && hrIdx === hourIdx) {
+          const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+          if (asg) {
+            const metaRoom = pl.rooms.find(r => r.id === asg.roomId);
+            const isMatch = asg.roomId === col.room.id || 
+                            (metaRoom && metaRoom.name.toLowerCase().trim() === col.room.num.toLowerCase().trim());
+            if (isMatch) {
+              if (seenAsg.has(asg.id)) return;
+              seenAsg.add(asg.id);
+              const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+              let clsName = classesMap.get(classId)?.name || 'Klasa';
+              if (asg.linkedClassIds && asg.linkedClassIds.length > 0) {
+                const linkedNames = asg.linkedClassIds.map(id => classesMap.get(id)?.name).filter(Boolean);
+                clsName = [clsName, ...linkedNames].join('+');
+              }
+              const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
+              lessonsInRoom.push({
+                subject,
+                className: clsName,
+                teacherAbbr: tAbbr
+              });
+            }
+          }
+        }
+      });
+    } else {
+      const cKey = localColKey(col);
+      const rawCell = schedData[appState.yearKey]?.[dayIdx]?.[hourNum]?.[cKey];
+      const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
+      slots.forEach(cell => {
+        if (!cell) return;
+        lessonsInRoom.push({
+          subject: cell.subject,
+          className: cell.className || cell.classes?.join('+') || 'Klasa',
+          teacherAbbr: cell.teacherAbbr
+        });
+      });
+    }
+
+    return lessonsInRoom;
+  };
+
   const generateRoomsMatrixHtml = () => {
     const categories = roomsPrintCategories;
-    const maxCategoryRooms = Math.max(...categories.map(c => c.cols.length), 1);
-    const recommendedScale = Math.min(1.0, Math.max(0.45, 12 / maxCategoryRooms));
+    const daysToRender = roomsSelectedDay === 'all' ? [0, 1, 2, 3, 4] : [roomsSelectedDay];
+    const catsToRender = roomsSelectedCategory === 'all' 
+      ? categories 
+      : categories.filter(c => c.id === roomsSelectedCategory);
 
-    let daysHtml = '';
-    
-    [0, 1, 2, 3, 4].forEach(dayIdx => {
-      let tablesHtml = '';
+    let pagesHtml = '';
 
-      categories.forEach(cat => {
-        const catRoomsCount = cat.cols.length;
-        const floorGroups = getFloorGroups(cat.cols, appState.buildings);
-        const segmentGroups = getSegmentGroups(cat.cols);
-        
-        // Compute layout parameters dynamically for this category table
-        let colMinWidth = '110px';
-        let thPadding = '8px';
-        let tdPadding = '8px';
-        let clsFontSize = '10px';
-        let subjFontSize = '9px';
-        let tAbbrFontSize = '8.5px';
-        let headerNameFontSize = '12px';
-        let headerDescFontSize = '8.5px';
-        let showHeaderDesc = true;
-        let maxSubjWidth = '130px';
+    daysToRender.forEach(dayIdx => {
+      catsToRender.forEach(cat => {
+        const chunks = chunkArray(cat.cols, roomsMaxColsPerPage > 0 ? roomsMaxColsPerPage : cat.cols.length);
 
-        if (catRoomsCount > 24) {
-          colMinWidth = '45px';
-          thPadding = '3px 1px';
-          tdPadding = '3px 1px';
-          clsFontSize = '7.5px';
-          subjFontSize = '7px';
-          tAbbrFontSize = '6.5px';
-          headerNameFontSize = '8px';
-          showHeaderDesc = false;
-          maxSubjWidth = '50px';
-        } else if (catRoomsCount > 16) {
-          colMinWidth = '65px';
-          thPadding = '4px 2px';
-          tdPadding = '4px 2px';
-          clsFontSize = '8.5px';
-          subjFontSize = '8px';
-          tAbbrFontSize = '7.5px';
-          headerNameFontSize = '9.5px';
-          showHeaderDesc = false;
-          maxSubjWidth = '75px';
-        } else if (catRoomsCount > 10) {
-          colMinWidth = '85px';
-          thPadding = '6px 3px';
-          tdPadding = '6px 3px';
-          clsFontSize = '9px';
-          subjFontSize = '8.5px';
-          tAbbrFontSize = '8px';
-          headerNameFontSize = '11px';
-          headerDescFontSize = '7.5px';
-          maxSubjWidth = '100px';
-        } else if (catRoomsCount > 6) {
-          colMinWidth = '100px';
-          thPadding = '8px 4px';
-          tdPadding = '8px 4px';
-          clsFontSize = '9.5px';
-          subjFontSize = '9px';
-          tAbbrFontSize = '8px';
-          headerNameFontSize = '12px';
-          headerDescFontSize = '8px';
-          maxSubjWidth = '115px';
-        }
+        chunks.forEach((chunkCols, chunkIdx) => {
+          const catRoomsCount = chunkCols.length;
+          const floorGroups = getFloorGroups(chunkCols, appState.buildings);
+          const segmentGroups = getSegmentGroups(chunkCols);
 
-        let rowsHtml = '';
-        hoursList.forEach(hour => {
-          const fileHIdx = hoursList.findIndex(h => h.num === hour.num);
+          // Dynamic styling based on columns count on this specific A4 landscape sheet
+          let thPadding = '6px 4px';
+          let tdPadding = '5px 3px';
+          let clsFontSize = '9.5px';
+          let subjFontSize = '9px';
+          let tAbbrFontSize = '8px';
+          let headerNameFontSize = '11px';
+          let headerDescFontSize = '8px';
+          let showHeaderDesc = true;
 
-          let roomsCellsHtml = '';
-          cat.cols.forEach(col => {
-            let lessonsInRoom: Array<{ subject: string; className: string; teacherAbbr?: string }> = [];
+          if (catRoomsCount > 14) {
+            thPadding = '3px 1px';
+            tdPadding = '3px 1px';
+            clsFontSize = '7.5px';
+            subjFontSize = '7px';
+            tAbbrFontSize = '6.5px';
+            headerNameFontSize = '8.5px';
+            headerDescFontSize = '6.5px';
+            showHeaderDesc = false;
+          } else if (catRoomsCount > 10) {
+            thPadding = '4px 2px';
+            tdPadding = '4px 2px';
+            clsFontSize = '8.5px';
+            subjFontSize = '8px';
+            tAbbrFontSize = '7.5px';
+            headerNameFontSize = '10px';
+            headerDescFontSize = '7.5px';
+          }
 
-            if (scheduleVersion === 'etap1') {
-              Object.entries(pl.lessons).forEach(([key, lesson]) => {
-                const parts = key.split('|');
-                const classId = parts[0];
-                const dIdx = parseInt(parts[1], 10);
-                const hrIdx = parseInt(parts[2], 10);
+          let rowsHtml = '';
+          hoursList.forEach((hour, hIdx) => {
+            let roomsCellsHtml = '';
+            chunkCols.forEach(col => {
+              const lessonsInRoom = getRoomLessons(col, dayIdx, hour.num, hIdx);
 
-                if (dIdx === dayIdx && hrIdx === fileHIdx) {
-                  const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                  if (asg) {
-                    const metaRoom = pl.rooms.find(r => r.id === asg.roomId);
-                    const isMatch = asg.roomId === col.room.id || 
-                                    (metaRoom && metaRoom.name.toLowerCase().trim() === col.room.num.toLowerCase().trim());
-                    if (isMatch) {
-                      const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-                      const clsName = classesMap.get(classId)?.name || 'Klasa';
-                      const tAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr : '';
-                      lessonsInRoom.push({
-                        subject,
-                        className: clsName,
-                        teacherAbbr: tAbbr
-                      });
-                    }
-                  }
-                }
-              });
-            } else {
-              const cKey = localColKey(col);
-              const rawCell = schedData[appState.yearKey]?.[dayIdx]?.[hour.num]?.[cKey];
-              const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
-              slots.forEach(cell => {
-                if (!cell) return;
-                lessonsInRoom.push({
-                  subject: cell.subject,
-                  className: cell.className || cell.classes?.join('+') || 'Klasa',
-                  teacherAbbr: cell.teacherAbbr
-                });
-              });
-            }
-
-            let cellContent = '-';
-            if (lessonsInRoom.length > 0) {
-              cellContent = lessonsInRoom.map(it => `
-                <div style="margin-bottom: 4px; line-height: 1.15;">
-                  <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; padding: 1px 4px; border-radius: 4px; font-size: ${clsFontSize}; display: inline-block;">
-                    ${escapeHtml(it.className)}
-                  </span>
-                  <div style="font-size: ${subjFontSize}; font-weight: bold; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: ${maxSubjWidth}; margin-top: 1px;" title="${escapeHtml(it.subject)}">
-                    ${escapeHtml(it.subject)}
+              let cellContent = '<span style="color: #cbd5e1; font-weight: bold; font-family: monospace;">-</span>';
+              if (lessonsInRoom.length > 0) {
+                cellContent = lessonsInRoom.map(it => `
+                  <div style="margin-bottom: 3px; line-height: 1.15;">
+                    <span style="font-weight: 900; background-color: #fef3c7; border: 1px solid #fde68a; color: #78350f; padding: 1px 4px; border-radius: 3px; font-size: ${clsFontSize}; display: inline-block;">
+                      ${escapeHtml(it.className)}
+                    </span>
+                    <div style="font-size: ${subjFontSize}; font-weight: bold; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;" title="${escapeHtml(it.subject)}">
+                      ${escapeHtml(it.subject)}
+                    </div>
+                    ${it.teacherAbbr ? `
+                      <span style="background-color: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; padding: 0.5px 3px; border-radius: 2px; font-size: ${tAbbrFontSize}; font-weight: bold; display: inline-block; margin-top: 1px;">
+                        ${escapeHtml(it.teacherAbbr)}
+                      </span>` : ''}
                   </div>
-                  ${it.teacherAbbr ? `
-                    <span style="background-color: #f1f5f9; border: 1px solid #e2e8f0; color: #334155; padding: 1px 3px; border-radius: 3px; font-size: ${tAbbrFontSize}; font-weight: bold; display: inline-block; margin-top: 1px;">
-                      ${escapeHtml(it.teacherAbbr)}
-                    </span>` : ''}
-                </div>
-              `).join('');
-            }
+                `).join('');
+              }
 
-            roomsCellsHtml += `
-              <td style="border: 1px solid #cbd5e1; padding: ${tdPadding}; text-align: center; vertical-align: top; background: #fff; min-height: 40px;">
-                ${cellContent}
-              </td>
+              roomsCellsHtml += `
+                <td style="border: 1px solid #94a3b8; padding: ${tdPadding}; text-align: center; vertical-align: top; background: #fff; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
+                  ${cellContent}
+                </td>
+              `;
+            });
+
+            rowsHtml += `
+              <tr>
+                <td style="border: 1px solid #94a3b8; padding: 4px 2px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px; width: 54px; max-width: 54px; box-sizing: border-box;">
+                  <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${escapeHtml(hour.num)}</div>
+                  <div style="font-size: 7.5px; color: #64748b; margin-top: 0.5px;">${escapeHtml(hour.start)}-${escapeHtml(hour.end)}</div>
+                </td>
+                ${roomsCellsHtml}
+              </tr>
             `;
           });
 
-          rowsHtml += `
-            <tr>
-              <td style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px; width: 70px;">
-                <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${escapeHtml(hour.num)}</div>
-                <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${escapeHtml(hour.start)}-${escapeHtml(hour.end)}</div>
-              </td>
-              ${roomsCellsHtml}
-            </tr>
+          const chunkLabel = chunks.length > 1 ? ` — CZĘŚĆ ${chunkIdx + 1}/${chunks.length} (Sal: ${catRoomsCount})` : ` (Sal: ${catRoomsCount})`;
+
+          pagesHtml += `
+            <div class="sheet-page" style="page-break-after: always; break-after: page; margin-bottom: 24px; background: white; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box; width: 100%;">
+              <!-- Page Header -->
+              <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 950; color: #0f172a; letter-spacing: -0.01em;">
+                    📅 ${escapeHtml(DAYS_NAMES[dayIdx].toUpperCase())} — ${escapeHtml(cat.name.toUpperCase())}${escapeHtml(chunkLabel)}
+                  </div>
+                  <div style="font-size: 9.5px; color: #475569; font-weight: bold; margin-top: 1px;">
+                    ${escapeHtml(appState.school.name)} • ROK SZKOLNY ${escapeHtml(appState.yearLabel)} • ${scheduleVersion === 'etap1' ? 'PLAN BAZOWY KLAS (ETAP 1)' : 'PLAN PRZYDZIAŁU SAL (ETAP 2)'}
+                  </div>
+                </div>
+                <div style="text-align: right; font-size: 8.5px; color: #64748b; font-family: monospace; font-weight: bold; line-height: 1.25;">
+                  SalePlan Pro · Razem sal: ${roomsToPrint.length}<br>
+                  ${new Date().toLocaleDateString('pl-PL')} ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+
+              <!-- Matrix Table -->
+              <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; table-layout: fixed; box-sizing: border-box;">
+                <thead>
+                  <!-- Floor level headers row -->
+                  <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                    <th style="border: 1px solid #94a3b8; padding: 4px 2px; text-align: center; font-size: 9.5px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
+                      Godz
+                    </th>
+                    ${floorGroups.map(g => `
+                      <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 3px; text-align: center; font-size: 9.5px; font-weight: bold; background-color: #f8fafc; color: #334155; box-sizing: border-box;">
+                        📍 ${escapeHtml(localCleanFloorName(g.name, g.buildingName))}
+                      </th>
+                    `).join('')}
+                  </tr>
+                  <!-- Segment level headers row -->
+                  <tr style="background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                    <th style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 8px; font-weight: 500; background-color: #f8fafc; color: #64748b; width: 54px; max-width: 54px; box-sizing: border-box;">
+                      -
+                    </th>
+                    ${segmentGroups.map(g => `
+                      <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 8.5px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase; box-sizing: border-box;">
+                        🧩 ${escapeHtml(g.name)}
+                      </th>
+                    `).join('')}
+                  </tr>
+                  <!-- Room level headers row -->
+                  <tr style="background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                    <th style="border: 1px solid #94a3b8; padding: 4px 2px; text-align: center; font-size: 9.5px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
+                      Nr
+                    </th>
+                    ${chunkCols.map((col: any) => {
+                      const roomDesc = col.room.sub || 'sala ogólna';
+                      return `
+                        <th style="border: 1px solid #94a3b8; padding: ${thPadding}; text-align: center; font-size: 10px; font-weight: 950; color: #020617; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
+                          <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">🚪 ${escapeHtml(col.room.num)}</span>
+                          ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 0.5px; text-transform: lowercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">(${escapeHtml(roomDesc)})</span>` : ''}
+                        </th>
+                      `;
+                    }).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsHtml}
+                </tbody>
+              </table>
+            </div>
           `;
         });
-
-        tablesHtml += `
-          <div class="category-section" style="page-break-inside: avoid; break-inside: avoid; margin-bottom: 24px;">
-            <div style="background-color: #f1f5f9; border-left: 4px solid #0f172a; padding: 6px 10px; margin-bottom: 8px; font-weight: bold; font-size: 11px; color: #1e293b; display: flex; align-items: center; gap: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-              <span style="font-size: 13px;">${cat.icon}</span>
-              <span style="letter-spacing: 0.03em;">${escapeHtml(cat.name.toUpperCase())} (Sal: ${catRoomsCount})</span>
-            </div>
-            
-            <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; margin-bottom: 12px; table-layout: fixed;">
-              <thead>
-                <!-- Floor level headers row -->
-                <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                  <th style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 10px; font-weight: 900; width: 70px; color: #1e293b;">
-                    Lekcja / Godz
-                  </th>
-                  ${floorGroups.map(g => `
-                    <th colspan="${g.span}" style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; font-size: 10px; font-weight: bold; background-color: #f8fafc; color: #334155;">
-                      📍 ${escapeHtml(localCleanFloorName(g.name, g.buildingName))}
-                    </th>
-                  `).join('')}
-                </tr>
-                <!-- Segment level headers row -->
-                <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                  <th style="border: 1px solid #cbd5e1; padding: 4px; text-align: center; font-size: 9px; font-weight: 500; background-color: #f8fafc; color: #64748b;">
-                    -
-                  </th>
-                  ${segmentGroups.map(g => `
-                    <th colspan="${g.span}" style="border: 1px solid #cbd5e1; padding: 3px; text-align: center; font-size: 9px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase;">
-                      🧩 ${escapeHtml(g.name)}
-                    </th>
-                  `).join('')}
-                </tr>
-                <!-- Room level headers row -->
-                <tr style="background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                  <th style="border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 10px; font-weight: 900; width: 70px; color: #1e293b;">
-                    Godzina
-                  </th>
-                  ${cat.cols.map(col => {
-                    const roomDesc = col.room.sub || 'sala ogólna';
-                    return `
-                      <th style="border: 1px solid #cbd5e1; padding: ${thPadding}; text-align: center; font-size: 11px; font-weight: 950; min-width: ${colMinWidth}; color: #020617;">
-                        <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">🚪 ${escapeHtml(col.room.num)}</span>
-                        ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 1px; text-transform: lowercase;">(${escapeHtml(roomDesc)})</span>` : ''}
-                      </th>
-                    `;
-                  }).join('')}
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsHtml}
-              </tbody>
-            </table>
-          </div>
-        `;
       });
-
-      daysHtml += `
-        <div class="day-sheet" style="page-break-after: always; margin-bottom: 30px;">
-          <div style="background-color: #0f172a; color: #ffffff; padding: 10px 14px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-            <span style="font-size: 12px; font-weight: 950; letter-spacing: 0.05em;">
-              📅 ${escapeHtml(DAYS_NAMES[dayIdx].toUpperCase())} — PŁACHTA OBŁOŻENIA GABINETÓW
-            </span>
-            <span style="font-size: 9px; font-weight: bold; font-family: monospace; opacity: 0.85;">
-              Wydruk podzielony na kategorie (Razem sal: ${roomsToPrint.length})
-            </span>
-          </div>
-
-          ${tablesHtml}
-        </div>
-      `;
     });
 
     return `
@@ -793,92 +816,70 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       <html lang="pl">
       <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=1024, initial-scale=0.85, shrink-to-fit=no">
+        <meta name="viewport" content="width=1120, initial-scale=0.8, shrink-to-fit=no">
         <title>Płachta Gabinetów - SalePlan Pro</title>
         <style>
+          * {
+            box-sizing: border-box;
+          }
           body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             margin: 0;
-            padding: 20px;
-            background-color: #f8fafc;
+            padding: 16px;
+            background-color: #f1f5f9;
             color: #0f172a;
-          }
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            border-bottom: 3px solid #0f172a;
-            padding-bottom: 12px;
-            margin-bottom: 24px;
-            transform-origin: top left;
-          }
-          .header-title h1 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 900;
-            color: #0f172a;
-            letter-spacing: -0.02em;
-          }
-          .header-title p {
-            margin: 4px 0 0 0;
-            font-size: 11px;
-            color: #475569;
-            font-weight: bold;
-            text-transform: uppercase;
-          }
-          .meta-info {
-            text-align: right;
-            font-size: 10px;
-            color: #64748b;
-            font-family: monospace;
-            font-weight: bold;
-            line-height: 1.4;
+            width: 100%;
           }
           .no-print-bar {
             background-color: #ffffff;
-            border: 1px solid #e2e8f0;
-            padding: 12px 24px;
-            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            padding: 10px 20px;
+            border-radius: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
             box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            max-width: 100%;
           }
           .btn-print {
             background-color: #2563eb;
             color: #ffffff;
             border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
+            padding: 8px 18px;
+            border-radius: 6px;
             font-weight: 800;
             font-size: 12px;
             cursor: pointer;
             display: flex;
             align-items: center;
             gap: 6px;
-            transition: background-color 0.2s;
           }
           .btn-print:hover {
             background-color: #1d4ed8;
           }
           .btn-close {
-            background-color: #f1f5f9;
+            background-color: #f8fafc;
             color: #334155;
             border: 1px solid #cbd5e1;
-            padding: 10px 20px;
-            border-radius: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
             font-weight: 800;
             font-size: 12px;
             cursor: pointer;
-            transition: background-color 0.2s;
           }
           .btn-close:hover {
             background-color: #e2e8f0;
           }
           
-          .content {
-            transform-origin: top left;
+          .content-container {
+            width: 100%;
+            max-width: 100%;
+          }
+          
+          @page {
+            size: landscape;
+            margin: 6mm 8mm;
           }
           
           @media print {
@@ -888,18 +889,26 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             body {
               background-color: #ffffff !important;
               padding: 0 !important;
+              margin: 0 !important;
+              width: 100% !important;
             }
-            .day-sheet {
+            .sheet-page {
               page-break-after: always !important;
               break-after: page !important;
-              margin-bottom: 0 !important;
+              margin: 0 0 20px 0 !important;
+              padding: 0 !important;
+              border: none !important;
+              box-shadow: none !important;
+              width: 100% !important;
+            }
+            table {
+              width: 100% !important;
+              table-layout: fixed !important;
             }
             td, th {
               border: 1px solid #000 !important;
-            }
-            @page {
-              size: landscape;
-              margin: 8mm;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
           }
         </style>
@@ -907,74 +916,24 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       <body>
         <div class="no-print-bar">
           <div style="display: flex; flex-direction: column;">
-            <span style="font-weight: 900; font-size: 13px; color: #020617;">PODGLĄD WYDRUKU PŁACHTY GABINETÓW</span>
-            <span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">Układ poziomy (A4 landscape) został automatycznie zoptymalizowany pod drukarkę</span>
+            <span style="font-weight: 900; font-size: 13px; color: #020617;">🖨️ PODGLĄD WYDRUKU PŁACHTY GABINETÓW (A4 POZIOMO)</span>
+            <span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">Automatycznie dopasowano do szerokości arkusza A4 bez ucinania</span>
           </div>
           
-          <div style="display: flex; align-items: center; gap: 16px; margin-left: auto; margin-right: 16px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <label style="font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase; white-space: nowrap;">Skala wydruku (Zoom):</label>
-              <select id="scale-selector" onchange="adjustScale(this.value)" style="padding: 6px 12px; border-radius: 6px; border: 1px solid #cbd5e1; font-size: 12px; font-weight: bold; color: #1e293b; background: white; cursor: pointer;">
-                <option value="1.0" ${recommendedScale >= 0.95 ? 'selected' : ''}>Auto (100%)</option>
-                <option value="0.95" ${recommendedScale >= 0.9 && recommendedScale < 0.95 ? 'selected' : ''}>95%</option>
-                <option value="0.90" ${recommendedScale >= 0.85 && recommendedScale < 0.9 ? 'selected' : ''}>90%</option>
-                <option value="0.85" ${recommendedScale >= 0.8 && recommendedScale < 0.85 ? 'selected' : ''}>85% (Kompaktowa)</option>
-                <option value="0.80" ${recommendedScale >= 0.75 && recommendedScale < 0.8 ? 'selected' : ''}>80%</option>
-                <option value="0.75" ${recommendedScale >= 0.7 && recommendedScale < 0.75 ? 'selected' : ''}>75%</option>
-                <option value="0.70" ${recommendedScale >= 0.65 && recommendedScale < 0.7 ? 'selected' : ''}>70%</option>
-                <option value="0.65" ${recommendedScale >= 0.6 && recommendedScale < 0.65 ? 'selected' : ''}>65%</option>
-                <option value="0.60" ${recommendedScale >= 0.55 && recommendedScale < 0.6 ? 'selected' : ''}>60% (Gęsta)</option>
-                <option value="0.55" ${recommendedScale >= 0.5 && recommendedScale < 0.55 ? 'selected' : ''}>55%</option>
-                <option value="0.50" ${recommendedScale >= 0.45 && recommendedScale < 0.5 ? 'selected' : ''}>50%</option>
-                <option value="0.45" ${recommendedScale >= 0.4 && recommendedScale < 0.45 ? 'selected' : ''}>45%</option>
-                <option value="0.40" ${recommendedScale < 0.4 ? 'selected' : ''}>40% (Bardzo gęsta)</option>
-              </select>
-            </div>
-          </div>
-
           <div style="display: flex; gap: 8px;">
-            <button class="btn-close" onclick="window.close()">Zamknij okno</button>
+            <button class="btn-close" onclick="window.close()">Zamknij</button>
             <button class="btn-print" onclick="window.print()">
-              🖨️ Drukuj (Ctrl+P)
+              🖨️ Drukuj teraz (Ctrl+P)
             </button>
           </div>
         </div>
 
-        <div class="header">
-          <div class="header-title">
-            <h1>PŁACHTA MATRYCOWA OBŁOŻENIA GABINETÓW</h1>
-            <p>${escapeHtml(appState.school.name)} — Rok szkolny ${escapeHtml(appState.yearLabel)}</p>
-          </div>
-          <div class="meta-info">
-            SYSTEM GENERACYJNY SalePlan Pro<br>
-            WERSJA: ${scheduleVersion === 'etap1' ? 'PLAN BAZOWY KLAS (ETAP 1)' : 'PLAN PRZYDZIAŁU SAL (ETAP 2)'}<br>
-            DATA GENEROWANIA: ${new Date().toLocaleDateString('pl-PL')} o ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
-
-        <div class="content">
-          ${daysHtml}
+        <div class="content-container">
+          ${pagesHtml}
         </div>
 
         <script>
-          function adjustScale(scaleValue) {
-            const content = document.querySelector('.content');
-            const header = document.querySelector('.header');
-            if (content) {
-              content.style.zoom = scaleValue;
-              content.style.webkitZoom = scaleValue;
-            }
-            if (header) {
-              header.style.zoom = scaleValue;
-              header.style.webkitZoom = scaleValue;
-            }
-          }
-
-          // Initial scale application
           window.addEventListener('DOMContentLoaded', () => {
-            const initialScale = document.getElementById('scale-selector')?.value || '1.0';
-            adjustScale(initialScale);
-            
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 window.print();
@@ -995,11 +954,12 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         printWindow.document.write(htmlContent);
         printWindow.document.close();
       } else {
-        setPopupBlocked(true);
+        // Fallback to interactive in-app print overlay if popup is blocked or inside iframe
+        setIsRoomsPrintFriendlyMode(true);
       }
     } catch (e) {
       console.error(e);
-      setPopupBlocked(true);
+      setIsRoomsPrintFriendlyMode(true);
     }
   };
 
@@ -1385,6 +1345,344 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       { id: 'sport', name: 'Sale Sportowe', icon: '🏆', cols: roomsToPrintColumns.sport }
     ].filter(c => c.cols.length > 0);
   }, [roomsToPrintColumns]);
+
+  if (isRoomsPrintFriendlyMode) {
+    const daysToRender = roomsSelectedDay === 'all' ? [0, 1, 2, 3, 4] : [roomsSelectedDay];
+    const catsToRender = roomsSelectedCategory === 'all' 
+      ? roomsPrintCategories 
+      : roomsPrintCategories.filter(c => c.id === roomsSelectedCategory);
+
+    return (
+      <div id="rooms-print-overlay" className="fixed inset-0 bg-slate-100/90 backdrop-blur-md z-[9999] overflow-y-auto p-4 md:p-8 font-sans text-slate-800">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            header, footer, #restoring-pointer-blocker {
+              display: none !important;
+            }
+            html, body, #root, [class*="h-screen"], [class*="overflow-hidden"] {
+              height: auto !important;
+              width: 100% !important;
+              overflow: visible !important;
+              position: static !important;
+            }
+            body {
+              background-color: white !important;
+              color: black !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            #rooms-print-overlay {
+              display: block !important;
+              position: static !important;
+              background: white !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              width: 100% !important;
+              height: auto !important;
+              overflow: visible !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+            .rooms-sheet-card {
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              border: none !important;
+              box-shadow: none !important;
+              margin: 0 0 20px 0 !important;
+              padding: 0 !important;
+              width: 100% !important;
+            }
+            table {
+              border-collapse: collapse !important;
+              width: 100% !important;
+              table-layout: fixed !important;
+            }
+            th, td {
+              border: 1px solid #000 !important;
+              color: #000 !important;
+              box-sizing: border-box !important;
+            }
+            th {
+              background-color: #f1f5f9 !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            @page {
+              size: ${roomsPageOrientation};
+              margin: 6mm 8mm;
+            }
+          }
+        ` }} />
+
+        {/* Top Control Bar */}
+        <div className="no-print bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 mb-6 max-w-7xl mx-auto shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className="p-2 bg-slate-800 rounded-lg text-amber-400">
+              <Printer size={20} />
+            </span>
+            <div className="text-left">
+              <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-tight">Studio Wydruku Płachty Sal</span>
+              <h3 className="text-sm font-black uppercase text-white leading-tight">
+                Płachta Obłożenia Gabinetów • Układ A4 {roomsPageOrientation === 'landscape' ? 'Poziomy' : 'Pionowy'}
+              </h3>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Orientation */}
+            <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+              <button
+                onClick={() => setRoomsPageOrientation('landscape')}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition cursor-pointer ${
+                  roomsPageOrientation === 'landscape' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Poziomo (A4)
+              </button>
+              <button
+                onClick={() => setRoomsPageOrientation('portrait')}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition cursor-pointer ${
+                  roomsPageOrientation === 'portrait' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Pionowo (A4)
+              </button>
+            </div>
+
+            {/* Max cols chunking */}
+            <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Sal / strona:</span>
+              <select
+                value={roomsMaxColsPerPage}
+                onChange={(e) => setRoomsMaxColsPerPage(parseInt(e.target.value, 10))}
+                className="bg-transparent text-white text-[11px] font-black outline-none cursor-pointer"
+              >
+                <option value={8} className="bg-slate-800 text-white">8 sal (Duża czytelność)</option>
+                <option value={10} className="bg-slate-800 text-white">10 sal (Zalecane A4)</option>
+                <option value={12} className="bg-slate-800 text-white">12 sal (Standard)</option>
+                <option value={15} className="bg-slate-800 text-white">15 sal (Kompakt)</option>
+                <option value={0} className="bg-slate-800 text-white">Wszystkie w 1 tabeli</option>
+              </select>
+            </div>
+
+            {/* Day selector */}
+            <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Dzień:</span>
+              <select
+                value={roomsSelectedDay}
+                onChange={(e) => setRoomsSelectedDay(e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10))}
+                className="bg-transparent text-white text-[11px] font-black outline-none cursor-pointer"
+              >
+                <option value="all" className="bg-slate-800 text-white">Wszystkie dni (Pn-Pt)</option>
+                {DAYS_NAMES.map((name, idx) => (
+                  <option key={idx} value={idx} className="bg-slate-800 text-white">{name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Category / Building selector */}
+            <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Budynek:</span>
+              <select
+                value={roomsSelectedCategory}
+                onChange={(e) => setRoomsSelectedCategory(e.target.value)}
+                className="bg-transparent text-white text-[11px] font-black outline-none cursor-pointer"
+              >
+                <option value="all" className="bg-slate-800 text-white">Wszystkie kategorie</option>
+                {roomsPrintCategories.map(c => (
+                  <option key={c.id} value={c.id} className="bg-slate-800 text-white">{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Action buttons */}
+            <button
+              onClick={openRoomsPrintPreview}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              title="Otwórz czysty HTML w nowej karcie"
+            >
+              <ExternalLink size={14} /> W osobnym oknie
+            </button>
+
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Printer size={15} /> Drukuj teraz (Ctrl+P)
+            </button>
+
+            <button
+              onClick={() => setIsRoomsPrintFriendlyMode(false)}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+            >
+              Zamknij
+            </button>
+          </div>
+        </div>
+
+        {/* Sheets List Container */}
+        <div className="max-w-7xl mx-auto space-y-8">
+          {daysToRender.map(dayIdx => {
+            return (
+              <div key={dayIdx} className="space-y-6">
+                {catsToRender.map(cat => {
+                  const chunks = chunkArray(cat.cols, roomsMaxColsPerPage > 0 ? roomsMaxColsPerPage : cat.cols.length);
+
+                  return chunks.map((chunkCols, chunkIdx) => {
+                    const catRoomsCount = chunkCols.length;
+                    const floorGroups = getFloorGroups(chunkCols, appState.buildings);
+                    const segmentGroups = getSegmentGroups(chunkCols);
+
+                    const chunkLabel = chunks.length > 1 
+                      ? ` — Część ${chunkIdx + 1}/${chunks.length} (Sal: ${catRoomsCount})` 
+                      : ` (Sal: ${catRoomsCount})`;
+
+                    return (
+                      <div
+                        key={`${dayIdx}-${cat.id}-${chunkIdx}`}
+                        className="rooms-sheet-card bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-md transition"
+                      >
+                        {/* Sheet Header */}
+                        <div className="flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-3">
+                          <div>
+                            <h2 className="text-base md:text-lg font-black text-slate-950 tracking-tight flex items-center gap-2">
+                              <span>📅 {DAYS_NAMES[dayIdx].toUpperCase()} — {cat.name.toUpperCase()}{chunkLabel}</span>
+                            </h2>
+                            <p className="text-[10.5px] text-slate-600 font-bold uppercase mt-0.5">
+                              {appState.school.name} • Rok szkolny {appState.yearLabel} • {scheduleVersion === 'etap1' ? 'Plan Bazowy Klas (Etap 1)' : 'Plan Przydziału Sal (Etap 2)'}
+                            </p>
+                          </div>
+                          <div className="text-right text-[9px] font-mono text-slate-400 font-bold uppercase leading-tight">
+                            SalePlan Pro • Sal w szkole: {roomsToPrint.length}<br />
+                            Wydrukowano: {new Date().toLocaleDateString('pl-PL')}
+                          </div>
+                        </div>
+
+                        {/* Table */}
+                        <div className="w-full overflow-hidden">
+                          <table className="w-full text-xs text-left border-collapse table-fixed bg-white">
+                            <thead>
+                              {/* Floor row */}
+                              <tr className="bg-slate-100 uppercase font-black text-slate-800">
+                                <th className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1.5 text-center text-[10px]">
+                                  Godz
+                                </th>
+                                {floorGroups.map((g, fIdx) => (
+                                  <th
+                                    key={fIdx}
+                                    colSpan={g.span}
+                                    className="border border-slate-300 p-1.5 text-center text-[9.5px] bg-slate-50 font-bold text-slate-700"
+                                  >
+                                    📍 {localCleanFloorName(g.name, g.buildingName)}
+                                  </th>
+                                ))}
+                              </tr>
+
+                              {/* Segment row */}
+                              <tr className="bg-white uppercase font-black text-slate-500">
+                                <th className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1 text-center text-[8px] bg-slate-50 font-medium text-slate-400">
+                                  -
+                                </th>
+                                {segmentGroups.map((g, sIdx) => (
+                                  <th
+                                    key={sIdx}
+                                    colSpan={g.span}
+                                    className="border border-slate-300 p-1 text-center text-[8.5px] bg-white text-slate-500 uppercase font-semibold"
+                                  >
+                                    🧩 {g.name}
+                                  </th>
+                                ))}
+                              </tr>
+
+                              {/* Room headers */}
+                              <tr className="bg-slate-50 uppercase font-black text-slate-800">
+                                <th className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1.5 text-center text-[10px]">
+                                  Nr
+                                </th>
+                                {chunkCols.map((col: any, cIdx) => (
+                                  <th
+                                    key={cIdx}
+                                    style={{ width: `calc((100% - 52px) / ${catRoomsCount})` }}
+                                    className="border border-slate-300 p-1.5 text-center"
+                                  >
+                                    <span className="font-mono text-[10.5px] block text-slate-950 font-black">
+                                      🚪 {col.room.num}
+                                    </span>
+                                    <span className="block text-[8px] text-slate-500 font-medium normal-case truncate max-w-full mx-auto mt-0.5">
+                                      ({col.room.sub || 'sala ogólna'})
+                                    </span>
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {hoursList.map((hour, hIdx) => (
+                                <tr key={hour.num} className="hover:bg-slate-50/40">
+                                  {/* Hour cell */}
+                                  <td className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1.5 font-mono text-center bg-slate-50/60">
+                                    <span className="font-black text-slate-900 text-[11px] block">{hour.num}</span>
+                                    <span className="block text-[7.5px] text-slate-500 leading-none mt-0.5 font-medium">
+                                      {hour.start}-{hour.end}
+                                    </span>
+                                  </td>
+
+                                  {/* Room cells */}
+                                  {chunkCols.map((col: any, cIdx) => {
+                                    const lessonsInRoom = getRoomLessons(col, dayIdx, hour.num, hIdx);
+
+                                    return (
+                                      <td
+                                        key={cIdx}
+                                        style={{ width: `calc((100% - 52px) / ${catRoomsCount})` }}
+                                        className="border border-slate-300 p-1.5 align-top text-center bg-white min-h-[44px]"
+                                      >
+                                        {lessonsInRoom.length > 0 ? (
+                                          <div className="space-y-1">
+                                            {lessonsInRoom.map((it, lIdx) => (
+                                              <div key={lIdx} className="leading-tight">
+                                                <span className="font-black text-slate-950 block text-[10px] bg-amber-100/90 border border-amber-300/90 rounded px-1.5 py-0.5 inline-block mb-0.5">
+                                                  {it.className}
+                                                </span>
+                                                <span
+                                                  className="text-[9px] text-slate-800 block font-bold truncate max-w-full mx-auto"
+                                                  title={it.subject}
+                                                >
+                                                  {it.subject}
+                                                </span>
+                                                {it.teacherAbbr && (
+                                                  <span className="bg-slate-100 text-slate-800 border border-slate-300 px-1 py-0.2 rounded text-[8px] font-bold inline-block mt-0.5">
+                                                    {it.teacherAbbr}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="text-[10px] text-slate-300 font-bold font-mono">-</span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    );
+                  });
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   if (isPrintFriendlyWeeklyMode) {
     return (
