@@ -1201,8 +1201,13 @@ export default function KreatorSzkoly({
           planLekcji: {
             ...appState.planLekcji,
             classes: nextClasses,
-            // Remove assignments
-            assignments: appState.planLekcji.assignments.filter(a => a.classId !== id)
+            // Remove assignments or strip from linked classes
+            assignments: appState.planLekcji.assignments
+              .filter(a => a.classId !== id)
+              .map(a => ({
+                ...a,
+                linkedClassIds: a.linkedClassIds ? a.linkedClassIds.filter(lid => lid !== id) : undefined
+              }))
           }
         });
         showNoti('Klasa została usunięta');
@@ -2378,6 +2383,11 @@ export default function KreatorSzkoly({
     const hours: Record<string, number> = {};
     appState.planLekcji.assignments.forEach(a => {
       hours[a.classId] = (hours[a.classId] || 0) + a.hoursPerWeek;
+      if (a.linkedClassIds && a.linkedClassIds.length > 0) {
+        a.linkedClassIds.forEach(linkedId => {
+          hours[linkedId] = (hours[linkedId] || 0) + a.hoursPerWeek;
+        });
+      }
     });
     return hours;
   }, [appState.planLekcji.assignments]);
@@ -5623,7 +5633,7 @@ export default function KreatorSzkoly({
 
                       if (asgListGrouping === 'class') {
                         return appState.classes.map(cls => {
-                          const classAsgs = appState.planLekcji.assignments.filter(a => a.classId === cls.id);
+                          const classAsgs = appState.planLekcji.assignments.filter(a => a.classId === cls.id || (a.linkedClassIds && a.linkedClassIds.includes(cls.id)));
                           if (classAsgs.length === 0) return null;
                           const totalHours = classAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0);
 
