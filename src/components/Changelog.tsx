@@ -30,6 +30,8 @@ export default function Changelog() {
       description: 'Przełomowa modernizacja warstwy przechowywania danych. Dotychczasowy magazyn localStorage z limitem 5 MB został zastąpiony zaawansowanym adapterem IndexedDB o niemal nieograniczonej pojemności (setki megabajtów / gigabajty), zapewniając płynną pracę największym placówkom oświatowym z setkami oddziałów i rozbudowaną historią autozapisów.',
       badge: 'Najnowsza',
       changes: [
+        { type: 'feature', text: 'Wprowadzono moduł Selektywnego Eksportu i Importu danych (JSON) – możliwość precyzyjnego wyboru, które elementy mają zostać zapisane lub wczytane (plan lekcji, konfiguracja zasobów i sal, archiwum roczne, migawki snapshotów, dziennik zdarzeń).', badgeText: 'Eksport/Import' },
+        { type: 'feature', text: 'Wdrożono maskowanie wpisywanego hasła (kropki/gwiazdki) z dedykowanym przełącznikiem oraz checkboxem „Pokaż hasło” w oknach eksportu i odszyfrowywania kopii.', badgeText: 'Bezpieczeństwo' },
         { type: 'feature', text: 'Wdrożono asynchroniczny silnik IndexedDB jako główne źródło prawdy (Source of Truth) dla stanu aplikacji, siatki lekcji, archiwum rocznego, punktów przywracania (snapshotów) oraz logów audytowych.', badgeText: 'Baza Danych' },
         { type: 'feature', text: 'Wprowadzono automatyczną, bezstratną migrację danych z dotychczasowego localStorage do IndexedDB przy pierwszym uruchomieniu po aktualizacji.', badgeText: 'Migracja' },
         { type: 'feature', text: 'Dodano dynamiczny wskaźnik stanu bazy IndexedDB w stopce aplikacji z podglądem zajętości oraz informacją o dostępnej przestrzeni bez ograniczeń.', badgeText: 'UI' },

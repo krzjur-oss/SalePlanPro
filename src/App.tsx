@@ -9,7 +9,8 @@ import {
   STORAGE_KEYS, getStorageItem, getStorageItemSync, setStorageItem, removeStorageItem,
   clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics
 } from './services/dbStorage';
-import BackupPasswordModal from './components/BackupPasswordModal';
+import ExportModal, { ExportOptions } from './components/ExportModal';
+import ImportModal, { ImportPayload, ImportSelectedOptions } from './components/ImportModal';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
 const PlanSal = lazy(() => import('./components/PlanSal'));
@@ -314,11 +315,10 @@ export default function App() {
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  // States for optional backup encryption
-  const [showBackupPasswordModal, setShowBackupPasswordModal] = useState(false);
-  const [backupPasswordMode, setBackupPasswordMode] = useState<'export' | 'import'>('export');
-  const [pendingEncryptedContent, setPendingEncryptedContent] = useState<string | null>(null);
-  const [backupModalError, setBackupModalError] = useState('');
+  // States for selective export and import
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [pendingImportRawContent, setPendingImportRawContent] = useState<string | null>(null);
 
   const handleUpdateAppState = (newState: AppState | ((prev: AppState) => AppState)) => {
     setAppState(prev => {
@@ -773,34 +773,50 @@ export default function App() {
     );
   };
 
-  // ── JSON BACKUPS ACTIONS ──
+  // ── JSON BACKUPS ACTIONS (SELECTIVE EXPORT & IMPORT) ──
   const handleExportBackup = () => {
-    setBackupPasswordMode('export');
-    setBackupModalError('');
-    setShowBackupPasswordModal(true);
+    setShowExportModal(true);
   };
 
-  const handleExecuteExport = async (password?: string) => {
-    const backupObj = {
-      version: '3.1.0',
-      appState,
-      schedData,
+  const handleExecuteExport = async (options: ExportOptions) => {
+    const backupObj: any = {
+      version: CURRENT_VERSION,
       timestamp: new Date().toISOString()
     };
+
+    if (options.includeAppState) {
+      backupObj.appState = appState;
+    }
+    if (options.includeSchedData) {
+      backupObj.schedData = schedData;
+    }
+    if (options.includeArchive) {
+      backupObj.archive = archive;
+    }
+    if (options.includeSnapshots) {
+      backupObj.snapshots = snapshots;
+    }
+    if (options.includeHistoryLogs) {
+      backupObj.historyLogs = historyLogs;
+    }
     
     const rawJson = JSON.stringify(backupObj, null, 2);
-    const fileName = `saleplan-plan-szkoly-${appState.school.short.toLowerCase() || 'v3'}`;
+    const schoolTag = appState.school.short?.toLowerCase() || 'szkola';
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const fileName = `saleplan-kopia-${schoolTag}-${dateStr}`;
 
     try {
-      if (password) {
-        const encrypted = await encryptText(rawJson, password);
+      if (options.password) {
+        const encrypted = await encryptText(rawJson, options.password);
         downloadFile(encrypted, `${fileName}-secured.json`, 'application/json');
         notify('Wyeksportowano zabezpieczone hasłem archiwum JSON', 'ok');
+        addEventLog('other', 'Wyeksportowano zabezpieczoną kopię JSON', `Zaszyfrowano dane hasłem (AES-256 GCM).`);
       } else {
         downloadFile(rawJson, `${fileName}.json`, 'application/json');
-        notify('Wyeksportowano archiwum JSON', 'ok');
+        notify('Wyeksportowano kopię JSON', 'ok');
+        addEventLog('other', 'Wyeksportowano kopię JSON', `Pobrano plik konfiguracyjny bez hasła.`);
       }
-      setShowBackupPasswordModal(false);
+      setShowExportModal(false);
     } catch (err) {
       notify('Błąd podczas eksportowania kopii', 'err');
     }
@@ -814,55 +830,81 @@ export default function App() {
     e.target.value = '';
 
     const reader = new FileReader();
-    reader.onload = async (evt) => {
+    reader.onload = (evt) => {
       const rawContent = evt.target?.result as string;
       if (!rawContent) return;
 
-      if (isEncryptedBackup(rawContent)) {
-        setPendingEncryptedContent(rawContent);
-        setBackupPasswordMode('import');
-        setBackupModalError('');
-        setShowBackupPasswordModal(true);
-      } else {
-        try {
-          const data = JSON.parse(rawContent);
-          processImportedBackup(data);
-        } catch (err) {
-          notify('Błąd odczytu pliku kopii - niepoprawny format JSON', 'err');
-        }
-      }
+      setPendingImportRawContent(rawContent);
+      setShowImportModal(true);
     };
     reader.readAsText(file);
   };
 
-  const handleExecuteDecryptAndImport = async (password: string) => {
-    if (!pendingEncryptedContent) return;
-    try {
-      const decrypted = await decryptText(pendingEncryptedContent, password);
-      const data = JSON.parse(decrypted);
-      processImportedBackup(data);
-      
-      setShowBackupPasswordModal(false);
-      setPendingEncryptedContent(null);
-    } catch (err: any) {
-      setBackupModalError(err.message || 'Niepoprawne hasło lub błąd odszyfrowywania.');
-    }
-  };
+  const handleExecuteSelectiveImport = async (payload: ImportPayload, options: ImportSelectedOptions) => {
+    const importedParts: string[] = [];
 
-  const processImportedBackup = (data: any) => {
-    if (data.appState && data.schedData) {
-      pushToUndo(schedData);
-      handleUpdateAppState(data.appState);
-      setSchedData(data.schedData);
-      notify('Pomyślnie wczytano archiwum lekcyjne!', 'ok');
-      addEventLog(
-        'import',
-        'Wczytano kopię zapasową JSON (plik)',
-        `Pomyślnie przywrócono stan planu lekcji i konfigurację dla szkoły "${data.appState.school?.name || ''}".`
-      );
-    } else {
-      notify('Błędny format pliku archiwum', 'err');
+    pushToUndo(schedData);
+
+    if (options.importAppState && payload.appState) {
+      handleUpdateAppState(payload.appState);
+      importedParts.push('Konfigurację szkoły');
     }
+
+    if (options.importSchedData && payload.schedData) {
+      setSchedData(payload.schedData);
+      importedParts.push('Plan lekcji');
+    }
+
+    if (options.importArchive && Array.isArray(payload.archive) && payload.archive.length > 0) {
+      if (options.archiveMode === 'merge') {
+        const existingKeys = new Set(archive.map(a => a.yearKey));
+        const newItems = payload.archive.filter(a => !existingKeys.has(a.yearKey));
+        const merged = [...archive, ...newItems];
+        setArchive(merged);
+        await setStorageItem(STORAGE_KEYS.ARCHIVE, merged);
+        importedParts.push(`Archiwum (+${newItems.length} nowych)`);
+      } else {
+        setArchive(payload.archive);
+        await setStorageItem(STORAGE_KEYS.ARCHIVE, payload.archive);
+        importedParts.push(`Archiwum (${payload.archive.length} zastąpionych)`);
+      }
+    }
+
+    if (options.importSnapshots && Array.isArray(payload.snapshots) && payload.snapshots.length > 0) {
+      if (options.snapshotsMode === 'merge') {
+        const existingIds = new Set(snapshots.map(s => s.id));
+        const newItems = payload.snapshots.filter(s => !existingIds.has(s.id));
+        const merged = [...snapshots, ...newItems];
+        setSnapshots(merged);
+        await setStorageItem(STORAGE_KEYS.SNAPSHOTS, merged);
+        importedParts.push(`Snapshoty (+${newItems.length} nowych)`);
+      } else {
+        setSnapshots(payload.snapshots);
+        await setStorageItem(STORAGE_KEYS.SNAPSHOTS, payload.snapshots);
+        importedParts.push(`Snapshoty (${payload.snapshots.length} zastąpionych)`);
+      }
+    }
+
+    if (options.importHistoryLogs && Array.isArray(payload.historyLogs) && payload.historyLogs.length > 0) {
+      const existingIds = new Set(historyLogs.map(l => l.id));
+      const newItems = payload.historyLogs.filter(l => !existingIds.has(l.id));
+      const merged = [...historyLogs, ...newItems];
+      setHistoryLogs(merged);
+      await setStorageItem(STORAGE_KEYS.HISTORY_LOGS, merged);
+      importedParts.push(`Dziennik zdarzeń (+${newItems.length} wpisów)`);
+    }
+
+    refreshStorageStats();
+    setShowImportModal(false);
+    setPendingImportRawContent(null);
+
+    const summaryText = importedParts.length > 0 ? importedParts.join(', ') : 'brak wybranych modułów';
+    notify(`Pomyślnie zaimportowano: ${summaryText}!`, 'ok');
+    addEventLog(
+      'import',
+      'Selektywny import danych (plik JSON)',
+      `Zaimportowano moduły: ${summaryText} dla szkoły "${payload.appState?.school?.name || appState.school.name}".`
+    );
   };
 
   const handleResetTimetable = async () => {
@@ -1343,26 +1385,25 @@ export default function App() {
         />
       </Suspense>
 
-      <BackupPasswordModal
-        isOpen={showBackupPasswordModal}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onExport={handleExecuteExport}
+        appState={appState}
+        schedData={schedData}
+        archive={archive}
+        snapshots={snapshots}
+        historyLogs={historyLogs}
+      />
+
+      <ImportModal
+        isOpen={showImportModal}
         onClose={() => {
-          setShowBackupPasswordModal(false);
-          setPendingEncryptedContent(null);
+          setShowImportModal(false);
+          setPendingImportRawContent(null);
         }}
-        mode={backupPasswordMode}
-        onSubmit={(password) => {
-          if (backupPasswordMode === 'export') {
-            handleExecuteExport(password);
-          } else {
-            handleExecuteDecryptAndImport(password);
-          }
-        }}
-        onSkip={() => {
-          if (backupPasswordMode === 'export') {
-            handleExecuteExport();
-          }
-        }}
-        errorMsg={backupModalError}
+        rawFileContent={pendingImportRawContent}
+        onExecuteImport={handleExecuteSelectiveImport}
       />
 
       {isRestoring && (

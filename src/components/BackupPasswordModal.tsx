@@ -112,12 +112,13 @@ export default function BackupPasswordModal({
             )}
 
             {/* Password input */}
-            <div className="space-y-1">
-              <label className="text-[10.5px] font-black text-slate-500 uppercase tracking-wider block">
+            <div className="space-y-1.5">
+              <label htmlFor="backup-password-input" className="text-[10.5px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider block">
                 Hasło kopii zapasowej:
               </label>
               <div className="relative">
                 <input
+                  id="backup-password-input"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => {
@@ -125,18 +126,38 @@ export default function BackupPasswordModal({
                     if (errorMsg) setErrorMsg('');
                   }}
                   placeholder={mode === 'export' ? 'Wpisz hasło (opcjonalne)' : 'Podaj hasło do pliku'}
-                  className="w-full text-xs font-medium bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2.5 pr-10 focus:outline-hidden focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-1 focus:ring-indigo-500 dark:focus:ring-indigo-400 transition"
+                  autoComplete={mode === 'export' ? 'new-password' : 'current-password'}
+                  className="w-full text-sm font-medium bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 pr-11 focus:outline-hidden focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition shadow-xs"
                   autoFocus
                 />
-                {password && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer z-10"
+                  title={showPassword ? 'Ukryj hasło' : 'Pokaż hasło'}
+                  aria-label={showPassword ? 'Ukryj hasło' : 'Pokaż hasło'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {/* Checkbox Pokaż hasło */}
+              <div className="flex items-center justify-between px-1 pt-0.5">
+                <label htmlFor="backup-show-password-cb" className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                  <input
+                    id="backup-show-password-cb"
+                    type="checkbox"
+                    checked={showPassword}
+                    onChange={(e) => setShowPassword(e.target.checked)}
+                    className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span className="font-semibold">Pokaż hasło</span>
+                  {password && (
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono ml-1">
+                      ({password.length} {password.length === 1 ? 'znak' : password.length < 5 ? 'znaki' : 'znaków'})
+                    </span>
+                  )}
+                </label>
               </div>
             </div>
 
