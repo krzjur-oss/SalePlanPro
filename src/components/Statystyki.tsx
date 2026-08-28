@@ -206,7 +206,18 @@ interface StatystykiProps {
   // --- Calculations for Lessons scheduled ---
   const scheduledLessonsList = useMemo(() => {
     // Collect all scheduled lessons in Plan Klas (Etap 1)
-    const list: Array<{ classId: string; dayIdx: number; hourIdx: number; teacherId: string | null; subjectId: string; roomId: string | null }> = [];
+    const list: Array<{ 
+      classId: string; 
+      dayIdx: number; 
+      hourIdx: number; 
+      teacherId: string | null; 
+      supportTeacherId?: string | null;
+      subjectId: string; 
+      roomId: string | null;
+      assignmentId: string;
+      groupId?: string | null;
+      linkedClassIds?: string[];
+    }> = [];
     Object.entries(pl.lessons).forEach(([key, lesson]) => {
       const parts = key.split('|');
       if (parts.length >= 3) {
@@ -220,8 +231,12 @@ interface StatystykiProps {
             dayIdx,
             hourIdx,
             teacherId: asg.teacherId,
+            supportTeacherId: lesson.supportTeacherId || null,
             subjectId: asg.subjectId,
-            roomId: asg.roomId
+            roomId: asg.roomId,
+            assignmentId: asg.id,
+            groupId: asg.groupId,
+            linkedClassIds: asg.linkedClassIds
           });
         }
       }
@@ -238,9 +253,14 @@ interface StatystykiProps {
       hoursScheduled[t.id] = 0;
     });
 
+    const countedTeacherSlots = new Set<string>();
     scheduledLessonsList.forEach(l => {
       if (l.teacherId && hoursScheduled[l.teacherId] !== undefined) {
-        hoursScheduled[l.teacherId] += 1;
+        const slotKey = `${l.teacherId}|${l.dayIdx}|${l.hourIdx}`;
+        if (!countedTeacherSlots.has(slotKey)) {
+          countedTeacherSlots.add(slotKey);
+          hoursScheduled[l.teacherId] += 1;
+        }
       }
     });
 
@@ -269,9 +289,14 @@ interface StatystykiProps {
       usageCount[r.id] = 0;
     });
 
+    const countedRoomSlots = new Set<string>();
     scheduledLessonsList.forEach(l => {
       if (l.roomId && usageCount[l.roomId] !== undefined) {
-        usageCount[l.roomId] += 1;
+        const slotKey = `${l.roomId}|${l.dayIdx}|${l.hourIdx}`;
+        if (!countedRoomSlots.has(slotKey)) {
+          countedRoomSlots.add(slotKey);
+          usageCount[l.roomId] += 1;
+        }
       }
     });
 
@@ -294,13 +319,18 @@ interface StatystykiProps {
       countMap[s.id] = 0;
     });
 
+    const countedSubjectSlots = new Set<string>();
     scheduledLessonsList.forEach(l => {
       if (l.subjectId && countMap[l.subjectId] !== undefined) {
-        countMap[l.subjectId] += 1;
+        const slotKey = `${l.subjectId}|${l.dayIdx}|${l.hourIdx}|${l.assignmentId}`;
+        if (!countedSubjectSlots.has(slotKey)) {
+          countedSubjectSlots.add(slotKey);
+          countMap[l.subjectId] += 1;
+        }
       }
     });
 
-    const total = scheduledLessonsList.length || 1;
+    const total = Object.values(countMap).reduce((a, b) => a + b, 0) || 1;
 
     return pl.subjects.map(s => {
       const count = countMap[s.id] || 0;
@@ -620,8 +650,25 @@ interface StatystykiProps {
 
     Object.entries(groups).forEach(([key, list]) => {
       if (list.length > 1) {
-        const uniqueClasses = Array.from(new Set(list.map(l => l.classId)));
-        if (uniqueClasses.length > 1) {
+        // Group lessons that belong to the same joint/inter-class assignment
+        const distinctAssignmentGroups: typeof scheduledLessonsList[] = [];
+        list.forEach(item => {
+          const matchingGroup = distinctAssignmentGroups.find(grp =>
+            grp.some(g =>
+              g.assignmentId === item.assignmentId ||
+              (g.linkedClassIds && g.linkedClassIds.includes(item.classId)) ||
+              (item.linkedClassIds && item.linkedClassIds.includes(g.classId))
+            )
+          );
+          if (matchingGroup) {
+            matchingGroup.push(item);
+          } else {
+            distinctAssignmentGroups.push([item]);
+          }
+        });
+
+        // A conflict exists ONLY if the teacher is assigned to 2 or more distinct unlinked assignments at the same time
+        if (distinctAssignmentGroups.length > 1) {
           const parts = key.split('|');
           const teacherId = parts[0];
           const dayIdx = parseInt(parts[1], 10);
@@ -632,11 +679,11 @@ interface StatystykiProps {
             teacher: teacher ? { name: `${teacher.first} ${teacher.last}`, abbr: teacher.abbr } : { name: 'Nieznany', abbr: '?' },
             dayIdx,
             hourIdx,
-            lessons: list.map(l => {
-              const cls = classesMap.get(l.classId);
-              const sub = subjectsMap.get(l.subjectId);
+            lessons: distinctAssignmentGroups.map(grp => {
+              const classNames = Array.from(new Set(grp.map(l => classesMap.get(l.classId)?.name || '?'))).join(' + ');
+              const sub = subjectsMap.get(grp[0].subjectId);
               return {
-                className: cls ? cls.name : '?',
+                className: classNames,
                 subjectName: sub ? sub.name : '?'
               };
             })
@@ -657,13 +704,25 @@ interface StatystykiProps {
       teacherAbbr: string;
     }> = [];
 
+    const seenSessions = new Set<string>();
+
     scheduledLessonsList.forEach(l => {
       if (!l.roomId) {
-        const cls = classesMap.get(l.classId);
+        const sessionKey = `${l.assignmentId}|${l.dayIdx}|${l.hourIdx}`;
+        if (seenSessions.has(sessionKey)) return;
+        seenSessions.add(sessionKey);
+
+        const asg = pl.assignments.find(a => a.id === l.assignmentId);
+        let classLabel = classesMap.get(l.classId)?.name || '?';
+        if (asg && asg.linkedClassIds && asg.linkedClassIds.length > 0) {
+          const allNames = [classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(Boolean);
+          classLabel = allNames.join(' + ');
+        }
+
         const sub = subjectsMap.get(l.subjectId);
         const teacher = l.teacherId ? teachersMap.get(l.teacherId) : null;
         missing.push({
-          className: cls ? cls.name : '?',
+          className: classLabel,
           dayIdx: l.dayIdx,
           hourIdx: l.hourIdx,
           subjectName: sub ? sub.name : '?',
@@ -673,7 +732,7 @@ interface StatystykiProps {
     });
 
     return missing;
-  }, [scheduledLessonsList, classesMap, subjectsMap, teachersMap]);
+  }, [scheduledLessonsList, classesMap, subjectsMap, teachersMap, pl.assignments]);
 
   const overlappingDuties = useMemo(() => {
     const overlaps: Array<{
@@ -749,25 +808,33 @@ interface StatystykiProps {
 
     Object.entries(groups).forEach(([key, list]) => {
       if (list.length > 1) {
-        const parts = key.split('|');
-        const classId = parts[0];
-        const dayIdx = parseInt(parts[1], 10);
-        const hourIdx = parseInt(parts[2], 10);
-        const cls = classesMap.get(classId);
+        // If lessons have distinct non-null groups (e.g. G1 vs G2), it's a valid split
+        const distinctAssignments = Array.from(new Set(list.map(l => l.assignmentId)));
+        const allHaveDistinctGroups = distinctAssignments.length > 1 && 
+          list.every(l => l.groupId) && 
+          new Set(list.map(l => l.groupId)).size === list.length;
 
-        conflicts.push({
-          className: cls ? cls.name : '?',
-          dayIdx,
-          hourIdx,
-          lessons: list.map(l => {
-            const sub = subjectsMap.get(l.subjectId);
-            const teacher = l.teacherId ? teachersMap.get(l.teacherId) : null;
-            return {
-              subjectName: sub ? sub.name : '?',
-              teacherAbbr: teacher ? teacher.abbr : 'Brak'
-            };
-          })
-        });
+        if (!allHaveDistinctGroups && distinctAssignments.length > 1) {
+          const parts = key.split('|');
+          const classId = parts[0];
+          const dayIdx = parseInt(parts[1], 10);
+          const hourIdx = parseInt(parts[2], 10);
+          const cls = classesMap.get(classId);
+
+          conflicts.push({
+            className: cls ? cls.name : '?',
+            dayIdx,
+            hourIdx,
+            lessons: list.map(l => {
+              const sub = subjectsMap.get(l.subjectId);
+              const teacher = l.teacherId ? teachersMap.get(l.teacherId) : null;
+              return {
+                subjectName: sub ? sub.name : '?',
+                teacherAbbr: teacher ? teacher.abbr : 'Brak'
+              };
+            })
+          });
+        }
       }
     });
 
@@ -793,27 +860,47 @@ interface StatystykiProps {
 
     Object.entries(groups).forEach(([key, list]) => {
       if (list.length > 1) {
-        const parts = key.split('|');
-        const roomId = parts[0];
-        const dayIdx = parseInt(parts[1], 10);
-        const hourIdx = parseInt(parts[2], 10);
-        const room = roomsMap.get(roomId);
-
-        conflicts.push({
-          roomName: room ? room.name : '?',
-          dayIdx,
-          hourIdx,
-          lessons: list.map(l => {
-            const cls = classesMap.get(l.classId);
-            const sub = subjectsMap.get(l.subjectId);
-            const teacher = l.teacherId ? teachersMap.get(l.teacherId) : null;
-            return {
-              className: cls ? cls.name : '?',
-              subjectName: sub ? sub.name : '?',
-              teacherAbbr: teacher ? teacher.abbr : 'Brak'
-            };
-          })
+        // Group lessons that belong to the same joint/inter-class assignment
+        const distinctAssignmentGroups: typeof scheduledLessonsList[] = [];
+        list.forEach(item => {
+          const matchingGroup = distinctAssignmentGroups.find(grp =>
+            grp.some(g =>
+              g.assignmentId === item.assignmentId ||
+              (g.linkedClassIds && g.linkedClassIds.includes(item.classId)) ||
+              (item.linkedClassIds && item.linkedClassIds.includes(g.classId))
+            )
+          );
+          if (matchingGroup) {
+            matchingGroup.push(item);
+          } else {
+            distinctAssignmentGroups.push([item]);
+          }
         });
+
+        // Room conflict occurs ONLY when 2 or more distinct unlinked assignments book the same room
+        if (distinctAssignmentGroups.length > 1) {
+          const parts = key.split('|');
+          const roomId = parts[0];
+          const dayIdx = parseInt(parts[1], 10);
+          const hourIdx = parseInt(parts[2], 10);
+          const room = roomsMap.get(roomId);
+
+          conflicts.push({
+            roomName: room ? room.name : '?',
+            dayIdx,
+            hourIdx,
+            lessons: distinctAssignmentGroups.map(grp => {
+              const classNames = Array.from(new Set(grp.map(l => classesMap.get(l.classId)?.name || '?'))).join(' + ');
+              const sub = subjectsMap.get(grp[0].subjectId);
+              const teacher = grp[0].teacherId ? teachersMap.get(grp[0].teacherId) : null;
+              return {
+                className: classNames,
+                subjectName: sub ? sub.name : '?',
+                teacherAbbr: teacher ? teacher.abbr : 'Brak'
+              };
+            })
+          });
+        }
       }
     });
 
@@ -824,7 +911,13 @@ interface StatystykiProps {
   const totalClasses = pl.classes.length;
   const totalTeachers = pl.teachers.length;
   const totalRooms = pl.rooms.length;
-  const totalHoursScheduled = scheduledLessonsList.length;
+  const totalHoursScheduled = useMemo(() => {
+    const uniqueSessions = new Set<string>();
+    scheduledLessonsList.forEach(l => {
+      uniqueSessions.add(`${l.dayIdx}|${l.hourIdx}|${l.assignmentId}`);
+    });
+    return uniqueSessions.size;
+  }, [scheduledLessonsList]);
   
   const totalOveloadedTeachers = teacherStats.filter(t => t.isOverloaded).length;
   const totalOverassignedDuties = teacherDutiesStats.filter(t => t.isOverLimit).length;
