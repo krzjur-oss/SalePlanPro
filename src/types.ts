@@ -149,12 +149,12 @@ export interface SchedCell {
   note?: string;
   locked?: boolean;
   _bridgeMeta?: {
-    classId: string;
-    teacherId: string | null;
-    subjectId: string | null;
-    roomId: string | null;
-    groupId: string | null;
-    suggestedRoom: string | null;
+    classId?: string;
+    teacherId?: string | null;
+    subjectId?: string | null;
+    roomId?: string | null;
+    groupId?: string | null;
+    suggestedRoom?: string | null;
   };
 }
 

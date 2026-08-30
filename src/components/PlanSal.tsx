@@ -1,11 +1,41 @@
 import React, { useState, useMemo } from 'react';
-import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom, Class } from '../types';
+import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom, Class, SchoolGroup } from '../types';
 import { colKey, flattenColumns, esc, hexRgba, mergeClassNames, cleanFloorName } from '../utils';
 import { 
   Building2, MapPin, Grid, AlertTriangle, UserCheck, RefreshCw, Trash2, Edit, Grab, Sparkles, Filter, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { DndContext, DragEndEvent, useSensor, useSensors, PointerSensor, TouchSensor, MouseSensor } from '@dnd-kit/core';
 import { DraggableItem, DroppableCell } from './DndWrapper';
+
+// Helper to parse class entries with possible group specifications like "5A (gr1)" or "5A"
+function parseClassWithGroup(raw: string): { baseClass: string; groupName: string | null; display: string }[] {
+  if (!raw) return [];
+  const parts = raw.split(/\s*\+\s*|\s+i\s+/i);
+  const results: { baseClass: string; groupName: string | null; display: string }[] = [];
+
+  parts.forEach(part => {
+    const trimmed = part.trim();
+    if (!trimmed) return;
+    const match = trimmed.match(/^([^\(]+?)(?:\s*\((.+?)\))?$/);
+    if (match) {
+      const baseClass = match[1].trim().toUpperCase();
+      const groupName = match[2] ? match[2].trim().toUpperCase() : null;
+      results.push({
+        baseClass,
+        groupName,
+        display: groupName ? `${baseClass} (${groupName})` : baseClass
+      });
+    } else {
+      results.push({
+        baseClass: trimmed.toUpperCase(),
+        groupName: null,
+        display: trimmed.toUpperCase()
+      });
+    }
+  });
+
+  return results;
+}
 
 interface PlanSalProps {
   appState: AppState;
@@ -148,6 +178,7 @@ export default function PlanSal({
     const assignmentsMap = new Map<string, Assignment>((pl.assignments || []).map(a => [a.id, a]));
     const teachersMap = new Map<string, Teacher>((pl.teachers || []).map(t => [t.id, t]));
     const subjectsMap = new Map<string, Subject>((pl.subjects || []).map(s => [s.id, s]));
+    const groupsMap = new Map<string, SchoolGroup>((pl.schoolGroups || []).map(g => [g.id, g]));
     
     // Support lookups by ID and by clean room name
     const roomsMap = new Map<string, ClassRoom>();
@@ -303,11 +334,17 @@ export default function PlanSal({
                 totalUnassigned++;
               } else {
                 occupiedKeys.add(assignedKey);
+                const groupObj = lesson.groupId ? groupsMap.get(lesson.groupId) : null;
+                const groupName = groupObj ? groupObj.name : (lesson.groupId || undefined);
+                const displayClassName = groupName 
+                  ? `${mergeClassNames(lesson.combinedClasses).join('+')} (${groupName})`
+                  : mergeClassNames(lesson.combinedClasses).join('+');
+
                 colKeyCells[assignedKey] = {
                   teacherAbbr: lesson.teacherAbbr,
                   supportTeacherAbbr: lesson.suppTeacherAbbr,
                   classes: lesson.combinedClasses,
-                  className: mergeClassNames(lesson.combinedClasses).join('+'),
+                  className: displayClassName,
                   subject: lesson.subjectName,
                   note: 'Zajęcia sportowe (W-F)',
                   _bridgeMeta: {
@@ -504,11 +541,17 @@ export default function PlanSal({
           const chosenLesson = unassignedStandard[best.lessonIdx];
           const chosenRoomKey = best.colKey;
 
+          const chosenGroupObj = chosenLesson.groupId ? groupsMap.get(chosenLesson.groupId) : null;
+          const chosenGroupName = chosenGroupObj ? chosenGroupObj.name : (chosenLesson.groupId || undefined);
+          const displayChosenClassName = chosenGroupName 
+            ? `${mergeClassNames(chosenLesson.combinedClasses).join('+')} (${chosenGroupName})`
+            : mergeClassNames(chosenLesson.combinedClasses).join('+');
+
           colKeyCells[chosenRoomKey] = {
             teacherAbbr: chosenLesson.teacherAbbr,
             supportTeacherAbbr: chosenLesson.suppTeacherAbbr,
             classes: chosenLesson.combinedClasses,
-            className: mergeClassNames(chosenLesson.combinedClasses).join('+'),
+            className: displayChosenClassName,
             subject: chosenLesson.subjectName,
             note: chosenLesson.suggestedRoomName ? `(sugestia: ${chosenLesson.suggestedRoomName})` : undefined,
             _bridgeMeta: {
@@ -740,6 +783,23 @@ export default function PlanSal({
     return new Map((appState.planLekcji.rooms || []).map(r => [r.id, r]));
   }, [appState.planLekcji.rooms]);
 
+  const groupsMap = useMemo(() => {
+    return new Map((appState.planLekcji.schoolGroups || []).map(g => [g.id, g]));
+  }, [appState.planLekcji.schoolGroups]);
+
+  // List of all class options including individual groups (e.g., "5A", "5A (gr1)", "5A (gr2)")
+  const allClassesAndGroupsOptions = useMemo(() => {
+    const options: string[] = [];
+    sortedClasses.forEach(c => {
+      options.push(c.name);
+      const classGrps = (appState.planLekcji?.schoolGroups || []).filter(g => g.classId === c.id);
+      classGrps.forEach(g => {
+        options.push(`${c.name} (${g.name})`);
+      });
+    });
+    return options;
+  }, [sortedClasses, appState.planLekcji?.schoolGroups]);
+
   // Set of classes assigned at any given hour on current active day in plan sal
   const isAssigned = useMemo(() => {
     const map = new Set<string>();
@@ -757,6 +817,9 @@ export default function PlanSal({
               map.add(`${h}|${c.toUpperCase()}`);
             }
           });
+          if (slot.className) {
+            map.add(`${h}|${slot.className.toUpperCase()}`);
+          }
         });
       });
     });
@@ -771,11 +834,16 @@ export default function PlanSal({
     const list: {
       id: string;
       className: string;
+      rawClassName: string;
+      groupId?: string | null;
+      groupName?: string;
       subject: string;
       teacherAbbr: string;
+      suppTeacherAbbr?: string;
       hourKey: string;
       suggestedRoom: string;
       isAssigned: boolean;
+      assignmentId?: string;
     }[] = [];
 
     pl.classes.forEach(cls => {
@@ -783,34 +851,61 @@ export default function PlanSal({
         const hIdx = pl.hours.findIndex(h => String(h.num) === hKey);
         if (hIdx === -1) return;
 
-        const lessonKey = `${cls.id}|${activeDay}|${hIdx}`;
-        const lesson = pl.lessons?.[lessonKey];
-        if (!lesson) return;
+        const matchingLessons = Object.entries(pl.lessons || {}).filter(([k]) => {
+          const p = k.split('|');
+          return p[0] === cls.id && parseInt(p[1], 10) === activeDay && parseInt(p[2], 10) === hIdx;
+        });
 
-        const asg = assignmentsMap.get(lesson.assignmentId);
-        if (!asg) return;
+        matchingLessons.forEach(([lessonKey, lesson]) => {
+          if (!lesson) return;
 
-        const className = cls.name;
-        const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-        const teacherAbbr = asg.teacherId ? teachersMap.get(asg.teacherId)?.abbr || '' : '';
-        const suggestedRoom = asg.roomId ? rMap.get(asg.roomId)?.name || '' : '';
-        
-        const assigned = isAssigned.has(`${hKey}|${className.toUpperCase()}`);
+          const asg = assignmentsMap.get(lesson.assignmentId);
+          if (!asg) return;
 
-        list.push({
-          id: `${cls.id}-${activeDay}-${hKey}`,
-          className,
-          subject,
-          teacherAbbr,
-          hourKey: hKey,
-          suggestedRoom,
-          isAssigned: assigned
+          // Deduplicate multi-class assignments
+          if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
+            return;
+          }
+
+          const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+          const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
+          const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+          const suggestedRoom = asg.roomId ? rMap.get(asg.roomId)?.name || '' : '';
+
+          const groupObj = asg.groupId ? groupsMap.get(asg.groupId) : null;
+          const groupName = groupObj ? groupObj.name : undefined;
+
+          const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
+            ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
+            : [];
+          const combinedClasses = [cls.name, ...extraClasses];
+          const displayClassName = groupName 
+            ? `${mergeClassNames(combinedClasses).join('+')} (${groupName})`
+            : mergeClassNames(combinedClasses).join('+');
+
+          const assigned = isAssigned.has(`${hKey}|${displayClassName.toUpperCase()}`) ||
+                           isAssigned.has(`${hKey}|${cls.name.toUpperCase()}`);
+
+          list.push({
+            id: `${lessonKey}-${asg.id}`,
+            className: displayClassName,
+            rawClassName: cls.name,
+            groupId: asg.groupId || null,
+            groupName,
+            subject,
+            teacherAbbr: teacher?.abbr || '',
+            suppTeacherAbbr: suppTeacher?.abbr || undefined,
+            hourKey: hKey,
+            suggestedRoom,
+            isAssigned: assigned,
+            assignmentId: asg.id
+          });
         });
       });
     });
 
     return list;
-  }, [appState.planLekcji, appState.hours, activeDay, assignmentsMap, subjectsMap, rMap, isAssigned]);
+  }, [appState.planLekcji, appState.hours, activeDay, assignmentsMap, teachersMap, subjectsMap, rMap, groupsMap, isAssigned]);
 
   const hourLessons = useMemo(() => {
     if (!editingCell) return [];
@@ -842,6 +937,9 @@ export default function PlanSal({
         clses.forEach(c => {
           if (c) otherAssignedClasses.add(c.trim().toUpperCase());
         });
+        if (slot.className) {
+          otherAssignedClasses.add(slot.className.trim().toUpperCase());
+        }
       });
     });
 
@@ -859,20 +957,18 @@ export default function PlanSal({
 
   const getOtherOptionsForIndex = (index: number) => {
     const schedSet = new Set(unassignedScheduledClasses.map(c => c.toUpperCase()));
-    return sortedClasses
-      .map(c => c.name)
-      .filter(clsName => {
-        if (schedSet.has(clsName.toUpperCase())) return false;
-        const isSelectedElsewhere = selectedClasses.some((c, idx) => idx !== index && c && c.toUpperCase() === clsName.toUpperCase());
-        return !isSelectedElsewhere;
-      });
+    return allClassesAndGroupsOptions.filter(clsName => {
+      if (schedSet.has(clsName.toUpperCase())) return false;
+      const isSelectedElsewhere = selectedClasses.some((c, idx) => idx !== index && c && c.toUpperCase() === clsName.toUpperCase());
+      return !isSelectedElsewhere;
+    });
   };
 
   const canAddMoreClasses = useMemo(() => {
     if (!editingCell) return false;
     const selectedSet = new Set(selectedClasses.map(c => c ? c.toUpperCase() : ''));
-    return sortedClasses.some(c => !selectedSet.has(c.name.toUpperCase()));
-  }, [editingCell, sortedClasses, selectedClasses]);
+    return allClassesAndGroupsOptions.some(cName => !selectedSet.has(cName.toUpperCase()));
+  }, [editingCell, allClassesAndGroupsOptions, selectedClasses]);
 
   const scheduledTeachers = useMemo(() => {
     return Array.from(new Set(hourLessons.map(l => l.teacherAbbr).filter(Boolean))).sort();
@@ -898,8 +994,15 @@ export default function PlanSal({
 
     // teacherLocations: "teacherAbbr|hour" -> list of { colKey, slotIdx, isSupport?: boolean }
     const teacherLocations = new Map<string, { colKey: string; slotIdx?: number; isSupport?: boolean }[]>();
-    // classLocations: "classAbbr|hour" -> list of { colKey, slotIdx }
-    const classLocations = new Map<string, { colKey: string; slotIdx?: number }[]>();
+    
+    interface ClassLocationItem {
+      colKey: string;
+      slotIdx?: number;
+      baseClass: string;
+      groupName: string | null;
+      display: string;
+    }
+    const classHourLocations = new Map<string, ClassLocationItem[]>(); // key: hour
 
     // detected: "hour|colKey" -> set of conflict descriptions / reasons
     const detected = new Map<string, string[]>();
@@ -995,22 +1098,26 @@ export default function PlanSal({
             }
           }
 
-          // Register classes (including split entries to detect split group conflicts)
+          // Register class entries (group-aware)
           const classNames = slot.classes || (slot.className ? [slot.className] : []);
-          const expandedClasses: string[] = [];
-          
-          classNames.forEach(cls => {
-            if (!cls) return;
-            const list = cls.split(/[\s,+/]+|(?:\bi\b)/i).map(c => c.trim().toUpperCase()).filter(Boolean);
-            expandedClasses.push(...list);
+          const parsedClasses: { baseClass: string; groupName: string | null; display: string }[] = [];
+          classNames.forEach(rawCls => {
+            if (rawCls) {
+              parsedClasses.push(...parseClassWithGroup(rawCls));
+            }
           });
 
-          expandedClasses.forEach(cls => {
-            const cKeyCombined = `${cls}|${h}`;
-            const list = classLocations.get(cKeyCombined) || [];
-            list.push({ colKey: cKey, slotIdx: isSport ? slIdx : undefined });
-            classLocations.set(cKeyCombined, list);
+          const hList = classHourLocations.get(h) || [];
+          parsedClasses.forEach(pc => {
+            hList.push({
+              colKey: cKey,
+              slotIdx: isSport ? slIdx : undefined,
+              baseClass: pc.baseClass,
+              groupName: pc.groupName,
+              display: pc.display
+            });
           });
+          classHourLocations.set(h, hList);
         });
       });
     });
@@ -1051,37 +1158,73 @@ export default function PlanSal({
       }
     });
 
-    // For Classes:
-    classLocations.forEach((list, cKeyCombined) => {
-      if (list.length > 1) {
-        const [cls, h] = cKeyCombined.split('|');
-        const distinctCols = Array.from(new Set(list.map(item => item.colKey)));
-        if (distinctCols.length > 1) {
-          list.forEach(item => {
-            const keyInCol = `${h}|${item.colKey}`;
-            const otherRms = distinctCols.filter(c => c !== item.colKey).map(c => {
-               const foundCol = allCols.find(x => colKey(x) === c);
-               return foundCol ? foundCol.room.num : c;
-            }).join(', ');
-            const desc = `Szkolny konflikt: Klasa ${cls} przypisana równolegle do sal: ${otherRms}`;
+    // For Classes (Group-aware overlap detection across different rooms):
+    classHourLocations.forEach((items, h) => {
+      const byBaseClass = new Map<string, ClassLocationItem[]>();
+      items.forEach(item => {
+        const list = byBaseClass.get(item.baseClass) || [];
+        list.push(item);
+        byBaseClass.set(item.baseClass, list);
+      });
 
-            const existing = detected.get(keyInCol) || [];
-            if (!existing.includes(desc)) {
-              existing.push(desc);
-              detected.set(keyInCol, existing);
-            }
+      byBaseClass.forEach((clsItems) => {
+        if (clsItems.length <= 1) return;
 
-            if (item.slotIdx !== undefined) {
-              const sKey = `${h}|${item.colKey}|${item.slotIdx}`;
-              const sExisting = slotConflicts.get(sKey) || [];
-              if (!sExisting.includes(desc)) {
-                sExisting.push(desc);
-                slotConflicts.set(sKey, sExisting);
+        for (let i = 0; i < clsItems.length; i++) {
+          for (let j = i + 1; j < clsItems.length; j++) {
+            const itemA = clsItems[i];
+            const itemB = clsItems[j];
+
+            if (itemA.colKey === itemB.colKey) continue;
+
+            // Conflict if either is the whole class, or both are the exact same group
+            const isConflict = 
+              itemA.groupName === null || 
+              itemB.groupName === null || 
+              itemA.groupName === itemB.groupName;
+
+            if (isConflict) {
+              const colA = allCols.find(x => colKey(x) === itemA.colKey);
+              const colB = allCols.find(x => colKey(x) === itemB.colKey);
+              const roomAName = colA ? colA.room.num : itemA.colKey;
+              const roomBName = colB ? colB.room.num : itemB.colKey;
+
+              const descA = `Szkolny konflikt: ${itemA.display} przypisana równolegle do innej sali (${roomBName}) z ${itemB.display}`;
+              const descB = `Szkolny konflikt: ${itemB.display} przypisana równolegle do innej sali (${roomAName}) z ${itemA.display}`;
+
+              const keyInColA = `${h}|${itemA.colKey}`;
+              const existingA = detected.get(keyInColA) || [];
+              if (!existingA.includes(descA)) {
+                existingA.push(descA);
+                detected.set(keyInColA, existingA);
+              }
+              if (itemA.slotIdx !== undefined) {
+                const sKeyA = `${h}|${itemA.colKey}|${itemA.slotIdx}`;
+                const sExistingA = slotConflicts.get(sKeyA) || [];
+                if (!sExistingA.includes(descA)) {
+                  sExistingA.push(descA);
+                  slotConflicts.set(sKeyA, sExistingA);
+                }
+              }
+
+              const keyInColB = `${h}|${itemB.colKey}`;
+              const existingB = detected.get(keyInColB) || [];
+              if (!existingB.includes(descB)) {
+                existingB.push(descB);
+                detected.set(keyInColB, existingB);
+              }
+              if (itemB.slotIdx !== undefined) {
+                const sKeyB = `${h}|${itemB.colKey}|${itemB.slotIdx}`;
+                const sExistingB = slotConflicts.get(sKeyB) || [];
+                if (!sExistingB.includes(descB)) {
+                  sExistingB.push(descB);
+                  slotConflicts.set(sKeyB, sExistingB);
+                }
               }
             }
-          });
+          }
         }
-      }
+      });
     });
 
     // Phase 3: Local Room Conflicts (Duplicate teachers/classes in the single room at the same hour)
@@ -1397,8 +1540,40 @@ export default function PlanSal({
     const { hour, colKey: cKey, slotIdx } = editingCell;
     const yearKey = appState.yearKey;
 
-    const finalClasses = selectedClasses.map(c => c.trim().toUpperCase()).filter(Boolean);
+    const finalClasses = selectedClasses.map(c => c.trim()).filter(Boolean);
     const combinedClassName = finalClasses.join(' + ');
+
+    let resolvedClassId: string | undefined = undefined;
+    let resolvedGroupId: string | null = null;
+    let resolvedTeacherId: string | undefined = undefined;
+    let resolvedSubjectId: string | undefined = undefined;
+
+    if (finalClasses.length > 0) {
+      const parsed = parseClassWithGroup(finalClasses[0]);
+      if (parsed.length > 0) {
+        const p = parsed[0];
+        const foundClass = appState.planLekcji?.classes?.find(c => c.name.toUpperCase().trim() === p.baseClass.toUpperCase().trim());
+        if (foundClass) {
+          resolvedClassId = foundClass.id;
+          if (p.groupName) {
+            const foundGrp = appState.planLekcji?.schoolGroups?.find(g => g.classId === foundClass.id && g.name.toUpperCase().trim() === p.groupName?.toUpperCase().trim());
+            if (foundGrp) {
+              resolvedGroupId = foundGrp.id;
+            }
+          }
+        }
+      }
+    }
+
+    if (cellTeacher) {
+      const foundTeacher = appState.planLekcji?.teachers?.find(t => t.abbr?.toUpperCase().trim() === cellTeacher.toUpperCase().trim());
+      if (foundTeacher) resolvedTeacherId = foundTeacher.id;
+    }
+
+    if (cellSubject) {
+      const foundSub = appState.planLekcji?.subjects?.find(s => s.name.toUpperCase().trim() === cellSubject.toUpperCase().trim());
+      if (foundSub) resolvedSubjectId = foundSub.id;
+    }
 
     const newCell: SchedCell = {
       teacherAbbr: cellTeacher.trim().toUpperCase(),
@@ -1406,7 +1581,15 @@ export default function PlanSal({
       className: combinedClassName,
       classes: finalClasses,
       subject: cellSubject.trim(),
-      note: cellNote.trim()
+      note: cellNote.trim(),
+      _bridgeMeta: {
+        classId: resolvedClassId,
+        groupId: resolvedGroupId,
+        teacherId: resolvedTeacherId,
+        subjectId: resolvedSubjectId,
+        roomId: null,
+        suggestedRoom: null
+      }
     };
 
     const newSchedData = { ...schedData };
@@ -2323,20 +2506,41 @@ export default function PlanSal({
                                 copy[0] = val;
                                 setSelectedClasses(copy);
                                 setCellClass(val);
+
+                                // Auto-fill teacher and subject if a matching scheduled lesson is found
+                                const matched = hourLessons.find(l => l.className.toUpperCase() === val.toUpperCase());
+                                if (matched) {
+                                  if (matched.teacherAbbr) {
+                                    setCellTeacher(matched.teacherAbbr);
+                                    setIsCustomTeacher(false);
+                                  }
+                                  if (matched.suppTeacherAbbr) {
+                                    setCellSupportTeacher(matched.suppTeacherAbbr);
+                                    setIsCustomSupportTeacher(false);
+                                  }
+                                  if (matched.subject) {
+                                    setCellSubject(matched.subject);
+                                    setIsCustomSubject(false);
+                                  }
+                                }
                               }}
                               className="flex-1 px-3 py-2 border border-slate-200 bg-white rounded-lg text-xs outline-none focus:border-blue-500 cursor-pointer"
                             >
-                              <option value="">-- wybierz klasę --</option>
+                              <option value="">-- wybierz klasę / grupę --</option>
+                              {cls && !scheduledClasses.some(o => o.toUpperCase() === cls.toUpperCase()) &&
+                                      !allClassesAndGroupsOptions.some(o => o.toUpperCase() === cls.toUpperCase()) && (
+                                <option value={cls}>{cls}</option>
+                              )}
                               {scheduledClasses.length > 0 && (
-                                <optgroup label="Zaplanowane na tę godzinę">
+                                <optgroup label="Zaplanowane na tę godzinę (w tym grupy)">
                                   {scheduledClasses.map(clsName => (
                                     <option key={clsName} value={clsName}>{clsName}</option>
                                   ))}
                                 </optgroup>
                               )}
-                              <optgroup label="Wszystkie pozostałe klasy">
-                                {sortedClasses.map(c => (
-                                  <option key={c.id} value={c.name}>{c.name}</option>
+                              <optgroup label="Wszystkie klasy i grupy">
+                                {allClassesAndGroupsOptions.map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
                                 ))}
                               </optgroup>
                             </select>
@@ -2352,7 +2556,7 @@ export default function PlanSal({
                                   }}
                                   className="flex-1 px-3 py-2 border border-indigo-200 bg-white rounded-lg text-xs font-semibold text-indigo-900 outline-none focus:border-indigo-550 cursor-pointer"
                                 >
-                                  <option value="">-- wybierz kolejną klasę --</option>
+                                  <option value="">-- wybierz kolejną klasę / grupę --</option>
                                   {cls && !getScheduledOptionsForIndex(idx).some(o => o.toUpperCase() === cls.toUpperCase()) && 
                                           !getOtherOptionsForIndex(idx).some(o => o.toUpperCase() === cls.toUpperCase()) && (
                                     <option value={cls}>{cls}</option>
@@ -2367,7 +2571,7 @@ export default function PlanSal({
                                   )}
 
                                   {getOtherOptionsForIndex(idx).length > 0 && (
-                                    <optgroup label="Wszystkie pozostałe klasy">
+                                    <optgroup label="Wszystkie pozostałe klasy i grupy">
                                       {getOtherOptionsForIndex(idx).map(clsName => (
                                         <option key={clsName} value={clsName}>{clsName}</option>
                                       ))}
