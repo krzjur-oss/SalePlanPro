@@ -1248,28 +1248,29 @@ export default function PlanSal({
 
         // 1. Check if the classes in this room are part of combined/integrated groups in the timetable (zajęcia międzyoddziałowe)
         const teachersInThisRoom = slots.map(s => s?.teacherAbbr?.trim().toUpperCase()).filter(Boolean);
-        const classesInThisRoom: string[] = [];
+        const parsedClassesInThisRoom: { baseClass: string; groupName: string | null; display: string }[] = [];
         slots.forEach(s => {
           const classNames = s?.classes || (s?.className ? [s?.className] : []);
           classNames.forEach(cls => {
             if (cls?.trim()) {
-              const individualList = cls.split(/[\s,+/]+|(?:\bi\b)/i).map(c => c.trim().toUpperCase()).filter(Boolean);
-              classesInThisRoom.push(...individualList);
+              parsedClassesInThisRoom.push(...parseClassWithGroup(cls));
             }
           });
         });
 
-        const uniqueClasses = Array.from(new Set(classesInThisRoom));
+        const uniqueBaseClasses = Array.from(new Set(parsedClassesInThisRoom.map(p => p.baseClass)));
+        const uniqueDisplays = Array.from(new Set(parsedClassesInThisRoom.map(p => p.display)));
+        const uniqueClasses = uniqueBaseClasses;
 
         let classesAreCombined = false;
-        if (uniqueClasses.length > 1) {
+        if (uniqueBaseClasses.length > 1) {
           const hIdx = appState.planLekcji.hours.findIndex(hourObj => String(hourObj.num) === h);
           if (hIdx !== -1) {
-            const classObjs = uniqueClasses.map(name => 
+            const classObjs = uniqueBaseClasses.map(name => 
               appState.planLekcji.classes.find(c => c.name.toUpperCase().trim() === name.toUpperCase().trim())
             ).filter(Boolean);
 
-            if (classObjs.length === uniqueClasses.length) {
+            if (classObjs.length === uniqueBaseClasses.length) {
               const targetClassIds = new Set(classObjs.map(c => c.id));
               
               // Helper to get assignments of class at hour h on activeDay
@@ -1345,8 +1346,8 @@ export default function PlanSal({
             }
           }
 
-          if (uniqueClasses.length > 1 && !classesAreCombined) {
-            const desc = `Konflikt Sali: Dwie różne klasy (${uniqueClasses.join(', ')}) w tej samej sali w tym samym czasie!`;
+          if (uniqueBaseClasses.length > 1 && !classesAreCombined) {
+            const desc = `Konflikt Sali: Dwie różne klasy (${uniqueDisplays.join(', ')}) w tej samej sali w tym samym czasie!`;
             const existing = detected.get(keyInCol) || [];
             if (!existing.includes(desc)) {
               existing.push(desc);
@@ -1358,8 +1359,8 @@ export default function PlanSal({
           // Check if this room/building has strict single-class limit configured
           const hasSingleClassLimit = meta?.singleClassLimit === true || bld?.singleClassLimit === true;
 
-          if (hasSingleClassLimit && uniqueClasses.length > 1 && !classesAreCombined) {
-            const desc = `Limit sali sportowej: Obiekt ma ustawiony limit 1 klasy, a przypisano: ${uniqueClasses.join(', ')}`;
+          if (hasSingleClassLimit && uniqueBaseClasses.length > 1 && !classesAreCombined) {
+            const desc = `Limit sali sportowej: Obiekt ma ustawiony limit 1 klasy, a przypisano: ${uniqueDisplays.join(', ')}`;
             const existing = detected.get(keyInCol) || [];
             if (!existing.includes(desc)) {
               existing.push(desc);
@@ -1398,7 +1399,7 @@ export default function PlanSal({
           }
 
           const classCounts = new Map<string, number>();
-          classesInThisRoom.forEach(c => classCounts.set(c, (classCounts.get(c) || 0) + 1));
+          parsedClassesInThisRoom.forEach(p => classCounts.set(p.display, (classCounts.get(p.display) || 0) + 1));
 
           let duplicatedClass = '';
           classCounts.forEach((count, c) => {
@@ -1415,7 +1416,8 @@ export default function PlanSal({
 
             slots.forEach((s, slIdx) => {
               const sClasses = s?.classes || (s?.className ? [s?.className] : []);
-              if (sClasses.some(cls => cls?.trim().toUpperCase() === duplicatedClass)) {
+              const parsedS = sClasses.flatMap(c => parseClassWithGroup(c));
+              if (parsedS.some(p => p.display === duplicatedClass)) {
                 const sKey = `${h}|${cKey}|${slIdx}`;
                 const sExisting = slotConflicts.get(sKey) || [];
                 if (!sExisting.includes(desc)) {
