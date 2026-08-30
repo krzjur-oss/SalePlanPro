@@ -32,7 +32,7 @@ export default function Changelog() {
       changes: [
         { type: 'feature', text: 'Wprowadzono możliwość wstawiania wielu zajęć grupowych w tym samym oknie godzinowym (np. gr1 i gr2) dla tej samej klasy – każda grupa ma przypisanego swojego nauczyciela i salę.', badgeText: 'Grupy' },
         { type: 'feature', text: 'Dodano czytelne, kolorowe plakietki grup (np. "👥 gr1", "👥 gr2", "👥 chł", "👥 dz") wewnątrz kafelków lekcji w planie pojedynczym oraz w widoku wszystkich klas.', badgeText: 'Wizualizacja' },
-        { type: 'improvement', text: 'Zmodernizowano silnik detekcji kolizji – system nie zgłasza już fałszywego konfliktu dla różnych grup tej samej klasy odbywających lekcje w tej samej godzinie.', badgeText: 'Kolizje' },
+        { type: 'improvement', text: 'Zmodernizowano silnik detekcji kolizji – system nie zgłasza fałszywego konfliktu dla różnych grup tej samej klasy odbywających lekcje w tej samej godzinie, ani dla obiektów sportowych (hala, basen, sale gimnastyczne, orlik), na których może przebywać wiele grup/klas jednocześnie.', badgeText: 'Obiekty Sportowe' },
         { type: 'improvement', text: 'Dodano przycisk szybkiego wstawiania "+ Dodaj 2. grupę" w zajętych częściowo slotach godzinowych oraz pełne wsparcie dla przeciągania i pędzla.', badgeText: 'Ergonomia' },
         { type: 'improvement', text: 'Zsynchronizowano generowanie wydruków i transfer do Planu Sal (Etap 2) z pełną obsługą wielu grup na jednej godzinie lekcyjnej.', badgeText: 'Wydruki & Mostek' }
       ]

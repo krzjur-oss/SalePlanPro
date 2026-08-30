@@ -28,6 +28,17 @@ const PALETTE_COLORS = [
 
 const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
+export const isSportsFacility = (room: ClassRoom | undefined | null): boolean => {
+  if (!room) return false;
+  if (room.type === 'sport') return true;
+  const name = (room.name || '').toLowerCase().trim();
+  const desc = (room.desc || '').toLowerCase().trim();
+  const keywords = ['basen', 'hala', 'wf', 'gimn', 'sport', 'boisko', 'orlik', 'stadion', 'fitness', 'siłownia', 'silownia'];
+  if (keywords.some(kw => name.includes(kw) || desc.includes(kw))) return true;
+  if (name === 'sg' || name.startsWith('sg') || name.startsWith('sg_') || name.startsWith('sg-')) return true;
+  return false;
+};
+
 interface PlanKlasProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
@@ -381,7 +392,10 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
     roomSlots.forEach((list, rKey) => {
       if (list.length > 1) {
         const [roomId] = rKey.split('|');
-        const rName = roomsMap.get(roomId)?.name || 'Sala';
+        const room = roomsMap.get(roomId);
+        const rName = room?.name || 'Sala';
+        const isSport = isSportsFacility(room);
+        const hasSingleClassLimit = room?.singleClassLimit === true;
 
         list.forEach((item) => {
           const otherEntries = list.filter(x => {
@@ -390,6 +404,17 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
             const xL = pl.lessons[x.key];
             if (itemL && xL && itemL.assignmentId === xL.assignmentId) {
               return false; // same joint lesson assignment - NOT a room conflict!
+            }
+            // For sports facilities (gyms, sports halls, pools, etc.):
+            if (isSport) {
+              // If without strict single-class limit: multiple classes and multiple groups are allowed without conflict!
+              if (!hasSingleClassLimit) {
+                return false;
+              }
+              // If strict single-class limit is set: multiple groups of the SAME class are still allowed!
+              if (x.classId === item.classId) {
+                return false;
+              }
             }
             return true;
           });
@@ -406,7 +431,9 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
               return `kl. ${otherClass?.name || 'Inna'}${otherGroup ? ` (gr. ${otherGroup.name})` : ''}`;
             });
             const uniqueConflictLabels = Array.from(new Set(conflictLabels));
-            const desc = `Konflikt Sali: Sala ${rName} jest zajęta w tym samym czasie przez: ${uniqueConflictLabels.join(', ')}`;
+            const desc = isSport && hasSingleClassLimit
+              ? `Limit sali sportowej: Obiekt ${rName} ma limit 1 klasy, a przypisano także: ${uniqueConflictLabels.join(', ')}`
+              : `Konflikt Sali: Sala ${rName} jest zajęta w tym samym czasie przez: ${uniqueConflictLabels.join(', ')}`;
             const existing = detected.get(item.key) || [];
             if (!existing.includes(desc)) {
               existing.push(desc);
@@ -942,6 +969,8 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
     if (asg && asg.roomId) {
       const targetRoom = pl.rooms.find(r => r.id === asg.roomId);
       const roomName = targetRoom ? targetRoom.name : 'nieznanej';
+      const isSport = isSportsFacility(targetRoom);
+      const hasSingleClassLimit = targetRoom?.singleClassLimit === true;
 
       const conflictingLessons: { classId: string; assignmentId: string }[] = [];
       Object.entries(pl.lessons).forEach(([lessonKey, lessonVal]) => {
@@ -956,7 +985,16 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
             if (lessonVal.assignmentId !== assignId) {
               const otherAsg = pl.assignments.find(a => a.id === lessonVal.assignmentId);
               if (otherAsg && otherAsg.roomId === asg.roomId) {
-                conflictingLessons.push({ classId: cId, assignmentId: lessonVal.assignmentId });
+                // If it's a sports facility:
+                if (isSport) {
+                  // If singleClassLimit is true, only conflicting if from a different class
+                  if (hasSingleClassLimit && !allInvolved.includes(cId)) {
+                    conflictingLessons.push({ classId: cId, assignmentId: lessonVal.assignmentId });
+                  }
+                  // If !hasSingleClassLimit (default for sports facilities), multiple classes and groups are allowed without conflict!
+                } else {
+                  conflictingLessons.push({ classId: cId, assignmentId: lessonVal.assignmentId });
+                }
               }
             }
           }
@@ -976,7 +1014,9 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
         const uniqueOtherDesc = Array.from(new Set(otherDescriptions));
         const currentClassName = allInvolved.map(clsId => pl.classes.find(cls => cls.id === clsId)?.name || 'bieżąca klasa').join(' + ');
         notify(
-          `⚠️ Konflikt Sali: Próba przypisania sali ${roomName} dla ${currentClassName}, która w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęta przez: ${uniqueOtherDesc.join(', ')}!`,
+          isSport && hasSingleClassLimit
+            ? `⚠️ Limit obiektu sportowego: Obiekt ${roomName} ma ustawiony limit 1 klasy, a w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęty przez: ${uniqueOtherDesc.join(', ')}!`
+            : `⚠️ Konflikt Sali: Próba przypisania sali ${roomName} dla ${currentClassName}, która w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęta przez: ${uniqueOtherDesc.join(', ')}!`,
           'err'
         );
       }
