@@ -143,6 +143,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
   const teachersMap = useMemo(() => new Map(pl.teachers.map(t => [t.id, t])), [pl.teachers]);
   const subjectsMap = useMemo(() => new Map(pl.subjects.map(s => [s.id, s])), [pl.subjects]);
   const roomsMap = useMemo(() => new Map(pl.rooms.map(r => [r.id, r])), [pl.rooms]);
+  const groupsMap = useMemo(() => new Map((pl.schoolGroups || []).map(g => [g.id, g])), [pl.schoolGroups]);
 
   // Count placed hours per assignment (unique time slots day|hour per assignment so multi-class lessons count as 1h)
   const placedHours = useMemo(() => {
@@ -212,21 +213,27 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
       return placed < a.hoursPerWeek;
     });
 
-    // Check if there is an empty slot on this day
+    // Check if there is an empty slot on this day (where no lessons at all are placed)
     const hours = pl.hours && pl.hours.length > 0 ? pl.hours : [];
     const hasEmptySlot = hours.some((_, hourIndex) => {
-      const key = `${classId}|${dayIndex}|${hourIndex}`;
-      return !pl.lessons[key];
+      const matchingKeys = Object.keys(pl.lessons).filter(k => {
+        const p = k.split('|');
+        return p[0] === classId && parseInt(p[1], 10) === dayIndex && parseInt(p[2], 10) === hourIndex;
+      });
+      return matchingKeys.length === 0;
     });
 
     // Check if there are scheduled blocks on this day with NO teacher or NO room
     const hasIncompleteScheduled = hours.some((_, hourIndex) => {
-      const key = `${classId}|${dayIndex}|${hourIndex}`;
-      const lesson = pl.lessons[key];
-      if (!lesson) return false;
-      const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-      if (!asg) return false;
-      return !asg.teacherId || !asg.roomId;
+      const matching = Object.entries(pl.lessons).filter(([k]) => {
+        const p = k.split('|');
+        return p[0] === classId && parseInt(p[1], 10) === dayIndex && parseInt(p[2], 10) === hourIndex;
+      });
+      return matching.some(([, lesson]) => {
+        const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+        if (!asg) return false;
+        return !asg.teacherId || !asg.roomId;
+      });
     });
 
     return (hasAnyUnplacedWeekly && hasEmptySlot) || hasIncompleteScheduled;
@@ -328,15 +335,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
       }
     });
 
-    // Check teacher conflicts (same teacher assigned to multiple classes/lessons at the same time)
+    // Check teacher conflicts (same teacher assigned to multiple classes/groups at the same time)
     teacherSlots.forEach((list, tKey) => {
       if (list.length > 1) {
-        const [teacherId, day, hour] = tKey.split('|');
+        const [teacherId] = tKey.split('|');
         const teacher = teachersMap.get(teacherId);
         const tName = teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nauczyciel';
 
         list.forEach((item) => {
-          // Find other lessons at this slot
+          // Find other lessons at this slot with different assignment
           const otherItems = list.filter(x => {
             if (x.key === item.key) return false;
             const itemL = pl.lessons[item.key];
@@ -349,8 +356,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
           if (otherItems.length > 0) {
             const descriptions = otherItems.map(oi => {
               const otherClassName = classesMap.get(oi.classId)?.name || 'Inna klasa';
+              const otherLesson = pl.lessons[oi.key];
+              const otherAsg = otherLesson ? pl.assignments.find(a => a.id === otherLesson.assignmentId) : null;
+              const otherGroup = otherAsg?.groupId ? pl.schoolGroups?.find(g => g.id === otherAsg.groupId) : null;
               const roleName = oi.role === 'wspomagający' ? 'wspomagający' : 'prowadzący';
-              return `${roleName} w kl. ${otherClassName}`;
+              
+              if (oi.classId === item.classId) {
+                return `${roleName} w innej grupie (${otherGroup?.name || 'inna gr.'})`;
+              }
+              return `${roleName} w kl. ${otherClassName}${otherGroup ? ` (gr. ${otherGroup.name})` : ''}`;
             });
             const desc = `Konflikt Nauczyciela: ${tName} jest zajęty równolegle (${descriptions.join(', ')})`;
             const existing = detected.get(item.key) || [];
@@ -363,28 +377,36 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
       }
     });
 
-    // Check room conflicts (same room assigned to multiple classes/lessons at the same time)
+    // Check room conflicts (same room assigned to multiple classes/groups at the same time)
     roomSlots.forEach((list, rKey) => {
       if (list.length > 1) {
-        const [roomId, day, hour] = rKey.split('|');
+        const [roomId] = rKey.split('|');
         const rName = roomsMap.get(roomId)?.name || 'Sala';
 
         list.forEach((item) => {
-          const otherClasses = list
-            .filter(x => {
-              if (x.classId === item.classId) return false;
-              const itemL = pl.lessons[item.key];
-              const xL = pl.lessons[x.key];
-              if (itemL && xL && itemL.assignmentId === xL.assignmentId) {
-                return false; // same joint lesson assignment - NOT a room conflict!
+          const otherEntries = list.filter(x => {
+            if (x.key === item.key) return false;
+            const itemL = pl.lessons[item.key];
+            const xL = pl.lessons[x.key];
+            if (itemL && xL && itemL.assignmentId === xL.assignmentId) {
+              return false; // same joint lesson assignment - NOT a room conflict!
+            }
+            return true;
+          });
+
+          if (otherEntries.length > 0) {
+            const conflictLabels = otherEntries.map(oi => {
+              const otherClass = classesMap.get(oi.classId);
+              const otherLesson = pl.lessons[oi.key];
+              const otherAsg = otherLesson ? pl.assignments.find(a => a.id === otherLesson.assignmentId) : null;
+              const otherGroup = otherAsg?.groupId ? pl.schoolGroups?.find(g => g.id === otherAsg.groupId) : null;
+              if (oi.classId === item.classId) {
+                return `inna grupa tej klasy (${otherGroup?.name || 'inna gr.'})`;
               }
-              return true;
-            })
-            .map(x => classesMap.get(x.classId)?.name || 'Inna klasa');
-          
-          const uniqueOtherClasses = Array.from(new Set(otherClasses));
-          if (uniqueOtherClasses.length > 0) {
-            const desc = `Konflikt Sali: Sala ${rName} jest zajęta w tym samym czasie przez klasy: ${uniqueOtherClasses.join(', ')}`;
+              return `kl. ${otherClass?.name || 'Inna'}${otherGroup ? ` (gr. ${otherGroup.name})` : ''}`;
+            });
+            const uniqueConflictLabels = Array.from(new Set(conflictLabels));
+            const desc = `Konflikt Sali: Sala ${rName} jest zajęta w tym samym czasie przez: ${uniqueConflictLabels.join(', ')}`;
             const existing = detected.get(item.key) || [];
             if (!existing.includes(desc)) {
               existing.push(desc);
@@ -396,7 +418,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
     });
 
     return detected;
-  }, [pl.lessons, pl.assignments, teachersMap, roomsMap, classesMap]);
+  }, [pl.lessons, pl.assignments, pl.schoolGroups, teachersMap, roomsMap, classesMap]);
 
   // ── HANDLERS ──
 
@@ -847,6 +869,45 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
     }
   };
 
+  const getGroupBadgeColor = (groupName?: string) => {
+    const g = (groupName || '').toLowerCase();
+    if (g.includes('1') || g.includes('a') || g.includes('chł')) return 'bg-blue-100 text-blue-800 border-blue-200';
+    if (g.includes('2') || g.includes('b') || g.includes('dz')) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    if (g.includes('3') || g.includes('c')) return 'bg-amber-100 text-amber-800 border-amber-200';
+    return 'bg-purple-100 text-purple-800 border-purple-200';
+  };
+
+  const getSlotLessons = (classId: string, dayIndex: number, hourIndex: number) => {
+    const matching = Object.entries(pl.lessons).filter(([k]) => {
+      const p = k.split('|');
+      return p[0] === classId && parseInt(p[1], 10) === dayIndex && parseInt(p[2], 10) === hourIndex;
+    });
+
+    return matching.map(([key, lesson]) => {
+      const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+      const subj = asg ? subjectsMap.get(asg.subjectId) : null;
+      const teacher = asg && asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+      const room = asg && asg.roomId ? roomsMap.get(asg.roomId) : null;
+      const group = asg && asg.groupId ? (pl.schoolGroups?.find(g => g.id === asg.groupId) || null) : null;
+      const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
+      const confReasons = conflicts.get(key) || [];
+      const isConf = confReasons.length > 0;
+
+      return {
+        key,
+        lesson,
+        asg,
+        subj,
+        teacher,
+        room,
+        group,
+        suppTeacher,
+        confReasons,
+        isConf
+      };
+    }).filter((item): item is typeof item & { asg: Assignment } => !!item.asg);
+  };
+
   const placeAssignmentOnCell = (assignId: string, day: number, hour: number, targetClassId?: string) => {
     const classIdToUse = targetClassId || activeClassId;
     if (!assignId || !classIdToUse) return;
@@ -891,8 +952,8 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
           const h = parseInt(parts[2], 10);
 
           if (d === day && h === hour) {
-            // Check if it's NOT in our newly assigned classes, and has a different assignment ID
-            if (!allInvolved.includes(cId) && lessonVal.assignmentId !== assignId) {
+            // Check if it has a different assignment ID
+            if (lessonVal.assignmentId !== assignId) {
               const otherAsg = pl.assignments.find(a => a.id === lessonVal.assignmentId);
               if (otherAsg && otherAsg.roomId === asg.roomId) {
                 conflictingLessons.push({ classId: cId, assignmentId: lessonVal.assignmentId });
@@ -903,25 +964,60 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
       });
 
       if (conflictingLessons.length > 0) {
-        const otherClassNames = Array.from(new Set(conflictingLessons.map(cl => {
+        const otherDescriptions = conflictingLessons.map(cl => {
           const c = pl.classes.find(cls => cls.id === cl.classId);
-          return c ? c.name : 'inna klasa';
-        })));
+          const oAsg = pl.assignments.find(a => a.id === cl.assignmentId);
+          const oGroup = oAsg?.groupId ? pl.schoolGroups?.find(g => g.id === oAsg.groupId) : null;
+          if (allInvolved.includes(cl.classId)) {
+            return `inna grupa tej klasy (${oGroup?.name || 'inna gr.'})`;
+          }
+          return `kl. ${c ? c.name : 'inna klasa'}${oGroup ? ` (gr. ${oGroup.name})` : ''}`;
+        });
+        const uniqueOtherDesc = Array.from(new Set(otherDescriptions));
         const currentClassName = allInvolved.map(clsId => pl.classes.find(cls => cls.id === clsId)?.name || 'bieżąca klasa').join(' + ');
         notify(
-          `⚠️ Konflikt Sali: Próba przypisania sali ${roomName} dla ${currentClassName}, która w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęta przez klasy: ${otherClassNames.join(', ')}!`,
+          `⚠️ Konflikt Sali: Próba przypisania sali ${roomName} dla ${currentClassName}, która w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęta przez: ${uniqueOtherDesc.join(', ')}!`,
           'err'
         );
       }
     }
 
     allInvolved.forEach(clsId => {
-      const lessonKey = `${clsId}|${day}|${hour}`;
-      updatedLessons[lessonKey] = {
-        assignmentId: assignId,
-        locked: false,
-        supportTeacherId: defaultSupportTeacherId
-      };
+      // Find all existing lesson keys for this slot
+      const existingSlotKeys = Object.keys(updatedLessons).filter(k => {
+        const p = k.split('|');
+        return p[0] === clsId && parseInt(p[1], 10) === day && parseInt(p[2], 10) === hour;
+      });
+
+      if (asg && asg.groupId) {
+        // Group lesson: remove whole-class lesson or lesson of the exact same group
+        existingSlotKeys.forEach(exKey => {
+          const exLesson = updatedLessons[exKey];
+          const exAsg = exLesson ? pl.assignments.find(a => a.id === exLesson.assignmentId) : null;
+          if (!exAsg || !exAsg.groupId || exAsg.groupId === asg.groupId) {
+            delete updatedLessons[exKey];
+          }
+        });
+
+        const targetKey = `${clsId}|${day}|${hour}|${asg.groupId}`;
+        updatedLessons[targetKey] = {
+          assignmentId: assignId,
+          locked: false,
+          supportTeacherId: defaultSupportTeacherId
+        };
+      } else {
+        // Whole class lesson: replace all lessons in this slot
+        existingSlotKeys.forEach(exKey => {
+          delete updatedLessons[exKey];
+        });
+
+        const targetKey = `${clsId}|${day}|${hour}`;
+        updatedLessons[targetKey] = {
+          assignmentId: assignId,
+          locked: false,
+          supportTeacherId: defaultSupportTeacherId
+        };
+      }
     });
 
     const updatedPL = {
@@ -1068,7 +1164,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
           const hour = parts[2];
           const allInvolved = [asg.classId, ...asg.linkedClassIds];
           allInvolved.forEach(clsId => {
-            const k = `${clsId}|${day}|${hour}`;
+            const k = asg.groupId ? `${clsId}|${day}|${hour}|${asg.groupId}` : `${clsId}|${day}|${hour}`;
             delete updatedLessons[k];
           });
         }
@@ -1518,21 +1614,16 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                         {/* Godziny lekcyjne w wybranym dniu */}
                         {pl.hours.map((_, hourIndex) => {
                           const dayIndex = activeDayIndex;
-                          const key = `${cls.id}|${dayIndex}|${hourIndex}`;
-                          const lesson = pl.lessons[key];
-                          const asg = lesson ? pl.assignments.find(a => a.id === lesson.assignmentId) : null;
-                          const subj = asg ? subjectsMap.get(asg.subjectId) : null;
-                          const teacher = asg && asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                          const room = asg && asg.roomId ? roomsMap.get(asg.roomId) : null;
-                          const confReasons = conflicts.get(key) || [];
-                          const isConf = confReasons.length > 0;
+                          const slotItems = getSlotLessons(cls.id, dayIndex, hourIndex);
+                          const anyConf = slotItems.some(it => it.isConf);
+                          const allConfReasons = Array.from(new Set(slotItems.flatMap(it => it.confReasons)));
 
                           return (
                             <td 
                               key={hourIndex}
-                              title={isConf ? confReasons.join('\n') : undefined}
-                              className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top h-28 transition-all ${
-                                isConf ? 'bg-red-50/70 border-2 border-red-300' : ''
+                              title={anyConf ? allConfReasons.join('\n') : undefined}
+                              className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-28 transition-all ${
+                                anyConf ? 'bg-red-50/70 border-2 border-red-300' : ''
                               }`}
                               data-cell-type="plan-cell"
                               data-day={dayIndex}
@@ -1541,162 +1632,191 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                               onDragOver={(e) => e.preventDefault()}
                               onDrop={() => handleDropOnCell(dayIndex, hourIndex, cls.id)}
                             >
-                              {asg ? (() => {
-                                const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
-                                const specStudentsInThisClassAndSubj = pl.specialStudents.filter(ss => {
-                                  if (ss.classId !== cls.id) return false;
-                                  return pl.specialAssignments.some(sa => sa.studentId === ss.id && sa.subjectId === asg.subjectId && sa.withClass);
-                                });
+                              {slotItems.length > 0 ? (
+                                <div className="flex flex-col gap-1.5 h-full">
+                                  {slotItems.map(({ key, lesson, asg, subj, teacher, room, group, suppTeacher, confReasons, isConf }) => {
+                                    const specStudentsInThisClassAndSubj = pl.specialStudents.filter(ss => {
+                                      if (ss.classId !== cls.id) return false;
+                                      return pl.specialAssignments.some(sa => sa.studentId === ss.id && sa.subjectId === asg.subjectId && sa.withClass);
+                                    });
 
-                                return (
-                                  <div 
-                                    onClick={() => {
-                                      if (selectedAssignmentId) {
-                                        placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex, cls.id);
-                                      } else {
-                                        setAllViewSelectedClassId(cls.id);
-                                      }
-                                    }}
-                                    draggable={!isTouchDevice}
-                                    onDragStart={(e) => {
-                                      if (isTouchDevice) {
-                                        e.preventDefault();
-                                        return;
-                                      }
-                                      handleDragStart(asg.id, key);
-                                    }}
-                                    onTouchStart={(e) => handleTouchStart(e, asg.id, key)}
-                                    onTouchMove={(e) => handleTouchMove(e, asg.id)}
-                                    onTouchEnd={handleTouchEnd}
-                                    onContextMenu={(e) => e.preventDefault()}
-                                    className={`h-full min-h-[90px] rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
-                                      selectedAssignmentId 
-                                        ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
-                                        : 'hover:shadow-md'
-                                    } ${
-                                      isConf 
-                                        ? 'border-red-600 bg-red-50 text-red-900 shadow-sm'
-                                        : 'bg-white shadow-sm'
-                                    }`}
-                                    style={{
-                                      ...(isConf ? {} : { borderLeftColor: subj?.color || '#cbd5e1' }),
-                                      WebkitTouchCallout: 'none',
-                                      WebkitUserSelect: 'none',
-                                      KhtmlUserSelect: 'none',
-                                      MozUserSelect: 'none',
-                                      msUserSelect: 'none',
-                                      userSelect: 'none',
-                                      WebkitUserDrag: 'none'
-                                    }}
-                                  >
-                                    <div>
-                                      <div className="flex items-center justify-between gap-1">
-                                        <span className="text-xs font-bold truncate" style={isConf ? {} : { color: subj?.color }}>
-                                          {subj?.name}
-                                        </span>
-                                        <button 
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleRemoveLesson(key);
-                                          }}
-                                          onTouchStart={(e) => e.stopPropagation()}
-                                          onTouchEnd={(e) => {
-                                            e.stopPropagation();
-                                            handleRemoveLesson(key);
-                                          }}
-                                          className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-6 h-6 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer"
-                                          title="Usuń lekcję z siatki"
-                                        >
-                                          ✕
-                                        </button>
-                                      </div>
-                                      <div className={`text-[10px] mt-0.5 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
-                                        👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
-                                      </div>
-
-                                      {suppTeacher && (
-                                        <div className="text-[10px] text-indigo-700 font-bold mt-1 truncate">
-                                          👥 Wspomaganie: {suppTeacher.first} {suppTeacher.last} ({suppTeacher.abbr})
-                                        </div>
-                                      )}
-
-                                      {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
-                                        <div className="text-[9px] text-indigo-850 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1 font-bold truncate flex items-center gap-0.5" title="Zajęcia łączone (grupa międzyoddziałowa)">
-                                          🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== cls.name).join(' + ')}
-                                        </div>
-                                      )}
-
-                                      {/* Specjalni uczniowie */}
-                                      {specStudentsInThisClassAndSubj.length > 0 && (
-                                        <div className="mt-1.5 flex flex-wrap gap-1">
-                                          {specStudentsInThisClassAndSubj.map(ss => {
-                                            const typeLabel = ss.type === 'ni' ? 'NI' : ss.type === 'rewa' ? 'Rewa' : 'Wsp';
-                                            return (
-                                              <span 
-                                                key={ss.id} 
-                                                className="text-[9px] font-bold px-1 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded flex items-center gap-0.5"
-                                                title={`${ss.firstName} ${ss.lastName} (${typeLabel}) - ma zajęcia z klasą`}
-                                              >
-                                                🎓 {ss.lastName} {ss.firstName[0]}. ({typeLabel})
-                                              </span>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-
-                                      {/* Wybór nauczyciela wspomagającego */}
+                                    return (
                                       <div 
-                                        className="mt-1.5 pt-1 border-t border-slate-100" 
-                                        onClick={(e) => e.stopPropagation()}
-                                        onTouchStart={(e) => e.stopPropagation()}
-                                        onTouchEnd={(e) => e.stopPropagation()}
+                                        key={key}
+                                        onClick={() => {
+                                          if (selectedAssignmentId) {
+                                            placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex, cls.id);
+                                          } else {
+                                            setAllViewSelectedClassId(cls.id);
+                                          }
+                                        }}
+                                        draggable={!isTouchDevice}
+                                        onDragStart={(e) => {
+                                          if (isTouchDevice) {
+                                            e.preventDefault();
+                                            return;
+                                          }
+                                          handleDragStart(asg.id, key);
+                                        }}
+                                        onTouchStart={(e) => handleTouchStart(e, asg.id, key)}
+                                        onTouchMove={(e) => handleTouchMove(e, asg.id)}
+                                        onTouchEnd={handleTouchEnd}
+                                        onContextMenu={(e) => e.preventDefault()}
+                                        className={`rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
+                                          selectedAssignmentId 
+                                            ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
+                                            : 'hover:shadow-md'
+                                        } ${
+                                          isConf 
+                                            ? 'border-red-600 bg-red-50 text-red-900 shadow-sm'
+                                            : 'bg-white shadow-sm'
+                                        }`}
+                                        style={{
+                                          ...(isConf ? {} : { borderLeftColor: subj?.color || '#cbd5e1' }),
+                                          WebkitTouchCallout: 'none',
+                                          WebkitUserSelect: 'none',
+                                          KhtmlUserSelect: 'none',
+                                          MozUserSelect: 'none',
+                                          msUserSelect: 'none',
+                                          userSelect: 'none',
+                                          WebkitUserDrag: 'none'
+                                        }}
                                       >
-                                        <select
-                                          title="Nauczyciel wspomagający"
-                                          className={`w-full text-[9px] font-semibold border rounded px-1.5 py-0.5 outline-none transition cursor-pointer ${
-                                            lesson.supportTeacherId 
-                                              ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-bold' 
-                                              : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
-                                          }`}
-                                          value={lesson.supportTeacherId || ''}
-                                          onChange={(e) => {
-                                            const val = e.target.value || null;
-                                            const updatedLessons = { ...pl.lessons };
-                                            updatedLessons[key] = {
-                                              ...updatedLessons[key],
-                                              supportTeacherId: val
-                                            };
-                                            onChangeAppState({
-                                              ...appState,
-                                              planLekcji: {
-                                                ...pl,
-                                                lessons: updatedLessons
-                                              }
-                                            });
-                                          }}
-                                        >
-                                          <option value="">👥 Dodaj wspomagającego...</option>
-                                          {pl.teachers.map(t => (
-                                            <option key={t.id} value={t.id}>
-                                              Wspomaga: {t.first[0]}. {t.last} ({t.abbr})
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </div>
+                                        <div>
+                                          <div className="flex items-start justify-between gap-1">
+                                            <div className="flex flex-col min-w-0">
+                                              {group && (
+                                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border inline-flex items-center gap-1 w-fit mb-0.5 ${getGroupBadgeColor(group.name)}`}>
+                                                  👥 {group.name}
+                                                </span>
+                                              )}
+                                              <span className="text-xs font-bold truncate leading-tight" style={isConf ? {} : { color: subj?.color }}>
+                                                {subj?.name}
+                                              </span>
+                                            </div>
+                                            <button 
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveLesson(key);
+                                              }}
+                                              onTouchStart={(e) => e.stopPropagation()}
+                                              onTouchEnd={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveLesson(key);
+                                              }}
+                                              className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer shrink-0"
+                                              title="Usuń tę lekcję z siatki"
+                                            >
+                                              ✕
+                                            </button>
+                                          </div>
+                                          <div className={`text-[10px] mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
+                                            👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
+                                          </div>
 
-                                      {isConf && (
-                                        <div className="text-[9px] text-red-600 font-bold bg-white/80 border border-red-200 p-1 rounded font-sans leading-tight mt-1 animate-pulse">
-                                          {confReasons[0]}
+                                          {suppTeacher && (
+                                            <div className="text-[10px] text-indigo-700 font-bold mt-0.5 truncate">
+                                              👥 Wspomaganie: {suppTeacher.first} {suppTeacher.last} ({suppTeacher.abbr})
+                                            </div>
+                                          )}
+
+                                          {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
+                                            <div className="text-[9px] text-indigo-850 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1 font-bold truncate flex items-center gap-0.5" title="Zajęcia łączone (grupa międzyoddziałowa)">
+                                              🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== cls.name).join(' + ')}
+                                            </div>
+                                          )}
+
+                                          {/* Specjalni uczniowie */}
+                                          {specStudentsInThisClassAndSubj.length > 0 && (
+                                            <div className="mt-1 flex flex-wrap gap-1">
+                                              {specStudentsInThisClassAndSubj.map(ss => {
+                                                const typeLabel = ss.type === 'ni' ? 'NI' : ss.type === 'rewa' ? 'Rewa' : 'Wsp';
+                                                return (
+                                                  <span 
+                                                    key={ss.id} 
+                                                    className="text-[9px] font-bold px-1 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded flex items-center gap-0.5"
+                                                    title={`${ss.firstName} ${ss.lastName} (${typeLabel}) - ma zajęcia z klasą`}
+                                                  >
+                                                    🎓 {ss.lastName} {ss.firstName[0]}. ({typeLabel})
+                                                  </span>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+
+                                          {/* Wybór nauczyciela wspomagającego */}
+                                          <div 
+                                            className="mt-1 pt-1 border-t border-slate-100" 
+                                            onClick={(e) => e.stopPropagation()}
+                                            onTouchStart={(e) => e.stopPropagation()}
+                                            onTouchEnd={(e) => e.stopPropagation()}
+                                          >
+                                            <select
+                                              title="Nauczyciel wspomagający"
+                                              className={`w-full text-[9px] font-semibold border rounded px-1.5 py-0.5 outline-none transition cursor-pointer ${
+                                                lesson.supportTeacherId 
+                                                  ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-bold' 
+                                                  : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                                              }`}
+                                              value={lesson.supportTeacherId || ''}
+                                              onChange={(e) => {
+                                                const val = e.target.value || null;
+                                                const updatedLessons = { ...pl.lessons };
+                                                updatedLessons[key] = {
+                                                  ...updatedLessons[key],
+                                                  supportTeacherId: val
+                                                };
+                                                onChangeAppState({
+                                                  ...appState,
+                                                  planLekcji: {
+                                                    ...pl,
+                                                    lessons: updatedLessons
+                                                  }
+                                                });
+                                              }}
+                                            >
+                                              <option value="">👥 Dodaj wspomagającego...</option>
+                                              {pl.teachers.map(t => (
+                                                <option key={t.id} value={t.id}>
+                                                  Wspomaga: {t.first[0]}. {t.last} ({t.abbr})
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+
+                                          {isConf && (
+                                            <div className="text-[9px] text-red-600 font-bold bg-white/80 border border-red-200 p-1 rounded font-sans leading-tight mt-1 animate-pulse">
+                                              {confReasons[0]}
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
+                                        <div className="flex items-center justify-between text-[9px] text-slate-400 mt-1.5 font-mono">
+                                          <span className={isConf ? 'text-red-700 font-bold' : ''}>🚪 {room ? room.name : 'Bez sali'}</span>
+                                          {isConf && <span className="text-red-600 font-black tracking-tighter">⚠️ KOLIZJA</span>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+
+                                  {slotItems.length === 1 && slotItems[0].asg.groupId && (
+                                    <div
+                                      onClick={() => {
+                                        if (selectedAssignmentId) {
+                                          placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex, cls.id);
+                                        }
+                                      }}
+                                      className={`border border-dashed rounded p-1 text-[9px] font-bold flex items-center justify-center gap-1 transition select-none ${
+                                        selectedAssignmentId
+                                          ? 'border-indigo-300 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 cursor-pointer animate-pulse'
+                                          : 'border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-slate-50 cursor-pointer'
+                                      }`}
+                                      title="Możesz wstawić drugą grupę (np. gr2) na tę samą godzinę lekcyjną"
+                                    >
+                                      <span>+ Dodaj 2. grupę</span>
                                     </div>
-                                    <div className="flex items-center justify-between text-[9px] text-slate-400 mt-2 font-mono">
-                                      <span className={isConf ? 'text-red-700 font-bold' : ''}>🚪 {room ? room.name : 'Bez sali'}</span>
-                                      {isConf && <span className="text-red-600 font-black tracking-tighter">⚠️ KOLIZJA</span>}
-                                    </div>
-                                  </div>
-                                );
-                              })() : (
+                                  )}
+                                </div>
+                              ) : (
                                 <div 
                                   onClick={() => {
                                     if (selectedAssignmentId) {
@@ -1752,21 +1872,16 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                           </td>
                           {/* Dni */}
                           {DAYS.map((_, dayIndex) => {
-                            const key = `${activeClassId}|${dayIndex}|${hourIndex}`;
-                            const lesson = pl.lessons[key];
-                            const asg = lesson ? pl.assignments.find(a => a.id === lesson.assignmentId) : null;
-                            const subj = asg ? subjectsMap.get(asg.subjectId) : null;
-                            const teacher = asg && asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                            const room = asg && asg.roomId ? roomsMap.get(asg.roomId) : null;
-                            const confReasons = conflicts.get(key) || [];
-                            const isConf = confReasons.length > 0;
+                            const slotItems = getSlotLessons(activeClassId, dayIndex, hourIndex);
+                            const anyConf = slotItems.some(it => it.isConf);
+                            const allConfReasons = Array.from(new Set(slotItems.flatMap(it => it.confReasons)));
 
                             return (
                               <td 
                                 key={dayIndex}
-                                title={isConf ? confReasons.join('\n') : undefined}
-                                className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top h-28 transition-all ${
-                                  isConf ? 'bg-red-50/70 border-2 border-red-300' : ''
+                                title={anyConf ? allConfReasons.join('\n') : undefined}
+                                className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-28 transition-all ${
+                                  anyConf ? 'bg-red-50/70 border-2 border-red-300' : ''
                                 }`}
                                 data-cell-type="plan-cell"
                                 data-day={dayIndex}
@@ -1775,160 +1890,189 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={() => handleDropOnCell(dayIndex, hourIndex)}
                               >
-                                {asg ? (() => {
-                                  const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
-                                  const specStudentsInThisClassAndSubj = pl.specialStudents.filter(ss => {
-                                    if (ss.classId !== activeClassId) return false;
-                                    return pl.specialAssignments.some(sa => sa.studentId === ss.id && sa.subjectId === asg.subjectId && sa.withClass);
-                                  });
+                                {slotItems.length > 0 ? (
+                                  <div className="flex flex-col gap-1.5 h-full">
+                                    {slotItems.map(({ key, lesson, asg, subj, teacher, room, group, suppTeacher, confReasons, isConf }) => {
+                                      const specStudentsInThisClassAndSubj = pl.specialStudents.filter(ss => {
+                                        if (ss.classId !== activeClassId) return false;
+                                        return pl.specialAssignments.some(sa => sa.studentId === ss.id && sa.subjectId === asg.subjectId && sa.withClass);
+                                      });
 
-                                  return (
-                                    <div 
-                                      onClick={() => {
-                                        if (selectedAssignmentId) {
-                                          placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
-                                        }
-                                      }}
-                                      draggable={!isTouchDevice}
-                                      onDragStart={(e) => {
-                                        if (isTouchDevice) {
-                                          e.preventDefault();
-                                          return;
-                                        }
-                                        handleDragStart(asg.id, key);
-                                      }}
-                                      onTouchStart={(e) => handleTouchStart(e, asg.id, key)}
-                                      onTouchMove={(e) => handleTouchMove(e, asg.id)}
-                                      onTouchEnd={handleTouchEnd}
-                                      onContextMenu={(e) => e.preventDefault()}
-                                      className={`h-full min-h-[90px] rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
-                                        selectedAssignmentId 
-                                          ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
-                                          : 'hover:shadow-md'
-                                      } ${
-                                        isConf 
-                                          ? 'border-red-600 bg-red-50 text-red-900 shadow-sm'
-                                          : 'bg-white shadow-sm'
-                                      }`}
-                                      style={{
-                                        ...(isConf ? {} : { borderLeftColor: subj?.color || '#cbd5e1' }),
-                                        WebkitTouchCallout: 'none',
-                                        WebkitUserSelect: 'none',
-                                        KhtmlUserSelect: 'none',
-                                        MozUserSelect: 'none',
-                                        msUserSelect: 'none',
-                                        userSelect: 'none',
-                                        WebkitUserDrag: 'none'
-                                      }}
-                                    >
-                                      <div>
-                                        <div className="flex items-center justify-between gap-1">
-                                          <span className="text-xs font-bold truncate" style={isConf ? {} : { color: subj?.color }}>
-                                            {subj?.name}
-                                          </span>
-                                          <button 
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleRemoveLesson(key);
-                                            }}
-                                            onTouchStart={(e) => e.stopPropagation()}
-                                            onTouchEnd={(e) => {
-                                              e.stopPropagation();
-                                              handleRemoveLesson(key);
-                                            }}
-                                            className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-6 h-6 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer"
-                                            title="Usuń lekcję z siatki"
-                                          >
-                                            ✕
-                                          </button>
-                                        </div>
-                                        <div className={`text-[10px] mt-0.5 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
-                                          👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
-                                        </div>
-
-                                        {suppTeacher && (
-                                          <div className="text-[10px] text-indigo-700 font-bold mt-1 truncate">
-                                            👥 Wspomaganie: {suppTeacher.first} {suppTeacher.last} ({suppTeacher.abbr})
-                                          </div>
-                                        )}
-
-                                        {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
-                                          <div className="text-[9px] text-indigo-850 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1 font-bold truncate flex items-center gap-0.5" title="Zajęcia łączone (grupa międzyoddziałowa)">
-                                            🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== currentClass?.name).join(' + ')}
-                                          </div>
-                                        )}
-
-                                        {/* Specjalni uczniowie */}
-                                        {specStudentsInThisClassAndSubj.length > 0 && (
-                                          <div className="mt-1.5 flex flex-wrap gap-1">
-                                            {specStudentsInThisClassAndSubj.map(ss => {
-                                              const typeLabel = ss.type === 'ni' ? 'NI' : ss.type === 'rewa' ? 'Rewa' : 'Wsp';
-                                              return (
-                                                <span 
-                                                  key={ss.id} 
-                                                  className="text-[9px] font-bold px-1 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded flex items-center gap-0.5"
-                                                  title={`${ss.firstName} ${ss.lastName} (${typeLabel}) - ma zajęcia z klasą`}
-                                                >
-                                                  🎓 {ss.lastName} {ss.firstName[0]}. ({typeLabel})
-                                                </span>
-                                              );
-                                            })}
-                                          </div>
-                                        )}
-
-                                        {/* Wybór nauczyciela wspomagającego */}
+                                      return (
                                         <div 
-                                          className="mt-1.5 pt-1 border-t border-slate-100" 
-                                          onClick={(e) => e.stopPropagation()}
-                                          onTouchStart={(e) => e.stopPropagation()}
-                                          onTouchEnd={(e) => e.stopPropagation()}
+                                          key={key}
+                                          onClick={() => {
+                                            if (selectedAssignmentId) {
+                                              placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                            }
+                                          }}
+                                          draggable={!isTouchDevice}
+                                          onDragStart={(e) => {
+                                            if (isTouchDevice) {
+                                              e.preventDefault();
+                                              return;
+                                            }
+                                            handleDragStart(asg.id, key);
+                                          }}
+                                          onTouchStart={(e) => handleTouchStart(e, asg.id, key)}
+                                          onTouchMove={(e) => handleTouchMove(e, asg.id)}
+                                          onTouchEnd={handleTouchEnd}
+                                          onContextMenu={(e) => e.preventDefault()}
+                                          className={`rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
+                                            selectedAssignmentId 
+                                              ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
+                                              : 'hover:shadow-md'
+                                          } ${
+                                            isConf 
+                                              ? 'border-red-600 bg-red-50 text-red-900 shadow-sm'
+                                              : 'bg-white shadow-sm'
+                                          }`}
+                                          style={{
+                                            ...(isConf ? {} : { borderLeftColor: subj?.color || '#cbd5e1' }),
+                                            WebkitTouchCallout: 'none',
+                                            WebkitUserSelect: 'none',
+                                            KhtmlUserSelect: 'none',
+                                            MozUserSelect: 'none',
+                                            msUserSelect: 'none',
+                                            userSelect: 'none',
+                                            WebkitUserDrag: 'none'
+                                          }}
                                         >
-                                          <select
-                                            title="Nauczyciel wspomagający"
-                                            className={`w-full text-[9px] font-semibold border rounded px-1.5 py-0.5 outline-none transition cursor-pointer ${
-                                              lesson.supportTeacherId 
-                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-bold' 
-                                                : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
-                                            }`}
-                                            value={lesson.supportTeacherId || ''}
-                                            onChange={(e) => {
-                                              const val = e.target.value || null;
-                                              const updatedLessons = { ...pl.lessons };
-                                              updatedLessons[key] = {
-                                                ...updatedLessons[key],
-                                                supportTeacherId: val
-                                              };
-                                              onChangeAppState({
-                                                ...appState,
-                                                planLekcji: {
-                                                  ...pl,
-                                                  lessons: updatedLessons
-                                                }
-                                              });
-                                            }}
-                                          >
-                                            <option value="">👥 Dodaj wspomagającego...</option>
-                                            {pl.teachers.map(t => (
-                                              <option key={t.id} value={t.id}>
-                                                Wspomaga: {t.first[0]}. {t.last} ({t.abbr})
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </div>
+                                          <div>
+                                            <div className="flex items-start justify-between gap-1">
+                                              <div className="flex flex-col min-w-0">
+                                                {group && (
+                                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border inline-flex items-center gap-1 w-fit mb-0.5 ${getGroupBadgeColor(group.name)}`}>
+                                                    👥 {group.name}
+                                                  </span>
+                                                )}
+                                                <span className="text-xs font-bold truncate leading-tight" style={isConf ? {} : { color: subj?.color }}>
+                                                  {subj?.name}
+                                                </span>
+                                              </div>
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveLesson(key);
+                                                }}
+                                                onTouchStart={(e) => e.stopPropagation()}
+                                                onTouchEnd={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveLesson(key);
+                                                }}
+                                                className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer shrink-0"
+                                                title="Usuń tę lekcję z siatki"
+                                              >
+                                                ✕
+                                              </button>
+                                            </div>
+                                            <div className={`text-[10px] mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
+                                              👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
+                                            </div>
 
-                                        {isConf && (
-                                          <div className="text-[9px] text-red-600 font-bold bg-white/80 border border-red-200 p-1 rounded font-sans leading-tight mt-1 animate-pulse">
-                                            {confReasons[0]}
+                                            {suppTeacher && (
+                                              <div className="text-[10px] text-indigo-700 font-bold mt-0.5 truncate">
+                                                👥 Wspomaganie: {suppTeacher.first} {suppTeacher.last} ({suppTeacher.abbr})
+                                              </div>
+                                            )}
+
+                                            {asg.linkedClassIds && asg.linkedClassIds.length > 0 && (
+                                              <div className="text-[9px] text-indigo-850 bg-indigo-50 border border-indigo-100 rounded px-1.5 py-0.5 mt-1 font-bold truncate flex items-center gap-0.5" title="Zajęcia łączone (grupa międzyoddziałowa)">
+                                                🔗 Wspólnie z: {[classesMap.get(asg.classId)?.name, ...asg.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(n => n && n !== currentClass?.name).join(' + ')}
+                                              </div>
+                                            )}
+
+                                            {/* Specjalni uczniowie */}
+                                            {specStudentsInThisClassAndSubj.length > 0 && (
+                                              <div className="mt-1 flex flex-wrap gap-1">
+                                                {specStudentsInThisClassAndSubj.map(ss => {
+                                                  const typeLabel = ss.type === 'ni' ? 'NI' : ss.type === 'rewa' ? 'Rewa' : 'Wsp';
+                                                  return (
+                                                    <span 
+                                                      key={ss.id} 
+                                                      className="text-[9px] font-bold px-1 py-0.5 bg-amber-50 border border-amber-200 text-amber-800 rounded flex items-center gap-0.5"
+                                                      title={`${ss.firstName} ${ss.lastName} (${typeLabel}) - ma zajęcia z klasą`}
+                                                    >
+                                                      🎓 {ss.lastName} {ss.firstName[0]}. ({typeLabel})
+                                                    </span>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+
+                                            {/* Wybór nauczyciela wspomagającego */}
+                                            <div 
+                                              className="mt-1 pt-1 border-t border-slate-100" 
+                                              onClick={(e) => e.stopPropagation()}
+                                              onTouchStart={(e) => e.stopPropagation()}
+                                              onTouchEnd={(e) => e.stopPropagation()}
+                                            >
+                                              <select
+                                                title="Nauczyciel wspomagający"
+                                                className={`w-full text-[9px] font-semibold border rounded px-1.5 py-0.5 outline-none transition cursor-pointer ${
+                                                  lesson.supportTeacherId 
+                                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-bold' 
+                                                    : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                                                }`}
+                                                value={lesson.supportTeacherId || ''}
+                                                onChange={(e) => {
+                                                  const val = e.target.value || null;
+                                                  const updatedLessons = { ...pl.lessons };
+                                                  updatedLessons[key] = {
+                                                    ...updatedLessons[key],
+                                                    supportTeacherId: val
+                                                  };
+                                                  onChangeAppState({
+                                                    ...appState,
+                                                    planLekcji: {
+                                                      ...pl,
+                                                      lessons: updatedLessons
+                                                    }
+                                                  });
+                                                }}
+                                              >
+                                                <option value="">👥 Dodaj wspomagającego...</option>
+                                                {pl.teachers.map(t => (
+                                                  <option key={t.id} value={t.id}>
+                                                    Wspomaga: {t.first[0]}. {t.last} ({t.abbr})
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </div>
+
+                                            {isConf && (
+                                              <div className="text-[9px] text-red-600 font-bold bg-white/80 border border-red-200 p-1 rounded font-sans leading-tight mt-1 animate-pulse">
+                                                {confReasons[0]}
+                                              </div>
+                                            )}
                                           </div>
-                                        )}
+                                          <div className="flex items-center justify-between text-[9px] text-slate-400 mt-1.5 font-mono">
+                                            <span className={isConf ? 'text-red-700 font-bold' : ''}>🚪 {room ? room.name : 'Bez sali'}</span>
+                                            {isConf && <span className="text-red-600 font-black tracking-tighter">⚠️ KOLIZJA</span>}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+
+                                    {slotItems.length === 1 && slotItems[0].asg.groupId && (
+                                      <div
+                                        onClick={() => {
+                                          if (selectedAssignmentId) {
+                                            placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
+                                          }
+                                        }}
+                                        className={`border border-dashed rounded p-1 text-[9px] font-bold flex items-center justify-center gap-1 transition select-none ${
+                                          selectedAssignmentId
+                                            ? 'border-indigo-300 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 cursor-pointer animate-pulse'
+                                            : 'border-slate-200 text-slate-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-slate-50 cursor-pointer'
+                                        }`}
+                                        title="Możesz wstawić drugą grupę (np. gr2) na tę samą godzinę lekcyjną"
+                                      >
+                                        <span>+ Dodaj 2. grupę</span>
                                       </div>
-                                      <div className="flex items-center justify-between text-[9px] text-slate-400 mt-2 font-mono">
-                                        <span className={isConf ? 'text-red-700 font-bold' : ''}>🚪 {room ? room.name : 'Bez sali'}</span>
-                                        {isConf && <span className="text-red-600 font-black tracking-tighter">⚠️ KOLIZJA</span>}
-                                      </div>
-                                    </div>
-                                  );
-                                })() : (
+                                    )}
+                                  </div>
+                                ) : (
                                   <div 
                                     onClick={() => {
                                       if (selectedAssignmentId) {
@@ -3422,10 +3566,15 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                     </div>
                   )}
                   <div className="flex items-center justify-between gap-1">
-                    <div className="flex flex-col truncate">
+                    <div className="flex flex-col truncate min-w-0">
+                      {a.groupId && groupsMap.get(a.groupId) && (
+                        <span className={`text-[8.5px] font-black px-1.5 py-0.2 rounded border inline-flex items-center gap-0.5 w-fit mb-0.5 ${getGroupBadgeColor(groupsMap.get(a.groupId)?.name || '')}`}>
+                          👥 {groupsMap.get(a.groupId)?.name}
+                        </span>
+                      )}
                       <span className="font-bold text-xs truncate" style={{ color: s?.color }}>{s?.name}</span>
                       {viewMode === 'all' && targetClass && (
-                        <span className="text-[9px] text-slate-400 font-extrabold mt-0.5">Klasa: {targetClass.name} {a.groupId ? `(gr)` : ''}</span>
+                        <span className="text-[9px] text-slate-400 font-extrabold mt-0.5">Klasa: {targetClass.name}</span>
                       )}
                     </div>
                     <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${

@@ -18,6 +18,7 @@ export interface ClassRoom {
   type?: string;
   capacity?: number;
   isGrade1_3?: boolean;
+  singleClassLimit?: boolean; // If true for sports room/gym, only 1 class is allowed at a time (strict limit)
 }
 
 export interface Subject {
@@ -113,6 +114,7 @@ export interface Building {
   name: string;
   address?: string;
   multi?: boolean;
+  singleClassLimit?: boolean; // If true for sports/external building, enforces single class per time slot
   hasCustomStructure?: boolean;
   customFloors?: string[];
   customSegments?: string[];
@@ -346,6 +348,45 @@ export interface AppErrorLog {
   type: 'runtime' | 'promise' | 'manual' | 'sw';
   userAgent: string;
   url: string;
+}
+
+export interface SchoolStructureTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  sourceYear?: string;
+  isBuiltIn?: boolean;
+  schoolType?: 'sp' | 'lo' | 'tech' | 'bs' | 'zsp' | 'custom';
+  tags?: string[];
+  stats: {
+    classesCount: number;
+    teachersCount: number;
+    roomsCount: number;
+    subjectsCount: number;
+    buildingsCount: number;
+    dutySpotsCount: number;
+  };
+  structure: {
+    school: School;
+    timeslots: Hour[];
+    hours: string[];
+    buildings: Building[];
+    floors: Floor[];
+    subjects: Subject[];
+    teachers: Teacher[];
+    classes: Class[];
+    schoolGroups: SchoolGroup[];
+    rooms: ClassRoom[];
+    homerooms?: HomeroomState;
+    assignments?: Assignment[];
+    specialStudents?: SpecialStudent[];
+    specialAssignments?: SpecialAssignment[];
+    dutySpots?: MiejsceDyzuru[];
+    dutyBreaks?: Przerwa[];
+    dutySettings?: any;
+    generatorSettings?: GeneratorSettings;
+  };
 }
 
 

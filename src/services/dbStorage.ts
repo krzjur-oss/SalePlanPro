@@ -26,6 +26,7 @@ export const STORAGE_KEYS = {
   ERROR_LOGS: 'saleplan_v3_error_logs',
   LAST_SEEN_VERSION: 'saleplan_last_seen_version',
   MIGRATION_DONE: 'saleplan_indexeddb_migrated_v1',
+  STRUCTURE_TEMPLATES: 'saleplan_v3_structure_templates',
 } as const;
 
 let dbPromise: Promise<IDBDatabase> | null = null;

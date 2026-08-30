@@ -24,11 +24,56 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.7.0',
+      date: 'Wrzesień 2026',
+      title: 'Obsługa Równoległych Zajęć w Grupach na Tej Samej Godzinie w Planie Klas',
+      description: 'Przełomowa funkcja w module Plan Klas umożliwiająca jednoczesne prowadzenie zajęć w grupach (np. Informatyka gr1 i Informatyka gr2, Język angielski gr1 i gr2, WF chłopcy i WF dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w oddzielnych salach, z czytelnym oznaczeniem grup i brakiem fałszywych kolizji.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Wprowadzono możliwość wstawiania wielu zajęć grupowych w tym samym oknie godzinowym (np. gr1 i gr2) dla tej samej klasy – każda grupa ma przypisanego swojego nauczyciela i salę.', badgeText: 'Grupy' },
+        { type: 'feature', text: 'Dodano czytelne, kolorowe plakietki grup (np. "👥 gr1", "👥 gr2", "👥 chł", "👥 dz") wewnątrz kafelków lekcji w planie pojedynczym oraz w widoku wszystkich klas.', badgeText: 'Wizualizacja' },
+        { type: 'improvement', text: 'Zmodernizowano silnik detekcji kolizji – system nie zgłasza już fałszywego konfliktu dla różnych grup tej samej klasy odbywających lekcje w tej samej godzinie.', badgeText: 'Kolizje' },
+        { type: 'improvement', text: 'Dodano przycisk szybkiego wstawiania "+ Dodaj 2. grupę" w zajętych częściowo slotach godzinowych oraz pełne wsparcie dla przeciągania i pędzla.', badgeText: 'Ergonomia' },
+        { type: 'improvement', text: 'Zsynchronizowano generowanie wydruków i transfer do Planu Sal (Etap 2) z pełną obsługą wielu grup na jednej godzinie lekcyjnej.', badgeText: 'Wydruki & Mostek' }
+      ]
+    },
+    {
+      version: 'v3.6.0',
+      date: 'Wrzesień 2026',
+      title: 'Szablony Struktury Szkoły – Zapis i Wczytywanie Konfiguracji Nowego Roku Szkolnego',
+      description: 'Nowy, kompleksowy moduł w Kreatorze Szkoły umożliwiający błyskawiczny zapis aktualnej struktury organizacyjnej szkoły (klasy i grupy, grono pedagogiczne z pensum, przedmioty, budynki, sale i pracownie) jako wielorazowy szablon. Pozwala to na zainicjowanie nowego roku szkolnego bez żmudnego, ręcznego wpisywania danych od zera z opcjonalną automatyczną promocją roczników.',
+      badge: 'Stabilna',
+      changes: [
+        { type: 'feature', text: 'Dodano funkcję zapisu bieżącego stanu szkoły do uniwersalnego szablonu struktury (SchoolStructureTemplate) z możliwością wyboru zapisywanych modułów (klasy, nauczyciele, sale, przedmioty, dyżury).', badgeText: 'Szablony' },
+        { type: 'feature', text: 'Wprowadzono automatyczną promocję klas o jeden poziom wyżej (np. 1A → 2A, 2B → 3B, a oddziały 8/4LO opuszczają szkołę) z zachowaniem wychowawstw i sal.', badgeText: 'Promocja Klas' },
+        { type: 'feature', text: 'Dodano wbudowane szablony wzorcowe dla Szkoły Podstawowej (SP 1-8) oraz Liceum Ogólnokształcącego (LO 1-4) z kompletną siatką przedmiotów MEN i strukturą sal.', badgeText: 'Wzorce' },
+        { type: 'feature', text: 'Wdrożono eksport i import szablonów struktury do pojedynczego pliku JSON – możliwość współdzielenia sprawdzonych struktur między placówkami i administratorami.', badgeText: 'Eksport / Import' },
+        { type: 'feature', text: 'Zintegrowano szybki dostęp do Szablonów Struktury bezpośrednio z poziomu paska bocznego Kreatora Szkoły, Kroku 1 (Dane Szkoły) oraz Kroku 10 (Podsumowanie i Start).', badgeText: 'Kreator Szkoły' },
+        { type: 'improvement', text: 'Wszystkie szablony są trwale przechowywane w lokalnej bazie IndexedDB (klucz STRUCTURE_TEMPLATES) z automatyczną kopią bezpieczeństwa w archiwum przed wdrożeniem nowego roku.', badgeText: 'Trwałość' }
+      ]
+    },
+    {
+      version: 'v3.5.0',
+      date: 'Sierpień 2026',
+      title: 'Centrum Wieloosobowego Scalania i Selektywnego Importu Danych (Klasy 1-3, 4-8, Dyżury)',
+      description: 'Przełomowy moduł pracy zespołowej umożliwiający scalanie planów przygotowywanych przez różne osoby (np. siatka lekcji od dyrekcji, sale edukacji wczesnoszkolnej 1-3 od jednego zespołu, sale klas 4-8 od drugiego oraz harmonogram dyżurów od koordynatora) w jeden spójny, kompletny plan szkolny bez ryzyka nadpisania pracy innych.',
+      badge: 'Stabilna',
+      changes: [
+        { type: 'feature', text: 'Wprowadzono wieloplikowe wczytywanie i kolejkę plików JSON (możliwość zaznaczenia wielu plików naraz, dodawania kolejnych oraz przeciągania Drag & Drop).', badgeText: 'Praca Zespołowa' },
+        { type: 'feature', text: 'Dodano inteligentne profile scalania jednym kliknięciem: "🌟 Inteligentny podział ról", "🎓 Siatka lekcji", "🧸 Sale klas 1-3", "🏫 Sale klas 4-8", "🛡️ Dyżury" oraz "🔄 Wszystko (Zastąp)".', badgeText: 'HIT' },
+        { type: 'feature', text: 'Wdrożono granularne filtry zakresu klas (wszystkie oddziały, tylko edukacja wczesnoszkolna 1-3, tylko klasy 4-8 lub precyzyjny wybór z listy klas).', badgeText: 'Filtry' },
+        { type: 'feature', text: 'Zaimplementowano selektywne scalanie obłożenia sal (Plan Sal / Etap 2) z zachowaniem już przypisanych gabinetów pozostałych roczników oraz obsługą sal wieloklasowych (np. sale gimnastyczne).', badgeText: 'Plan Sal' },
+        { type: 'feature', text: 'Dodano możliwość łączenia bazy nauczycieli i przedmiotów w trybie "Dołącz nowych / uzupełnij brakujące" (bez niszczenia istniejących danych).', badgeText: 'Kadra & Zasoby' },
+        { type: 'feature', text: 'Wdrożono interaktywną kartę "Podgląd Scalenia" prezentującą dokładny bilans wynikowy (liczba oddziałów, nauczycieli, lekcji, obłożenie sal 1-3 vs 4-8 oraz dyżury) przed zatwierdzeniem.', badgeText: 'Podgląd' },
+        { type: 'security', text: 'Dodano automatyczne tworzenie punktu przywracania (Undo) przed wykonaniem każdego scalenia wieloplikowego, gwarantując 100% bezpieczeństwo danych.', badgeText: 'Bezpieczeństwo' }
+      ]
+    },
+    {
       version: 'v3.4.0',
       date: 'Sierpień 2026',
       title: 'Migracja silnika bazy danych na IndexedDB – zniesienie limitu 5 MB dla dużych szkół',
       description: 'Przełomowa modernizacja warstwy przechowywania danych. Dotychczasowy magazyn localStorage z limitem 5 MB został zastąpiony zaawansowanym adapterem IndexedDB o niemal nieograniczonej pojemności (setki megabajtów / gigabajty), zapewniając płynną pracę największym placówkom oświatowym z setkami oddziałów i rozbudowaną historią autozapisów.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Wprowadzono moduł Selektywnego Eksportu i Importu danych (JSON) – możliwość precyzyjnego wyboru, które elementy mają zostać zapisane lub wczytane (plan lekcji, konfiguracja zasobów i sal, archiwum roczne, migawki snapshotów, dziennik zdarzeń).', badgeText: 'Eksport/Import' },
         { type: 'feature', text: 'Wdrożono maskowanie wpisywanego hasła (kropki/gwiazdki) z dedykowanym przełącznikiem oraz checkboxem „Pokaż hasło” w oknach eksportu i odszyfrowywania kopii.', badgeText: 'Bezpieczeństwo' },

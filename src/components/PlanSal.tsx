@@ -210,47 +210,52 @@ export default function PlanSal({
         const lessonsToAssign: any[] = [];
 
         pl.classes.forEach(cls => {
-          const lessonKey = `${cls.id}|${day}|${hourIdx}`;
-          const lesson = pl.lessons[lessonKey];
-          if (!lesson) return;
+          const matchingLessons = Object.entries(pl.lessons).filter(([k]) => {
+            const p = k.split('|');
+            return p[0] === cls.id && parseInt(p[1], 10) === day && parseInt(p[2], 10) === hourIdx;
+          });
 
-          const asg = assignmentsMap.get(lesson.assignmentId);
-          if (!asg) return;
+          matchingLessons.forEach(([lessonKey, lesson]) => {
+            if (!lesson) return;
 
-          // Deduplicate multi-class assignments
-          if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
-            return;
-          }
+            const asg = assignmentsMap.get(lesson.assignmentId);
+            if (!asg) return;
 
-          const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-          const subject = subjectsMap.get(asg.subjectId);
-          const roomEtap1 = asg.roomId ? roomsMap.get(asg.roomId) : null;
+            // Deduplicate multi-class assignments
+            if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
+              return;
+            }
 
-          const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
-          const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
-            ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
-            : [];
-          const combinedClasses = [cls.name, ...extraClasses];
+            const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+            const subject = subjectsMap.get(asg.subjectId);
+            const roomEtap1 = asg.roomId ? roomsMap.get(asg.roomId) : null;
 
-          const isPE = isPESubject(asg.subjectId, asg.teacherId);
+            const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
+            const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
+              ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
+              : [];
+            const combinedClasses = [cls.name, ...extraClasses];
 
-          lessonsToAssign.push({
-            id: lessonKey,
-            assignmentId: asg.id,
-            classId: cls.id,
-            className: cls.name,
-            classYear: cls.year,
-            groupId: asg.groupId,
-            combinedClasses,
-            teacherId: asg.teacherId,
-            teacherAbbr: teacher?.abbr || '?',
-            suppTeacherAbbr: suppTeacher?.abbr,
-            subjectId: asg.subjectId,
-            subjectShort: subject?.short || 'Zajęcia',
-            subjectName: subject?.name || 'Zajęcia',
-            suggestedRoomId: asg.roomId,
-            suggestedRoomName: roomEtap1 ? roomEtap1.name : null,
-            isPE
+            const isPE = isPESubject(asg.subjectId, asg.teacherId);
+
+            lessonsToAssign.push({
+              id: lessonKey,
+              assignmentId: asg.id,
+              classId: cls.id,
+              className: cls.name,
+              classYear: cls.year,
+              groupId: asg.groupId,
+              combinedClasses,
+              teacherId: asg.teacherId,
+              teacherAbbr: teacher?.abbr || '?',
+              suppTeacherAbbr: suppTeacher?.abbr,
+              subjectId: asg.subjectId,
+              subjectShort: subject?.short || 'Zajęcia',
+              subjectName: subject?.name || 'Zajęcia',
+              suggestedRoomId: asg.roomId,
+              suggestedRoomName: roomEtap1 ? roomEtap1.name : null,
+              isPE
+            });
           });
         });
 
@@ -1206,7 +1211,20 @@ export default function PlanSal({
             }
           }
         } else {
-          // If multi room (gym/sports), detect duplicate teacher or duplicate class WITHIN the gym slots
+          // If multi room (gym/sports):
+          // Check if this room/building has strict single-class limit configured
+          const hasSingleClassLimit = meta?.singleClassLimit === true || bld?.singleClassLimit === true;
+
+          if (hasSingleClassLimit && uniqueClasses.length > 1 && !classesAreCombined) {
+            const desc = `Limit sali sportowej: Obiekt ma ustawiony limit 1 klasy, a przypisano: ${uniqueClasses.join(', ')}`;
+            const existing = detected.get(keyInCol) || [];
+            if (!existing.includes(desc)) {
+              existing.push(desc);
+              detected.set(keyInCol, existing);
+            }
+          }
+
+          // Detect duplicate teacher or duplicate class WITHIN the gym slots
           // (They shouldn't be assigned twice in different slots of the same gym at the same hour)
           const teacherCounts = new Map<string, number>();
           teachersInThisRoom.forEach(t => teacherCounts.set(t, (teacherCounts.get(t) || 0) + 1));
@@ -1887,6 +1905,12 @@ export default function PlanSal({
                       {cols.map((col, idx) => {
                         const cKey = colKey(col);
                         const homeroom = appState.homerooms?.[cKey];
+                        const roomNameClean = (col.room.num || '').toLowerCase().trim();
+                        const meta = roomsMap.get(roomNameClean);
+                        const bld = appState.buildings[col.floor.buildingIdx];
+                        const isSport = meta?.type === 'sport' || bld?.multi === true;
+                        const hasSingleClassLimit = meta?.singleClassLimit === true || bld?.singleClassLimit === true;
+
                         return (
                           <th 
                             key={`room-${idx}`} 
@@ -1907,6 +1931,20 @@ export default function PlanSal({
                             {col.room.sub && (
                               <div className="text-[9px] text-slate-400 font-medium normal-case mt-0.5 leading-none">
                                 ({col.room.sub})
+                              </div>
+                            )}
+
+                            {isSport && (
+                              <div className="mt-1 flex justify-center">
+                                {hasSingleClassLimit ? (
+                                  <span className="bg-rose-50 border border-rose-200/80 text-rose-700 text-[8px] font-extrabold px-1.5 py-0.2 rounded leading-tight shadow-2xs" title="Sala sportowa z rygorystycznym limitem 1 klasy">
+                                    Limit: 1 klasa
+                                  </span>
+                                ) : (
+                                  <span className="bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[8px] font-extrabold px-1.5 py-0.2 rounded leading-tight shadow-2xs" title="Sala sportowa / obiekt bez limitu liczby klas">
+                                    Bez limitu klas
+                                  </span>
+                                )}
                               </div>
                             )}
 

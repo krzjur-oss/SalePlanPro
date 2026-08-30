@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { uid, genAbbr, ensureUniqueAbbr, subjectAbbr } from '../utils';
 import SioImport from './SioImport';
+import StructureTemplatesModal from './StructureTemplatesModal';
+import { Bookmark } from 'lucide-react';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -214,12 +216,41 @@ export default function KreatorSzkoly({
 }: KreatorSzkolyProps) {
   const [activeStep, setActiveStep] = useState<number>(1);
   const [showSioImport, setShowSioImport] = useState<boolean>(false);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState<boolean>(false);
 
   // Success Notification
   const [noti, setNoti] = useState<{ text: string; type: 'info' | 'success' } | null>(null);
   const showNoti = (text: string, type: 'info' | 'success' = 'success') => {
     setNoti({ text, type });
     setTimeout(() => setNoti(null), 3500);
+  };
+
+  const handleApplyStructureTemplate = (newAppState: AppState, targetYearLabel: string, templateName: string) => {
+    if (onChangeArchive && archive) {
+      const existingArchiveIdx = archive.findIndex(a => a.yearKey === appState.yearKey);
+      const archiveEntry: ArchiveEntry = {
+        yearKey: appState.yearKey,
+        label: appState.yearLabel,
+        savedAt: new Date().toISOString(),
+        config: JSON.parse(JSON.stringify(appState))
+      };
+      let updatedArchive: ArchiveEntry[];
+      if (existingArchiveIdx >= 0) {
+        updatedArchive = [...archive];
+        updatedArchive[existingArchiveIdx] = archiveEntry;
+      } else {
+        updatedArchive = [...archive, archiveEntry];
+      }
+      onChangeArchive(updatedArchive);
+    }
+
+    onChangeAppState(newAppState);
+    setSchoolYear(targetYearLabel);
+    setSchoolName(newAppState.school.name || '');
+    setSchoolShort(newAppState.school.short || '');
+    setSchoolPhone(newAppState.school.phone || '');
+    setSchoolWeb(newAppState.school.web || '');
+    showNoti(`Zastosowano szablon „${templateName}” dla roku ${targetYearLabel}!`, 'success');
   };
 
   // Custom Confirm Dialog
@@ -714,6 +745,7 @@ export default function KreatorSzkoly({
   const [newBldName, setNewBldName] = useState('');
   const [newBldAddress, setNewBldAddress] = useState('');
   const [newBldIsZlecony, setNewBldIsZlecony] = useState(false); // multi flag used to signify outside/zlecony location
+  const [newBldSingleClassLimit, setNewBldSingleClassLimit] = useState(false); // limit do max 1 klasy na zajęciach
   const [newBldHasCustomStructure, setNewBldHasCustomStructure] = useState(false);
   const [newBldCustomFloors, setNewBldCustomFloors] = useState('');
   const [newBldCustomSegments, setNewBldCustomSegments] = useState('');
@@ -725,7 +757,7 @@ export default function KreatorSzkoly({
     const parsedFloors = newBldHasCustomStructure 
       ? newBldCustomFloors.split(',').map(s => s.trim()).filter(Boolean)
       : [];
-    const parsedSegments = newBldHasCustomStructure
+    const parsedSegments = newBldHasCustomStructure 
       ? newBldCustomSegments.split(',').map(s => s.trim()).filter(Boolean)
       : [];
 
@@ -738,6 +770,7 @@ export default function KreatorSzkoly({
             name: newBldName.trim(),
             address: newBldAddress.trim() || undefined,
             multi: newBldIsZlecony,
+            singleClassLimit: newBldSingleClassLimit,
             hasCustomStructure: newBldHasCustomStructure,
             customFloors: parsedFloors.length > 0 ? parsedFloors : undefined,
             customSegments: parsedSegments.length > 0 ? parsedSegments : undefined
@@ -769,6 +802,7 @@ export default function KreatorSzkoly({
       setNewBldName('');
       setNewBldAddress('');
       setNewBldIsZlecony(false);
+      setNewBldSingleClassLimit(false);
       setNewBldHasCustomStructure(false);
       setNewBldCustomFloors('');
       setNewBldCustomSegments('');
@@ -780,6 +814,7 @@ export default function KreatorSzkoly({
         name: newBldName.trim(),
         address: newBldAddress.trim() || undefined,
         multi: newBldIsZlecony, // true means zlecony / wynajmowany np. orlik, basen
+        singleClassLimit: newBldSingleClassLimit,
         hasCustomStructure: newBldHasCustomStructure,
         customFloors: parsedFloors.length > 0 ? parsedFloors : undefined,
         customSegments: parsedSegments.length > 0 ? parsedSegments : undefined
@@ -864,6 +899,7 @@ export default function KreatorSzkoly({
   const [newRoomCustomAbbr, setNewRoomCustomAbbr] = useState('');
   const [newRoomDesc, setNewRoomDesc] = useState('');
   const [newRoomType, setNewRoomType] = useState<'ogolna' | 'wczesnoszkolna' | 'informatyka' | 'indywidualne' | 'sport'>('ogolna');
+  const [newRoomSingleClassLimit, setNewRoomSingleClassLimit] = useState<boolean>(false);
   const [newRoomBldIdx, setNewRoomBldIdx] = useState(0);
 
   // Sync room's level and segment with current building's custom structure choice
@@ -950,7 +986,8 @@ export default function KreatorSzkoly({
         desc: (newRoomDesc.trim() || roomTypeLabels[newRoomType]),
         type: newRoomType,
         capacity: newRoomType === 'indywidualne' ? 5 : 30,
-        isGrade1_3: isGrade1_3
+        isGrade1_3: isGrade1_3,
+        singleClassLimit: newRoomType === 'sport' ? newRoomSingleClassLimit : undefined
       };
 
       const nextRooms = appState.planLekcji.rooms.map(r => r.id === editingRoomId ? updatedClassroom : r);
@@ -1016,6 +1053,7 @@ export default function KreatorSzkoly({
       setNewRoomNum('');
       setNewRoomCustomAbbr('');
       setNewRoomDesc('');
+      setNewRoomSingleClassLimit(false);
       showNoti(`Zaktualizowano salę: ${updatedClassroom.name}`);
     } else {
       // Add Mode
@@ -1030,7 +1068,8 @@ export default function KreatorSzkoly({
         desc: (newRoomDesc.trim() || roomTypeLabels[newRoomType]),
         type: newRoomType,
         capacity: newRoomType === 'indywidualne' ? 5 : 30,
-        isGrade1_3: isGrade1_3
+        isGrade1_3: isGrade1_3,
+        singleClassLimit: newRoomType === 'sport' ? newRoomSingleClassLimit : undefined
       };
 
       // Synthesize physical floor column
@@ -2424,14 +2463,25 @@ export default function KreatorSzkoly({
       {/* STEPS SIDEBAR */}
       <aside className="w-full md:w-80 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-950 p-6 md:h-full overflow-y-auto select-none">
         
-        <div className="flex items-center gap-2 pb-5 mb-5 border-b border-slate-800 shrink-0">
-          <div className="bg-amber-500 rounded-lg p-1.5 text-slate-950 leading-none">
-            <Sparkles size={16} className="animate-pulse" />
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-800 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="bg-amber-500 rounded-lg p-1.5 text-slate-950 leading-none">
+              <Sparkles size={16} className="animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-sm font-black text-white uppercase tracking-wider">Kreator Szkoły</h2>
+              <p className="text-[10px] text-slate-400 font-semibold">Uporządkowane wprowadzanie danych</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-black text-white uppercase tracking-wider">Kreator Szkoły</h2>
-            <p className="text-[10px] text-slate-400 font-semibold">Uporządkowane wprowadzanie danych</p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsTemplateModalOpen(true)}
+            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 rounded-lg border border-slate-700 transition flex items-center gap-1 text-[10px] font-bold cursor-pointer"
+            title="Zarządzaj Szablonami Struktury Szkoły"
+          >
+            <Bookmark size={13} />
+            <span className="hidden sm:inline">Szablony</span>
+          </button>
         </div>
 
         {/* Vertical Timeline Steps */}
@@ -2512,6 +2562,37 @@ export default function KreatorSzkoly({
                   <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 1</span>
                   <h2 className="text-xl font-black text-slate-900 mt-2">🏫 Dane Szkoły i Rok Szkolny</h2>
                   <p className="text-xs text-slate-500 mt-1">Skonfiguruj nazwę, kontakt i aktualny okres planowania lekcji.</p>
+                </div>
+
+                {/* SZABLONY STRUKTURY SZKOŁY BANNER */}
+                <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 border border-blue-700/50 text-white rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md select-none">
+                  <div className="flex items-start gap-3.5">
+                    <div className="bg-blue-500 text-white rounded-xl p-2.5 shadow-sm shrink-0">
+                      <Bookmark size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-black text-white uppercase tracking-wide">
+                          📋 Szablony Struktury Szkoły
+                        </h4>
+                        <span className="text-[9px] bg-blue-400/20 text-blue-200 border border-blue-400/30 px-2 py-0.2 rounded-full font-mono">
+                          Nowy Rok Szkolny
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-200 mt-1 max-w-xl leading-relaxed font-medium">
+                        Zapisz aktualną strukturę (klasy, nauczyciele z pensum, sale i gabinety) jako szablon lub wczytaj gotowy wzorzec, aby rozpocząć kolejny rok szkolny w kilka sekund!
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 shrink-0">
+                    <button 
+                      type="button"
+                      onClick={() => setIsTemplateModalOpen(true)}
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer border-none"
+                    >
+                      <Bookmark size={13} /> Otwórz Szablony Struktury
+                    </button>
+                  </div>
                 </div>
 
                 {/* SIO CSV IMPORT PROMOTION BANNER */}
@@ -3024,9 +3105,29 @@ export default function KreatorSzkoly({
                         className="rounded accent-blue-600"
                       />
                       <label htmlFor="outerLoc" className="text-slate-600 text-xs font-bold leading-none cursor-pointer">
-                        Zlecona zewnętrzna (hala, basen itp.)
+                        Zlecona zewnętrzna / sportowa (hala, basen itp.)
                       </label>
                     </div>
+
+                    {newBldIsZlecony && (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl space-y-1">
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            id="bldSingleClassLimit" 
+                            checked={newBldSingleClassLimit}
+                            onChange={(e) => setNewBldSingleClassLimit(e.target.checked)}
+                            className="rounded accent-amber-600"
+                          />
+                          <label htmlFor="bldSingleClassLimit" className="text-amber-900 text-xs font-bold leading-none cursor-pointer">
+                            Rygorystyczny limit klas (maks. 1 klasa jednocześnie)
+                          </label>
+                        </div>
+                        <p className="text-[10px] text-amber-700 font-medium pl-5">
+                          Gdy zaznaczone, system zgłosi konflikt przy próbie zaplanowania więcej niż 1 klasy w tym samym czasie. Jeśli odznaczone (np. duże boisko/orlik), wiele klas może ćwiczyć równolegle.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Optional custom structure division in Step 2 */}
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-105">
@@ -3111,9 +3212,16 @@ export default function KreatorSzkoly({
                             <div className="flex items-center gap-1.5">
                               <span className="text-xs font-black text-slate-950">{b.name}</span>
                               {b.multi ? (
-                                <span className="bg-amber-100 border border-amber-200 text-amber-700 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Zlecony</span>
+                                <span className="bg-amber-100 border border-amber-200 text-amber-700 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Zlecony / Obiekt sportowy</span>
                               ) : (
                                 <span className="bg-blue-100 border border-blue-200 text-blue-700 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Własny</span>
+                              )}
+                              {b.multi && (
+                                b.singleClassLimit ? (
+                                  <span className="bg-rose-100 border border-rose-200 text-rose-700 font-bold px-1.5 py-0.5 rounded text-[9px]">Limit: 1 klasa</span>
+                                ) : (
+                                  <span className="bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[9px]">Bez limitu klas</span>
+                                )
                               )}
                             </div>
                             <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{b.address || 'Brak sprecyzowanego adresu'}</p>
@@ -3145,6 +3253,7 @@ export default function KreatorSzkoly({
                               setNewBldName(b.name);
                               setNewBldAddress(b.address || '');
                               setNewBldIsZlecony(!!b.multi);
+                              setNewBldSingleClassLimit(!!b.singleClassLimit);
                               setNewBldHasCustomStructure(!!b.hasCustomStructure);
                               setNewBldCustomFloors(b.customFloors ? b.customFloors.join(', ') : '');
                               setNewBldCustomSegments(b.customSegments ? b.customSegments.join(', ') : '');
@@ -3331,6 +3440,26 @@ export default function KreatorSzkoly({
                       </select>
                     </div>
 
+                    {newRoomType === 'sport' && (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200/80 rounded-xl space-y-1">
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            id="roomSingleClassLimit" 
+                            checked={newRoomSingleClassLimit}
+                            onChange={(e) => setNewRoomSingleClassLimit(e.target.checked)}
+                            className="rounded accent-emerald-600"
+                          />
+                          <label htmlFor="roomSingleClassLimit" className="text-emerald-950 text-xs font-bold leading-none cursor-pointer">
+                            Rygorystyczny limit (maks. 1 klasa na zajęciach)
+                          </label>
+                        </div>
+                        <p className="text-[10px] text-emerald-800 font-medium pl-5">
+                          Zaznacz, jeśli ta sala pomieści tylko jedną klasę. Jeśli nie zaznaczono (np. duża hala, boisko), w planie sal dozwolone jest równoległe prowadzenie zajęć z kilkoma klasami bez zgłaszania konfliktu.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold">Krótki opis / specjalizacja</label>
                       <input 
@@ -3386,6 +3515,13 @@ export default function KreatorSzkoly({
                               {r.type === 'sport' && (
                                 <span className="bg-emerald-100 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Zajęcia Sportowe</span>
                               )}
+                              {r.type === 'sport' && (
+                                r.singleClassLimit ? (
+                                  <span className="bg-rose-100 border border-rose-200 text-rose-700 font-bold px-1.5 py-0.5 rounded text-[9px]">Limit: 1 klasa</span>
+                                ) : (
+                                  <span className="bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[9px]">Bez limitu klas</span>
+                                )
+                              )}
                               {r.type === 'indywidualne' && (
                                 <span className="bg-yellow-100 text-yellow-700 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Zg. Indywidualne</span>
                               )}
@@ -3423,6 +3559,7 @@ export default function KreatorSzkoly({
                               setNewRoomCustomAbbr(r.name);
                               setNewRoomDesc(r.desc);
                               setNewRoomType(r.isGrade1_3 ? 'wczesnoszkolna' : ((r.type || 'ogolna') as any));
+                              setNewRoomSingleClassLimit(!!r.singleClassLimit);
                               
                               const loc = getRoomLocationInfo(r.name);
                               if (loc) {
@@ -6183,6 +6320,12 @@ export default function KreatorSzkoly({
               {/* Action routes */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2 justify-center">
                 <button 
+                  onClick={() => setIsTemplateModalOpen(true)}
+                  className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer"
+                >
+                  <Bookmark size={14} /> 💾 Zapisz tę strukturę jako Szablon
+                </button>
+                <button 
                   onClick={() => onNavigateToTab('plan_klas')}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-md transition"
                 >
@@ -6486,6 +6629,17 @@ export default function KreatorSzkoly({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Structure Templates Modal */}
+      {isTemplateModalOpen && (
+        <StructureTemplatesModal
+          isOpen={isTemplateModalOpen}
+          onClose={() => setIsTemplateModalOpen(false)}
+          currentAppState={appState}
+          onApplyTemplate={handleApplyStructureTemplate}
+          onShowNotification={showNoti}
+        />
       )}
 
     </div>

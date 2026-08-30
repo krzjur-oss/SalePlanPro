@@ -1,686 +1,1420 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Upload, Key, Lock, Unlock, Eye, EyeOff, CheckSquare, Square, 
   Calendar, Building2, Archive, Camera, History, AlertCircle, Check, 
-  FileText, ShieldAlert, Sparkles, X, Info
+  FileText, ShieldAlert, Sparkles, X, Info, Plus, Trash2, Layers, 
+  GitMerge, Shield, Users, BookOpen, Clock, ChevronDown, ChevronRight, 
+  Filter, CheckCircle2, AlertTriangle, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AppState, SchedData, ArchiveEntry, SnapshotEntry, AppEventLog } from '../types';
+import { 
+  AppState, 
+  SchedData, 
+  ArchiveEntry, 
+  SnapshotEntry, 
+  AppEventLog 
+} from '../types';
 import { decryptText, isEncryptedBackup } from '../lib/crypto';
+import { 
+  ImportPayload, 
+  FileMergeConfig, 
+  createDefaultFileMergeConfig, 
+  inspectFilePayload, 
+  applyFileMergeToState, 
+  executeMultiFileMerge,
+  isClassGrade1_3,
+  isClassGrade4_8,
+  ClassScope,
+  MergeStrategy
+} from '../utils/mergeEngine';
 
-export interface ImportPayload {
-  version?: string;
-  timestamp?: string;
-  appState?: AppState;
-  schedData?: SchedData;
-  archive?: ArchiveEntry[];
-  snapshots?: SnapshotEntry[];
-  historyLogs?: AppEventLog[];
-  [key: string]: any;
-}
-
-export interface ImportSelectedOptions {
-  importSchedData: boolean;
-  importAppState: boolean;
-  importArchive: boolean;
-  archiveMode: 'merge' | 'replace';
-  importSnapshots: boolean;
-  snapshotsMode: 'merge' | 'replace';
-  importHistoryLogs: boolean;
+interface LoadedFileItem {
+  id: string;
+  name: string;
+  rawContent: string;
+  isEncrypted: boolean;
+  password?: string;
+  decryptError?: string;
+  payload: ImportPayload | null;
+  config: FileMergeConfig | null;
 }
 
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
-  rawFileContent: string | null;
-  onExecuteImport: (payload: ImportPayload, options: ImportSelectedOptions) => void;
+  initialRawFiles?: { name: string; content: string }[];
+  currentAppState: AppState;
+  currentSchedData: SchedData;
+  currentArchive: ArchiveEntry[];
+  currentSnapshots: SnapshotEntry[];
+  currentHistoryLogs: AppEventLog[];
+  onExecuteMultiImport: (result: {
+    mergedState: AppState;
+    mergedSched: SchedData;
+    mergedArchive: ArchiveEntry[];
+    mergedSnapshots: SnapshotEntry[];
+    mergedLogs: AppEventLog[];
+    overallReport: string[];
+  }) => void;
 }
 
 export default function ImportModal({
   isOpen,
   onClose,
-  rawFileContent,
-  onExecuteImport
+  initialRawFiles,
+  currentAppState,
+  currentSchedData,
+  currentArchive,
+  currentSnapshots,
+  currentHistoryLogs,
+  onExecuteMultiImport
 }: ImportModalProps) {
-  const [isEncrypted, setIsEncrypted] = useState(false);
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [decryptError, setDecryptError] = useState('');
-  const [isDecrypting, setIsDecrypting] = useState(false);
+  const [files, setFiles] = useState<LoadedFileItem[]>([]);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
+  const [isDecryptingId, setIsDecryptingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'files' | 'preview'>('files');
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    base: true,
+    planLekcji: true,
+    planSal: true,
+    dyzury: true,
+    extra: false
+  });
 
-  // Parsed payload ready for selective import
-  const [parsedData, setParsedData] = useState<ImportPayload | null>(null);
-
-  // Checkboxes for selective import
-  const [importSchedData, setImportSchedData] = useState(true);
-  const [importAppState, setImportAppState] = useState(true);
-  const [importArchive, setImportArchive] = useState(true);
-  const [archiveMode, setArchiveMode] = useState<'merge' | 'replace'>('merge');
-  const [importSnapshots, setImportSnapshots] = useState(true);
-  const [snapshotsMode, setSnapshotsMode] = useState<'merge' | 'replace'>('merge');
-  const [importHistoryLogs, setImportHistoryLogs] = useState(false);
-
+  // Initialize files on open or when initialRawFiles change
   useEffect(() => {
-    if (isOpen && rawFileContent) {
-      setPassword('');
-      setShowPassword(false);
-      setDecryptError('');
-      setIsDecrypting(false);
+    if (isOpen && initialRawFiles && initialRawFiles.length > 0) {
+      const loaded: LoadedFileItem[] = initialRawFiles.map((rf, idx) => {
+        const fileId = `file_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+        const encrypted = isEncryptedBackup(rf.content);
+        let parsedPayload: ImportPayload | null = null;
+        let config: FileMergeConfig | null = null;
 
-      if (isEncryptedBackup(rawFileContent)) {
-        setIsEncrypted(true);
-        setParsedData(null);
-      } else {
-        setIsEncrypted(false);
-        try {
-          const data = JSON.parse(rawFileContent);
-          initParsedData(data);
-        } catch (err) {
-          setDecryptError('Plik nie jest poprawnym dokumentem JSON.');
-          setParsedData(null);
+        if (!encrypted) {
+          try {
+            parsedPayload = JSON.parse(rf.content);
+            config = createDefaultFileMergeConfig(fileId, rf.name, parsedPayload, idx === 0);
+          } catch (e) {
+            // invalid json
+          }
         }
+
+        return {
+          id: fileId,
+          name: rf.name,
+          rawContent: rf.content,
+          isEncrypted: encrypted,
+          payload: parsedPayload,
+          config: config
+        };
+      });
+
+      setFiles(loaded);
+      if (loaded.length > 0) {
+        setActiveFileId(loaded[0].id);
       }
     }
-  }, [isOpen, rawFileContent]);
-
-  const initParsedData = (data: ImportPayload) => {
-    setParsedData(data);
-    setImportSchedData(!!data.schedData);
-    setImportAppState(!!data.appState);
-    setImportArchive(Array.isArray(data.archive) && data.archive.length > 0);
-    setImportSnapshots(Array.isArray(data.snapshots) && data.snapshots.length > 0);
-    setImportHistoryLogs(false);
-  };
+  }, [isOpen, initialRawFiles]);
 
   if (!isOpen) return null;
 
-  const handleDecrypt = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!rawFileContent) return;
-    if (!password.trim()) {
-      setDecryptError('Wprowadź hasło, aby odszyfrować plik.');
-      return;
-    }
+  const handleAddMoreFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || []) as File[];
+    if (selectedFiles.length === 0) return;
+    e.target.value = '';
 
-    setIsDecrypting(true);
-    setDecryptError('');
+    selectedFiles.forEach((file: File, idx: number) => {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const rawContent = evt.target?.result as string;
+        if (!rawContent) return;
 
-    try {
-      const decrypted = await decryptText(rawFileContent, password);
-      const data = JSON.parse(decrypted);
-      setIsEncrypted(false);
-      initParsedData(data);
-    } catch (err: any) {
-      setDecryptError(err.message || 'Niepoprawne hasło lub błąd odszyfrowywania.');
-    } finally {
-      setIsDecrypting(false);
-    }
-  };
+        const fileId = `file_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+        const encrypted = isEncryptedBackup(rawContent);
+        let parsedPayload: ImportPayload | null = null;
+        let config: FileMergeConfig | null = null;
 
-  const handleConfirmImport = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!parsedData) return;
+        if (!encrypted) {
+          try {
+            parsedPayload = JSON.parse(rawContent);
+            config = createDefaultFileMergeConfig(fileId, file.name, parsedPayload, files.length === 0);
+          } catch (e) {
+            // invalid json
+          }
+        }
 
-    const isSelected = 
-      (importSchedData && !!parsedData.schedData) ||
-      (importAppState && !!parsedData.appState) ||
-      (importArchive && Array.isArray(parsedData.archive) && parsedData.archive.length > 0) ||
-      (importSnapshots && Array.isArray(parsedData.snapshots) && parsedData.snapshots.length > 0) ||
-      (importHistoryLogs && Array.isArray(parsedData.historyLogs) && parsedData.historyLogs.length > 0);
-
-    if (!isSelected) {
-      setDecryptError('Wybierz przynajmniej jeden element do zaimportowania.');
-      return;
-    }
-
-    onExecuteImport(parsedData, {
-      importSchedData: importSchedData && !!parsedData.schedData,
-      importAppState: importAppState && !!parsedData.appState,
-      importArchive: importArchive && Array.isArray(parsedData.archive) && parsedData.archive.length > 0,
-      archiveMode,
-      importSnapshots: importSnapshots && Array.isArray(parsedData.snapshots) && parsedData.snapshots.length > 0,
-      snapshotsMode,
-      importHistoryLogs: importHistoryLogs && Array.isArray(parsedData.historyLogs) && parsedData.historyLogs.length > 0,
+        setFiles(prev => {
+          const next = [
+            ...prev,
+            {
+              id: fileId,
+              name: file.name,
+              rawContent: rawContent,
+              isEncrypted: encrypted,
+              payload: parsedPayload,
+              config: config
+            }
+          ];
+          if (!activeFileId) setActiveFileId(fileId);
+          return next;
+        });
+      };
+      reader.readAsText(file);
     });
   };
 
-  const selectAll = () => {
-    if (!parsedData) return;
-    setImportSchedData(!!parsedData.schedData);
-    setImportAppState(!!parsedData.appState);
-    setImportArchive(Array.isArray(parsedData.archive) && parsedData.archive.length > 0);
-    setImportSnapshots(Array.isArray(parsedData.snapshots) && parsedData.snapshots.length > 0);
-    setImportHistoryLogs(Array.isArray(parsedData.historyLogs) && parsedData.historyLogs.length > 0);
+  const handleDecryptFile = async (fileId: string, passwordInput: string) => {
+    const file = files.find(f => f.id === fileId);
+    if (!file || !passwordInput.trim()) return;
+
+    setIsDecryptingId(fileId);
+    try {
+      const decrypted = await decryptText(file.rawContent, passwordInput);
+      const parsed: ImportPayload = JSON.parse(decrypted);
+      const config = createDefaultFileMergeConfig(fileId, file.name, parsed, files.indexOf(file) === 0);
+
+      setFiles(prev => prev.map(f => {
+        if (f.id === fileId) {
+          return {
+            ...f,
+            isEncrypted: false,
+            decryptError: undefined,
+            payload: parsed,
+            config: config
+          };
+        }
+        return f;
+      }));
+    } catch (err: any) {
+      setFiles(prev => prev.map(f => {
+        if (f.id === fileId) {
+          return {
+            ...f,
+            decryptError: err.message || 'Niepoprawne hasło lub błąd odszyfrowywania.'
+          };
+        }
+        return f;
+      }));
+    } finally {
+      setIsDecryptingId(null);
+    }
   };
 
-  const selectPlanOnly = () => {
-    if (!parsedData) return;
-    setImportSchedData(!!parsedData.schedData);
-    setImportAppState(false);
-    setImportArchive(false);
-    setImportSnapshots(false);
-    setImportHistoryLogs(false);
+  const handleRemoveFile = (fileId: string) => {
+    setFiles(prev => {
+      const filtered = prev.filter(f => f.id !== fileId);
+      if (activeFileId === fileId) {
+        setActiveFileId(filtered.length > 0 ? filtered[0].id : null);
+      }
+      return filtered;
+    });
   };
 
-  const selectConfigOnly = () => {
-    if (!parsedData) return;
-    setImportSchedData(false);
-    setImportAppState(!!parsedData.appState);
-    setImportArchive(false);
-    setImportSnapshots(false);
-    setImportHistoryLogs(false);
+  const updateActiveConfig = (updater: (prev: FileMergeConfig) => FileMergeConfig) => {
+    if (!activeFileId) return;
+    setFiles(prev => prev.map(f => {
+      if (f.id === activeFileId && f.config) {
+        return {
+          ...f,
+          config: updater(f.config)
+        };
+      }
+      return f;
+    }));
   };
 
-  // Inspect data
-  const hasSched = !!parsedData?.schedData;
-  const hasApp = !!parsedData?.appState;
-  const hasArch = Array.isArray(parsedData?.archive) && parsedData.archive.length > 0;
-  const hasSnaps = Array.isArray(parsedData?.snapshots) && parsedData.snapshots.length > 0;
-  const hasLogs = Array.isArray(parsedData?.historyLogs) && parsedData.historyLogs.length > 0;
+  const activeFile = files.find(f => f.id === activeFileId);
+  const activeConfig = activeFile?.config;
+  const activePayload = activeFile?.payload;
+  const activeStats = activePayload ? inspectFilePayload(activePayload, activeFile.name) : null;
 
-  // Count lessons in backup
-  let lessonsInFile = 0;
-  if (parsedData?.schedData) {
-    Object.values(parsedData.schedData).forEach((year) => {
-      Object.values(year || {}).forEach((day) => {
-        Object.values(day || {}).forEach((hour) => {
-          Object.values(hour || {}).forEach((cell) => {
+  // Preset Handlers
+  const applyRolePreset = (
+    fileId: string, 
+    role: 'all_replace' | 'plan_klas' | 'sal_1_3' | 'sal_4_8' | 'dyzury' | 'sal_all'
+  ) => {
+    setFiles(prev => prev.map(f => {
+      if (f.id !== fileId || !f.payload || !f.config) return f;
+
+      const isFirst = prev.indexOf(f) === 0;
+      const base = createDefaultFileMergeConfig(f.id, f.name, f.payload, isFirst);
+
+      if (role === 'all_replace') {
+        base.importSchoolInfo = true;
+        base.importBuildingsAndFloors = true;
+        base.importRoomsList = true;
+        base.teachersMode = 'replace';
+        base.subjectsMode = 'replace';
+        base.classesMode = 'replace';
+        base.homeroomsMode = 'replace';
+        base.planLekcjiScope = 'all';
+        base.planLekcjiStrategy = 'replace';
+        base.planSalScope = 'all';
+        base.planSalStrategy = 'replace';
+        base.dyzuryMode = 'all';
+        base.dyzuryStrategy = 'replace';
+      } else if (role === 'plan_klas') {
+        base.importSchoolInfo = isFirst;
+        base.importBuildingsAndFloors = isFirst;
+        base.importRoomsList = isFirst;
+        base.teachersMode = isFirst ? 'replace' : 'merge_new';
+        base.subjectsMode = isFirst ? 'replace' : 'merge_new';
+        base.classesMode = isFirst ? 'replace' : 'merge_new';
+        base.homeroomsMode = 'none';
+        base.planLekcjiScope = 'all';
+        base.planLekcjiStrategy = isFirst ? 'replace' : 'merge';
+        base.planSalScope = 'all'; // No room placements
+        base.planSalStrategy = 'merge';
+        base.dyzuryMode = 'none';
+      } else if (role === 'sal_1_3') {
+        base.importSchoolInfo = false;
+        base.importBuildingsAndFloors = false;
+        base.importRoomsList = false;
+        base.teachersMode = 'merge_new';
+        base.subjectsMode = 'merge_new';
+        base.classesMode = 'merge_new';
+        base.homeroomsMode = 'merge';
+        base.planLekcjiScope = 'grades_1_3';
+        base.planLekcjiStrategy = 'merge';
+        base.planSalScope = 'grades_1_3';
+        base.planSalStrategy = 'merge';
+        base.dyzuryMode = 'none';
+      } else if (role === 'sal_4_8') {
+        base.importSchoolInfo = false;
+        base.importBuildingsAndFloors = false;
+        base.importRoomsList = false;
+        base.teachersMode = 'merge_new';
+        base.subjectsMode = 'merge_new';
+        base.classesMode = 'merge_new';
+        base.homeroomsMode = 'merge';
+        base.planLekcjiScope = 'grades_4_8';
+        base.planLekcjiStrategy = 'merge';
+        base.planSalScope = 'grades_4_8';
+        base.planSalStrategy = 'merge';
+        base.dyzuryMode = 'none';
+      } else if (role === 'sal_all') {
+        base.importSchoolInfo = false;
+        base.importBuildingsAndFloors = false;
+        base.importRoomsList = false;
+        base.teachersMode = 'merge_new';
+        base.subjectsMode = 'merge_new';
+        base.classesMode = 'merge_new';
+        base.homeroomsMode = 'merge';
+        base.planLekcjiScope = 'all';
+        base.planLekcjiStrategy = 'merge';
+        base.planSalScope = 'all';
+        base.planSalStrategy = 'merge';
+        base.dyzuryMode = 'none';
+      } else if (role === 'dyzury') {
+        base.importSchoolInfo = false;
+        base.importBuildingsAndFloors = false;
+        base.importRoomsList = false;
+        base.teachersMode = 'merge_new';
+        base.subjectsMode = 'none';
+        base.classesMode = 'none';
+        base.homeroomsMode = 'none';
+        base.planLekcjiScope = 'all';
+        base.planSalScope = 'all';
+        base.dyzuryMode = 'all';
+        base.dyzuryStrategy = 'merge';
+      }
+
+      return {
+        ...f,
+        config: base
+      };
+    }));
+  };
+
+  // Auto-Match All Files Smart Preset
+  const applySmartAutoMatchAll = () => {
+    setFiles(prev => prev.map((f, idx) => {
+      if (!f.payload || !f.config) return f;
+      const stats = inspectFilePayload(f.payload, f.name);
+      
+      let presetRole: 'all_replace' | 'plan_klas' | 'sal_1_3' | 'sal_4_8' | 'dyzury' | 'sal_all' = 'plan_klas';
+      
+      if (stats.detectedRole === 'dyzury') {
+        presetRole = 'dyzury';
+      } else if (stats.detectedRole === 'sal_1_3') {
+        presetRole = 'sal_1_3';
+      } else if (stats.detectedRole === 'sal_4_8') {
+        presetRole = 'sal_4_8';
+      } else if (idx === 0) {
+        presetRole = 'all_replace';
+      }
+
+      const base = createDefaultFileMergeConfig(f.id, f.name, f.payload, idx === 0);
+      if (presetRole === 'all_replace') {
+        base.importSchoolInfo = true;
+        base.importBuildingsAndFloors = true;
+        base.importRoomsList = true;
+        base.teachersMode = 'replace';
+        base.subjectsMode = 'replace';
+        base.classesMode = 'replace';
+        base.homeroomsMode = 'replace';
+        base.planLekcjiScope = 'all';
+        base.planLekcjiStrategy = 'replace';
+        base.planSalScope = 'all';
+        base.planSalStrategy = 'replace';
+        base.dyzuryMode = stats.dutyEntries > 0 ? 'all' : 'none';
+        base.dyzuryStrategy = 'replace';
+      } else if (presetRole === 'sal_1_3') {
+        base.importSchoolInfo = false;
+        base.importBuildingsAndFloors = false;
+        base.importRoomsList = false;
+        base.teachersMode = 'merge_new';
+        base.subjectsMode = 'merge_new';
+        base.classesMode = 'merge_new';
+        base.homeroomsMode = 'merge';
+        base.planLekcjiScope = 'grades_1_3';
+        base.planLekcjiStrategy = 'merge';
+        base.planSalScope = 'grades_1_3';
+        base.planSalStrategy = 'merge';
+        base.dyzuryMode = 'none';
+      } else if (presetRole === 'sal_4_8') {
+        base.importSchoolInfo = false;
+        base.importBuildingsAndFloors = false;
+        base.importRoomsList = false;
+        base.teachersMode = 'merge_new';
+        base.subjectsMode = 'merge_new';
+        base.classesMode = 'merge_new';
+        base.homeroomsMode = 'merge';
+        base.planLekcjiScope = 'grades_4_8';
+        base.planLekcjiStrategy = 'merge';
+        base.planSalScope = 'grades_4_8';
+        base.planSalStrategy = 'merge';
+        base.dyzuryMode = 'none';
+      } else if (presetRole === 'dyzury') {
+        base.importSchoolInfo = false;
+        base.importBuildingsAndFloors = false;
+        base.importRoomsList = false;
+        base.teachersMode = 'merge_new';
+        base.subjectsMode = 'none';
+        base.classesMode = 'none';
+        base.homeroomsMode = 'none';
+        base.planLekcjiScope = 'all';
+        base.planSalScope = 'all';
+        base.dyzuryMode = 'all';
+        base.dyzuryStrategy = 'merge';
+      }
+
+      return {
+        ...f,
+        config: base
+      };
+    }));
+  };
+
+  // Calculate live preview of combined merge
+  const previewSummary = useMemo(() => {
+    const validConfigs = files.map(f => f.config).filter(Boolean) as FileMergeConfig[];
+    if (validConfigs.length === 0) return null;
+
+    let testState = JSON.parse(JSON.stringify(currentAppState));
+    let testSched = JSON.parse(JSON.stringify(currentSchedData));
+    const stepReports: { fileName: string; reports: string[] }[] = [];
+
+    validConfigs.forEach(cfg => {
+      const { nextState, nextSched, report } = applyFileMergeToState(testState, testSched, cfg);
+      testState = nextState;
+      testSched = nextSched;
+      stepReports.push({ fileName: cfg.fileName, reports: report });
+    });
+
+    const classesCount = testState.classes.length;
+    const teachersCount = testState.teachers.length;
+    const lessonsCount = Object.keys(testState.planLekcji.lessons || {}).length;
+    const dutiesCount = Object.keys(testState.dyzury.harmonogram || {}).length;
+
+    let schedPlacements1_3 = 0;
+    let schedPlacements4_8 = 0;
+    let schedTotal = 0;
+
+    Object.values(testSched).forEach((year: any) => {
+      Object.values(year || {}).forEach((day: any) => {
+        Object.values(day || {}).forEach((hour: any) => {
+          Object.values(hour || {}).forEach((cell: any) => {
             if (cell) {
-              if (Array.isArray(cell)) lessonsInFile += cell.length;
-              else lessonsInFile += 1;
+              const cellsArr = Array.isArray(cell) ? cell : [cell];
+              cellsArr.forEach(c => {
+                schedTotal++;
+                const cNames = c.classes || (c.className ? [c.className] : []);
+                if (cNames.some((cn: string) => isClassGrade1_3(cn))) schedPlacements1_3++;
+                if (cNames.some((cn: string) => isClassGrade4_8(cn))) schedPlacements4_8++;
+              });
             }
           });
         });
       });
     });
-  }
 
-  const schoolName = parsedData?.appState?.school?.name || 'Niezdefiniowana szkoła';
-  const schoolShort = parsedData?.appState?.school?.short || '';
-  const yearLabel = parsedData?.appState?.yearLabel || '';
-  const classesCount = parsedData?.appState?.classes?.length || 0;
-  const teachersCount = parsedData?.appState?.teachers?.length || 0;
+    return {
+      classesCount,
+      teachersCount,
+      lessonsCount,
+      dutiesCount,
+      schedPlacements1_3,
+      schedPlacements4_8,
+      schedTotal,
+      stepReports
+    };
+  }, [files, currentAppState, currentSchedData]);
+
+  const handleFinalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const validConfigs = files.map(f => f.config).filter(Boolean) as FileMergeConfig[];
+    if (validConfigs.length === 0) {
+      alert('Brak poprawnie skonfigurowanych plików do zaimportowania.');
+      return;
+    }
+
+    const result = await executeMultiFileMerge(
+      currentAppState,
+      currentSchedData,
+      currentArchive,
+      currentSnapshots,
+      currentHistoryLogs,
+      validConfigs
+    );
+
+    onExecuteMultiImport(result);
+  };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Available classes in active file for custom checklist
+  const activeAvailableClasses = activePayload?.appState?.classes || activePayload?.appState?.planLekcji?.classes || [];
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs cursor-pointer"
+          className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs cursor-pointer"
         />
 
-        {/* Modal Window */}
+        {/* Main Modal Card */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          initial={{ opacity: 0, scale: 0.96, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          exit={{ opacity: 0, scale: 0.96, y: 15 }}
           transition={{ type: 'spring', duration: 0.3, bounce: 0.1 }}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[92vh]"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden relative z-10 flex flex-col max-h-[94vh]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40">
-                {isEncrypted ? <Key size={20} /> : <Upload size={20} />}
+              <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
+                <GitMerge size={22} />
               </div>
               <div>
-                <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide">
-                  {isEncrypted ? 'Odszyfrowanie Kopii Zapasowej' : 'Selektywny Import Danych'}
-                </h3>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">
-                  {isEncrypted 
-                    ? 'Wprowadź hasło, aby odblokować zawartość zaszyfrowanego pliku' 
-                    : 'Wybierz, które moduły chcesz wczytać do programu'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide">
+                    Centrum Scalania i Importu Danych (Wieloosobowe)
+                  </h2>
+                  <span className="bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 font-extrabold px-2 py-0.5 rounded-full text-[10px]">
+                    {files.length} {files.length === 1 ? 'plik' : files.length < 5 ? 'pliki' : 'plików'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Łącz siatki zajęć, przydziały sal dla klas 1-3 oraz 4-8 i dyżury z kilku plików w jeden spójny plan
+                </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-slate-200/70 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
-            >
-              <X size={18} />
-            </button>
+
+            <div className="flex items-center gap-2">
+              <div className="bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl flex items-center gap-1 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('files')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'files' 
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs' 
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  <Layers size={14} /> Konfiguracja Plików
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('preview')}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === 'preview' 
+                      ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs' 
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  <CheckCircle2 size={14} /> Podgląd Scalenia
+                </button>
+              </div>
+
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-slate-200/70 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer ml-2"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
-          {/* PHASE 1: Password decrypt form */}
-          {isEncrypted ? (
-            <form onSubmit={handleDecrypt} className="p-6 space-y-4 flex-1">
-              <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-start gap-2.5">
-                <Lock size={16} className="text-indigo-500 mt-0.5 shrink-0" />
-                <div>
-                  <p className="font-bold text-slate-800 dark:text-slate-200">
-                    Ten plik kopii jest zabezpieczony szyfrowaniem AES-256 GCM.
-                  </p>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                    Podaj hasło zdefiniowane podczas eksportu, aby uzyskać dostęp do siatki zajęć i konfiguracji.
-                  </p>
-                </div>
+          {/* Quick Presets Bar */}
+          {files.length > 0 && (
+            <div className="bg-indigo-50/70 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-900/40 px-6 py-2.5 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                <Sparkles size={15} className="text-indigo-600 shrink-0" />
+                <span>Szybkie profile scalania:</span>
               </div>
-
-              {/* Password Input */}
-              <div className="space-y-1.5">
-                <label htmlFor="import-password-input" className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider block">
-                  Hasło do pliku:
-                </label>
-                <div className="relative">
-                  <input
-                    id="import-password-input"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (decryptError) setDecryptError('');
-                    }}
-                    placeholder="Wprowadź hasło odszyfrowania..."
-                    autoComplete="current-password"
-                    className="w-full text-sm font-medium bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 pr-11 focus:outline-hidden focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20 transition shadow-xs"
-                    autoFocus
-                  />
+              <div className="flex flex-wrap items-center gap-1.5">
+                {files.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer z-10"
-                    title={showPassword ? 'Ukryj hasło' : 'Pokaż hasło'}
-                    aria-label={showPassword ? 'Ukryj hasło' : 'Pokaż hasło'}
+                    onClick={applySmartAutoMatchAll}
+                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-black transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="Automatycznie przypisuje role (np. Plan klas -> Baza, 1-3 -> Sale 1-3, 4-8 -> Sale 4-8, Dyżury -> Dyżury)"
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    🌟 Inteligentny podział ról dla wszystkich
                   </button>
-                </div>
-
-                {/* Checkbox Pokaż hasło */}
-                <div className="flex items-center justify-between px-1 pt-0.5">
-                  <label htmlFor="import-show-password-cb" className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-                    <input
-                      id="import-show-password-cb"
-                      type="checkbox"
-                      checked={showPassword}
-                      onChange={(e) => setShowPassword(e.target.checked)}
-                      className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                    <span className="font-semibold">Pokaż hasło</span>
-                    {password && (
-                      <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono ml-1">
-                        ({password.length} {password.length === 1 ? 'znak' : password.length < 5 ? 'znaki' : 'znaków'})
-                      </span>
-                    )}
-                  </label>
-                </div>
-              </div>
-
-              {/* Decrypt Error */}
-              {decryptError && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl text-xs font-semibold"
-                >
-                  <ShieldAlert size={16} className="mt-0.5 shrink-0" />
-                  <span>{decryptError}</span>
-                </motion.div>
-              )}
-
-              {/* Actions */}
-              <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="py-2.5 px-4 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-black text-slate-600 dark:text-slate-400 transition cursor-pointer"
-                >
-                  Anuluj
-                </button>
-                <button
-                  type="submit"
-                  disabled={!password.trim() || isDecrypting}
-                  className="flex-1 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <Unlock size={15} />
-                  {isDecrypting ? 'Odszyfrowywanie...' : 'Odszyfruj i Przejdź do Wyboru'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            /* PHASE 2: Selective Import checklist */
-            <form onSubmit={handleConfirmImport} className="p-6 space-y-4 overflow-y-auto flex-1 custom-scrollbar">
-              {/* File Info summary card */}
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-950/50 border border-slate-200/80 dark:border-slate-800 rounded-xl space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                    <Building2 size={14} className="text-indigo-500" />
-                    {schoolName} {schoolShort ? `(${schoolShort})` : ''}
-                  </span>
-                  {yearLabel && (
-                    <span className="text-[10px] font-extrabold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-md">
-                      {yearLabel}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  {classesCount > 0 && <span>Oddziały: <strong className="text-slate-700 dark:text-slate-300">{classesCount}</strong></span>}
-                  {teachersCount > 0 && <span>Nauczyciele: <strong className="text-slate-700 dark:text-slate-300">{teachersCount}</strong></span>}
-                  {lessonsInFile > 0 && <span>Lekcje w pliku: <strong className="text-slate-700 dark:text-slate-300">{lessonsInFile}</strong></span>}
-                  {parsedData?.timestamp && (
-                    <span>Utworzono: <strong className="text-slate-700 dark:text-slate-300">{new Date(parsedData.timestamp).toLocaleDateString()}</strong></span>
-                  )}
-                </div>
-              </div>
-
-              {/* Quick Selectors */}
-              <div className="flex items-center justify-between gap-2 pt-1">
-                <span className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                  Wybierz elementy do wczytania:
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={selectAll}
-                    className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                  >
-                    Wszystko
-                  </button>
-                  <span className="text-slate-300 dark:text-slate-700">|</span>
-                  <button
-                    type="button"
-                    onClick={selectPlanOnly}
-                    className="text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
-                  >
-                    Tylko plan
-                  </button>
-                  <span className="text-slate-300 dark:text-slate-700">|</span>
-                  <button
-                    type="button"
-                    onClick={selectConfigOnly}
-                    className="text-[10px] font-extrabold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer"
-                  >
-                    Tylko zasoby
-                  </button>
-                </div>
-              </div>
-
-              {/* Checklist */}
-              <div className="space-y-2">
-                {/* 1. SchedData */}
-                <label 
-                  className={`flex items-start gap-3 p-3 rounded-xl border transition ${
-                    !hasSched 
-                      ? 'opacity-40 pointer-events-none bg-slate-100/50 border-dashed border-slate-200' 
-                      : importSchedData 
-                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/60 cursor-pointer text-slate-900 dark:text-slate-100' 
-                        : 'bg-slate-50/50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 cursor-pointer text-slate-500'
-                  }`}
-                >
-                  <div className="pt-0.5">
-                    <input
-                      type="checkbox"
-                      disabled={!hasSched}
-                      checked={importSchedData && hasSched}
-                      onChange={(e) => setImportSchedData(e.target.checked)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black flex items-center gap-1.5">
-                        <Calendar size={14} className="text-indigo-500" />
-                        Plan Lekcji (Siatka zajęć)
-                      </span>
-                      {hasSched ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                          {lessonsInFile} lekcji
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-medium text-slate-400">Brak w pliku</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                      Zastąpi bieżący rozkład godzin i lekcji danymi z pliku kopii.
-                    </p>
-                  </div>
-                </label>
-
-                {/* 2. AppState */}
-                <label 
-                  className={`flex items-start gap-3 p-3 rounded-xl border transition ${
-                    !hasApp 
-                      ? 'opacity-40 pointer-events-none bg-slate-100/50 border-dashed border-slate-200' 
-                      : importAppState 
-                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/60 cursor-pointer text-slate-900 dark:text-slate-100' 
-                        : 'bg-slate-50/50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 cursor-pointer text-slate-500'
-                  }`}
-                >
-                  <div className="pt-0.5">
-                    <input
-                      type="checkbox"
-                      disabled={!hasApp}
-                      checked={importAppState && hasApp}
-                      onChange={(e) => setImportAppState(e.target.checked)}
-                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black flex items-center gap-1.5">
-                        <Building2 size={14} className="text-emerald-500" />
-                        Konfiguracja Szkoły i Zasobów
-                      </span>
-                      {hasApp ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
-                          {classesCount} klas • {teachersCount} naucz.
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-medium text-slate-400">Brak w pliku</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                      Wykaz nauczycieli, gabinety, przedmioty, oddziały, dzwonki oraz dyżury.
-                    </p>
-                  </div>
-                </label>
-
-                {/* 3. Archive */}
-                <div 
-                  className={`p-3 rounded-xl border transition ${
-                    !hasArch 
-                      ? 'opacity-40 bg-slate-100/50 border-dashed border-slate-200' 
-                      : importArchive 
-                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/60 text-slate-900 dark:text-slate-100' 
-                        : 'bg-slate-50/50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 text-slate-500'
-                  }`}
-                >
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <div className="pt-0.5">
-                      <input
-                        type="checkbox"
-                        disabled={!hasArch}
-                        checked={importArchive && hasArch}
-                        onChange={(e) => setImportArchive(e.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black flex items-center gap-1.5">
-                          <Archive size={14} className="text-amber-500" />
-                          Archiwum Roczne
-                        </span>
-                        {hasArch ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
-                            {parsedData.archive!.length} roczników
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-medium text-slate-400">Brak w pliku</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Archiwalne wersje planów z poprzednich lat.
-                      </p>
-                    </div>
-                  </label>
-
-                  {hasArch && importArchive && (
-                    <div className="mt-2.5 ml-7 flex items-center gap-3 text-[11px] border-t border-slate-200/60 dark:border-slate-800 pt-2">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="archiveMode"
-                          value="merge"
-                          checked={archiveMode === 'merge'}
-                          onChange={() => setArchiveMode('merge')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Połącz z obecnymi</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="archiveMode"
-                          value="replace"
-                          checked={archiveMode === 'replace'}
-                          onChange={() => setArchiveMode('replace')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Zastąp całe archiwum</span>
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                {/* 4. Snapshots */}
-                <div 
-                  className={`p-3 rounded-xl border transition ${
-                    !hasSnaps 
-                      ? 'opacity-40 bg-slate-100/50 border-dashed border-slate-200' 
-                      : importSnapshots 
-                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/60 text-slate-900 dark:text-slate-100' 
-                        : 'bg-slate-50/50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 text-slate-500'
-                  }`}
-                >
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <div className="pt-0.5">
-                      <input
-                        type="checkbox"
-                        disabled={!hasSnaps}
-                        checked={importSnapshots && hasSnaps}
-                        onChange={(e) => setImportSnapshots(e.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black flex items-center gap-1.5">
-                          <Camera size={14} className="text-violet-500" />
-                          Punkty Przywracania (Snapshoty)
-                        </span>
-                        {hasSnaps ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300">
-                            {parsedData.snapshots!.length} migawek
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-medium text-slate-400">Brak w pliku</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Zapisane punkty przywracania stanu prac nad planem.
-                      </p>
-                    </div>
-                  </label>
-
-                  {hasSnaps && importSnapshots && (
-                    <div className="mt-2.5 ml-7 flex items-center gap-3 text-[11px] border-t border-slate-200/60 dark:border-slate-800 pt-2">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="snapshotsMode"
-                          value="merge"
-                          checked={snapshotsMode === 'merge'}
-                          onChange={() => setSnapshotsMode('merge')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Dołącz do obecnych</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="snapshotsMode"
-                          value="replace"
-                          checked={snapshotsMode === 'replace'}
-                          onChange={() => setSnapshotsMode('replace')}
-                          className="text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="font-semibold text-slate-700 dark:text-slate-300">Zastąp wszystkie</span>
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                {/* 5. History logs */}
-                {hasLogs && (
-                  <label 
-                    className={`flex items-start gap-3 p-3 rounded-xl border transition cursor-pointer ${
-                      importHistoryLogs 
-                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-900/60 text-slate-900 dark:text-slate-100' 
-                        : 'bg-slate-50/50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 text-slate-500'
-                    }`}
-                  >
-                    <div className="pt-0.5">
-                      <input
-                        type="checkbox"
-                        checked={importHistoryLogs}
-                        onChange={(e) => setImportHistoryLogs(e.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-black flex items-center gap-1.5">
-                          <History size={14} className="text-sky-500" />
-                          Dziennik Zdarzeń (Logi audytu)
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300">
-                          {parsedData.historyLogs!.length} wpisów
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                        Dołącz wpisy historii zdarzeń z importowanego pliku.
-                      </p>
-                    </div>
-                  </label>
+                )}
+                {activeFileId && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => applyRolePreset(activeFileId, 'plan_klas')}
+                      className="px-2 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                      title="Ustaw ten plik jako źródło siatki lekcji klas"
+                    >
+                      🎓 Siatka lekcji
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyRolePreset(activeFileId, 'sal_1_3')}
+                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                      title="Ustaw ten plik jako przydział sal dla edukacji wczesnoszkolnej"
+                    >
+                      🧸 Sale klas 1-3
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyRolePreset(activeFileId, 'sal_4_8')}
+                      className="px-2 py-1 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                      title="Ustaw ten plik jako przydział sal dla klas 4-8"
+                    >
+                      🏫 Sale klas 4-8
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyRolePreset(activeFileId, 'dyzury')}
+                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                      title="Ustaw ten plik jako źródło dyżurów"
+                    >
+                      🛡️ Dyżury
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyRolePreset(activeFileId, 'all_replace')}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                      title="Zastąp wszystko danymi z tego pliku"
+                    >
+                      🔄 Wszystko (Zastąp)
+                    </button>
+                  </>
                 )}
               </div>
-
-              {/* Error message */}
-              {decryptError && (
-                <motion.div
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-start gap-2 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 text-red-700 dark:text-red-400 rounded-xl text-xs font-semibold"
-                >
-                  <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                  <span>{decryptError}</span>
-                </motion.div>
-              )}
-
-              {/* Actions */}
-              <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="py-2.5 px-4 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-black text-slate-600 dark:text-slate-400 transition cursor-pointer"
-                >
-                  Anuluj
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <Upload size={15} /> Wczytaj Wybrane Dane do Programu
-                </button>
-              </div>
-            </form>
+            </div>
           )}
+
+          {/* Main Content Area */}
+          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+            {activeTab === 'files' ? (
+              <>
+                {/* Left Sidebar: Uploaded Files Queue */}
+                <div className="w-full md:w-72 lg:w-80 border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 p-4 flex flex-col gap-3 overflow-y-auto shrink-0 custom-scrollbar">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                      Lista plików ({files.length}):
+                    </span>
+                    <label className="text-[11px] font-extrabold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer">
+                      <Plus size={13} /> Dodaj plik
+                      <input
+                        type="file"
+                        multiple
+                        accept=".json"
+                        className="hidden"
+                        onChange={handleAddMoreFiles}
+                      />
+                    </label>
+                  </div>
+
+                  {files.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-3">
+                      <div className="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 rounded-2xl">
+                        <Upload size={24} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-slate-800 dark:text-slate-200">Wybierz pliki JSON</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Możesz zaznaczyć kilka plików naraz do scalenia</p>
+                      </div>
+                      <label className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition cursor-pointer shadow-xs">
+                        Przeglądaj pliki
+                        <input
+                          type="file"
+                          multiple
+                          accept=".json"
+                          className="hidden"
+                          onChange={handleAddMoreFiles}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {files.map((file, idx) => {
+                        const isActive = file.id === activeFileId;
+                        const stats = file.payload ? inspectFilePayload(file.payload, file.name) : null;
+
+                        return (
+                          <div
+                            key={file.id}
+                            onClick={() => setActiveFileId(file.id)}
+                            className={`p-3 rounded-xl border transition cursor-pointer relative ${
+                              isActive 
+                                ? 'bg-white dark:bg-slate-800 border-indigo-500 dark:border-indigo-400 shadow-md ring-1 ring-indigo-500/20' 
+                                : 'bg-white/80 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className={`p-1.5 rounded-lg shrink-0 ${
+                                  file.isEncrypted 
+                                    ? 'bg-amber-100 dark:bg-amber-950 text-amber-600' 
+                                    : 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600'
+                                }`}>
+                                  {file.isEncrypted ? <Lock size={14} /> : <FileText size={14} />}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black text-slate-800 dark:text-slate-200 truncate" title={file.name}>
+                                    {idx + 1}. {file.name}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400 truncate">
+                                    {file.isEncrypted ? '🔒 Plik zaszyfrowany' : (stats?.schoolName || 'Szkoła')}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveFile(file.id);
+                                }}
+                                className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition"
+                                title="Usuń plik z listy"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+
+                            {/* Tags / mini stats */}
+                            {!file.isEncrypted && stats && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {stats.totalLessons > 0 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 rounded border border-blue-100 dark:border-blue-900/40">
+                                    {stats.totalLessons} lekcji
+                                  </span>
+                                )}
+                                {stats.sched1_3 > 0 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 rounded border border-amber-100 dark:border-amber-900/40">
+                                    1-3: {stats.sched1_3} sal
+                                  </span>
+                                )}
+                                {stats.sched4_8 > 0 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded border border-emerald-100 dark:border-emerald-900/40">
+                                    4-8: {stats.sched4_8} sal
+                                  </span>
+                                )}
+                                {stats.dutyEntries > 0 && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 rounded border border-violet-100 dark:border-violet-900/40">
+                                    {stats.dutyEntries} dyżurów
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Drop / Add bottom bar */}
+                  <label className="p-3 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer bg-white/40 dark:bg-slate-900/40">
+                    <Plus size={14} /> Dodaj kolejny plik JSON
+                    <input
+                      type="file"
+                      multiple
+                      accept=".json"
+                      className="hidden"
+                      onChange={handleAddMoreFiles}
+                    />
+                  </label>
+                </div>
+
+                {/* Right Area: Active File Detailed Configuration */}
+                <div className="flex-1 p-5 overflow-y-auto custom-scrollbar space-y-4">
+                  {activeFile ? (
+                    activeFile.isEncrypted ? (
+                      /* Encrypted Password Form */
+                      <div className="p-6 max-w-md mx-auto bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-4 mt-6">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
+                            <Lock size={20} />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
+                              Odszyfruj plik: {activeFile.name}
+                            </h3>
+                            <p className="text-xs text-slate-500">Podaj hasło AES-256 zdefiniowane przy eksporcie</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Hasło:</label>
+                          <div className="relative">
+                            <input
+                              type={showPassword[activeFile.id] ? 'text' : 'password'}
+                              value={activeFile.password || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFiles(prev => prev.map(f => f.id === activeFile.id ? { ...f, password: val, decryptError: undefined } : f));
+                              }}
+                              placeholder="Wprowadź hasło..."
+                              className="w-full text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 pr-10 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(p => ({ ...p, [activeFile.id]: !p[activeFile.id] }))}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            >
+                              {showPassword[activeFile.id] ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {activeFile.decryptError && (
+                          <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold flex items-center gap-2">
+                            <AlertCircle size={15} />
+                            <span>{activeFile.decryptError}</span>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={!activeFile.password?.trim() || isDecryptingId === activeFile.id}
+                          onClick={() => handleDecryptFile(activeFile.id, activeFile.password || '')}
+                          className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+                        >
+                          <Unlock size={14} />
+                          {isDecryptingId === activeFile.id ? 'Odszyfrowywanie...' : 'Odszyfruj i Konfiguruj'}
+                        </button>
+                      </div>
+                    ) : activeConfig && activeStats ? (
+                      /* Decrypted / Valid JSON Configurator */
+                      <div className="space-y-4">
+                        {/* File Header Details */}
+                        <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
+                                {activeFile.name}
+                              </h3>
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded">
+                                {activeStats.schoolName}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Zawiera: {activeStats.classesCount} klas, {activeStats.teachersCount} nauczycieli, {activeStats.totalLessons} lekcji w planie, {activeStats.schedRoomsTotal} przypisań w planie sal, {activeStats.dutyEntries} dyżurów
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* SECTION 1: School Info & Infrastructure */}
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                          <div 
+                            onClick={() => toggleSection('base')}
+                            className="p-3 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                              <Building2 size={15} className="text-indigo-500" />
+                              <span>1. Dane Szkoły, Nauczyciele i Zasoby</span>
+                            </div>
+                            {expandedSections.base ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </div>
+
+                          {expandedSections.base && (
+                            <div className="p-4 space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={activeConfig.importSchoolInfo}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, importSchoolInfo: e.target.checked }))}
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                  />
+                                  <span>Nazwa szkoły i godziny lekcyjne (Dzwonki)</span>
+                                </label>
+
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={activeConfig.importBuildingsAndFloors}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, importBuildingsAndFloors: e.target.checked }))}
+                                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                  />
+                                  <span>Infrastruktura budynków i pięter</span>
+                                </label>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                {/* Teachers mode */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Nauczyciele:</label>
+                                  <select
+                                    value={activeConfig.teachersMode}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, teachersMode: e.target.value as any }))}
+                                    className="w-full text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
+                                  >
+                                    <option value="none">Nie importuj</option>
+                                    <option value="merge_new">✓ Dołącz nowych / uzupełnij</option>
+                                    <option value="replace">Zastąp całą listę</option>
+                                  </select>
+                                </div>
+
+                                {/* Subjects mode */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Przedmioty:</label>
+                                  <select
+                                    value={activeConfig.subjectsMode}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, subjectsMode: e.target.value as any }))}
+                                    className="w-full text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
+                                  >
+                                    <option value="none">Nie importuj</option>
+                                    <option value="merge_new">✓ Dołącz nowe</option>
+                                    <option value="replace">Zastąp całą listę</option>
+                                  </select>
+                                </div>
+
+                                {/* Classes mode */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Oddziały (Klasy):</label>
+                                  <select
+                                    value={activeConfig.classesMode}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, classesMode: e.target.value as any }))}
+                                    className="w-full text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
+                                  >
+                                    <option value="none">Nie importuj</option>
+                                    <option value="merge_new">✓ Dołącz nowe</option>
+                                    <option value="replace">Zastąp całą listę</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* SECTION 2: Plan Lekcji (Etap 1 - Klasy i Nauczyciele) */}
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                          <div 
+                            onClick={() => toggleSection('planLekcji')}
+                            className="p-3 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                              <Calendar size={15} className="text-blue-500" />
+                              <span>2. Plan Lekcji (Siatka Zajęć Klas - Etap 1)</span>
+                              <span className="text-[10px] font-normal text-slate-400 normal-case">
+                                ({activeStats.totalLessons} lekcji w pliku)
+                              </span>
+                            </div>
+                            {expandedSections.planLekcji ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </div>
+
+                          {expandedSections.planLekcji && (
+                            <div className="p-4 space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Zakres klas do wczytania:</label>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateActiveConfig(c => ({ ...c, planLekcjiScope: 'all' }))}
+                                      className={`p-2 rounded-lg text-xs font-bold border text-left transition ${
+                                        activeConfig.planLekcjiScope === 'all'
+                                          ? 'bg-blue-50 border-blue-300 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200'
+                                          : 'border-slate-200 text-slate-600 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      Wszystkie oddziały
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateActiveConfig(c => ({ ...c, planLekcjiScope: 'grades_1_3' }))}
+                                      className={`p-2 rounded-lg text-xs font-bold border text-left transition ${
+                                        activeConfig.planLekcjiScope === 'grades_1_3'
+                                          ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200'
+                                          : 'border-slate-200 text-slate-600 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      🧸 Tylko klasy 1-3 ({activeStats.lessons1_3} lekcji)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateActiveConfig(c => ({ ...c, planLekcjiScope: 'grades_4_8' }))}
+                                      className={`p-2 rounded-lg text-xs font-bold border text-left transition ${
+                                        activeConfig.planLekcjiScope === 'grades_4_8'
+                                          ? 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200'
+                                          : 'border-slate-200 text-slate-600 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      🏫 Tylko klasy 4-8 ({activeStats.lessons4_8} lekcji)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => updateActiveConfig(c => ({ ...c, planLekcjiScope: 'custom' }))}
+                                      className={`p-2 rounded-lg text-xs font-bold border text-left transition ${
+                                        activeConfig.planLekcjiScope === 'custom'
+                                          ? 'bg-indigo-50 border-indigo-300 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-200'
+                                          : 'border-slate-200 text-slate-600 dark:border-slate-700'
+                                      }`}
+                                    >
+                                      🎯 Wybrane oddziały
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Tryb scalania siatki lekcji:</label>
+                                  <div className="space-y-1.5">
+                                    <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-bold">
+                                      <input
+                                        type="radio"
+                                        name={`plStrategy_${activeFile.id}`}
+                                        checked={activeConfig.planLekcjiStrategy === 'merge'}
+                                        onChange={() => updateActiveConfig(c => ({ ...c, planLekcjiStrategy: 'merge' }))}
+                                        className="text-blue-600"
+                                      />
+                                      <span>Scal / Zastąp lekcje dla wybranych klas (zachowaj pozostałe)</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-bold">
+                                      <input
+                                        type="radio"
+                                        name={`plStrategy_${activeFile.id}`}
+                                        checked={activeConfig.planLekcjiStrategy === 'replace'}
+                                        onChange={() => updateActiveConfig(c => ({ ...c, planLekcjiStrategy: 'replace' }))}
+                                        className="text-blue-600"
+                                      />
+                                      <span>Zastąp cały plan lekcji</span>
+                                    </label>
+                                  </div>
+
+                                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                                    <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer font-bold">
+                                      <input
+                                        type="checkbox"
+                                        checked={activeConfig.planLekcjiIncludeSpecial}
+                                        onChange={(e) => updateActiveConfig(c => ({ ...c, planLekcjiIncludeSpecial: e.target.checked }))}
+                                        className="rounded border-slate-300 text-blue-600"
+                                      />
+                                      <span>Dołącz Nauczanie Indywidualne (NI) i Rewalidację</span>
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Custom Classes Checklist if custom scope is selected */}
+                              {activeConfig.planLekcjiScope === 'custom' && (
+                                <div className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 mt-2">
+                                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                                    <span>Zaznacz oddziały do zaimportowania:</span>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => updateActiveConfig(c => ({ ...c, planLekcjiCustomClasses: activeAvailableClasses.map(cl => cl.id) }))}
+                                        className="text-indigo-600 hover:underline cursor-pointer"
+                                      >
+                                        Wszystkie
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => updateActiveConfig(c => ({ ...c, planLekcjiCustomClasses: [] }))}
+                                        className="text-slate-400 hover:underline cursor-pointer"
+                                      >
+                                        Wyczyść
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
+                                    {activeAvailableClasses.map(cl => {
+                                      const isChecked = activeConfig.planLekcjiCustomClasses.includes(cl.id);
+                                      return (
+                                        <label
+                                          key={cl.id}
+                                          className={`px-2 py-1 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                                            isChecked 
+                                              ? 'bg-indigo-600 text-white border-indigo-600' 
+                                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                          }`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            className="hidden"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              const checked = e.target.checked;
+                                              updateActiveConfig(c => ({
+                                                ...c,
+                                                planLekcjiCustomClasses: checked 
+                                                  ? [...c.planLekcjiCustomClasses, cl.id]
+                                                  : c.planLekcjiCustomClasses.filter(id => id !== cl.id)
+                                              }));
+                                            }}
+                                          />
+                                          {cl.name}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* SECTION 3: Plan Sal (Etap 2 - Obłożenie Gabinetów / schedData) */}
+                        <div className="border border-emerald-200 dark:border-emerald-900/60 rounded-xl overflow-hidden bg-emerald-50/20 dark:bg-emerald-950/10">
+                          <div 
+                            onClick={() => toggleSection('planSal')}
+                            className="p-3 bg-emerald-50/80 dark:bg-emerald-950/40 border-b border-emerald-100 dark:border-emerald-900/40 flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 text-xs font-black text-emerald-900 dark:text-emerald-200 uppercase tracking-wide">
+                              <Building2 size={15} className="text-emerald-600" />
+                              <span>3. Plan Sal (Płachta Obłożenia Gabinetów - Etap 2)</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 rounded">
+                                {activeStats.schedRoomsTotal} przypisań w pliku
+                              </span>
+                            </div>
+                            {expandedSections.planSal ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </div>
+
+                          {expandedSections.planSal && (
+                            <div className="p-4 space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                                    Zakres sal / klas do wczytania z tego pliku:
+                                  </label>
+                                  <div className="space-y-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateActiveConfig(c => ({ ...c, planSalScope: 'all' }))}
+                                      className={`w-full p-2 rounded-lg text-xs font-bold border text-left transition ${
+                                        activeConfig.planSalScope === 'all'
+                                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700'
+                                      }`}
+                                    >
+                                      Wszystkie sale i klasy ({activeStats.schedRoomsTotal} przypisań)
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => updateActiveConfig(c => ({ ...c, planSalScope: 'grades_1_3' }))}
+                                      className={`w-full p-2 rounded-lg text-xs font-bold border text-left transition ${
+                                        activeConfig.planSalScope === 'grades_1_3'
+                                          ? 'bg-amber-500 text-white border-amber-500 shadow-2xs'
+                                          : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200'
+                                      }`}
+                                    >
+                                      ⭐ Tylko przydziały sal dla klas 1-3 ({activeStats.sched1_3} przypisań)
+                                      <span className="block text-[10px] font-normal opacity-90">
+                                        Wczytuje ułożone sale dla edukacji wczesnoszkolnej i zachowuje sale klas 4-8
+                                      </span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => updateActiveConfig(c => ({ ...c, planSalScope: 'grades_4_8' }))}
+                                      className={`w-full p-2 rounded-lg text-xs font-bold border text-left transition ${
+                                        activeConfig.planSalScope === 'grades_4_8'
+                                          ? 'bg-sky-600 text-white border-sky-600 shadow-2xs'
+                                          : 'bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-900/60 text-sky-900 dark:text-sky-200'
+                                      }`}
+                                    >
+                                      ⭐ Tylko przydziały sal dla klas 4-8 ({activeStats.sched4_8} przypisań)
+                                      <span className="block text-[10px] font-normal opacity-90">
+                                        Wczytuje ułożone sale dla klas starszych i zachowuje sale klas 1-3
+                                      </span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
+                                    Tryb scalania rozkładu sal:
+                                  </label>
+                                  <div className="space-y-2">
+                                    <label className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-start gap-2 text-xs text-slate-800 dark:text-slate-200 cursor-pointer font-bold">
+                                      <input
+                                        type="radio"
+                                        name={`salStrategy_${activeFile.id}`}
+                                        checked={activeConfig.planSalStrategy === 'merge'}
+                                        onChange={() => updateActiveConfig(c => ({ ...c, planSalStrategy: 'merge' }))}
+                                        className="text-emerald-600 mt-0.5"
+                                      />
+                                      <div>
+                                        <span>Połącz z obecnym planem sal (Zalecane)</span>
+                                        <p className="text-[10px] text-slate-500 font-medium">
+                                          Zachowuje sale przypisane dla pozostałych klas/gabinetów, aktualizując tylko wybrany zakres.
+                                        </p>
+                                      </div>
+                                    </label>
+
+                                    <label className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-start gap-2 text-xs text-slate-800 dark:text-slate-200 cursor-pointer font-bold">
+                                      <input
+                                        type="radio"
+                                        name={`salStrategy_${activeFile.id}`}
+                                        checked={activeConfig.planSalStrategy === 'replace'}
+                                        onChange={() => updateActiveConfig(c => ({ ...c, planSalStrategy: 'replace' }))}
+                                        className="text-emerald-600 mt-0.5"
+                                      />
+                                      <div>
+                                        <span>Zastąp cały rozkład sal</span>
+                                        <p className="text-[10px] text-slate-500 font-medium">
+                                          Czyści wszystkie dotychczasowe gabinety i wstawia stan z tego pliku.
+                                        </p>
+                                      </div>
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* SECTION 4: Plan Dyżurów */}
+                        <div className="border border-violet-200 dark:border-violet-900/60 rounded-xl overflow-hidden bg-violet-50/20 dark:bg-violet-950/10">
+                          <div 
+                            onClick={() => toggleSection('dyzury')}
+                            className="p-3 bg-violet-50/80 dark:bg-violet-950/40 border-b border-violet-100 dark:border-violet-900/40 flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 text-xs font-black text-violet-900 dark:text-violet-200 uppercase tracking-wide">
+                              <Shield size={15} className="text-violet-600" />
+                              <span>4. Plan Dyżurów Nauczycielskich</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-violet-100 dark:bg-violet-900/60 text-violet-800 dark:text-violet-200 rounded">
+                                {activeStats.dutyEntries} wpisów dyżurów w pliku
+                              </span>
+                            </div>
+                            {expandedSections.dyzury ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </div>
+
+                          {expandedSections.dyzury && (
+                            <div className="p-4 space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">Zakres dyżurów:</label>
+                                  <select
+                                    value={activeConfig.dyzuryMode}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, dyzuryMode: e.target.value as any }))}
+                                    className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
+                                  >
+                                    <option value="none">Nie importuj dyżurów</option>
+                                    <option value="harmonogram_only">Tylko harmonogram przerw</option>
+                                    <option value="all">✓ Całość (Miejsca, Przerwy i Harmonogram)</option>
+                                  </select>
+                                </div>
+
+                                {activeConfig.dyzuryMode !== 'none' && (
+                                  <div className="space-y-1">
+                                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">Tryb łączenia dyżurów:</label>
+                                    <select
+                                      value={activeConfig.dyzuryStrategy}
+                                      onChange={(e) => updateActiveConfig(c => ({ ...c, dyzuryStrategy: e.target.value as any }))}
+                                      className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
+                                    >
+                                      <option value="merge">✓ Dołącz / Scal z obecnymi dyżurami</option>
+                                      <option value="replace">Zastąp cały harmonogram dyżurów</option>
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* SECTION 5: Archive & Snapshots */}
+                        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                          <div 
+                            onClick={() => toggleSection('extra')}
+                            className="p-3 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2 text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                              <Archive size={15} className="text-slate-500" />
+                              <span>5. Archiwum, Punkty Przywracania i Dziennik Zdarzeń</span>
+                            </div>
+                            {expandedSections.extra ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </div>
+
+                          {expandedSections.extra && (
+                            <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={activeConfig.importArchive}
+                                  onChange={(e) => updateActiveConfig(c => ({ ...c, importArchive: e.target.checked }))}
+                                  className="rounded text-indigo-600"
+                                />
+                                <span>Archiwum ({activeStats.archiveCount})</span>
+                              </label>
+
+                              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={activeConfig.importSnapshots}
+                                  onChange={(e) => updateActiveConfig(c => ({ ...c, importSnapshots: e.target.checked }))}
+                                  className="rounded text-indigo-600"
+                                />
+                                <span>Snapshoty ({activeStats.snapshotsCount})</span>
+                              </label>
+
+                              <label className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={activeConfig.importHistoryLogs}
+                                  onChange={(e) => updateActiveConfig(c => ({ ...c, importHistoryLogs: e.target.checked }))}
+                                  className="rounded text-indigo-600"
+                                />
+                                <span>Logi audytu ({activeStats.historyLogsCount})</span>
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : null
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center p-12 text-slate-400 text-xs font-semibold">
+                      Wybierz plik z listy po lewej, aby dostosować reguły scalania.
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* PREVIEW TAB */
+              <div className="flex-1 p-6 overflow-y-auto custom-scrollbar space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide">
+                      Podsumowanie Wynikowe Scalenia
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Oto stan, jaki powstanie po połączeniu wybranych modułów ze wszystkich {files.length} plików:
+                    </p>
+                  </div>
+                </div>
+
+                {previewSummary && (
+                  <>
+                    {/* Metric Cards Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider block">Oddziały i Nauczyciele</span>
+                        <p className="text-lg font-black text-blue-950 dark:text-blue-100">
+                          {previewSummary.classesCount} <span className="text-xs font-normal text-blue-600">klas</span> • {previewSummary.teachersCount} <span className="text-xs font-normal text-blue-600">nauczycieli</span>
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider block">Siatka Lekcji (Plan Klas)</span>
+                        <p className="text-lg font-black text-indigo-950 dark:text-indigo-100">
+                          {previewSummary.lessonsCount} <span className="text-xs font-normal text-indigo-600">lekcji łącznie</span>
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/60 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider block">Plan Sal (Płachta)</span>
+                        <p className="text-lg font-black text-emerald-950 dark:text-emerald-100">
+                          {previewSummary.schedTotal} <span className="text-xs font-normal text-emerald-600">sal</span>
+                        </p>
+                        <p className="text-[10px] text-emerald-700 font-bold">
+                          1-3: {previewSummary.schedPlacements1_3} • 4-8: {previewSummary.schedPlacements4_8}
+                        </p>
+                      </div>
+
+                      <div className="p-3.5 bg-violet-50/80 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900/60 rounded-xl space-y-1">
+                        <span className="text-[10px] font-black text-violet-700 uppercase tracking-wider block">Plan Dyżurów</span>
+                        <p className="text-lg font-black text-violet-950 dark:text-violet-100">
+                          {previewSummary.dutiesCount} <span className="text-xs font-normal text-violet-600">dyżurów</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Step-by-step Execution Log */}
+                    <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50 dark:bg-slate-950/50 space-y-2.5">
+                      <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <Layers size={14} className="text-indigo-500" />
+                        Kolejność nakładania danych z plików:
+                      </h4>
+
+                      <div className="space-y-2">
+                        {previewSummary.stepReports.map((sr, i) => (
+                          <div key={i} className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg flex items-start gap-2.5">
+                            <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 text-[10px] font-extrabold rounded">
+                              Krok {i + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{sr.fileName}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                {sr.reports.length > 0 ? sr.reports.join(' • ') : 'Brak wybranych modułów z tego pliku'}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Shield size={14} className="text-emerald-500" />
+              <span>Przed scaleniem program automatycznie utworzy punkt przywracania (Undo).</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="py-2.5 px-4 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl text-xs font-black text-slate-600 dark:text-slate-400 transition cursor-pointer"
+              >
+                Anuluj
+              </button>
+              <button
+                type="button"
+                disabled={files.length === 0}
+                onClick={handleFinalSubmit}
+                className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 shadow-sm"
+              >
+                <GitMerge size={16} /> Scal i Zastosuj w Programie
+              </button>
+            </div>
+          </div>
         </motion.div>
       </div>
     </AnimatePresence>

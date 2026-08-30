@@ -113,6 +113,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   // Rooms dedicated print friendly & scaling states
   const [isRoomsPrintFriendlyMode, setIsRoomsPrintFriendlyMode] = useState<boolean>(false);
   const [roomsPageOrientation, setRoomsPageOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [roomsSplitMode, setRoomsSplitMode] = useState<'floors' | 'cols' | 'none'>('floors');
+  const [roomsSelectedFloor, setRoomsSelectedFloor] = useState<string | 'all'>('all');
   const [roomsMaxColsPerPage, setRoomsMaxColsPerPage] = useState<number>(12);
   const [roomsSelectedDay, setRoomsSelectedDay] = useState<number | 'all'>('all');
   const [roomsSelectedCategory, setRoomsSelectedCategory] = useState<string>('all');
@@ -1490,13 +1492,71 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     };
   }, [appState.floors, appState.buildings, pl.rooms, selectedRoomId]);
 
+  // Extract unique floors for floor selector
+  const availableFloors = useMemo(() => {
+    const floorList: { id: string; name: string; buildingName: string }[] = [];
+    const seen = new Set<string>();
+    
+    appState.floors.forEach((floor, fi) => {
+      const bld = appState.buildings[floor.buildingIdx];
+      const bldName = bld?.name || `Budynek ${floor.buildingIdx + 1}`;
+      const fName = localCleanFloorName(floor.name || `Piętro ${fi + 1}`, bldName);
+      const id = `f_${fi}`;
+      if (!seen.has(id)) {
+        seen.add(id);
+        floorList.push({ id, name: `${bldName} - ${fName}`, buildingName: bldName });
+      }
+    });
+    return floorList;
+  }, [appState.floors, appState.buildings]);
+
   const roomsPrintCategories = useMemo(() => {
+    if (roomsSplitMode === 'floors') {
+      // Group columns by floor
+      const allCols = [
+        ...roomsToPrintColumns.main,
+        ...roomsToPrintColumns.individual,
+        ...roomsToPrintColumns.sport
+      ];
+
+      // If user selected a specific floor
+      const filteredByFloor = roomsSelectedFloor === 'all'
+        ? allCols
+        : allCols.filter(col => `f_${col.floorIdx}` === roomsSelectedFloor);
+
+      const floorMap = new Map<string, { id: string; name: string; icon: string; floorIdx: number; cols: any[] }>();
+
+      filteredByFloor.forEach(col => {
+        const floorKey = `f_${col.floorIdx}`;
+        const bld = appState.buildings[col.floor.buildingIdx];
+        const bldName = bld?.name || `Budynek ${col.floor.buildingIdx + 1}`;
+        const fName = localCleanFloorName(col.floor.name || `Piętro ${col.floorIdx + 1}`, bldName);
+        const displayName = `${bldName} — ${fName}`;
+
+        if (!floorMap.has(floorKey)) {
+          floorMap.set(floorKey, {
+            id: floorKey,
+            name: displayName,
+            icon: '📍',
+            floorIdx: col.floorIdx,
+            cols: []
+          });
+        }
+        floorMap.get(floorKey)!.cols.push(col);
+      });
+
+      // Sort by floorIdx
+      return Array.from(floorMap.values())
+        .sort((a, b) => a.floorIdx - b.floorIdx)
+        .filter(c => c.cols.length > 0);
+    }
+
     return [
       { id: 'main', name: 'Budynek Główny', icon: '🏢', cols: roomsToPrintColumns.main },
       { id: 'individual', name: 'Nauczanie Indywidualne', icon: '🗣️', cols: roomsToPrintColumns.individual },
       { id: 'sport', name: 'Sale Sportowe', icon: '🏆', cols: roomsToPrintColumns.sport }
     ].filter(c => c.cols.length > 0);
-  }, [roomsToPrintColumns]);
+  }, [roomsSplitMode, roomsSelectedFloor, roomsToPrintColumns, appState.floors, appState.buildings]);
 
   if (isRoomsPrintFriendlyMode) {
     const daysToRender = roomsSelectedDay === 'all' ? [0, 1, 2, 3, 4] : [roomsSelectedDay];
@@ -1603,6 +1663,36 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 Pionowo (A4)
               </button>
             </div>
+
+            {/* Grouping / Split mode */}
+            <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Układ tabel:</span>
+              <select
+                value={roomsSplitMode}
+                onChange={(e) => setRoomsSplitMode(e.target.value as any)}
+                className="bg-transparent text-white text-[11px] font-black outline-none cursor-pointer"
+              >
+                <option value="floors" className="bg-slate-800 text-white">Podział wg Kondygnacji (Zalecany)</option>
+                <option value="cols" className="bg-slate-800 text-white">Wg Kategorii / Budynków</option>
+              </select>
+            </div>
+
+            {/* Floor selector when roomsSplitMode === 'floors' */}
+            {roomsSplitMode === 'floors' && (
+              <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Piętro:</span>
+                <select
+                  value={roomsSelectedFloor}
+                  onChange={(e) => setRoomsSelectedFloor(e.target.value)}
+                  className="bg-transparent text-white text-[11px] font-black outline-none cursor-pointer"
+                >
+                  <option value="all" className="bg-slate-800 text-white">Wszystkie kondygnacje</option>
+                  {availableFloors.map(f => (
+                    <option key={f.id} value={f.id} className="bg-slate-800 text-white">{f.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Max cols chunking */}
             <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
@@ -2028,21 +2118,28 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                               let displayItems: Array<{ subject: string; teacherAbbr?: string; roomName?: string }> = [];
 
                               if (scheduleVersion === 'etap1') {
-                                const lessonKeyStr = `${cls.id}|${dayIdx}|${hIdx}`;
-                                const lesson = pl.lessons[lessonKeyStr];
-                                if (lesson) {
-                                  const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                  if (asg) {
-                                    const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
-                                    const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                                    const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                                    displayItems.push({
-                                      subject,
-                                      teacherAbbr: teacher?.abbr,
-                                      roomName: room?.name
-                                    });
+                                const matchingLessons = Object.entries(pl.lessons).filter(([k]) => {
+                                  const p = k.split('|');
+                                  return p[0] === cls.id && parseInt(p[1], 10) === dayIdx && parseInt(p[2], 10) === hIdx;
+                                });
+
+                                matchingLessons.forEach(([_, lesson]) => {
+                                  if (lesson) {
+                                    const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+                                    if (asg) {
+                                      const baseSubject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
+                                      const group = asg.groupId ? pl.schoolGroups?.find(g => g.id === asg.groupId) : null;
+                                      const subject = group ? `[${group.name}] ${baseSubject}` : baseSubject;
+                                      const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+                                      const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
+                                      displayItems.push({
+                                        subject,
+                                        teacherAbbr: teacher?.abbr,
+                                        roomName: room?.name
+                                      });
+                                    }
                                   }
-                                }
+                                });
                               } else {
                                 const clsMapData = etap2Schedule.classes[cls.id] || {};
                                 const daySchedules = clsMapData[dayIdx] || {};
@@ -2581,21 +2678,28 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
                           if (scheduleVersion === 'etap1') {
                             // Find base Etap 1 lessons
-                            const lessonKeyStr = `${cls.id}|${dayIdx}|${hIdx}`;
-                            const lesson = pl.lessons[lessonKeyStr];
-                            if (lesson) {
-                              const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                              if (asg) {
-                                const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
-                                const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                                const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                                displayItems.push({
-                                  subject,
-                                  teacherAbbr: teacher?.abbr,
-                                  roomName: room?.name
-                                });
+                            const matchingLessons = Object.entries(pl.lessons).filter(([k]) => {
+                              const p = k.split('|');
+                              return p[0] === cls.id && parseInt(p[1], 10) === dayIdx && parseInt(p[2], 10) === hIdx;
+                            });
+
+                            matchingLessons.forEach(([_, lesson]) => {
+                              if (lesson) {
+                                const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+                                if (asg) {
+                                  const baseSubject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
+                                  const group = asg.groupId ? pl.schoolGroups?.find(g => g.id === asg.groupId) : null;
+                                  const subject = group ? `[${group.name}] ${baseSubject}` : baseSubject;
+                                  const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+                                  const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
+                                  displayItems.push({
+                                    subject,
+                                    teacherAbbr: teacher?.abbr,
+                                    roomName: room?.name
+                                  });
+                                }
                               }
-                            }
+                            });
                           } else {
                             // Find Etap 2 schedules from compiled map
                             const clsMapData = etap2Schedule.classes[cls.id] || {};

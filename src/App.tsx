@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { 
-  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion
+  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion, Lesson
 } from './types';
 import { 
   getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
@@ -10,7 +10,7 @@ import {
   clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics
 } from './services/dbStorage';
 import ExportModal, { ExportOptions } from './components/ExportModal';
-import ImportModal, { ImportPayload, ImportSelectedOptions } from './components/ImportModal';
+import ImportModal from './components/ImportModal';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
 const PlanSal = lazy(() => import('./components/PlanSal'));
@@ -284,7 +284,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.4.0';
+  const CURRENT_VERSION = '3.6.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
 
   useEffect(() => {
@@ -318,7 +318,7 @@ export default function App() {
   // States for selective export and import
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [pendingImportRawContent, setPendingImportRawContent] = useState<string | null>(null);
+  const [pendingImportFiles, setPendingImportFiles] = useState<{ name: string; content: string }[]>([]);
 
   const handleUpdateAppState = (newState: AppState | ((prev: AppState) => AppState)) => {
     setAppState(prev => {
@@ -550,99 +550,110 @@ export default function App() {
         const colKeyCells = nextSchedData[yearKey][day][hourKey];
 
         // Find all lessons for this day and hour in Plan Klas
+        const currentHIdx = pl.hours.findIndex(h => String(h.num) === hourKey);
         pl.classes.forEach(cls => {
-          const lessonKey = `${cls.id}|${day}|${pl.hours.findIndex(h => String(h.num) === hourKey)}`;
-          const lesson = pl.lessons[lessonKey];
-          if (!lesson) return;
-
-          const asg = assignmentsMap.get(lesson.assignmentId);
-          if (!asg) return;
-
-          // Deduplicate inter-class shared lessons: only process them for the primary class
-          if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
-            return;
-          }
-
-          const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
-          const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-          const roomEtap1 = asg.roomId ? roomsMap.get(asg.roomId) : null;
-
-          // Attempt to find a suitable room in the building layout
-          let assignedColKey = '';
-          appState.floors.forEach((floor, fi) => {
-            floor.segments.forEach((seg, si) => {
-              seg.rooms.forEach((rm, ri) => {
-                const targetKey = `f${fi}_s${si}_${rm.num}`;
-                
-                // Prioritize the room matching name / num
-                if (roomEtap1 && String(rm.num).trim() === String(roomEtap1.name).trim()) {
-                  assignedColKey = targetKey;
-                }
-              });
-            });
+          const matchingLessons = (Object.entries(pl.lessons) as [string, Lesson | undefined][]).filter(([k]) => {
+            const p = k.split('|');
+            return p[0] === cls.id && parseInt(p[1], 10) === day && parseInt(p[2], 10) === currentHIdx;
           });
 
-          // Fallback to first empty room of appropriate type if room specified but no strict match, or if any is free
-          if (!assignedColKey) {
-            for (let fi = 0; fi < appState.floors.length; fi++) {
-              const floor = appState.floors[fi];
-              for (let si = 0; si < floor.segments.length; si++) {
-                const seg = floor.segments[si];
-                for (let ri = 0; ri < seg.rooms.length; ri++) {
-                  const rm = seg.rooms[ri];
-                  const keyCandidate = `f${fi}_s${si}_${rm.num}`;
+          matchingLessons.forEach(([lessonKey, lesson]) => {
+            if (!lesson) return;
+
+            const asg = assignmentsMap.get(lesson.assignmentId);
+            if (!asg) return;
+
+            // Deduplicate inter-class shared lessons: only process them for the primary class
+            if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
+              return;
+            }
+
+            const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
+            const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+            const roomEtap1 = asg.roomId ? roomsMap.get(asg.roomId) : null;
+
+            // Attempt to find a suitable room in the building layout
+            let assignedColKey = '';
+            appState.floors.forEach((floor, fi) => {
+              floor.segments.forEach((seg, si) => {
+                seg.rooms.forEach((rm, ri) => {
+                  const targetKey = `f${fi}_s${si}_${rm.num}`;
                   
-                  if (!colKeyCells[keyCandidate]) {
-                    assignedColKey = keyCandidate;
-                    break;
+                  // Prioritize the room matching name / num
+                  if (roomEtap1 && String(rm.num).trim() === String(roomEtap1.name).trim()) {
+                    assignedColKey = targetKey;
                   }
+                });
+              });
+            });
+
+            // Fallback to first empty room of appropriate type if room specified but no strict match, or if any is free
+            if (!assignedColKey) {
+              for (let fi = 0; fi < appState.floors.length; fi++) {
+                const floor = appState.floors[fi];
+                for (let si = 0; si < floor.segments.length; si++) {
+                  const seg = floor.segments[si];
+                  for (let ri = 0; ri < seg.rooms.length; ri++) {
+                    const rm = seg.rooms[ri];
+                    const keyCandidate = `f${fi}_s${si}_${rm.num}`;
+                    
+                    if (!colKeyCells[keyCandidate]) {
+                      assignedColKey = keyCandidate;
+                      break;
+                    }
+                  }
+                  if (assignedColKey) break;
                 }
                 if (assignedColKey) break;
               }
-              if (assignedColKey) break;
             }
-          }
 
-          // Force to first slot if unable to find empty
-          if (!assignedColKey && appState.floors[0]?.segments[0]?.rooms[0]) {
-            const firstRm = appState.floors[0].segments[0].rooms[0];
-            assignedColKey = `f0_s0_${firstRm.num}`;
-          }
+            // Force to first slot if unable to find empty
+            if (!assignedColKey && appState.floors[0]?.segments[0]?.rooms[0]) {
+              const firstRm = appState.floors[0].segments[0].rooms[0];
+              assignedColKey = `f0_s0_${firstRm.num}`;
+            }
 
-          if (assignedColKey) {
-            const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
-            const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
-              ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
-              : [];
-            
-            const combinedClasses = [cls.name, ...extraClasses];
-            const newCell: SchedCell = {
-              teacherAbbr: teacher?.abbr || '?',
-              supportTeacherAbbr: suppTeacher?.abbr || undefined,
-              classes: combinedClasses,
-              className: mergeClassNames(combinedClasses).join('+'),
-              subject: subject,
-              note: roomEtap1 ? `(sugestia: ${roomEtap1.name})` : undefined,
-              _bridgeMeta: {
-                classId: cls.id,
-                teacherId: asg.teacherId,
-                subjectId: asg.subjectId,
-                roomId: asg.roomId,
-                groupId: asg.groupId || null,
-                suggestedRoom: roomEtap1 ? roomEtap1.name : null
+            if (assignedColKey) {
+              const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
+              const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
+                ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
+                : [];
+              
+              const groupObj = asg.groupId ? pl.schoolGroups?.find(g => g.id === asg.groupId) : null;
+              const combinedClasses = [cls.name, ...extraClasses];
+              const displayClassName = groupObj 
+                ? `${mergeClassNames(combinedClasses).join('+')} (${groupObj.name})`
+                : mergeClassNames(combinedClasses).join('+');
+
+              const newCell: SchedCell = {
+                teacherAbbr: teacher?.abbr || '?',
+                supportTeacherAbbr: suppTeacher?.abbr || undefined,
+                classes: combinedClasses,
+                className: displayClassName,
+                subject: subject,
+                note: roomEtap1 ? `(sugestia: ${roomEtap1.name})` : undefined,
+                _bridgeMeta: {
+                  classId: cls.id,
+                  teacherId: asg.teacherId,
+                  subjectId: asg.subjectId,
+                  roomId: asg.roomId,
+                  groupId: asg.groupId || null,
+                  suggestedRoom: roomEtap1 ? roomEtap1.name : null
+                }
+              };
+
+              // If already occupied, accumulate into an array to preserve both for conflict detection
+              const existing = colKeyCells[assignedColKey];
+              if (existing) {
+                const existingArr = Array.isArray(existing) ? existing : [existing];
+                colKeyCells[assignedColKey] = [...existingArr, newCell];
+              } else {
+                colKeyCells[assignedColKey] = newCell;
               }
-            };
-
-            // If already occupied, accumulate into an array to preserve both for conflict detection
-            const existing = colKeyCells[assignedColKey];
-            if (existing) {
-              const existingArr = Array.isArray(existing) ? existing : [existing];
-              colKeyCells[assignedColKey] = [...existingArr, newCell];
-            } else {
-              colKeyCells[assignedColKey] = newCell;
+              countTransfer++;
             }
-            countTransfer++;
-          }
+          });
         });
       });
     }
@@ -823,87 +834,69 @@ export default function App() {
   };
 
   const handleImportBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []) as File[];
+    if (files.length === 0) return;
 
-    // Reset so same file can be selected again
+    // Reset so same files can be selected again
     e.target.value = '';
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const rawContent = evt.target?.result as string;
-      if (!rawContent) return;
+    const loadedFiles: { name: string; content: string }[] = [];
+    let readCount = 0;
 
-      setPendingImportRawContent(rawContent);
-      setShowImportModal(true);
-    };
-    reader.readAsText(file);
+    files.forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const rawContent = evt.target?.result as string;
+        if (rawContent) {
+          loadedFiles.push({ name: file.name, content: rawContent });
+        }
+        readCount++;
+        if (readCount === files.length) {
+          setPendingImportFiles(loadedFiles);
+          setShowImportModal(true);
+        }
+      };
+      reader.readAsText(file);
+    });
   };
 
-  const handleExecuteSelectiveImport = async (payload: ImportPayload, options: ImportSelectedOptions) => {
-    const importedParts: string[] = [];
-
+  const handleExecuteMultiImport = async (result: {
+    mergedState: AppState;
+    mergedSched: SchedData;
+    mergedArchive: ArchiveEntry[];
+    mergedSnapshots: SnapshotEntry[];
+    mergedLogs: AppEventLog[];
+    overallReport: string[];
+  }) => {
     pushToUndo(schedData);
 
-    if (options.importAppState && payload.appState) {
-      handleUpdateAppState(payload.appState);
-      importedParts.push('Konfigurację szkoły');
-    }
+    handleUpdateAppState(result.mergedState);
+    setSchedData(result.mergedSched);
+    setArchive(result.mergedArchive);
+    setSnapshots(result.mergedSnapshots);
+    setHistoryLogs(result.mergedLogs);
 
-    if (options.importSchedData && payload.schedData) {
-      setSchedData(payload.schedData);
-      importedParts.push('Plan lekcji');
-    }
-
-    if (options.importArchive && Array.isArray(payload.archive) && payload.archive.length > 0) {
-      if (options.archiveMode === 'merge') {
-        const existingKeys = new Set(archive.map(a => a.yearKey));
-        const newItems = payload.archive.filter(a => !existingKeys.has(a.yearKey));
-        const merged = [...archive, ...newItems];
-        setArchive(merged);
-        await setStorageItem(STORAGE_KEYS.ARCHIVE, merged);
-        importedParts.push(`Archiwum (+${newItems.length} nowych)`);
-      } else {
-        setArchive(payload.archive);
-        await setStorageItem(STORAGE_KEYS.ARCHIVE, payload.archive);
-        importedParts.push(`Archiwum (${payload.archive.length} zastąpionych)`);
-      }
-    }
-
-    if (options.importSnapshots && Array.isArray(payload.snapshots) && payload.snapshots.length > 0) {
-      if (options.snapshotsMode === 'merge') {
-        const existingIds = new Set(snapshots.map(s => s.id));
-        const newItems = payload.snapshots.filter(s => !existingIds.has(s.id));
-        const merged = [...snapshots, ...newItems];
-        setSnapshots(merged);
-        await setStorageItem(STORAGE_KEYS.SNAPSHOTS, merged);
-        importedParts.push(`Snapshoty (+${newItems.length} nowych)`);
-      } else {
-        setSnapshots(payload.snapshots);
-        await setStorageItem(STORAGE_KEYS.SNAPSHOTS, payload.snapshots);
-        importedParts.push(`Snapshoty (${payload.snapshots.length} zastąpionych)`);
-      }
-    }
-
-    if (options.importHistoryLogs && Array.isArray(payload.historyLogs) && payload.historyLogs.length > 0) {
-      const existingIds = new Set(historyLogs.map(l => l.id));
-      const newItems = payload.historyLogs.filter(l => !existingIds.has(l.id));
-      const merged = [...historyLogs, ...newItems];
-      setHistoryLogs(merged);
-      await setStorageItem(STORAGE_KEYS.HISTORY_LOGS, merged);
-      importedParts.push(`Dziennik zdarzeń (+${newItems.length} wpisów)`);
-    }
+    await Promise.all([
+      setStorageItem(STORAGE_KEYS.APP_STATE, result.mergedState),
+      setStorageItem(STORAGE_KEYS.SCHED_DATA, result.mergedSched),
+      setStorageItem(STORAGE_KEYS.ARCHIVE, result.mergedArchive),
+      setStorageItem(STORAGE_KEYS.SNAPSHOTS, result.mergedSnapshots),
+      setStorageItem(STORAGE_KEYS.HISTORY_LOGS, result.mergedLogs)
+    ]);
 
     refreshStorageStats();
     setShowImportModal(false);
-    setPendingImportRawContent(null);
+    setPendingImportFiles([]);
 
-    const summaryText = importedParts.length > 0 ? importedParts.join(', ') : 'brak wybranych modułów';
-    notify(`Pomyślnie zaimportowano: ${summaryText}!`, 'ok');
+    const summaryText = result.overallReport.length > 0 
+      ? result.overallReport.join(' | ') 
+      : 'Pomyślnie scalono dane';
+
+    notify('Pomyślnie scalono i zaktualizowano plan!', 'ok');
     addEventLog(
       'import',
-      'Selektywny import danych (plik JSON)',
-      `Zaimportowano moduły: ${summaryText} dla szkoły "${payload.appState?.school?.name || appState.school.name}".`
+      'Wieloosobowe scalanie i import danych (JSON)',
+      `Wynik scalania: ${summaryText}`
     );
   };
 
@@ -1188,9 +1181,10 @@ export default function App() {
           </button>
           
           <label className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1 cursor-pointer">
-            <Upload size={15} /> Import
+            <Upload size={15} /> Import / Scalanie
             <input 
               type="file" 
+              multiple
               accept=".json" 
               className="hidden" 
               onChange={handleImportBackup} 
@@ -1400,10 +1394,15 @@ export default function App() {
         isOpen={showImportModal}
         onClose={() => {
           setShowImportModal(false);
-          setPendingImportRawContent(null);
+          setPendingImportFiles([]);
         }}
-        rawFileContent={pendingImportRawContent}
-        onExecuteImport={handleExecuteSelectiveImport}
+        initialRawFiles={pendingImportFiles}
+        currentAppState={appState}
+        currentSchedData={schedData}
+        currentArchive={archive}
+        currentSnapshots={snapshots}
+        currentHistoryLogs={historyLogs}
+        onExecuteMultiImport={handleExecuteMultiImport}
       />
 
       {isRestoring && (
@@ -1448,9 +1447,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.1.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.5.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Zaimplementowano wykres zapotrzebowania na dyżury (Recharts), role administracyjne nauczycieli i przestrzenie przejściowe.
+                  Nowe Centrum Scalania i Importu Danych (Wieloosobowe) – łatwe łączenie planów klas 1–3, 4–8 i dyżurów.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button
