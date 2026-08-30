@@ -1687,6 +1687,53 @@ export default function PlanSal({
     notify('Wyczyszczono przydział', 'ok');
   };
 
+  const handleClearRoomColumn = (col: any, colKeyStr: string) => {
+    if (presentationMode) return;
+    const yearKey = appState.yearKey;
+    const dayData = schedData[yearKey]?.[activeDay];
+    if (!dayData) return;
+
+    let lessonCount = 0;
+    appState.hours.forEach(h => {
+      const raw = dayData[h]?.[colKeyStr];
+      if (raw) {
+        if (Array.isArray(raw)) {
+          lessonCount += raw.filter(Boolean).length;
+        } else {
+          lessonCount += 1;
+        }
+      }
+    });
+
+    const roomName = col.room?.num || 'wybranej sali';
+    if (lessonCount === 0) {
+      notify(`Sala ${roomName} nie ma żadnych przydziałów w wybranym dniu.`, 'err');
+      return;
+    }
+
+    if (!window.confirm(`Czy na pewno chcesz usunąć wszystkie (${lessonCount}) przydziały z sali ${roomName} dla wybranego dnia (${DAYS[activeDay]})?`)) {
+      return;
+    }
+
+    const newSchedData = { ...schedData };
+    const newYearData = { ...(newSchedData[yearKey] || {}) };
+    const newDayData = { ...(newYearData[activeDay] || {}) };
+
+    appState.hours.forEach(h => {
+      if (newDayData[h] && newDayData[h][colKeyStr]) {
+        const newHourRow = { ...newDayData[h] };
+        delete newHourRow[colKeyStr];
+        newDayData[h] = newHourRow;
+      }
+    });
+
+    newYearData[activeDay] = newDayData;
+    newSchedData[yearKey] = newYearData;
+
+    onChangeSchedData(newSchedData);
+    notify(`Wyczyszczono przydziały (${lessonCount}) dla sali ${roomName}`, 'ok');
+  };
+
   const handleAddWFSlot = (hour: string, cKey: string) => {
     if (presentationMode) return;
     const yearKey = appState.yearKey;
@@ -2471,6 +2518,56 @@ export default function PlanSal({
                     );
                   })}
                 </tbody>
+                {!presentationMode && (
+                  <tfoot className="bg-slate-50/90 border-t-2 border-slate-200">
+                    <tr>
+                      <td className="p-2 text-center text-[10px] font-bold text-slate-400 border-r border-slate-200 bg-slate-100 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] uppercase tracking-wider select-none">
+                        Czyszczenie
+                      </td>
+                      {cols.map((col, colIdx) => {
+                        const cKey = colKey(col);
+                        const dayData = currentDayData;
+                        let roomLessonCount = 0;
+                        appState.hours.forEach(h => {
+                          const raw = dayData[h]?.[cKey];
+                          if (raw) {
+                            if (Array.isArray(raw)) {
+                              roomLessonCount += raw.filter(Boolean).length;
+                            } else {
+                              roomLessonCount += 1;
+                            }
+                          }
+                        });
+
+                        return (
+                          <td key={colIdx} className="p-2 text-center border-r last:border-r-0 border-slate-200 align-middle bg-slate-50/60">
+                            <button
+                              type="button"
+                              onClick={() => handleClearRoomColumn(col, cKey)}
+                              disabled={roomLessonCount === 0}
+                              title={roomLessonCount > 0 
+                                ? `Wyczyść salę ${col.room.num} w tym dniu (${roomLessonCount} ${roomLessonCount === 1 ? 'lekcja' : 'lekcje/lekcji'})`
+                                : `Sala ${col.room.num} jest pusta w tym dniu`}
+                              className={`w-full py-1.5 px-2 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                                roomLessonCount > 0
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 hover:text-rose-800 hover:border-rose-300 shadow-xs cursor-pointer active:scale-95'
+                                  : 'bg-slate-100/50 text-slate-350 border border-dashed border-slate-200 cursor-not-allowed opacity-50'
+                              }`}
+                            >
+                              <Trash2 size={12} className={roomLessonCount > 0 ? "text-rose-500 shrink-0" : "text-slate-350 shrink-0"} />
+                              <span className="whitespace-nowrap">Wyczyść salę</span>
+                              {roomLessonCount > 0 && (
+                                <span className="ml-0.5 text-[9px] font-extrabold px-1.5 py-0.5 bg-rose-200 text-rose-800 rounded-full leading-none">
+                                  {roomLessonCount}
+                                </span>
+                              )}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}
