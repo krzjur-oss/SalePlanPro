@@ -907,46 +907,89 @@ export default function PlanSal({
     return list;
   }, [appState.planLekcji, appState.hours, activeDay, assignmentsMap, teachersMap, subjectsMap, rMap, groupsMap, isAssigned]);
 
+  const assignedLessonsMap = useMemo(() => {
+    if (!editingCell) return new Map<string, { roomName: string; isCurrentCell: boolean }>();
+    const hour = editingCell.hour;
+    const yearKey = appState.yearKey;
+    const hourRow = schedData[yearKey]?.[activeDay]?.[hour] || {};
+    
+    const roomNameByKey = new Map<string, string>();
+    allRoomsList.forEach(r => roomNameByKey.set(r.key, r.num));
+
+    const map = new Map<string, { roomName: string; isCurrentCell: boolean }>();
+
+    Object.entries(hourRow).forEach(([cKey, cell]) => {
+      if (!cell) return;
+      const roomNum = roomNameByKey.get(cKey) || cKey;
+      const slots = Array.isArray(cell) ? cell : [cell];
+      slots.forEach((slot, slIdx) => {
+        if (!slot) return;
+        const isCurrent = cKey === editingCell.colKey && (editingCell.slotIdx === undefined || editingCell.slotIdx === slIdx);
+        
+        const clses = slot.classes || (slot.className ? [slot.className] : []);
+        clses.forEach(c => {
+          if (c?.trim()) {
+            const parsed = parseClassWithGroup(c);
+            parsed.forEach(p => {
+              map.set(p.display.toUpperCase(), { roomName: roomNum, isCurrentCell: isCurrent });
+              if (!p.groupName) {
+                map.set(p.baseClass.toUpperCase(), { roomName: roomNum, isCurrentCell: isCurrent });
+              }
+            });
+            map.set(c.trim().toUpperCase(), { roomName: roomNum, isCurrentCell: isCurrent });
+          }
+        });
+        if (slot.className?.trim()) {
+          map.set(slot.className.trim().toUpperCase(), { roomName: roomNum, isCurrentCell: isCurrent });
+        }
+      });
+    });
+
+    return map;
+  }, [editingCell, schedData, appState.yearKey, activeDay, allRoomsList]);
+
   const hourLessons = useMemo(() => {
     if (!editingCell) return [];
     return poolLessons.filter(l => l.hourKey === editingCell.hour);
   }, [poolLessons, editingCell]);
+
+  const isLessonAssignedElsewhere = (l: { className: string; rawClassName: string }) => {
+    const info = assignedLessonsMap.get(l.className.toUpperCase()) || 
+                 assignedLessonsMap.get(l.rawClassName.toUpperCase());
+    return !!(info && !info.isCurrentCell);
+  };
+
+  const getAssignedRoomName = (l: { className: string; rawClassName: string }) => {
+    const info = assignedLessonsMap.get(l.className.toUpperCase()) || 
+                 assignedLessonsMap.get(l.rawClassName.toUpperCase());
+    return info ? info.roomName : null;
+  };
+
+  const unassignedHourLessons = useMemo(() => {
+    return hourLessons.filter(l => !isLessonAssignedElsewhere(l));
+  }, [hourLessons, assignedLessonsMap]);
+
+  const assignedHourLessons = useMemo(() => {
+    return hourLessons.filter(l => isLessonAssignedElsewhere(l));
+  }, [hourLessons, assignedLessonsMap]);
 
   const scheduledClasses = useMemo(() => {
     return Array.from(new Set(hourLessons.map(l => l.className))).sort();
   }, [hourLessons]);
 
   const unassignedScheduledClasses = useMemo(() => {
-    if (!editingCell) return [];
-    const hour = editingCell.hour;
-    
-    const otherAssignedClasses = new Set<string>();
-    const yearKey = appState.yearKey;
-    const hourRow = schedData[yearKey]?.[activeDay]?.[hour] || {};
-    
-    Object.entries(hourRow).forEach(([cKey, cell]) => {
-      const isCurrentEditing = cKey === editingCell.colKey;
-      if (!cell) return;
-      const slots = Array.isArray(cell) ? cell : [cell];
-      slots.forEach((slot, slIdx) => {
-        if (isCurrentEditing && (editingCell.slotIdx === undefined || editingCell.slotIdx === slIdx)) {
-          return;
-        }
-        if (!slot) return;
-        const clses = slot.classes || (slot.className ? [slot.className] : []);
-        clses.forEach(c => {
-          if (c) otherAssignedClasses.add(c.trim().toUpperCase());
-        });
-        if (slot.className) {
-          otherAssignedClasses.add(slot.className.trim().toUpperCase());
-        }
-      });
-    });
-
     return scheduledClasses.filter(cls => {
-      return !otherAssignedClasses.has(cls.trim().toUpperCase());
+      const info = assignedLessonsMap.get(cls.toUpperCase());
+      return !info || info.isCurrentCell;
     });
-  }, [editingCell, scheduledClasses, schedData, appState.yearKey, activeDay]);
+  }, [scheduledClasses, assignedLessonsMap]);
+
+  const assignedScheduledClasses = useMemo(() => {
+    return scheduledClasses.filter(cls => {
+      const info = assignedLessonsMap.get(cls.toUpperCase());
+      return !!(info && !info.isCurrentCell);
+    });
+  }, [scheduledClasses, assignedLessonsMap]);
 
   const getScheduledOptionsForIndex = (index: number) => {
     return unassignedScheduledClasses.filter(clsName => {
@@ -2459,9 +2502,16 @@ export default function PlanSal({
                 {/* ⚡ Szybki wybór z planu lekcji */}
                 {hourLessons.length > 0 && (
                   <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-3.5 space-y-1.5 select-none shadow-xs">
-                    <label className="block text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">
-                      ⚡ Szybki wybór z planu lekcji (godz. {editingCell.hour})
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">
+                        ⚡ Szybki wybór z planu lekcji (godz. {editingCell.hour})
+                      </label>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        unassignedHourLessons.length > 0 ? 'bg-indigo-200/80 text-indigo-800' : 'bg-slate-200 text-slate-600'
+                      }`}>
+                        {unassignedHourLessons.length} do przypisania
+                      </span>
+                    </div>
                     <select
                       value=""
                       onChange={(e) => {
@@ -2479,11 +2529,29 @@ export default function PlanSal({
                       className="w-full px-2 py-1.5 border border-indigo-200 bg-white rounded-lg text-xs outline-none focus:border-indigo-550 text-indigo-900 font-semibold cursor-pointer"
                     >
                       <option value="">-- Wybierz zaplanowaną lekcję --</option>
-                      {hourLessons.map((l, idx) => (
-                        <option key={idx} value={`${l.className}|${l.subject}|${l.teacherAbbr}`}>
-                          {l.className} • {l.subject} ({l.teacherAbbr})
-                        </option>
-                      ))}
+                      
+                      {unassignedHourLessons.length > 0 && (
+                        <optgroup label="📋 Wolne / Do przypisania (brak sali)">
+                          {unassignedHourLessons.map((l, idx) => (
+                            <option key={`unassigned-${idx}`} value={`${l.className}|${l.subject}|${l.teacherAbbr}`}>
+                              {l.className} • {l.subject} ({l.teacherAbbr}){l.suggestedRoom ? ` [sugestia: ${l.suggestedRoom}]` : ''}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+
+                      {assignedHourLessons.length > 0 && (
+                        <optgroup label="✓ Już przypisane do sali (na dole listy)">
+                          {assignedHourLessons.map((l, idx) => {
+                            const roomName = getAssignedRoomName(l);
+                            return (
+                              <option key={`assigned-${idx}`} value={`${l.className}|${l.subject}|${l.teacherAbbr}`}>
+                                [W sali: {roomName || 'przypisana'}] {l.className} • {l.subject} ({l.teacherAbbr})
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
                 )}
@@ -2533,17 +2601,31 @@ export default function PlanSal({
                                       !allClassesAndGroupsOptions.some(o => o.toUpperCase() === cls.toUpperCase()) && (
                                 <option value={cls}>{cls}</option>
                               )}
-                              {scheduledClasses.length > 0 && (
-                                <optgroup label="Zaplanowane na tę godzinę (w tym grupy)">
-                                  {scheduledClasses.map(clsName => (
+                              {unassignedScheduledClasses.length > 0 && (
+                                <optgroup label="Zaplanowane (wolne - do przypisania)">
+                                  {unassignedScheduledClasses.map(clsName => (
                                     <option key={clsName} value={clsName}>{clsName}</option>
                                   ))}
                                 </optgroup>
                               )}
-                              <optgroup label="Wszystkie klasy i grupy">
-                                {allClassesAndGroupsOptions.map(opt => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
+                              {assignedScheduledClasses.length > 0 && (
+                                <optgroup label="Zaplanowane (już przypisane do innej sali)">
+                                  {assignedScheduledClasses.map(clsName => {
+                                    const info = assignedLessonsMap.get(clsName.toUpperCase());
+                                    return (
+                                      <option key={clsName} value={clsName}>
+                                        {clsName} [w sali: {info?.roomName || 'przypisana'}]
+                                      </option>
+                                    );
+                                  })}
+                                </optgroup>
+                              )}
+                              <optgroup label="Wszystkie pozostałe klasy i grupy">
+                                {allClassesAndGroupsOptions
+                                  .filter(opt => !unassignedScheduledClasses.some(u => u.toUpperCase() === opt.toUpperCase()))
+                                  .map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
                               </optgroup>
                             </select>
                           ) : (
