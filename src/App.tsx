@@ -1682,9 +1682,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.5.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.7.1!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Nowe Centrum Scalania i Importu Danych (Wieloosobowe) – łatwe łączenie planów klas 1–3, 4–8 i dyżurów.
+                  Optymalizacja wydruków płachty sal, automatyczna deduplikacja wpisów i zaawansowana autokorekta pamięci.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

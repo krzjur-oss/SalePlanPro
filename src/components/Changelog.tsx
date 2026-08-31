@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.7.1',
+      date: 'Sierpień / Wrzesień 2026',
+      title: 'Optymalizacja Wydruków Płachty Gabinetów oraz Autonaprawa Pamięci Podręcznej',
+      description: 'Aktualizacja usprawniająca generowanie i drukowanie macierzy gabinetów (płachty sal) w orientacji poziomej oraz wprowadzająca zaawansowane mechanizmy autokorekty stanu i awaryjnego resetu pamięci podręcznej w przypadku uszkodzonych danych.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'fix', text: 'Wyeliminowano powtórzenia wpisów i dublowanie etykiet w komórkach płachty sal na wydrukach (deduplikacja lekcji, oczyszczenie nazw klas ze wstrzykniętych nazw przedmiotów).', badgeText: 'Wydruki Sal' },
+        { type: 'improvement', text: 'Zoptymalizowano formatowanie i dopełnienia tabeli wydruku gabinetów z regułami ochrony przed dzieleniem stron (break-inside: avoid), zapewniając idealne dopasowanie arkusza do formatu A4.', badgeText: 'Druk A4' },
+        { type: 'improvement', text: 'Wdrożono automatyczną autokorektę i łagodne uzgadnianie powiązań (sortAppState i sanitizeAppState), zapobiegając błędom aplikacji przy wczytywaniu niekompletnych struktur danych.', badgeText: 'Stabilność' },
+        { type: 'feature', text: 'Dodano funkcję „Awaryjny reset pamięci podręcznej” w module ErrorBoundary umożliwiającą natychmiastowe przywrócenie poprawnego działania aplikacji jednym kliknięciem.', badgeText: 'Autonaprawa' }
+      ]
+    },
+    {
       version: 'v3.7.0',
       date: 'Wrzesień 2026',
       title: 'Obsługa Równoległych Zajęć w Grupach na Tej Samej Godzinie w Planie Klas',
       description: 'Przełomowa funkcja w module Plan Klas umożliwiająca jednoczesne prowadzenie zajęć w grupach (np. Informatyka gr1 i Informatyka gr2, Język angielski gr1 i gr2, WF chłopcy i WF dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w oddzielnych salach, z czytelnym oznaczeniem grup i brakiem fałszywych kolizji.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Wprowadzono możliwość wstawiania wielu zajęć grupowych w tym samym oknie godzinowym (np. gr1 i gr2) dla tej samej klasy – każda grupa ma przypisanego swojego nauczyciela i salę.', badgeText: 'Grupy' },
         { type: 'feature', text: 'Dodano czytelne, kolorowe plakietki grup (np. "👥 gr1", "👥 gr2", "👥 chł", "👥 dz") wewnątrz kafelków lekcji w planie pojedynczym oraz w widoku wszystkich klas.', badgeText: 'Wizualizacja' },
