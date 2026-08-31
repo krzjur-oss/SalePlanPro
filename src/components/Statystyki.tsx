@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppState, SchedData, AppEventLog, DyzurEntry, AppErrorLog } from '../types';
 import { 
-  BarChart as LucideBarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, TrendingUp, Info, HelpCircle,
+  BarChart as LucideBarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, CheckCircle, TrendingUp, Info, HelpCircle,
   Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw, RefreshCw, XCircle, ShieldAlert
 } from 'lucide-react';
 import { getStorageSize, formatBytes, colKey, flattenColumns } from '../utils';
@@ -2279,27 +2279,5 @@ interface StatystykiProps {
 
       </div>
     </div>
-  );
-}
-
-// Support function inside to avoid import needs
-function CheckCircle(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={props.className}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="m9 12 2 2 4-4" />
-    </svg>
   );
 }

@@ -1719,7 +1719,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                                           MozUserSelect: 'none',
                                           msUserSelect: 'none',
                                           userSelect: 'none',
-                                          WebkitUserDrag: 'none'
+                                          ...({ WebkitUserDrag: 'none' } as any)
                                         }}
                                       >
                                         <div>
@@ -1975,7 +1975,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                                             MozUserSelect: 'none',
                                             msUserSelect: 'none',
                                             userSelect: 'none',
-                                            WebkitUserDrag: 'none'
+                                            ...({ WebkitUserDrag: 'none' } as any)
                                           }}
                                         >
                                           <div>
@@ -3597,7 +3597,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                     MozUserSelect: 'none',
                     msUserSelect: 'none',
                     userSelect: 'none',
-                    WebkitUserDrag: 'none'
+                    ...({ WebkitUserDrag: 'none' } as any)
                   }}
                 >
                   {isSelected && (

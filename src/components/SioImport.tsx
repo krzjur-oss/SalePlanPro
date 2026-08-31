@@ -47,7 +47,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
 
   // Active validation tab
   const [activeTab, setActiveTab] = useState<'teachers' | 'classes' | 'subjects' | 'assignments'>('assignments');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'errors' | 'warnings' | 'duplicates' | 'valid'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'errors' | 'warnings' | 'duplicates' | 'valid' | 'missing_class' | 'missing_subject' | 'invalid_hours' | 'missing_teacher' | 'high_hours'>('all');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 

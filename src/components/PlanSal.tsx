@@ -1855,7 +1855,7 @@ export default function PlanSal({
   };
 
   const renderSidebar = () => {
-    // Filter pool lessons
+    // Filter pool lessons (unassigned on top, assigned at bottom)
     const filteredPool = poolLessons.filter(lesson => {
       const matchesFilter = poolFilter === 'all' || !lesson.isAssigned;
       const matchesSearch = 
@@ -1863,6 +1863,11 @@ export default function PlanSal({
         lesson.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
         lesson.teacherAbbr.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesFilter && matchesSearch;
+    }).sort((a, b) => {
+      if (a.isAssigned !== b.isAssigned) {
+        return a.isAssigned ? 1 : -1;
+      }
+      return 0;
     });
 
     if (!showPoolSidebar) {

@@ -11,6 +11,8 @@ import {
 } from './services/dbStorage';
 import ExportModal, { ExportOptions } from './components/ExportModal';
 import ImportModal from './components/ImportModal';
+import ErrorBoundary from './components/ErrorBoundary';
+import { sanitizeAppState } from './utils/mergeEngine';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
 const PlanSal = lazy(() => import('./components/PlanSal'));
@@ -314,6 +316,77 @@ export default function App() {
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+
+  // Reference holding the last verified working application snapshot for instant rollback
+  const lastValidBackupRef = React.useRef<{
+    appState: AppState;
+    schedData: SchedData;
+    archive: ArchiveEntry[];
+    snapshots: SnapshotEntry[];
+    historyLogs: AppEventLog[];
+  }>({
+    appState,
+    schedData,
+    archive,
+    snapshots,
+    historyLogs
+  });
+
+  // Keep lastValidBackupRef updated when state is stable and not in restoring state
+  useEffect(() => {
+    if (!isRestoring) {
+      lastValidBackupRef.current = {
+        appState: JSON.parse(JSON.stringify(appState)),
+        schedData: JSON.parse(JSON.stringify(schedData)),
+        archive: JSON.parse(JSON.stringify(archive)),
+        snapshots: JSON.parse(JSON.stringify(snapshots)),
+        historyLogs: JSON.parse(JSON.stringify(historyLogs))
+      };
+    }
+  }, [appState, schedData, archive, snapshots, historyLogs, isRestoring]);
+
+  // Safety watchdog timer for isRestoring: prevents infinite loading screens
+  useEffect(() => {
+    if (!isRestoring) return;
+
+    const timeoutId = setTimeout(() => {
+      console.warn('⚠️ Watchdog: Przekroczono maksymalny czas operacji przywracania/importu (timeout). Następuje automatyczny rollback i odblokowanie.');
+      handleRollbackToLastValid('Przekroczono maksymalny dopuszczalny czas przetwarzania danych (timeout).');
+    }, 6000);
+
+    return () => clearTimeout(timeoutId);
+  }, [isRestoring]);
+
+  const handleRollbackToLastValid = async (reason?: string) => {
+    try {
+      const backup = lastValidBackupRef.current;
+      if (backup) {
+        setAppState(sortAppState(backup.appState));
+        setSchedData(backup.schedData);
+        setArchive(backup.archive);
+        setSnapshots(backup.snapshots);
+        setHistoryLogs(backup.historyLogs);
+
+        await Promise.all([
+          setStorageItem(STORAGE_KEYS.APP_STATE, backup.appState),
+          setStorageItem(STORAGE_KEYS.SCHED_DATA, backup.schedData),
+          setStorageItem(STORAGE_KEYS.ARCHIVE, backup.archive),
+          setStorageItem(STORAGE_KEYS.SNAPSHOTS, backup.snapshots),
+          setStorageItem(STORAGE_KEYS.HISTORY_LOGS, backup.historyLogs)
+        ]);
+        refreshStorageStats();
+      }
+    } catch (e) {
+      console.error('Błąd podczas procedury rollbacku:', e);
+    } finally {
+      setIsRestoring(false);
+      const msg = reason 
+        ? `Wykryto problem: ${reason} Automatycznie wycofano zmiany (Rollback) i przywrócono stabilny stan.`
+        : 'Wystąpił błąd podczas przetwarzania danych. Automatycznie wycofano zmiany (Rollback).';
+      notify(msg, 'err');
+      addEventLog('other', 'Automatyczne wycofanie zmian (Rollback)', reason || 'Wystąpił błąd spójności danych.');
+    }
+  };
 
   // States for selective export and import
   const [showExportModal, setShowExportModal] = useState(false);
@@ -667,121 +740,200 @@ export default function App() {
     );
   };
 
-  // ── SNAPSHOT ACTIONS ──
-  const validateSnapshotData = (state: any, sched: any): boolean => {
-    if (!state || typeof state !== 'object') {
-      notify('Błąd spójności danych: Stan aplikacji ma nieprawidłowy format.', 'err');
-      return false;
+  // ── INTEGRITY VALIDATION & DATA SANITIZATION ──
+  const validateAndSanitizeDataIntegrity = (rawState: any, rawSched: any): { sanitizedState: AppState; sanitizedSched: SchedData } => {
+    if (!rawState || typeof rawState !== 'object') {
+      throw new Error('Nieprawidłowa struktura danych (obiekt stanu nie istnieje lub jest uszkodzony).');
     }
-    if (!sched || typeof sched !== 'object') {
-      notify('Błąd spójności danych: Harmonogram lekcji ma nieprawidłowy format.', 'err');
-      return false;
+    if (!rawSched || typeof rawSched !== 'object') {
+      throw new Error('Nieprawidłowa struktura siatki harmonogramu (schedData).');
     }
-    if (typeof state.yearKey !== 'string' || !state.yearKey) {
-      notify('Błąd spójności danych: Brak identyfikatora roku (yearKey).', 'err');
-      return false;
-    }
-    if (!state.school || typeof state.school !== 'object' || typeof state.school.name !== 'string') {
-      notify('Błąd spójności danych: Brak lub uszkodzona struktura danych szkoły.', 'err');
-      return false;
-    }
-    if (!state.planLekcji || typeof state.planLekcji !== 'object') {
-      notify('Błąd spójności danych: Brak struktury planu lekcji.', 'err');
-      return false;
-    }
-    const pl = state.planLekcji;
-    if (!Array.isArray(pl.hours) || !Array.isArray(pl.classes) || !Array.isArray(pl.teachers) || !Array.isArray(pl.subjects)) {
-      notify('Błąd spójności danych: Brak wymaganych list (godziny, klasy, nauczyciele lub przedmioty).', 'err');
-      return false;
-    }
-    if (!state.dyzury || typeof state.dyzury !== 'object' || !Array.isArray(state.dyzury.miejsca) || !Array.isArray(state.dyzury.przerwy)) {
-      notify('Błąd spójności danych: Brak lub uszkodzona sekcja dyżurów.', 'err');
-      return false;
-    }
-    return true;
-  };
 
-  const handleRestoreSnapshotState = (restoredAppState: AppState, restoredSchedData: SchedData) => {
-    const startTime = performance.now();
-    if (import.meta.env.DEV) {
-      console.group('⏱️ Rozpoczęcie procedury przywracania stanu z punktu przywracania (Snapshot)');
+    // Sanitize state through comprehensive merge engine
+    const sanitizedState = sanitizeAppState(rawState);
+    const pl = sanitizedState.planLekcji;
+    if (!pl) {
+      throw new Error('Brak wymaganej sekcji planu lekcji (planLekcji).');
     }
-    
-    if (!validateSnapshotData(restoredAppState, restoredSchedData)) {
-      if (import.meta.env.DEV) {
-        console.error('❌ Walidacja spójności danych przywracanego punktu nie powiodła się.');
-        console.groupEnd();
+
+    // 1. Validate Classes and build classId set
+    const classIdSet = new Set<string>();
+    const validClasses = (pl.classes || []).filter(c => {
+      if (c && typeof c.id === 'string' && c.id.trim()) {
+        classIdSet.add(c.id);
+        return true;
       }
-      throw new Error('Walidacja spójności danych nie powiodła się.');
+      return false;
+    });
+    if (validClasses.length === 0 && Array.isArray(rawState.classes) && rawState.classes.length > 0) {
+      throw new Error('Wykryto uszkodzone identyfikatory (ID) klas.');
     }
+    pl.classes = validClasses;
 
-    // Obliczenie statystyk przywracanych obiektów dla ułatwienia debugowania
-    const classesCount = restoredAppState.planLekcji?.classes?.length || 0;
-    const teachersCount = restoredAppState.planLekcji?.teachers?.length || 0;
-    const roomsCount = restoredAppState.planLekcji?.rooms?.length || 0;
-    const subjectsCount = restoredAppState.planLekcji?.subjects?.length || 0;
-    const assignmentsCount = restoredAppState.planLekcji?.assignments?.length || 0;
-    const lessonsCount = Object.keys(restoredAppState.planLekcji?.lessons || {}).length;
+    // 2. Validate Teachers and build teacherId set
+    const teacherIdSet = new Set<string>();
+    const validTeachers = (pl.teachers || []).filter(t => {
+      if (t && typeof t.id === 'string' && t.id.trim()) {
+        teacherIdSet.add(t.id);
+        return true;
+      }
+      return false;
+    });
+    pl.teachers = validTeachers;
 
-    const specialStudentsCount = restoredAppState.planLekcji?.specialStudents?.length || 0;
-    const specialAssignmentsCount = restoredAppState.planLekcji?.specialAssignments?.length || 0;
-    const specialLessonsCount = Object.keys(restoredAppState.planLekcji?.specialLessons || {}).length;
+    // 3. Validate Subjects and build subjectId set
+    const subjectIdSet = new Set<string>();
+    const validSubjects = (pl.subjects || []).filter(s => {
+      if (s && typeof s.id === 'string' && s.id.trim()) {
+        subjectIdSet.add(s.id);
+        return true;
+      }
+      return false;
+    });
+    pl.subjects = validSubjects;
 
-    const dutyPlacesCount = restoredAppState.dyzury?.miejsca?.length || 0;
-    const dutyScheduleCount = Object.keys(restoredAppState.dyzury?.harmonogram || {}).length;
+    // 4. Validate Assignments & Relations
+    const assignmentIdSet = new Set<string>();
+    const validAssignments: Assignment[] = [];
+    for (const a of pl.assignments || []) {
+      if (!a || typeof a.id !== 'string' || !a.id.trim()) {
+        throw new Error('Wykryto przydział lekcyjny z uszkodzonym identyfikatorem ID.');
+      }
+      // Verify foreign key integrity
+      if (!classIdSet.has(a.classId)) {
+        throw new Error(`Przydział (ID: "${a.id}") odwołuje się do nieistniejącego ID klasy: "${a.classId}".`);
+      }
+      if (!subjectIdSet.has(a.subjectId)) {
+        throw new Error(`Przydział (ID: "${a.id}") odwołuje się do nieistniejącego ID przedmiotu: "${a.subjectId}".`);
+      }
+      if (a.teacherId && !teacherIdSet.has(a.teacherId)) {
+        throw new Error(`Przydział (ID: "${a.id}") odwołuje się do nieistniejącego ID nauczyciela: "${a.teacherId}".`);
+      }
+      assignmentIdSet.add(a.id);
+      validAssignments.push(a);
+    }
+    pl.assignments = validAssignments;
 
-    let schedCellsCount = 0;
-    if (restoredSchedData) {
-      for (const yKey in restoredSchedData) {
-        const yearData = restoredSchedData[yKey];
-        if (yearData) {
-          for (const dIdx in yearData) {
-            const dayData = yearData[+dIdx];
-            if (dayData) {
-              for (const hKey in dayData) {
-                const hData = dayData[hKey];
-                if (hData) {
-                  schedCellsCount += Object.keys(hData).length;
-                }
-              }
-            }
+    // 5. Clean lessons referencing invalid/missing assignments
+    const cleanedLessons: Record<string, Lesson> = {};
+    if (pl.lessons && typeof pl.lessons === 'object') {
+      for (const [key, lesson] of Object.entries(pl.lessons)) {
+        if (!lesson || typeof lesson !== 'object') continue;
+        if (!lesson.assignmentId || !assignmentIdSet.has(lesson.assignmentId)) {
+          console.warn(`[Integrity Check] Usunięto uszkodzoną lekcję "${key}" wskazującą na nieistniejące assignmentId: "${lesson.assignmentId}"`);
+          continue;
+        }
+        cleanedLessons[key] = lesson;
+      }
+    }
+    pl.lessons = cleanedLessons;
+
+    // 6. SchedData integrity check
+    const sanitizedSched: SchedData = {};
+    for (const [yearK, yData] of Object.entries(rawSched)) {
+      if (!yData || typeof yData !== 'object') continue;
+      sanitizedSched[yearK] = {};
+      for (const [dayK, dData] of Object.entries(yData as Record<string, any>)) {
+        if (!dData || typeof dData !== 'object') continue;
+        const dayIdx = parseInt(dayK, 10);
+        if (isNaN(dayIdx)) continue;
+        sanitizedSched[yearK][dayIdx] = {};
+        for (const [hourK, hData] of Object.entries(dData as Record<string, any>)) {
+          if (!hData || typeof hData !== 'object') continue;
+          sanitizedSched[yearK][dayIdx][hourK] = {};
+          for (const [colK, cellVal] of Object.entries(hData as Record<string, any>)) {
+            if (!cellVal) continue;
+            sanitizedSched[yearK][dayIdx][hourK][colK] = cellVal;
           }
         }
       }
     }
 
-    if (import.meta.env.DEV) {
-      console.log('📊 Przywracane struktury danych i obiekty:');
-      console.log(`- Klasy: ${classesCount}`);
-      console.log(`- Nauczyciele: ${teachersCount}`);
-      console.log(`- Sale lekcyjne: ${roomsCount}`);
-      console.log(`- Przedmioty: ${subjectsCount}`);
-      console.log(`- Przydziały (Assignments): ${assignmentsCount}`);
-      console.log(`- Obsadzone lekcje (Lessons): ${lessonsCount}`);
-      console.log(`- Uczniowie ze spec. potrzebami: ${specialStudentsCount}`);
-      console.log(`- Specjalne przydziały / lekcje: ${specialAssignmentsCount} / ${specialLessonsCount}`);
-      console.log(`- Miejsca dyżurów / zaplanowane dyżury: ${dutyPlacesCount} / ${dutyScheduleCount}`);
-      console.log(`- Komórki harmonogramu (SchedData): ${schedCellsCount}`);
+    return {
+      sanitizedState: sortAppState(sanitizedState),
+      sanitizedSched
+    };
+  };
+
+  const handleRestoreSnapshotState = async (restoredAppState: AppState, restoredSchedData: SchedData) => {
+    const startTime = performance.now();
+    setIsRestoring(true);
+
+    // Save previous snapshot for atomic rollback in case of error
+    const preRestoreState = JSON.parse(JSON.stringify(appState));
+    const preRestoreSched = JSON.parse(JSON.stringify(schedData));
+    const preRestoreArchive = JSON.parse(JSON.stringify(archive));
+    const preRestoreSnapshots = JSON.parse(JSON.stringify(snapshots));
+    const preRestoreLogs = JSON.parse(JSON.stringify(historyLogs));
+
+    try {
+      if (import.meta.env.DEV) {
+        console.group('⏱️ Rozpoczęcie procedury przywracania stanu z punktu przywracania (Snapshot)');
+      }
+      
+      const { sanitizedState, sanitizedSched } = validateAndSanitizeDataIntegrity(restoredAppState, restoredSchedData);
+
+      // Save active schedule into undo history
+      pushToUndo(schedData);
+      handleUpdateAppState(sanitizedState);
+      setSchedData(sanitizedSched);
+
+      await Promise.all([
+        setStorageItem(STORAGE_KEYS.APP_STATE, sanitizedState),
+        setStorageItem(STORAGE_KEYS.SCHED_DATA, sanitizedSched)
+      ]);
+
+      refreshStorageStats();
+
+      // Update backup ref
+      lastValidBackupRef.current = {
+        appState: JSON.parse(JSON.stringify(sanitizedState)),
+        schedData: JSON.parse(JSON.stringify(sanitizedSched)),
+        archive: JSON.parse(JSON.stringify(archive)),
+        snapshots: JSON.parse(JSON.stringify(snapshots)),
+        historyLogs: JSON.parse(JSON.stringify(historyLogs))
+      };
+
+      const duration = performance.now() - startTime;
+      if (import.meta.env.DEV) {
+        console.log(`✅ Synchronizacja stanów i struktur zakończona pomyślnie.`);
+        console.log(`⏱️ Czas procesowania logicznego: ${duration.toFixed(2)} ms`);
+        console.groupEnd();
+      }
+
+      notify('Przywrócono stan planu do wybranego punktu przywracania', 'ok');
+      addEventLog(
+        'restore',
+        'Przywrócono plan z punktu przywracania',
+        `Zaktualizowano całą konfigurację dla szkoły "${sanitizedState.school?.name || ''}" (${sanitizedState.yearLabel || ''}). Czas: ${duration.toFixed(2)} ms.`
+      );
+    } catch (err: any) {
+      console.error('❌ Błąd podczas procedury przywracania punktu:', err);
+      // Automatic rollback to preRestore state
+      setAppState(sortAppState(preRestoreState));
+      setSchedData(preRestoreSched);
+      setArchive(preRestoreArchive);
+      setSnapshots(preRestoreSnapshots);
+      setHistoryLogs(preRestoreLogs);
+
+      await Promise.all([
+        setStorageItem(STORAGE_KEYS.APP_STATE, preRestoreState),
+        setStorageItem(STORAGE_KEYS.SCHED_DATA, preRestoreSched),
+        setStorageItem(STORAGE_KEYS.ARCHIVE, preRestoreArchive),
+        setStorageItem(STORAGE_KEYS.SNAPSHOTS, preRestoreSnapshots),
+        setStorageItem(STORAGE_KEYS.HISTORY_LOGS, preRestoreLogs)
+      ]);
+      refreshStorageStats();
+
+      const errMsg = err?.message || 'Nieprawidłowa struktura danych lub brak spójności ID.';
+      notify(`Błąd przywracania: ${errMsg} Automatycznie wycofano zmiany (Rollback).`, 'err');
+      addEventLog('other', 'Wycofano przywracanie planu (Rollback)', `Wykryto problem: ${errMsg}`);
+      throw err;
+    } finally {
+      setTimeout(() => {
+        setIsRestoring(false);
+      }, 100);
     }
-
-    // Save active schedule into undo history so the user can easily revert a restore action if needed
-    pushToUndo(schedData);
-    handleUpdateAppState(restoredAppState);
-    setSchedData(restoredSchedData);
-
-    const duration = performance.now() - startTime;
-    if (import.meta.env.DEV) {
-      console.log(`✅ Synchronizacja stanów i struktur zakończona pomyślnie.`);
-      console.log(`⏱️ Czas procesowania logicznego: ${duration.toFixed(2)} ms`);
-      console.groupEnd();
-    }
-
-    notify('Przywrócono stan planu do wybranego punktu przywracania', 'ok');
-    addEventLog(
-      'restore',
-      'Przywrócono plan z punktu przywracania',
-      `Zaktualizowano całą konfigurację dla szkoły "${restoredAppState.school?.name || ''}" (${restoredAppState.yearLabel || ''}). Proces trwał ${duration.toFixed(2)} ms.`
-    );
   };
 
   // ── JSON BACKUPS ACTIONS (SELECTIVE EXPORT & IMPORT) ──
@@ -868,36 +1020,86 @@ export default function App() {
     mergedLogs: AppEventLog[];
     overallReport: string[];
   }) => {
-    pushToUndo(schedData);
+    setIsRestoring(true);
 
-    handleUpdateAppState(result.mergedState);
-    setSchedData(result.mergedSched);
-    setArchive(result.mergedArchive);
-    setSnapshots(result.mergedSnapshots);
-    setHistoryLogs(result.mergedLogs);
+    const preImportState = JSON.parse(JSON.stringify(appState));
+    const preImportSched = JSON.parse(JSON.stringify(schedData));
+    const preImportArchive = JSON.parse(JSON.stringify(archive));
+    const preImportSnapshots = JSON.parse(JSON.stringify(snapshots));
+    const preImportLogs = JSON.parse(JSON.stringify(historyLogs));
 
-    await Promise.all([
-      setStorageItem(STORAGE_KEYS.APP_STATE, result.mergedState),
-      setStorageItem(STORAGE_KEYS.SCHED_DATA, result.mergedSched),
-      setStorageItem(STORAGE_KEYS.ARCHIVE, result.mergedArchive),
-      setStorageItem(STORAGE_KEYS.SNAPSHOTS, result.mergedSnapshots),
-      setStorageItem(STORAGE_KEYS.HISTORY_LOGS, result.mergedLogs)
-    ]);
+    try {
+      // Validate and sanitize merged data before committing
+      const { sanitizedState, sanitizedSched } = validateAndSanitizeDataIntegrity(result.mergedState, result.mergedSched);
 
-    refreshStorageStats();
-    setShowImportModal(false);
-    setPendingImportFiles([]);
+      pushToUndo(schedData);
 
-    const summaryText = result.overallReport.length > 0 
-      ? result.overallReport.join(' | ') 
-      : 'Pomyślnie scalono dane';
+      handleUpdateAppState(sanitizedState);
+      setSchedData(sanitizedSched);
+      setArchive(result.mergedArchive);
+      setSnapshots(result.mergedSnapshots);
+      setHistoryLogs(result.mergedLogs);
 
-    notify('Pomyślnie scalono i zaktualizowano plan!', 'ok');
-    addEventLog(
-      'import',
-      'Wieloosobowe scalanie i import danych (JSON)',
-      `Wynik scalania: ${summaryText}`
-    );
+      await Promise.all([
+        setStorageItem(STORAGE_KEYS.APP_STATE, sanitizedState),
+        setStorageItem(STORAGE_KEYS.SCHED_DATA, sanitizedSched),
+        setStorageItem(STORAGE_KEYS.ARCHIVE, result.mergedArchive),
+        setStorageItem(STORAGE_KEYS.SNAPSHOTS, result.mergedSnapshots),
+        setStorageItem(STORAGE_KEYS.HISTORY_LOGS, result.mergedLogs)
+      ]);
+
+      refreshStorageStats();
+      setShowImportModal(false);
+      setPendingImportFiles([]);
+
+      // Update backup ref
+      lastValidBackupRef.current = {
+        appState: JSON.parse(JSON.stringify(sanitizedState)),
+        schedData: JSON.parse(JSON.stringify(sanitizedSched)),
+        archive: JSON.parse(JSON.stringify(result.mergedArchive)),
+        snapshots: JSON.parse(JSON.stringify(result.mergedSnapshots)),
+        historyLogs: JSON.parse(JSON.stringify(result.mergedLogs))
+      };
+
+      const summaryText = result.overallReport.length > 0 
+        ? result.overallReport.join(' | ') 
+        : 'Pomyślnie scalono dane';
+
+      notify('Pomyślnie scalono i zaktualizowano plan!', 'ok');
+      addEventLog(
+        'import',
+        'Wieloosobowe scalanie i import danych (JSON)',
+        `Wynik scalania: ${summaryText}`
+      );
+    } catch (err: any) {
+      console.error('❌ Błąd podczas scalania i importu danych:', err);
+      // Automatic rollback to previous stable state
+      setAppState(sortAppState(preImportState));
+      setSchedData(preImportSched);
+      setArchive(preImportArchive);
+      setSnapshots(preImportSnapshots);
+      setHistoryLogs(preImportLogs);
+
+      await Promise.all([
+        setStorageItem(STORAGE_KEYS.APP_STATE, preImportState),
+        setStorageItem(STORAGE_KEYS.SCHED_DATA, preImportSched),
+        setStorageItem(STORAGE_KEYS.ARCHIVE, preImportArchive),
+        setStorageItem(STORAGE_KEYS.SNAPSHOTS, preImportSnapshots),
+        setStorageItem(STORAGE_KEYS.HISTORY_LOGS, preImportLogs)
+      ]);
+      refreshStorageStats();
+
+      setShowImportModal(false);
+      setPendingImportFiles([]);
+
+      const errMsg = err?.message || 'Błąd spójności danych lub nieprawidłowe ID.';
+      notify(`Błąd importu: ${errMsg} Automatycznie wycofano zmiany (Rollback).`, 'err');
+      addEventLog('other', 'Wycofano scalanie i import (Rollback)', `Wykryto problem: ${errMsg}`);
+    } finally {
+      setTimeout(() => {
+        setIsRestoring(false);
+      }, 100);
+    }
   };
 
   const handleResetTimetable = async () => {
@@ -1219,67 +1421,72 @@ export default function App() {
                 <span className="text-xs font-semibold">Ładowanie modułu...</span>
               </div>
             }>
-              {currentTab === 'kreator' && (
-                <KreatorSzkoly
-                  appState={appState}
-                  onChangeAppState={handleUpdateAppState}
-                  onNavigateToTab={(tab) => setCurrentTab(tab)}
-                  archive={archive}
-                  onChangeArchive={handleUpdateArchive}
-                />
-              )}
-              {currentTab === 'plan_klas' && (
-                <PlanKlas 
-                  appState={appState} 
-                  onChangeAppState={handleUpdateAppState} 
-                  onTransfer={() => {
-                    handleImportFromPlanKlas();
-                    setCurrentTab('plan_sal');
-                  }}
-                  presentationMode={isPresentationMode}
-                />
-              )}
-              {currentTab === 'plan_sal' && (
-                <PlanSal 
-                  appState={appState} 
-                  schedData={schedData} 
-                  onChangeAppState={handleUpdateAppState} 
-                  onChangeSchedData={handleUpdateSchedData} 
-                  onImportFromPlanKlas={handleImportFromPlanKlas}
-                  presentationMode={isPresentationMode}
-                />
-              )}
-              {currentTab === 'dyzury' && (
-                <Dyzury 
-                  appState={appState} 
-                  onChangeAppState={handleUpdateAppState} 
-                  schedData={schedData}
-                  presentationMode={isPresentationMode}
-                />
-              )}
-              {currentTab === 'wydruki' && (
-                <Wydruki 
-                  appState={appState} 
-                  schedData={schedData}
-                />
-              )}
-              {currentTab === 'statystyki' && (
-                <Statystyki 
-                  appState={appState} 
-                  schedData={schedData}
-                  historyLogs={historyLogs}
-                  onClearHistoryLogs={() => setHistoryLogs([])}
-                />
-              )}
-              {currentTab === 'ustawienia_generatorow' && (
-                <UstawieniaGeneratorow 
-                  appState={appState} 
-                  onChangeAppState={handleUpdateAppState} 
-                />
-              )}
-              {currentTab === 'o_programie' && (
-                <OProgramie initialTab={oProgramieTab} />
-              )}
+              <ErrorBoundary 
+                onReset={() => handleRollbackToLastValid('Reset po błędzie widoku')}
+                fallbackTitle="Wystąpił nieoczekiwany błąd w module planu"
+              >
+                {currentTab === 'kreator' && (
+                  <KreatorSzkoly
+                    appState={appState}
+                    onChangeAppState={handleUpdateAppState}
+                    onNavigateToTab={(tab) => setCurrentTab(tab)}
+                    archive={archive}
+                    onChangeArchive={handleUpdateArchive}
+                  />
+                )}
+                {currentTab === 'plan_klas' && (
+                  <PlanKlas 
+                    appState={appState} 
+                    onChangeAppState={handleUpdateAppState} 
+                    onTransfer={() => {
+                      handleImportFromPlanKlas();
+                      setCurrentTab('plan_sal');
+                    }}
+                    presentationMode={isPresentationMode}
+                  />
+                )}
+                {currentTab === 'plan_sal' && (
+                  <PlanSal 
+                    appState={appState} 
+                    schedData={schedData} 
+                    onChangeAppState={handleUpdateAppState} 
+                    onChangeSchedData={handleUpdateSchedData} 
+                    onImportFromPlanKlas={handleImportFromPlanKlas}
+                    presentationMode={isPresentationMode}
+                  />
+                )}
+                {currentTab === 'dyzury' && (
+                  <Dyzury 
+                    appState={appState} 
+                    onChangeAppState={handleUpdateAppState} 
+                    schedData={schedData}
+                    presentationMode={isPresentationMode}
+                  />
+                )}
+                {currentTab === 'wydruki' && (
+                  <Wydruki 
+                    appState={appState} 
+                    schedData={schedData}
+                  />
+                )}
+                {currentTab === 'statystyki' && (
+                  <Statystyki 
+                    appState={appState} 
+                    schedData={schedData}
+                    historyLogs={historyLogs}
+                    onClearHistoryLogs={() => setHistoryLogs([])}
+                  />
+                )}
+                {currentTab === 'ustawienia_generatorow' && (
+                  <UstawieniaGeneratorow 
+                    appState={appState} 
+                    onChangeAppState={handleUpdateAppState} 
+                  />
+                )}
+                {currentTab === 'o_programie' && (
+                  <OProgramie initialTab={oProgramieTab} />
+                )}
+              </ErrorBoundary>
             </Suspense>
           </motion.div>
         </AnimatePresence>
@@ -1407,15 +1614,25 @@ export default function App() {
 
       {isRestoring && (
         <div 
-          className="fixed inset-0 z-[9999] bg-slate-950/40 backdrop-blur-xs pointer-events-none cursor-wait select-none flex flex-col items-center justify-center text-white"
+          className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs select-none flex flex-col items-center justify-center text-white"
           id="restoring-pointer-blocker"
         >
-          <div className="bg-slate-900/95 border border-slate-700/50 rounded-2xl p-6 flex flex-col items-center shadow-2xl space-y-3 max-w-xs text-center pointer-events-none">
+          <div className="bg-slate-900/95 border border-slate-700/80 rounded-2xl p-6 flex flex-col items-center shadow-2xl space-y-4 max-w-sm text-center">
             <RefreshCw className="w-10 h-10 text-indigo-400 animate-spin" />
             <div className="space-y-1">
-              <p className="font-extrabold text-sm tracking-tight font-sans text-slate-100">Inicjalizacja danych...</p>
-              <p className="text-[10.5px] text-slate-400 font-semibold leading-relaxed">Trwa bezpieczna podmiana stanów i przebudowa widoków planu.</p>
+              <p className="font-extrabold text-sm tracking-tight font-sans text-slate-100">Przetwarzanie i weryfikacja danych...</p>
+              <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                Trwa bezpieczna podmiana stanów, sprawdzanie spójności relacji ID i przebudowa widoków planu.
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={() => handleRollbackToLastValid('Przerwano ręcznie przez użytkownika')}
+              className="px-3.5 py-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-200 border border-slate-700 hover:border-rose-500/50 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm pointer-events-auto"
+            >
+              <RotateCcw size={13} />
+              Anuluj i przywróć poprzedni stan
+            </button>
           </div>
         </div>
       )}

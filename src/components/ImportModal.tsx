@@ -22,6 +22,8 @@ import {
   inspectFilePayload, 
   applyFileMergeToState, 
   executeMultiFileMerge,
+  normalizeImportPayload,
+  sanitizeAppState,
   isClassGrade1_3,
   isClassGrade4_8,
   ClassScope,
@@ -93,7 +95,8 @@ export default function ImportModal({
 
         if (!encrypted) {
           try {
-            parsedPayload = JSON.parse(rf.content);
+            const raw = JSON.parse(rf.content);
+            parsedPayload = normalizeImportPayload(raw);
             config = createDefaultFileMergeConfig(fileId, rf.name, parsedPayload, idx === 0);
           } catch (e) {
             // invalid json
@@ -137,7 +140,8 @@ export default function ImportModal({
 
         if (!encrypted) {
           try {
-            parsedPayload = JSON.parse(rawContent);
+            const raw = JSON.parse(rawContent);
+            parsedPayload = normalizeImportPayload(raw);
             config = createDefaultFileMergeConfig(fileId, file.name, parsedPayload, files.length === 0);
           } catch (e) {
             // invalid json
@@ -171,7 +175,8 @@ export default function ImportModal({
     setIsDecryptingId(fileId);
     try {
       const decrypted = await decryptText(file.rawContent, passwordInput);
-      const parsed: ImportPayload = JSON.parse(decrypted);
+      const raw = JSON.parse(decrypted);
+      const parsed: ImportPayload = normalizeImportPayload(raw);
       const config = createDefaultFileMergeConfig(fileId, file.name, parsed, files.indexOf(file) === 0);
 
       setFiles(prev => prev.map(f => {
@@ -409,57 +414,67 @@ export default function ImportModal({
 
   // Calculate live preview of combined merge
   const previewSummary = useMemo(() => {
-    const validConfigs = files.map(f => f.config).filter(Boolean) as FileMergeConfig[];
-    if (validConfigs.length === 0) return null;
+    try {
+      const validConfigs = files.map(f => f.config).filter(Boolean) as FileMergeConfig[];
+      if (validConfigs.length === 0) return null;
 
-    let testState = JSON.parse(JSON.stringify(currentAppState));
-    let testSched = JSON.parse(JSON.stringify(currentSchedData));
-    const stepReports: { fileName: string; reports: string[] }[] = [];
+      let testState = sanitizeAppState(JSON.parse(JSON.stringify(currentAppState)));
+      let testSched = JSON.parse(JSON.stringify(currentSchedData || {}));
+      const stepReports: { fileName: string; reports: string[] }[] = [];
 
-    validConfigs.forEach(cfg => {
-      const { nextState, nextSched, report } = applyFileMergeToState(testState, testSched, cfg);
-      testState = nextState;
-      testSched = nextSched;
-      stepReports.push({ fileName: cfg.fileName, reports: report });
-    });
+      validConfigs.forEach(cfg => {
+        const { nextState, nextSched, report } = applyFileMergeToState(testState, testSched, cfg);
+        testState = nextState;
+        testSched = nextSched;
+        stepReports.push({ fileName: cfg.fileName, reports: report });
+      });
 
-    const classesCount = testState.classes.length;
-    const teachersCount = testState.teachers.length;
-    const lessonsCount = Object.keys(testState.planLekcji.lessons || {}).length;
-    const dutiesCount = Object.keys(testState.dyzury.harmonogram || {}).length;
+      const classesCount = (testState.classes || []).length;
+      const teachersCount = (testState.teachers || []).length;
+      const lessonsCount = Object.keys(testState.planLekcji?.lessons || {}).length;
+      const dutiesCount = Object.keys(testState.dyzury?.harmonogram || {}).length;
 
-    let schedPlacements1_3 = 0;
-    let schedPlacements4_8 = 0;
-    let schedTotal = 0;
+      let schedPlacements1_3 = 0;
+      let schedPlacements4_8 = 0;
+      let schedTotal = 0;
 
-    Object.values(testSched).forEach((year: any) => {
-      Object.values(year || {}).forEach((day: any) => {
-        Object.values(day || {}).forEach((hour: any) => {
-          Object.values(hour || {}).forEach((cell: any) => {
-            if (cell) {
-              const cellsArr = Array.isArray(cell) ? cell : [cell];
-              cellsArr.forEach(c => {
-                schedTotal++;
-                const cNames = c.classes || (c.className ? [c.className] : []);
-                if (cNames.some((cn: string) => isClassGrade1_3(cn))) schedPlacements1_3++;
-                if (cNames.some((cn: string) => isClassGrade4_8(cn))) schedPlacements4_8++;
-              });
-            }
+      Object.values(testSched || {}).forEach((year: any) => {
+        if (!year || typeof year !== 'object') return;
+        Object.values(year).forEach((day: any) => {
+          if (!day || typeof day !== 'object') return;
+          Object.values(day).forEach((hour: any) => {
+            if (!hour || typeof hour !== 'object') return;
+            Object.values(hour).forEach((cell: any) => {
+              if (cell) {
+                const cellsArr = Array.isArray(cell) ? cell : [cell];
+                cellsArr.forEach(c => {
+                  if (c) {
+                    schedTotal++;
+                    const cNames = Array.isArray(c.classes) ? c.classes : (c.className ? [c.className] : []);
+                    if (cNames.some((cn: string) => isClassGrade1_3(String(cn || '')))) schedPlacements1_3++;
+                    if (cNames.some((cn: string) => isClassGrade4_8(String(cn || '')))) schedPlacements4_8++;
+                  }
+                });
+              }
+            });
           });
         });
       });
-    });
 
-    return {
-      classesCount,
-      teachersCount,
-      lessonsCount,
-      dutiesCount,
-      schedPlacements1_3,
-      schedPlacements4_8,
-      schedTotal,
-      stepReports
-    };
+      return {
+        classesCount,
+        teachersCount,
+        lessonsCount,
+        dutiesCount,
+        schedPlacements1_3,
+        schedPlacements4_8,
+        schedTotal,
+        stepReports
+      };
+    } catch (err) {
+      console.warn('Błąd podczas generowania podglądu scalania:', err);
+      return null;
+    }
   }, [files, currentAppState, currentSchedData]);
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
@@ -1303,7 +1318,28 @@ export default function ImportModal({
                           )}
                         </div>
                       </div>
-                    ) : null
+                    ) : (
+                      /* Error or invalid file state */
+                      <div className="flex flex-col items-center justify-center p-8 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/50 rounded-2xl text-center my-6">
+                        <div className="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-3">
+                          <AlertTriangle size={24} />
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
+                          Nie udało się odczytać struktury pliku
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mb-4 leading-relaxed">
+                          Plik <span className="font-semibold text-slate-700 dark:text-slate-300 font-mono">"{activeFile?.name}"</span> nie zawiera poprawnego formatu JSON planu lekcji lub jest uszkodzony.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => activeFile && handleRemoveFile(activeFile.id)}
+                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <Trash2 size={14} />
+                          Usuń ten plik z kolejki
+                        </button>
+                      </div>
+                    )
                   ) : (
                     <div className="flex-1 flex items-center justify-center p-12 text-slate-400 text-xs font-semibold">
                       Wybierz plik z listy po lewej, aby dostosować reguły scalania.
