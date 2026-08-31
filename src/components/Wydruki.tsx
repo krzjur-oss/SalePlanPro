@@ -865,9 +865,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           // Dynamic styling based on columns count on this specific A4 landscape sheet
           let thPadding = '4px 3px';
           let tdPadding = '3px 2px';
-          let clsFontSize = '9px';
-          let subjFontSize = '8.5px';
-          let tAbbrFontSize = '8px';
+          let clsFontSize = '10px';
+          let grpFontSize = '8.5px';
+          let subjFontSize = '9px';
+          let tAbbrFontSize = '8.5px';
           let headerNameFontSize = '10.5px';
           let headerDescFontSize = '7.5px';
           let showHeaderDesc = true;
@@ -875,18 +876,20 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           if (catRoomsCount > 14) {
             thPadding = '2px 1px';
             tdPadding = '2px 1px';
-            clsFontSize = '7.5px';
-            subjFontSize = '7.5px';
-            tAbbrFontSize = '7px';
+            clsFontSize = '8.5px';
+            grpFontSize = '7.5px';
+            subjFontSize = '8px';
+            tAbbrFontSize = '7.5px';
             headerNameFontSize = '8px';
             headerDescFontSize = '6.5px';
             showHeaderDesc = false;
           } else if (catRoomsCount > 10) {
             thPadding = '3px 2px';
             tdPadding = '2.5px 1.5px';
-            clsFontSize = '8px';
-            subjFontSize = '8px';
-            tAbbrFontSize = '7.5px';
+            clsFontSize = '9px';
+            grpFontSize = '8px';
+            subjFontSize = '8.5px';
+            tAbbrFontSize = '8px';
             headerNameFontSize = '9.5px';
             headerDescFontSize = '7px';
           }
@@ -900,27 +903,23 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               let cellContent = '<span style="color: #cbd5e1; font-weight: bold; font-family: monospace;">-</span>';
               if (lessonsInRoom.length > 0) {
                 cellContent = lessonsInRoom.map(it => `
-                  <div style="margin-bottom: 2px; line-height: 1.1; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5px;" title="${escapeHtml(it.displayText)} (${escapeHtml(it.subject)})">
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 2px;">
-                      <span style="background-color: #fef3c7; border: 1px solid #fde68a; color: #78350f; padding: 0.5px 3px; border-radius: 2px; font-weight: 900; font-size: ${clsFontSize}; display: inline-block;">
-                        ${escapeHtml(it.className)}
-                      </span>
-                      ${it.groupShort ? `
-                        <span style="background-color: #ede9fe; border: 1px solid #ddd6fe; color: #5b21b6; padding: 0.5px 2.5px; border-radius: 2px; font-size: ${tAbbrFontSize}; font-weight: 900; display: inline-block;">
-                          ${escapeHtml(it.groupShort)}
-                        </span>` : ''}
+                  <div style="line-height: 1.15; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin: 1px 0;" title="${escapeHtml(it.displayText)} (${escapeHtml(it.subject)})">
+                    <div style="color: #0f172a; font-weight: 900; font-size: ${clsFontSize}; letter-spacing: -0.01em;">
+                      ${escapeHtml(it.className)}
                     </div>
-                    <div style="color: #0f172a; font-weight: 800; font-size: ${subjFontSize}; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${it.groupShort ? `
+                      <div style="color: #4338ca; font-weight: 800; font-size: ${grpFontSize};">
+                        ${escapeHtml(it.groupShort)}
+                      </div>` : ''}
+                    <div style="color: #1e293b; font-weight: 800; font-size: ${subjFontSize}; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                       ${escapeHtml(it.subjectShort || it.subject)}
                     </div>
                     ${it.teacherAbbr ? `
-                      <div>
-                        <span style="background-color: #f1f5f9; border: 1px solid #cbd5e1; color: #334155; padding: 0.5px 3px; border-radius: 2px; font-size: ${tAbbrFontSize}; font-weight: 900; font-family: monospace; display: inline-block;">
-                          ${escapeHtml(it.teacherAbbr)}
-                        </span>
+                      <div style="color: #334155; font-weight: 700; font-family: monospace; font-size: ${tAbbrFontSize};">
+                        ${escapeHtml(it.teacherAbbr)}
                       </div>` : ''}
                   </div>
-                `).join('');
+                `).join('<div style="border-top: 1px dashed #cbd5e1; margin: 2px 0; width: 80%;"></div>');
               }
 
               roomsCellsHtml += `
@@ -1938,27 +1937,25 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                         className="border border-slate-300 p-1.5 align-middle text-center bg-white min-h-[44px]"
                                       >
                                         {lessonsInRoom.length > 0 ? (
-                                          <div className="space-y-1.5">
+                                          <div className="space-y-1">
                                             {lessonsInRoom.map((it, lIdx) => (
-                                              <div key={lIdx} className="leading-tight flex flex-col items-center justify-center gap-0.5" title={`${it.displayText} (${it.subject})`}>
-                                                <div className="flex items-center justify-center gap-1">
-                                                  <span className="font-black text-slate-950 text-[10px] bg-amber-100/90 border border-amber-300/90 rounded px-1.5 py-0.5 inline-block">
-                                                    {it.className}
+                                              <div key={lIdx} className="leading-tight flex flex-col items-center justify-center text-center py-0.5" title={`${it.displayText} (${it.subject})`}>
+                                                <span className="font-black text-slate-950 text-[10.5px]">
+                                                  {it.className}
+                                                </span>
+                                                {it.groupShort && (
+                                                  <span className="text-indigo-700 text-[8.5px] font-bold">
+                                                    {it.groupShort}
                                                   </span>
-                                                  {it.groupShort && (
-                                                    <span className="bg-purple-100 text-purple-900 border border-purple-200 px-1 py-0.2 rounded text-[8px] font-black inline-block">
-                                                      {it.groupShort}
-                                                    </span>
-                                                  )}
-                                                </div>
+                                                )}
                                                 <span
-                                                  className="text-[9.5px] text-slate-900 font-extrabold truncate max-w-full"
+                                                  className="text-[9.5px] text-slate-800 font-extrabold truncate max-w-full"
                                                   title={it.subject}
                                                 >
                                                   {it.subjectShort || it.subject}
                                                 </span>
                                                 {it.teacherAbbr && (
-                                                  <span className="bg-slate-100 text-slate-800 border border-slate-300 px-1 py-0.2 rounded text-[8px] font-mono font-bold inline-block">
+                                                  <span className="text-slate-600 text-[8.5px] font-mono font-bold">
                                                     {it.teacherAbbr}
                                                   </span>
                                                 )}
@@ -3022,24 +3019,22 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                             return (
                                               <td key={cIdx} className="border border-slate-300 p-1.5 align-middle text-center min-h-[50px] bg-white">
                                                 {lessonsInRoom.length > 0 ? (
-                                                  <div className="space-y-1.5">
+                                                  <div className="space-y-1">
                                                     {lessonsInRoom.map((it, dIdx) => (
-                                                      <div key={dIdx} className="text-[10px] leading-tight flex flex-col items-center justify-center gap-0.5" title={`${it.displayText} (${it.subject})`}>
-                                                        <div className="flex items-center justify-center gap-1">
-                                                          <span className="font-extrabold text-slate-900 text-[10.5px] bg-amber-100/70 border border-amber-200/80 rounded px-1.5 py-0.5 inline-block">
-                                                            {it.className}
+                                                      <div key={dIdx} className="text-[10px] leading-tight flex flex-col items-center justify-center text-center py-0.5" title={`${it.displayText} (${it.subject})`}>
+                                                        <span className="font-extrabold text-slate-900 text-[10.5px]">
+                                                          {it.className}
+                                                        </span>
+                                                        {it.groupShort && (
+                                                          <span className="text-indigo-700 text-[8.5px] font-bold">
+                                                            {it.groupShort}
                                                           </span>
-                                                          {it.groupShort && (
-                                                            <span className="bg-purple-100 text-purple-900 border border-purple-200 px-1 py-0.2 rounded text-[8.5px] font-black inline-block">
-                                                              {it.groupShort}
-                                                            </span>
-                                                          )}
-                                                        </div>
+                                                        )}
                                                         <span className="text-[9.5px] text-slate-800 font-extrabold truncate max-w-full" title={it.subject}>
                                                           {it.subjectShort || it.subject}
                                                         </span>
                                                         {it.teacherAbbr && (
-                                                          <span className="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold inline-block">
+                                                          <span className="text-slate-600 text-[8.5px] font-mono font-bold">
                                                             {it.teacherAbbr}
                                                           </span>
                                                         )}
