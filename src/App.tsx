@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import { 
   AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion, Lesson
 } from './types';
@@ -30,64 +30,75 @@ import {
   Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, Database
 } from 'lucide-react';
 
-function sortAppState(resolved: AppState): AppState {
+function sortAppState(rawInput: any): AppState {
+  // Always sanitize first to ensure completely valid schema defaults
+  const resolved = sanitizeAppState(rawInput);
+
   let nextClasses = resolved.classes;
-  if (nextClasses) {
-    nextClasses = [...nextClasses].sort((a, b) => 
-      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  if (Array.isArray(nextClasses)) {
+    nextClasses = [...nextClasses].filter(Boolean).sort((a, b) => 
+      String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { numeric: true, sensitivity: 'base' })
     );
   }
   
   let nextPlanClasses = resolved.planLekcji?.classes;
-  if (nextPlanClasses) {
-    nextPlanClasses = [...nextPlanClasses].sort((a, b) => 
-      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  if (Array.isArray(nextPlanClasses)) {
+    nextPlanClasses = [...nextPlanClasses].filter(Boolean).sort((a, b) => 
+      String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { numeric: true, sensitivity: 'base' })
     );
   }
 
   let nextTeachers = resolved.teachers;
-  if (nextTeachers) {
-    nextTeachers = [...nextTeachers].sort((a, b) => {
-      const lCompare = a.last.localeCompare(b.last, undefined, { sensitivity: 'base' });
+  if (Array.isArray(nextTeachers)) {
+    nextTeachers = [...nextTeachers].filter(Boolean).sort((a, b) => {
+      const lA = String(a?.last || '');
+      const lB = String(b?.last || '');
+      const lCompare = lA.localeCompare(lB, undefined, { sensitivity: 'base' });
       if (lCompare !== 0) return lCompare;
-      return a.first.localeCompare(b.first, undefined, { sensitivity: 'base' });
+      const fA = String(a?.first || '');
+      const fB = String(b?.first || '');
+      return fA.localeCompare(fB, undefined, { sensitivity: 'base' });
     });
   }
 
   let nextPlanTeachers = resolved.planLekcji?.teachers;
-  if (nextPlanTeachers) {
-    nextPlanTeachers = [...nextPlanTeachers].sort((a, b) => {
-      const lCompare = a.last.localeCompare(b.last, undefined, { sensitivity: 'base' });
+  if (Array.isArray(nextPlanTeachers)) {
+    nextPlanTeachers = [...nextPlanTeachers].filter(Boolean).sort((a, b) => {
+      const lA = String(a?.last || '');
+      const lB = String(b?.last || '');
+      const lCompare = lA.localeCompare(lB, undefined, { sensitivity: 'base' });
       if (lCompare !== 0) return lCompare;
-      return a.first.localeCompare(b.first, undefined, { sensitivity: 'base' });
+      const fA = String(a?.first || '');
+      const fB = String(b?.first || '');
+      return fA.localeCompare(fB, undefined, { sensitivity: 'base' });
     });
   }
 
   let nextSubjects = resolved.subjects;
-  if (nextSubjects) {
-    nextSubjects = [...nextSubjects].sort((a, b) => 
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  if (Array.isArray(nextSubjects)) {
+    nextSubjects = [...nextSubjects].filter(Boolean).sort((a, b) => 
+      String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' })
     );
   }
 
   let nextPlanSubjects = resolved.planLekcji?.subjects;
-  if (nextPlanSubjects) {
-    nextPlanSubjects = [...nextPlanSubjects].sort((a, b) => 
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  if (Array.isArray(nextPlanSubjects)) {
+    nextPlanSubjects = [...nextPlanSubjects].filter(Boolean).sort((a, b) => 
+      String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' })
     );
   }
 
   return {
     ...resolved,
-    classes: nextClasses,
-    teachers: nextTeachers,
-    subjects: nextSubjects,
-    planLekcji: resolved.planLekcji ? {
+    classes: nextClasses || [],
+    teachers: nextTeachers || [],
+    subjects: nextSubjects || [],
+    planLekcji: {
       ...resolved.planLekcji,
-      classes: nextPlanClasses || resolved.planLekcji.classes,
-      teachers: nextPlanTeachers || resolved.planLekcji.teachers,
-      subjects: nextPlanSubjects || resolved.planLekcji.subjects,
-    } : resolved.planLekcji
+      classes: nextPlanClasses || resolved.planLekcji?.classes || [],
+      teachers: nextPlanTeachers || resolved.planLekcji?.teachers || [],
+      subjects: nextPlanSubjects || resolved.planLekcji?.subjects || [],
+    }
   };
 }
 
@@ -792,22 +803,29 @@ export default function App() {
     });
     pl.subjects = validSubjects;
 
-    // 4. Validate Assignments & Relations
+    // 4. Validate Assignments & Relations with graceful reconciliation
     const assignmentIdSet = new Set<string>();
     const validAssignments: Assignment[] = [];
     for (const a of pl.assignments || []) {
       if (!a || typeof a.id !== 'string' || !a.id.trim()) {
-        throw new Error('Wykryto przydział lekcyjny z uszkodzonym identyfikatorem ID.');
+        continue;
       }
-      // Verify foreign key integrity
+      // If referenced class does not exist, ignore orphaned assignment gracefully
       if (!classIdSet.has(a.classId)) {
-        throw new Error(`Przydział (ID: "${a.id}") odwołuje się do nieistniejącego ID klasy: "${a.classId}".`);
+        console.warn(`[Integrity Check] Pominięto przydział "${a.id}" dla nieistniejącej klasy: "${a.classId}"`);
+        continue;
       }
+      // If referenced subject does not exist, fallback to first available subject if possible
       if (!subjectIdSet.has(a.subjectId)) {
-        throw new Error(`Przydział (ID: "${a.id}") odwołuje się do nieistniejącego ID przedmiotu: "${a.subjectId}".`);
+        if (validSubjects.length > 0) {
+          a.subjectId = validSubjects[0].id;
+        } else {
+          continue;
+        }
       }
+      // If referenced teacher does not exist, reset teacherId to empty string/null rather than crashing
       if (a.teacherId && !teacherIdSet.has(a.teacherId)) {
-        throw new Error(`Przydział (ID: "${a.id}") odwołuje się do nieistniejącego ID nauczyciela: "${a.teacherId}".`);
+        a.teacherId = '';
       }
       assignmentIdSet.add(a.id);
       validAssignments.push(a);

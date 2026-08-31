@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, RotateCcw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, RotateCcw, Trash2, Wrench } from 'lucide-react';
+import { clearAllStorage, STORAGE_KEYS, removeStorageItem } from '../services/dbStorage';
 
 interface Props {
   children: ReactNode;
@@ -11,6 +12,7 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
+  isRepairing: boolean;
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
@@ -19,12 +21,13 @@ export default class ErrorBoundary extends Component<Props, State> {
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
+      isRepairing: false
     };
   }
 
   public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, errorInfo: null };
+    return { hasError: true, error, errorInfo: null, isRepairing: false };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
@@ -50,6 +53,21 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
   };
 
+  private handleEmergencyRepair = async () => {
+    this.setState({ isRepairing: true });
+    try {
+      // Clear potentially corrupt cached state while preserving snapshots/backups if possible
+      await removeStorageItem(STORAGE_KEYS.APP_STATE);
+      await removeStorageItem(STORAGE_KEYS.SCHED_DATA);
+      localStorage.removeItem(STORAGE_KEYS.APP_STATE);
+      localStorage.removeItem(STORAGE_KEYS.SCHED_DATA);
+    } catch (e) {
+      console.warn('Błąd podczas czyszczenia pamięci podręcznej:', e);
+    } finally {
+      window.location.reload();
+    }
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -64,7 +82,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             </h2>
 
             <p className="text-xs text-slate-400 mb-5 leading-relaxed">
-              System napotkał nieoczekiwany stan danych. Dane w pamięci podręcznej są zabezpieczone. Możesz spróbować odświeżyć widok lub zresetować moduł.
+              System napotkał nieoczekiwany stan danych. Dane w pamięci podręcznej są zabezpieczone. Możesz spróbować odświeżyć widok, naprawić stan lub przywrócić bezpieczną wersję.
             </p>
 
             {this.state.error && (
@@ -90,6 +108,17 @@ export default class ErrorBoundary extends Component<Props, State> {
               >
                 <RefreshCw size={14} />
                 Odśwież aplikację
+              </button>
+
+              <button
+                type="button"
+                onClick={this.handleEmergencyRepair}
+                disabled={this.state.isRepairing}
+                className="px-4 py-2 bg-rose-700 hover:bg-rose-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                title="Wyczyść uszkodzoną pamięć podręczną i uruchom bezpieczny stan"
+              >
+                <Wrench size={14} />
+                {this.state.isRepairing ? 'Naprawianie...' : 'Awaryjny reset pamięci podręcznej'}
               </button>
             </div>
           </div>
