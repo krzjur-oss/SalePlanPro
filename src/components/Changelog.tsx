@@ -26,14 +26,15 @@ export default function Changelog() {
     {
       version: 'v3.7.2',
       date: 'Wrzesień 2026',
-      title: 'Szczegółowy Plan Nauczycieli z Dyżurami Międzylekcyjnymi',
-      description: 'Rozbudowa modułu Wydruki i Publikacje o pełną prezentację tygodniowego planu nauczycieli: w komórkach lekcji prezentowane są dane w układzie pionowym (nazwa przedmiotu, klasa z oznaczeniem grupy, numer/nazwa sali), a pomiędzy lekcjami zintegrowano wiersze dyżurów międzylekcyjnych z dokładną lokalizacją i piętrem.',
+      title: 'Szczegółowy Plan Nauczycieli z Właściwymi Salami i Dyżurami Międzylekcyjnymi',
+      description: 'Kompleksowa rozbudowa modułu Wydruki i Publikacje: w komórkach planu tygodniowego nauczycieli wyświetlane są pełne dane (przedmiot, klasa z oznaczeniem grupy oraz rzeczywista sala przypisana w Planie Sal / Etap 2, zamiast sal sugerowanych), a pomiędzy godzinami lekcyjnymi zintegrowano wiersze przerw z wyznaczonymi dyżurami nauczycielskimi i ich lokalizacją.',
       badge: 'Najnowsza',
       changes: [
+        { type: 'fix', text: 'Precyzyjne pobieranie sali z Planu Sal: Wyeliminowano problem wyświetlania sal sugerowanych lub notatek – w planach nauczycieli i klas na wydrukach wyświetlana jest teraz rzeczywista sala lekcyjna wynikająca z faktycznego przydziału w matrycy sal (Plan Sal / schedData).', badgeText: 'Plan Sal' },
         { type: 'feature', text: 'Zintegrowano wyświetlanie dyżurów międzylekcyjnych w planie nauczycieli – harmonogram dyżurów jest automatycznie wstrzykiwany w wiersze przerw pomiędzy lekcjami (wraz z nazwą miejsca i piętrem).', badgeText: 'Dyżury' },
         { type: 'feature', text: 'Wdrożono czytelny, pionowy układ danych w komórkach planu nauczyciela: Przedmiot (wyraźny nagłówek), Klasa (z grupą np. "3a (gr1)") oraz Sala lekcyjna (np. "s. 104"), bez zbędnych obwódek.', badgeText: 'Układ Lekcji' },
         { type: 'improvement', text: 'Dodano przełącznik „Dyżury na przerwach” w panelu sterowania wydrukami oraz w widoku podglądu tygodniowego, pozwalający na elastyczne włączanie lub ukrywanie przerw z dyżurami.', badgeText: 'Kontrola Druku' },
-        { type: 'improvement', text: 'Zapewniono pełną zgodność z oboma etapami planowania: Etap 1 (Plan Klas) oraz Etap 2 (Plan Sal / Obłożenie Gabinetów).', badgeText: 'Kompatybilność' }
+        { type: 'improvement', text: 'Zapewniono pełną zgodność z oboma etapami planowania: Etap 1 (Plan Klas) oraz Etap 2 (Plan Sal / Obłożenie Gabinetów) oraz przy eksporcie do kalendarza (.ics).', badgeText: 'Kompatybilność' }
       ]
     },
     {

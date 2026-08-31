@@ -24,9 +24,10 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 
 ### 3. 📊 Moduł Wydruków i Publikacji (Wydruki)
 System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku tradycyjnego lub zapisu cyfrowego:
-*   **Plan Tygodniowy Nauczycieli ze Zintegrowanymi Dyżurami**:
-    *   W każdej komórce lekcji prezentowane są dane w czytelnym układzie pionowym: **Przedmiot** (wyraźny nagłówek), **Klasa / Grupa** (np. `3a (gr1)`) oraz **Sala lekcyjna** (np. `s. 104`).
-    *   **Dyżury Międzylekcyjne**: Pomiędzy godzinami lekcyjnymi automatycznie wstawiane są wiersze przerw z informacją o wyznaczonym dyżurze dla danego nauczyciela (miejsce dyżuru oraz piętro, np. `Parter - Korytarz główny`).
+*   **Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
+    *   W każdej komórce lekcji prezentowane są precyzyjne dane w czytelnym układzie pionowym: **Przedmiot** (wyraźny nagłówek), **Klasa / Grupa** (np. `3a (gr1)`) oraz **Rzeczywista Sala Lekcyjna** (np. `s. 104`).
+    *   **Pobieranie Właściwych Sal z Planu Sal**: System weryfikuje faktyczne obłożenie w matrycy sal (`schedData` / Etap 2) i wyświetla salę, w której lekcja realnie się odbywa, a nie salę jedynie sugerowaną przez nauczyciela w notatce.
+    *   **Dyżury Międzylekcyjne**: Pomiędzy godzinami lekcyjnymi automatycznie wstawiane są wiersze przerw z informacją o wyznaczonym dyżurze dla danego nauczyciela (dokładne miejsce dyżuru oraz piętro, np. `Parter - Korytarz główny`).
     *   Opcjonalny przełącznik włączania/wyłączania widoczności dyżurów w widoku pojedynczym i zbiorczym.
 *   **Płachta Gabinetów i Sal (Matryca Sal na A4 Landscape)**:
     *   Czysty, minimalistyczny układ danych w komórkach (**Klasa**, **Grupa**, **Przedmiot**, **Nauczyciel**) ułożonych jedno pod drugim bez rozpraszających ramek i kolorowych obwódek – idealna czytelność dla uczniów i nauczycieli po wydrukowaniu na papierze.
@@ -59,8 +60,9 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Szczegółowy Plan Tygodniowy Nauczycieli ze Zintegrowanymi Dyżurami**:
-    *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Sala lekcyjna) bez zbędnych obwódek i ozdobników.
+1.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
+    *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal) bez zbędnych obwódek i ozdobników.
+    *   Poprawiono resolver sal: wyeliminowano pokazywanie sal sugerowanych z notatek; system pobiera salę z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
     *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich (z nazwą miejsca i kondygnacją).
     *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
 2.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape)**:

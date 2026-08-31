@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell } from '../types';
 import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
@@ -99,7 +99,19 @@ function getSegmentGroups(categoryCols: any[]) {
 
 export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties'>('classes');
-  const [scheduleVersion, setScheduleVersion] = useState<'etap1' | 'etap2'>('etap1');
+  const [scheduleVersion, setScheduleVersion] = useState<'etap1' | 'etap2'>(() => {
+    const yk = appState.yearKey || 'default';
+    const yearObj = schedData[yk];
+    if (yearObj && typeof yearObj === 'object') {
+      const hasAnyOccupiedSlots = Object.values(yearObj).some(dayObj => 
+        dayObj && typeof dayObj === 'object' && Object.values(dayObj).some(hourObj => 
+          hourObj && typeof hourObj === 'object' && Object.keys(hourObj).length > 0
+        )
+      );
+      if (hasAnyOccupiedSlots) return 'etap2';
+    }
+    return 'etap1';
+  });
   
   // Selected filter states
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
@@ -268,76 +280,6 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   const RRULE_DAYS = ['MO', 'TU', 'WE', 'TH', 'FR'];
-
-  // Safe builder for teacher's current assigned lessons list
-  const getTeacherLessonsList = (teacher: Teacher) => {
-    const lessons: Array<{
-      dayIdx: number;
-      hourNum: number;
-      start: string;
-      end: string;
-      subject: string;
-      className: string;
-      roomName?: string;
-    }> = [];
-
-    for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-      hoursList.forEach((hour, hIdx) => {
-        const hourKeyStr = String(hour.num);
-        let items: Array<{ subject: string; className: string; roomName?: string }> = [];
-
-        if (scheduleVersion === 'etap1') {
-          Object.entries(pl.lessons).forEach(([key, lesson]) => {
-            const parts = key.split('|');
-            const classId = parts[0];
-            const dIdx = parseInt(parts[1], 10);
-            const hrIndex = parseInt(parts[2], 10);
-
-            if (dIdx === dayIdx && hrIndex === hIdx) {
-              const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-              if (asg && asg.teacherId === teacher.id) {
-                const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
-                const clsName = classesMap.get(classId)?.name || 'Inna';
-                const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                items.push({
-                  subject,
-                  className: clsName,
-                  roomName: room?.name
-                });
-              }
-            }
-          });
-        } else {
-          // Etap 2 schedules
-          const tSched = etap2Schedule.teachers[teacher.id] || {};
-          const daySchedules = tSched[dayIdx] || {};
-          const hourCells = daySchedules[hourKeyStr] || [];
-          
-          hourCells.forEach(cell => {
-            items.push({
-              subject: cell.subject,
-              className: cell.className || cell.classes?.join('+') || 'Klasa',
-              roomName: cell.note
-            });
-          });
-        }
-
-        items.forEach(it => {
-          lessons.push({
-            dayIdx,
-            hourNum: hour.num,
-            start: hour.start,
-            end: hour.end,
-            subject: it.subject,
-            className: it.className,
-            roomName: it.roomName
-          });
-        });
-      });
-    }
-
-    return lessons;
-  };
 
   const handleExportTeacherIcs = (teacher: Teacher) => {
     const lessons = getTeacherLessonsList(teacher);
@@ -605,6 +547,52 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     ];
   }, [pl.hours]);
 
+  // Fast lookup from colKey (e.g. f0_s0_101) to room definition in appState.floors
+  const colKeyToRoomMap = useMemo(() => {
+    const map = new Map<string, { num: string; sub?: string; name: string; floorName: string }>();
+    const rawCols = localFlattenColumns(appState.floors || []);
+    rawCols.forEach(col => {
+      const key = localColKey(col);
+      const num = (col.room?.num || '').trim();
+      const sub = (col.room?.sub || '').trim();
+      const name = num || sub || 'Sala';
+      const floorName = col.floor?.name || '';
+      map.set(key, { num, sub, name, floorName });
+    });
+    return map;
+  }, [appState.floors]);
+
+  // Robust resolver that extracts the actual room name from the Plan Sal column
+  const resolveRoomFromColKey = useCallback((cKey: string): string => {
+    if (!cKey) return '';
+    const fromMap = colKeyToRoomMap.get(cKey);
+    if (fromMap && fromMap.name) return fromMap.name;
+
+    // Pattern matching on colKey e.g. f0_s1_104 or f0_s0_Gimnastyczna or f1_s2_r3
+    const parts = cKey.split('_');
+    if (parts.length >= 3) {
+      const fi = parseInt(parts[0].replace('f', ''), 10);
+      const si = parseInt(parts[1].replace('s', ''), 10);
+      const lastPart = parts.slice(2).join('_');
+      
+      if (lastPart.startsWith('r') && /^\d+$/.test(lastPart.slice(1))) {
+        const ri = parseInt(lastPart.slice(1), 10);
+        const roomObj = appState.floors?.[fi]?.segments?.[si]?.rooms?.[ri];
+        if (roomObj) {
+          return (roomObj.num || roomObj.sub || '').trim() || `Sala ${ri + 1}`;
+        }
+      } else if (lastPart) {
+        return lastPart;
+      }
+    }
+
+    // Direct room match in pl.rooms
+    const directRoom = pl.rooms.find(r => r.id === cKey || r.name === cKey || (r.name && r.name.toLowerCase() === cKey.toLowerCase()));
+    if (directRoom) return directRoom.name;
+
+    return '';
+  }, [colKeyToRoomMap, appState.floors, pl.rooms]);
+
   // Helper: check if a lesson from SchedData (Etap 2) belongs to a specific class, teacher, or room
   // schedData structure: yearKey -> dayIdx -> hourKey -> colKey -> SchedCell | SchedCell[]
   const etap2Schedule = useMemo(() => {
@@ -620,14 +608,13 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     Object.entries(yearData).forEach(([dayStr, hoursData]) => {
       const dayIdx = parseInt(dayStr, 10);
       Object.entries(hoursData).forEach(([hourKey, cells]) => {
-        Object.entries(cells).forEach(([colKey, cellVal]) => {
+        Object.entries(cells).forEach(([colKeyStr, cellVal]) => {
           const cellList = Array.isArray(cellVal) ? cellVal : [cellVal];
           
           cellList.forEach(cell => {
             if (!cell) return;
-            // colKey example: f0_s0_101 (last part is room name)
-            const parts = colKey.split('_');
-            const roomName = parts[parts.length - 1] || '';
+            // Always resolve the actual room name from the Plan Sal room column
+            const actualRoomName = resolveRoomFromColKey(colKeyStr);
 
             // 1. By Class name
             if (cell.classes && cell.classes.length > 0) {
@@ -639,7 +626,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 
                 classMap[clsId][dayIdx][hourKey].push({
                   ...cell,
-                  note: roomName // Use the actual room name in cell
+                  note: actualRoomName // Store the actual room name in note for downstream rendering
                 });
               });
             } else if (cell.className) {
@@ -650,7 +637,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               
               classMap[clsId][dayIdx][hourKey].push({
                 ...cell,
-                note: roomName
+                note: actualRoomName
               });
             }
 
@@ -664,20 +651,20 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               
               teacherMap[teacherId][dayIdx][hourKey].push({
                 ...cell,
-                note: roomName
+                note: actualRoomName
               });
             }
 
             // 3. By Room Name
-            if (roomName) {
-              const roomId = pl.rooms.find(r => r.name === roomName)?.id || roomName;
+            if (actualRoomName) {
+              const roomId = pl.rooms.find(r => r.name === actualRoomName)?.id || actualRoomName;
               if (!roomMap[roomId]) roomMap[roomId] = {};
               if (!roomMap[roomId][dayIdx]) roomMap[roomId][dayIdx] = {};
               if (!roomMap[roomId][dayIdx][hourKey]) roomMap[roomId][dayIdx][hourKey] = [];
               
               roomMap[roomId][dayIdx][hourKey].push({
                 ...cell,
-                note: roomName
+                note: actualRoomName
               });
             }
           });
@@ -686,7 +673,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     });
 
     return { classes: classMap, teachers: teacherMap, rooms: roomMap };
-  }, [schedData, appState.yearKey, pl.classes, pl.teachers, pl.rooms]);
+  }, [schedData, appState.yearKey, pl.classes, pl.teachers, pl.rooms, resolveRoomFromColKey]);
 
   // Handle system print trigger
   const handlePrint = () => {
@@ -776,7 +763,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       });
     } else {
       const cKey = localColKey(col);
-      const rawCell = schedData[appState.yearKey]?.[dayIdx]?.[hourNum]?.[cKey];
+      const hourKeyStr = String(hourNum);
+      const hourSlots = schedData[appState.yearKey]?.[dayIdx] || {};
+      const rawCell = hourSlots[hourKeyStr]?.[cKey] || hourSlots[hourNum]?.[cKey] || hourSlots[String(hourIdx)]?.[cKey];
       const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
       slots.forEach(cell => {
         if (!cell) return;
@@ -848,7 +837,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   // Helper to retrieve lessons for a teacher and hour cleanly
-  const getTeacherLessons = (
+  const getTeacherLessons = useCallback((
     teacher: Teacher,
     dayIdx: number,
     hourNum: number,
@@ -865,6 +854,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     }> = [];
 
     const hourKeyStr = String(hourNum);
+    const yk = appState.yearKey || 'default';
+    const hourSlots = schedData[yk]?.[dayIdx]?.[hourKeyStr] || schedData[yk]?.[dayIdx]?.[hourNum] || {};
 
     if (scheduleVersion === 'etap1') {
       const seenAsg = new Set<string>();
@@ -877,7 +868,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
         if (dIdx === dayIdx && hrIdx === hourIdx) {
           const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-          if (asg && asg.teacherId === teacher.id) {
+          if (asg && (asg.teacherId === teacher.id || lesson.supportTeacherId === teacher.id)) {
             const uniqueKey = `${asg.id}-${classId}-${asg.groupId || keyGroupId || ''}`;
             if (seenAsg.has(uniqueKey)) return;
             seenAsg.add(uniqueKey);
@@ -898,8 +889,27 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             const groupName = grpObj ? grpObj.name : rawGroupId || undefined;
             const groupShort = getGroupShort(groupName, subjectShort || subjectName);
 
+            // Check if Plan Sal (schedData) has the actual room assigned for this lesson/slot
+            let actualRoom = '';
+            for (const [colKey, rawCell] of Object.entries(hourSlots)) {
+              const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
+              const match = slots.find(c => {
+                if (!c) return false;
+                const matchesTeacher = c.teacherAbbr === teacher.abbr || c.supportTeacherAbbr === teacher.abbr || c._bridgeMeta?.teacherId === teacher.id;
+                if (!matchesTeacher) return false;
+                const matchesClass = c._bridgeMeta?.classId === classId || c.className?.includes(cleanClsName) || (c.classes && c.classes.includes(cleanClsName));
+                const matchesSubj = !c.subject || c.subject.toLowerCase() === subjectName.toLowerCase() || c._bridgeMeta?.subjectId === asg.subjectId;
+                return matchesClass || matchesSubj;
+              });
+              if (match) {
+                actualRoom = resolveRoomFromColKey(colKey);
+                if (actualRoom) break;
+              }
+            }
+
+            // If not placed in Plan Sal yet, only then fallback to asg.roomId (suggested room)
             const metaRoom = asg.roomId ? (roomsMap.get(asg.roomId) || pl.rooms.find(r => r.id === asg.roomId)) : null;
-            const roomName = metaRoom?.name || (asg.roomId ? String(asg.roomId) : '');
+            const roomName = actualRoom || metaRoom?.name || (asg.roomId ? String(asg.roomId) : '');
 
             const partsFormatted = [subjectName, cleanClsName + (groupShort ? ` (${groupShort})` : ''), roomName ? `s. ${roomName}` : ''].filter(Boolean);
             const displayText = partsFormatted.join(' • ');
@@ -917,27 +927,17 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         }
       });
     } else {
-      // In Etap 2: Check schedData for cells where teacher matches teacher.abbr or teacher.id
-      const yk = appState.yearKey;
-      const hourSlots = schedData[yk]?.[dayIdx]?.[hourKeyStr] || schedData[yk]?.[dayIdx]?.[hourNum] || {};
+      // In Etap 2: Check schedData for cells where teacher matches teacher.abbr, supportTeacherAbbr, or teacher.id
       const seenSlots = new Set<string>();
 
       Object.entries(hourSlots).forEach(([colKey, rawCell]) => {
         const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
         slots.forEach(cell => {
           if (!cell) return;
-          if (cell.teacherAbbr !== teacher.abbr && cell._bridgeMeta?.teacherId !== teacher.id) return;
+          if (cell.teacherAbbr !== teacher.abbr && cell.supportTeacherAbbr !== teacher.abbr && cell._bridgeMeta?.teacherId !== teacher.id) return;
 
-          // Col room resolution
-          let roomName = cell.note || '';
-          if (!roomName && cell._bridgeMeta?.roomId) {
-            const rObj = roomsMap.get(cell._bridgeMeta.roomId) || pl.rooms.find(r => r.id === cell._bridgeMeta.roomId);
-            if (rObj) roomName = rObj.name;
-          }
-          if (!roomName && colKey) {
-            const matchingRoom = pl.rooms.find(r => r.id === colKey || r.name === colKey || (r.name && colKey && r.name.toLowerCase() === colKey.toLowerCase()));
-            if (matchingRoom) roomName = matchingRoom.name;
-          }
+          // Col room resolution: ALWAYS resolve actual room from the Plan Sal room column
+          const roomName = resolveRoomFromColKey(colKey);
 
           const rawClass = cell.className || cell.classes?.join('+') || 'Klasa';
           let cleanClass = rawClass;
@@ -1006,7 +1006,39 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       seenTeacherLessonKey.add(key);
       return true;
     });
-  };
+  }, [scheduleVersion, appState.yearKey, schedData, pl.lessons, pl.assignments, pl.subjects, pl.classes, pl.schoolGroups, pl.rooms, subjectsMap, classesMap, groupsMap, roomsMap, resolveRoomFromColKey]);
+
+  // Safe builder for teacher's current assigned lessons list
+  const getTeacherLessonsList = useCallback((teacher: Teacher) => {
+    const lessons: Array<{
+      dayIdx: number;
+      hourNum: number;
+      start: string;
+      end: string;
+      subject: string;
+      className: string;
+      roomName?: string;
+    }> = [];
+
+    for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+      hoursList.forEach((hour, hIdx) => {
+        const teacherLessons = getTeacherLessons(teacher, dayIdx, Number(hour.num), hIdx);
+        teacherLessons.forEach(it => {
+          lessons.push({
+            dayIdx,
+            hourNum: hour.num,
+            start: hour.start,
+            end: hour.end,
+            subject: it.subject,
+            className: it.className + (it.groupShort ? ` (${it.groupShort})` : ''),
+            roomName: it.roomName
+          });
+        });
+      });
+    }
+
+    return lessons;
+  }, [hoursList, getTeacherLessons]);
 
   // Helper to get teacher duties for a specific break number and day
   const getTeacherDutiesForBreak = (teacherAbbr: string, dayIdx: number, breakNum: number) => {
