@@ -27,9 +27,10 @@ export default function Changelog() {
       version: 'v3.7.1',
       date: 'Sierpień / Wrzesień 2026',
       title: 'Optymalizacja Wydruków Płachty Gabinetów oraz Autonaprawa Pamięci Podręcznej',
-      description: 'Aktualizacja usprawniająca generowanie i drukowanie macierzy gabinetów (płachty sal) w orientacji poziomej oraz wprowadzająca zaawansowane mechanizmy autokorekty stanu i awaryjnego resetu pamięci podręcznej w przypadku uszkodzonych danych.',
+      description: 'Aktualizacja usprawniająca generowanie i drukowanie macierzy gabinetów (płachty sal) w orientacji poziomej, wdrożenie minimalistycznego, wysoce czytelnego układu pionowego danych w komórkach (klasa, grupa, przedmiot, nauczyciel bez zbędnych ramek i obwódek) oraz zaawansowanych mechanizmów autokorekty stanu i awaryjnego resetu pamięci podręcznej.',
       badge: 'Najnowsza',
       changes: [
+        { type: 'feature', text: 'Zoptymalizowano prezentację danych w komórkach płachty sal: dane ułożone przejrzyście jedno pod drugim (Klasa, Grupa, Przedmiot, Nauczyciel) bez zbędnych ramek, cieni i plakietek, co zapewnia maksymalną ostrość i czytelność dla uczniów i nauczycieli po wydrukowaniu.', badgeText: 'Układ Komórek' },
         { type: 'fix', text: 'Wyeliminowano powtórzenia wpisów i dublowanie etykiet w komórkach płachty sal na wydrukach (deduplikacja lekcji, oczyszczenie nazw klas ze wstrzykniętych nazw przedmiotów).', badgeText: 'Wydruki Sal' },
         { type: 'improvement', text: 'Zoptymalizowano formatowanie i dopełnienia tabeli wydruku gabinetów z regułami ochrony przed dzieleniem stron (break-inside: avoid), zapewniając idealne dopasowanie arkusza do formatu A4.', badgeText: 'Druk A4' },
         { type: 'improvement', text: 'Wdrożono automatyczną autokorektę i łagodne uzgadnianie powiązań (sortAppState i sanitizeAppState), zapobiegając błędom aplikacji przy wczytywaniu niekompletnych struktur danych.', badgeText: 'Stabilność' },

@@ -24,6 +24,10 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 
 ### 3. 📊 Moduł Wydruków i Publikacji (Wydruki)
 System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku tradycyjnego lub zapisu cyfrowego:
+*   **Płachta Gabinetów i Sal (Matryca Sal na A4 Landscape)**:
+    *   Czysty, minimalistyczny układ danych w komórkach (**Klasa**, **Grupa**, **Przedmiot**, **Nauczyciel**) ułożonych jedno pod drugim bez rozpraszających ramek i kolorowych obwódek – idealna czytelność dla uczniów i nauczycieli po wydrukowaniu na papierze.
+    *   Wbudowany algorytm deduplikacji wpisów eliminujący powtarzanie się tych samych lekcji w jednym oknie godzinowym.
+    *   Precyzyjne reguły podziału stron `@media print` (`break-inside: avoid`) zapobiegające rozcinaniu wierszy i generowaniu pustych arkuszy.
 *   **Dynamiczny Podgląd Dyżurów (Duties Print Preview & Verification Modal)**:
     *   Osobny, interaktywny modal umożliwiający podgląd całego harmonogramu dyżurów.
     *   **Skalowanie w locie (Zoom)**: Regulacja gęstości tabeli (od 70% do 110%) w celu idealnego dopasowania wydruku do jednej strony A4 w układzie poziomym (Landscape).
@@ -51,19 +55,24 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Automatyzacja Wyboru Roku Szkolnego**:
+1.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape)**:
+    *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
+    *   Wprowadzono algorytm deduplikacji wpisów oraz oczyszczanie nazw klas ze wstrzykiwanych opisów przedmiotów.
+    *   Zaimplementowano sztywne reguły zapobiegania rozcinaniu wierszy i stron przy druku (`break-inside: avoid`).
+2.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej**:
+    *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF chłopcy/dziewczęta) w tym samym slocie godzinowym bez fałszywych kolizji.
+3.  **Centrum Scalania i Wieloosobowej Pracy**:
+    *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.
+4.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej**:
+    *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
+5.  **Automatyzacja Wyboru Roku Szkolnego**:
     *   Zlikwidowano twardo zakodowaną wartość `2026/2027` w Kreatorze Szkoły.
-    *   Wdrożono funkcję `getDefaultSchoolYear()` opartą o bieżący czas systemowy. Jeśli użytkownik wejdzie do programu np. w maju 2026 r., system zaproponuje rok szkolny `2026/2027`. Jeśli wejdzie w marcu 2026 r., zaproponuje rok `2025/2026`.
+    *   Wdrożono funkcję `getDefaultSchoolYear()` opartą o bieżący czas systemowy.
     *   Dodano dynamiczną listę wyboru `getDynamicSchoolYears()` obejmującą lata od -3 do +6 wstecz/w przód.
-    *   Wprowadzono opcję `"custom"`, dającą pełną wolność wpisania nietypowego roku szkolnego za pomocą bezpiecznego monitu.
-2.  **Słownik Przedmiotów dedykowany dla Rodzajów Szkół**:
-    *   Zaimplementowano cztery oficjalne profile szkolne: Szkoła Podstawowa (SP), Liceum Ogólnokształcące (LO), Technikum oraz Szkoła Branżowa.
-    *   Dla każdego profilu zdefiniowano kanoniczne przedmioty nauczania wraz ze spójnym kodowaniem kolorów, skrótami (np. JP, MAT, BIOL) oraz domyślnymi flagami podgrup (np. podgrupy na WF czy językach obcych).
-    *   Stworzono przyjazny interfejs checklisty w Kreatorze Szkoły z funkcjami *Zaznacz/Odznacz wszystko* oraz automatyczną eliminacją duplikatów (jeśli dany skrót przedmiotu już istnieje w bazie, system go nie nadpisze ani nie zdubluje).
-3.  **Dynamiczny Modal Podglądu Dyżurów w Wydrukach**:
-    *   Dodano przycisk podglądu otwierający interaktywny modal w sekcji "Wydruki".
-    *   Wdrożono w pełni funkcjonalny suwak skali (zoomu) pozwalający dopasować wielkość tabeli dyżurów do specyfiki ekranu oraz wydruku.
-    *   Wprowadzono filtrację według dni tygodnia oraz podgląd powiązanych lekcji SchedData bezpośrednio przed i po przerwie.
+6.  **Słownik Przedmiotów dedykowany dla Rodzajów Szkół**:
+    *   Zaimplementowano profile szkolne: Szkoła Podstawowa (SP), Liceum Ogólnokształcące (LO), Technikum oraz Szkoła Branżowa.
+7.  **Dynamiczny Modal Podglądu Dyżurów w Wydrukach**:
+    *   Dodano przycisk podglądu z suwakiem skali (zoomu) i podglądem lekcji sąsiadujących z dyżurem.
 
 ---
 
