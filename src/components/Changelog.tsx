@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.7.2',
+      date: 'Wrzesień 2026',
+      title: 'Szczegółowy Plan Nauczycieli z Dyżurami Międzylekcyjnymi',
+      description: 'Rozbudowa modułu Wydruki i Publikacje o pełną prezentację tygodniowego planu nauczycieli: w komórkach lekcji prezentowane są dane w układzie pionowym (nazwa przedmiotu, klasa z oznaczeniem grupy, numer/nazwa sali), a pomiędzy lekcjami zintegrowano wiersze dyżurów międzylekcyjnych z dokładną lokalizacją i piętrem.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Zintegrowano wyświetlanie dyżurów międzylekcyjnych w planie nauczycieli – harmonogram dyżurów jest automatycznie wstrzykiwany w wiersze przerw pomiędzy lekcjami (wraz z nazwą miejsca i piętrem).', badgeText: 'Dyżury' },
+        { type: 'feature', text: 'Wdrożono czytelny, pionowy układ danych w komórkach planu nauczyciela: Przedmiot (wyraźny nagłówek), Klasa (z grupą np. "3a (gr1)") oraz Sala lekcyjna (np. "s. 104"), bez zbędnych obwódek.', badgeText: 'Układ Lekcji' },
+        { type: 'improvement', text: 'Dodano przełącznik „Dyżury na przerwach” w panelu sterowania wydrukami oraz w widoku podglądu tygodniowego, pozwalający na elastyczne włączanie lub ukrywanie przerw z dyżurami.', badgeText: 'Kontrola Druku' },
+        { type: 'improvement', text: 'Zapewniono pełną zgodność z oboma etapami planowania: Etap 1 (Plan Klas) oraz Etap 2 (Plan Sal / Obłożenie Gabinetów).', badgeText: 'Kompatybilność' }
+      ]
+    },
+    {
       version: 'v3.7.1',
       date: 'Sierpień / Wrzesień 2026',
       title: 'Optymalizacja Wydruków Płachty Gabinetów oraz Autonaprawa Pamięci Podręcznej',
       description: 'Aktualizacja usprawniająca generowanie i drukowanie macierzy gabinetów (płachty sal) w orientacji poziomej, wdrożenie minimalistycznego, wysoce czytelnego układu pionowego danych w komórkach (klasa, grupa, przedmiot, nauczyciel bez zbędnych ramek i obwódek) oraz zaawansowanych mechanizmów autokorekty stanu i awaryjnego resetu pamięci podręcznej.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Zoptymalizowano prezentację danych w komórkach płachty sal: dane ułożone przejrzyście jedno pod drugim (Klasa, Grupa, Przedmiot, Nauczyciel) bez zbędnych ramek, cieni i plakietek, co zapewnia maksymalną ostrość i czytelność dla uczniów i nauczycieli po wydrukowaniu.', badgeText: 'Układ Komórek' },
         { type: 'fix', text: 'Wyeliminowano powtórzenia wpisów i dublowanie etykiet w komórkach płachty sal na wydrukach (deduplikacja lekcji, oczyszczenie nazw klas ze wstrzykniętych nazw przedmiotów).', badgeText: 'Wydruki Sal' },

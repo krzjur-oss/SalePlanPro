@@ -124,6 +124,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [isDutiesModalOpen, setIsDutiesModalOpen] = useState<boolean>(false);
   const [dutiesModalScale, setDutiesModalScale] = useState<number>(1.0);
   const [dutiesModalDayFilter, setDutiesModalDayFilter] = useState<number | 'all'>('all');
+  
+  // Teacher schedule configuration
+  const [showDutiesInTeacherPlan, setShowDutiesInTeacherPlan] = useState<boolean>(true);
 
   useEffect(() => {
     try {
@@ -842,6 +845,192 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       seenLessonKey.add(key);
       return true;
     });
+  };
+
+  // Helper to retrieve lessons for a teacher and hour cleanly
+  const getTeacherLessons = (
+    teacher: Teacher,
+    dayIdx: number,
+    hourNum: number,
+    hourIdx: number
+  ) => {
+    const lessonsForTeacher: Array<{
+      subject: string;
+      subjectShort: string;
+      className: string;
+      groupName?: string;
+      groupShort?: string;
+      roomName?: string;
+      displayText: string;
+    }> = [];
+
+    const hourKeyStr = String(hourNum);
+
+    if (scheduleVersion === 'etap1') {
+      const seenAsg = new Set<string>();
+      Object.entries(pl.lessons).forEach(([key, lesson]) => {
+        const parts = key.split('|');
+        const classId = parts[0];
+        const dIdx = parseInt(parts[1], 10);
+        const hrIdx = parseInt(parts[2], 10);
+        const keyGroupId = parts[3] || null;
+
+        if (dIdx === dayIdx && hrIdx === hourIdx) {
+          const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+          if (asg && asg.teacherId === teacher.id) {
+            const uniqueKey = `${asg.id}-${classId}-${asg.groupId || keyGroupId || ''}`;
+            if (seenAsg.has(uniqueKey)) return;
+            seenAsg.add(uniqueKey);
+
+            const subjObj = subjectsMap.get(asg.subjectId) || pl.subjects.find(s => s.id === asg.subjectId);
+            const subjectName = subjObj?.name || 'Przedmiot';
+            const subjectShort = subjObj?.short || getSubjectShort(asg.subjectId, subjObj);
+
+            let clsName = classesMap.get(classId)?.name || 'Klasa';
+            if (asg.linkedClassIds && asg.linkedClassIds.length > 0) {
+              const linkedNames = asg.linkedClassIds.map(id => classesMap.get(id)?.name).filter(Boolean);
+              clsName = [clsName, ...linkedNames].join('+');
+            }
+            const cleanClsName = clsName.replace(/\s*\([^)]*\)/g, '').trim() || clsName;
+
+            const rawGroupId = asg.groupId || keyGroupId;
+            const grpObj = rawGroupId ? (pl.schoolGroups.find(g => g.id === rawGroupId) || groupsMap.get(rawGroupId)) : null;
+            const groupName = grpObj ? grpObj.name : rawGroupId || undefined;
+            const groupShort = getGroupShort(groupName, subjectShort || subjectName);
+
+            const metaRoom = asg.roomId ? (roomsMap.get(asg.roomId) || pl.rooms.find(r => r.id === asg.roomId)) : null;
+            const roomName = metaRoom?.name || (asg.roomId ? String(asg.roomId) : '');
+
+            const partsFormatted = [subjectName, cleanClsName + (groupShort ? ` (${groupShort})` : ''), roomName ? `s. ${roomName}` : ''].filter(Boolean);
+            const displayText = partsFormatted.join(' • ');
+
+            lessonsForTeacher.push({
+              subject: subjectName,
+              subjectShort,
+              className: cleanClsName,
+              groupName,
+              groupShort,
+              roomName,
+              displayText
+            });
+          }
+        }
+      });
+    } else {
+      // In Etap 2: Check schedData for cells where teacher matches teacher.abbr or teacher.id
+      const yk = appState.yearKey;
+      const hourSlots = schedData[yk]?.[dayIdx]?.[hourKeyStr] || schedData[yk]?.[dayIdx]?.[hourNum] || {};
+      const seenSlots = new Set<string>();
+
+      Object.entries(hourSlots).forEach(([colKey, rawCell]) => {
+        const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
+        slots.forEach(cell => {
+          if (!cell) return;
+          if (cell.teacherAbbr !== teacher.abbr && cell._bridgeMeta?.teacherId !== teacher.id) return;
+
+          // Col room resolution
+          let roomName = cell.note || '';
+          if (!roomName && cell._bridgeMeta?.roomId) {
+            const rObj = roomsMap.get(cell._bridgeMeta.roomId) || pl.rooms.find(r => r.id === cell._bridgeMeta.roomId);
+            if (rObj) roomName = rObj.name;
+          }
+          if (!roomName && colKey) {
+            const matchingRoom = pl.rooms.find(r => r.id === colKey || r.name === colKey || (r.name && colKey && r.name.toLowerCase() === colKey.toLowerCase()));
+            if (matchingRoom) roomName = matchingRoom.name;
+          }
+
+          const rawClass = cell.className || cell.classes?.join('+') || 'Klasa';
+          let cleanClass = rawClass;
+          let embeddedGroupInClass = '';
+          const parenMatch = rawClass.match(/\(([^)]+)\)/);
+          if (parenMatch) {
+            embeddedGroupInClass = parenMatch[1].trim();
+            cleanClass = rawClass.replace(/\s*\([^)]*\)/g, '').trim() || rawClass;
+          }
+
+          const subjObj = (cell._bridgeMeta?.subjectId ? (subjectsMap.get(cell._bridgeMeta.subjectId) || pl.subjects.find(s => s.id === cell._bridgeMeta?.subjectId)) : null) ||
+                          pl.subjects.find(s => s.name.toLowerCase().trim() === (cell.subject || '').toLowerCase().trim());
+          const subjectName = cell.subject || subjObj?.name || 'Przedmiot';
+          const subjectShort = subjObj?.short || getSubjectShort(cell.subject, subjObj);
+
+          let rawGroup = cell._bridgeMeta?.groupId;
+          if (!rawGroup && cell._bridgeMeta?.classId && cell._bridgeMeta?.subjectId) {
+            const matchingAsg = pl.assignments.find(a => 
+              a.classId === cell._bridgeMeta?.classId && 
+              a.subjectId === cell._bridgeMeta?.subjectId &&
+              (!cell._bridgeMeta?.teacherId || a.teacherId === cell._bridgeMeta?.teacherId)
+            );
+            if (matchingAsg?.groupId) {
+              rawGroup = matchingAsg.groupId;
+            }
+          }
+          if (!rawGroup && embeddedGroupInClass) {
+            rawGroup = embeddedGroupInClass;
+          }
+          if (!rawGroup && cell.note) {
+            const noteMatch = cell.note.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2|chłopcy|dziewczęta)\b/i);
+            if (noteMatch) {
+              rawGroup = noteMatch[0];
+            }
+          }
+
+          const grpObj = rawGroup ? (pl.schoolGroups.find(g => g.id === rawGroup) || groupsMap.get(rawGroup)) : null;
+          const groupName = grpObj ? grpObj.name : rawGroup || undefined;
+          const groupShort = getGroupShort(groupName, subjectShort || subjectName);
+
+          const slotKey = `${subjectName}-${cleanClass}-${groupShort || ''}-${roomName}`;
+          if (seenSlots.has(slotKey)) return;
+          seenSlots.add(slotKey);
+
+          const partsFormatted = [subjectName, cleanClass + (groupShort ? ` (${groupShort})` : ''), roomName ? `s. ${roomName}` : ''].filter(Boolean);
+          const displayText = partsFormatted.join(' • ');
+
+          lessonsForTeacher.push({
+            subject: subjectName,
+            subjectShort,
+            className: cleanClass,
+            groupName,
+            groupShort,
+            roomName,
+            displayText
+          });
+        });
+      });
+    }
+
+    // Deduplicate any repeated identical entries
+    const seenTeacherLessonKey = new Set<string>();
+    return lessonsForTeacher.filter(it => {
+      const key = `${it.className}|${it.subjectShort}|${it.groupShort}|${it.roomName}`;
+      if (seenTeacherLessonKey.has(key)) return false;
+      seenTeacherLessonKey.add(key);
+      return true;
+    });
+  };
+
+  // Helper to get teacher duties for a specific break number and day
+  const getTeacherDutiesForBreak = (teacherAbbr: string, dayIdx: number, breakNum: number) => {
+    if (!appState.dyzury?.harmonogram || !appState.dyzury?.miejsca) return [];
+    const duties: Array<{ placeName: string; floor?: string; desc?: string; note?: string; breakName: string; start: string; end: string }> = [];
+    
+    const przerwa = appState.dyzury.przerwy?.find(p => p.num === breakNum);
+    
+    appState.dyzury.miejsca.forEach(m => {
+      const key = `${m.id}|${dayIdx}|${breakNum}`;
+      const entry = appState.dyzury.harmonogram[key];
+      if (entry && entry.teacherAbbr === teacherAbbr) {
+        duties.push({
+          placeName: m.name,
+          floor: m.floor,
+          desc: m.desc,
+          note: entry.note,
+          breakName: przerwa?.name || `Przerwa ${breakNum}`,
+          start: przerwa?.start || '',
+          end: przerwa?.end || ''
+        });
+      }
+    });
+    return duties;
   };
 
   const generateRoomsMatrixHtml = () => {
@@ -2100,16 +2289,28 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 ))}
               </select>
             ) : (
-              <select
-                value={selectedTeacherId}
-                onChange={(e) => setSelectedTeacherId(e.target.value)}
-                className="bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
-              >
-                <option value="all">Wszyscy nauczyciele</option>
-                {pl.teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.last} {t.first}</option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedTeacherId}
+                  onChange={(e) => setSelectedTeacherId(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Wszyscy nauczyciele</option>
+                  {pl.teachers.map(t => (
+                    <option key={t.id} value={t.id}>{t.last} {t.first}</option>
+                  ))}
+                </select>
+
+                <label className="flex items-center gap-1.5 text-xs text-slate-300 font-bold cursor-pointer select-none bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg hover:border-slate-600 transition">
+                  <input
+                    type="checkbox"
+                    checked={showDutiesInTeacherPlan}
+                    onChange={(e) => setShowDutiesInTeacherPlan(e.target.checked)}
+                    className="rounded text-indigo-500 focus:ring-indigo-400 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>Dyżury na przerwach</span>
+                </label>
+              </div>
             )}
 
             <button
@@ -2260,74 +2461,130 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {hoursList.map((hour, hIdx) => {
-                        const hourKeyStr = String(hour.num);
-                        return (
-                          <tr key={hour.num} className="bg-white">
-                            <td className="border border-slate-300 p-2 py-2.5 font-mono text-center text-[10px] bg-slate-50/50">
-                              <span className="font-extrabold text-slate-900">{hour.num}</span>
-                              <span className="block text-[8px] text-slate-200 font-semibold leading-none mt-0.5">{hour.start}-{hour.end}</span>
-                            </td>
-
-                            {[0, 1, 2, 3, 4].map(dayIdx => {
-                              let displayItems: Array<{ subject: string; className: string; roomName?: string }> = [];
-
-                              if (scheduleVersion === 'etap1') {
-                                Object.entries(pl.lessons).forEach(([key, lesson]) => {
-                                  const parts = key.split('|');
-                                  const classId = parts[0];
-                                  const dIdx = parseInt(parts[1], 10);
-                                  const hrIndex = parseInt(parts[2], 10);
-
-                                  if (dIdx === dayIdx && hrIndex === hIdx) {
-                                    const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                    if (asg && asg.teacherId === teacher.id) {
-                                      const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
-                                      const clsName = classesMap.get(classId)?.name || 'Inna';
-                                      const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                                      displayItems.push({
-                                        subject,
-                                        className: clsName,
-                                        roomName: room?.name
-                                      });
-                                    }
-                                  }
-                                });
-                              } else {
-                                const tSched = etap2Schedule.teachers[teacher.id] || {};
-                                const daySchedules = tSched[dayIdx] || {};
-                                const hourCells = daySchedules[hourKeyStr] || [];
-                                
-                                hourCells.forEach(cell => {
-                                  displayItems.push({
-                                    subject: cell.subject,
-                                    className: cell.className || cell.classes?.join('+') || 'Klasa',
-                                    roomName: cell.note
-                                  });
-                                });
-                              }
-
-                              return (
-                                <td key={dayIdx} className="border border-slate-300 p-2.5 align-middle text-center min-h-[50px] bg-white">
-                                  {displayItems.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                      {displayItems.map((it, dIdx) => (
-                                        <div key={dIdx} className="text-[10px] leading-tight">
-                                          <span className="font-black text-slate-900 block tracking-tight text-[10.5px]">{it.subject}</span>
-                                          <div className="flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1">
-                                            <span className="bg-amber-100 hover:bg-amber-200 border border-amber-200 text-amber-800 px-1 rounded">{it.className}</span>
-                                            {it.roomName && <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded">sala: {it.roomName}</span>}
+                      {/* Pre-lesson break 0 (if any duties for this teacher) */}
+                      {showDutiesInTeacherPlan && (() => {
+                        const preBreaks = (appState.dyzury?.przerwy || []).filter(p => p.num === 0);
+                        return preBreaks.map(p => {
+                          const hasAnyDuty = [0, 1, 2, 3, 4].some(d => getTeacherDutiesForBreak(teacher.abbr, d, p.num).length > 0);
+                          if (!hasAnyDuty) return null;
+                          return (
+                            <tr key={`break-pre-${p.num}`} className="bg-amber-50/70 border-y border-amber-200/90 font-medium">
+                              <td className="border border-slate-300 p-1.5 font-mono text-center text-[9.5px] bg-amber-100/60">
+                                <span className="font-extrabold text-amber-950 block">{p.start}–{p.end}</span>
+                                <span className="text-[8px] font-black uppercase text-amber-800 block">Dyżur</span>
+                              </td>
+                              {[0, 1, 2, 3, 4].map(dayIdx => {
+                                const duties = getTeacherDutiesForBreak(teacher.abbr, dayIdx, p.num);
+                                return (
+                                  <td key={dayIdx} className="border border-slate-300 p-1.5 align-middle text-center bg-amber-50/40">
+                                    {duties.length > 0 ? (
+                                      <div className="space-y-0.5">
+                                        {duties.map((d, dIdx) => (
+                                          <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
+                                            <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
+                                            <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                            {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
                                           </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <span className="text-[9px] text-slate-200 font-bold font-mono">-</span>
-                                  )}
-                                </td>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[8px] text-slate-300 font-mono">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        });
+                      })()}
+
+                      {hoursList.map((hour, hIdx) => {
+                        const currentHourNum = Number(hour.num);
+                        const matchingBreaks = (appState.dyzury?.przerwy || []).filter(p => {
+                          if (p.num === 0) return false;
+                          if (p.num === currentHourNum || p.num === hIdx + 1) return true;
+                          if (hour.end && p.start && hour.end === p.start) return true;
+                          return false;
+                        });
+
+                        return (
+                          <React.Fragment key={hour.num}>
+                            <tr className="bg-white">
+                              <td className="border border-slate-300 p-2 py-2.5 font-mono text-center text-[10px] bg-slate-50/50">
+                                <span className="font-extrabold text-slate-900">{hour.num}</span>
+                                <span className="block text-[8.5px] text-slate-500 font-semibold leading-none mt-0.5">{hour.start}-{hour.end}</span>
+                              </td>
+
+                              {[0, 1, 2, 3, 4].map(dayIdx => {
+                                const lessons = getTeacherLessons(teacher, dayIdx, Number(hour.num), hIdx);
+
+                                return (
+                                  <td key={dayIdx} className="border border-slate-300 p-2 align-middle text-center min-h-[52px] bg-white">
+                                    {lessons.length > 0 ? (
+                                      <div className="space-y-1.5 py-0.5">
+                                        {lessons.map((it, dIdx) => (
+                                          <div key={dIdx} className="text-[10px] leading-tight flex flex-col items-center justify-center text-center" title={it.displayText}>
+                                            <span className="font-black text-slate-900 block tracking-tight text-[11px]">
+                                              {it.subject}
+                                            </span>
+                                            <div className="flex items-center justify-center gap-1 text-[9.5px] mt-0.5 font-bold text-slate-800">
+                                              <span>{it.className}</span>
+                                              {it.groupShort && (
+                                                <span className="text-indigo-700 font-extrabold text-[8.5px]">
+                                                  ({it.groupShort})
+                                                </span>
+                                              )}
+                                            </div>
+                                            {it.roomName && (
+                                              <span className="text-slate-600 text-[8.5px] font-semibold mt-0.5">
+                                                s. {it.roomName}
+                                              </span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[9px] text-slate-300 font-bold font-mono">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Duty breaks between lessons */}
+                            {showDutiesInTeacherPlan && matchingBreaks.map(p => {
+                              const hasAnyDuty = [0, 1, 2, 3, 4].some(d => getTeacherDutiesForBreak(teacher.abbr, d, p.num).length > 0);
+                              if (!hasAnyDuty) return null;
+                              return (
+                                <tr key={`break-${hour.num}-${p.num}`} className="bg-amber-50/70 border-y border-amber-200/90 font-medium">
+                                  <td className="border border-slate-300 p-1.5 font-mono text-center text-[9.5px] bg-amber-100/60">
+                                    <span className="font-extrabold text-amber-950 block">{p.start}–{p.end}</span>
+                                    <span className="text-[8px] font-black uppercase text-amber-800 block">Dyżur</span>
+                                  </td>
+                                  {[0, 1, 2, 3, 4].map(dayIdx => {
+                                    const duties = getTeacherDutiesForBreak(teacher.abbr, dayIdx, p.num);
+                                    return (
+                                      <td key={dayIdx} className="border border-slate-300 p-1.5 align-middle text-center bg-amber-50/40">
+                                        {duties.length > 0 ? (
+                                          <div className="space-y-0.5">
+                                            {duties.map((d, dIdx) => (
+                                              <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
+                                                <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
+                                                <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                                {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="text-[8px] text-slate-300 font-mono">-</span>
+                                        )}
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
                               );
                             })}
-                          </tr>
+                          </React.Fragment>
                         );
                       })}
                     </tbody>
@@ -2557,19 +2814,34 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           )}
 
           {printType === 'teachers' && (
-            <div className="space-y-1">
-              <label className="text-[10px] text-slate-400 font-bold uppercase">Wybierz Nauczyciela</label>
-              <select
-                value={selectedTeacherId}
-                onChange={(e) => setSelectedTeacherId(e.target.value)}
-                className="w-full h-[38px] px-3 border border-slate-200 bg-white text-xs font-semibold rounded-lg text-slate-700 outline-none"
-              >
-                <option value="all">Wszyscy nauczyciele (każdy na nowej stronie)</option>
-                {pl.teachers.map(t => (
-                  <option key={t.id} value={t.id}>{t.last} {t.first} ({t.abbr})</option>
-                ))}
-              </select>
-            </div>
+            <>
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-bold uppercase">Wybierz Nauczyciela</label>
+                <select
+                  value={selectedTeacherId}
+                  onChange={(e) => setSelectedTeacherId(e.target.value)}
+                  className="w-full h-[38px] px-3 border border-slate-200 bg-white text-xs font-semibold rounded-lg text-slate-700 outline-none"
+                >
+                  <option value="all">Wszyscy nauczyciele (każdy na nowej stronie)</option>
+                  {pl.teachers.map(t => (
+                    <option key={t.id} value={t.id}>{t.last} {t.first} ({t.abbr})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1 flex flex-col justify-end">
+                <label className="text-[10px] text-slate-400 font-bold uppercase block">Opcje planu</label>
+                <label className="h-[38px] px-3 bg-white border border-slate-200 hover:border-indigo-300 rounded-lg flex items-center gap-2 cursor-pointer transition select-none text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={showDutiesInTeacherPlan}
+                    onChange={(e) => setShowDutiesInTeacherPlan(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                  />
+                  <span>Pokaż dyżury międzylekcyjne</span>
+                </label>
+              </div>
+            </>
           )}
 
           {printType === 'rooms' && (
@@ -2829,78 +3101,132 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {hoursList.map((hour, hIdx) => {
-                    const hourKeyStr = String(hour.num);
-                    return (
-                      <tr key={hour.num} className="hover:bg-slate-50/50">
-                        {/* Hour info */}
-                        <td className="border border-slate-300 p-2 font-mono text-center text-[10px]">
-                          <span className="font-extrabold text-slate-900">{hour.num}</span>
-                          <span className="block text-[8px] text-slate-400 leading-none mt-0.5">{hour.start}-{hour.end}</span>
-                        </td>
-                        
-                        {/* Day columns 0..4 */}
-                        {[0, 1, 2, 3, 4].map(dayIdx => {
-                          let displayItems: Array<{ subject: string; className: string; roomName?: string }> = [];
-
-                          if (scheduleVersion === 'etap1') {
-                            // Collect all matches from Step 1 lessons mapping
-                            Object.entries(pl.lessons).forEach(([key, lesson]) => {
-                              const parts = key.split('|');
-                              const classId = parts[0];
-                              const dIdx = parseInt(parts[1], 10);
-                              const hrIndex = parseInt(parts[2], 10);
-
-                              if (dIdx === dayIdx && hrIndex === hIdx) {
-                                const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                if (asg && asg.teacherId === teacher.id) {
-                                  const subject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
-                                  const clsName = classesMap.get(classId)?.name || 'Inna';
-                                  const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                                  displayItems.push({
-                                    subject,
-                                    className: clsName,
-                                    roomName: room?.name
-                                  });
-                                }
-                              }
-                            });
-                          } else {
-                            // Gather SchedData from compiled teacher map
-                            const tSched = etap2Schedule.teachers[teacher.id] || {};
-                            const daySchedules = tSched[dayIdx] || {};
-                            const hourCells = daySchedules[hourKeyStr] || [];
-                            
-                            hourCells.forEach(cell => {
-                              displayItems.push({
-                                subject: cell.subject,
-                                className: cell.className || cell.classes?.join('+') || 'Klasa',
-                                roomName: cell.note // mapped room name
-                              });
-                            });
-                          }
-
-                          return (
-                            <td key={dayIdx} className="border border-slate-300 p-2 align-top text-center min-h-[45px]">
-                              {displayItems.length > 0 ? (
-                                <div className="space-y-1">
-                                  {displayItems.map((it, dIdx) => (
-                                    <div key={dIdx} className="text-[10px]">
-                                      <span className="font-black text-slate-950 block">{it.subject}</span>
-                                      <div className="flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-bold mt-0.5">
-                                        <span className="bg-amber-100 hover:bg-amber-200 border border-amber-200 text-amber-800 px-1 rounded">{it.className}</span>
-                                        {it.roomName && <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1.5 rounded">s. {it.roomName}</span>}
+                  {/* Pre-lesson break 0 (if any duties for this teacher) */}
+                  {showDutiesInTeacherPlan && (() => {
+                    const preBreaks = (appState.dyzury?.przerwy || []).filter(p => p.num === 0);
+                    return preBreaks.map(p => {
+                      const hasAnyDuty = [0, 1, 2, 3, 4].some(d => getTeacherDutiesForBreak(teacher.abbr, d, p.num).length > 0);
+                      if (!hasAnyDuty) return null;
+                      return (
+                        <tr key={`break-pre-${p.num}`} className="bg-amber-50/70 border-y border-amber-200/90 font-medium">
+                          <td className="border border-slate-300 p-1.5 font-mono text-center text-[9.5px] bg-amber-100/60">
+                            <span className="font-extrabold text-amber-950 block">{p.start}–{p.end}</span>
+                            <span className="text-[8px] font-black uppercase text-amber-800 block">Dyżur</span>
+                          </td>
+                          {[0, 1, 2, 3, 4].map(dayIdx => {
+                            const duties = getTeacherDutiesForBreak(teacher.abbr, dayIdx, p.num);
+                            return (
+                              <td key={dayIdx} className="border border-slate-300 p-1.5 align-middle text-center bg-amber-50/40">
+                                {duties.length > 0 ? (
+                                  <div className="space-y-0.5">
+                                    {duties.map((d, dIdx) => (
+                                      <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
+                                        <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
+                                        <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                        {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
                                       </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-[9px] text-slate-300 font-bold font-mono">-</span>
-                              )}
-                            </td>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[8px] text-slate-300 font-mono">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    });
+                  })()}
+
+                  {hoursList.map((hour, hIdx) => {
+                    const currentHourNum = Number(hour.num);
+                    const matchingBreaks = (appState.dyzury?.przerwy || []).filter(p => {
+                      if (p.num === 0) return false;
+                      if (p.num === currentHourNum || p.num === hIdx + 1) return true;
+                      if (hour.end && p.start && hour.end === p.start) return true;
+                      return false;
+                    });
+
+                    return (
+                      <React.Fragment key={hour.num}>
+                        <tr className="hover:bg-slate-50/50">
+                          {/* Hour info */}
+                          <td className="border border-slate-300 p-2 font-mono text-center text-[10px] bg-slate-50/50">
+                            <span className="font-extrabold text-slate-900">{hour.num}</span>
+                            <span className="block text-[8px] text-slate-500 font-semibold leading-none mt-0.5">{hour.start}-{hour.end}</span>
+                          </td>
+                          
+                          {/* Day columns 0..4 */}
+                          {[0, 1, 2, 3, 4].map(dayIdx => {
+                            const lessons = getTeacherLessons(teacher, dayIdx, Number(hour.num), hIdx);
+
+                            return (
+                              <td key={dayIdx} className="border border-slate-300 p-2 align-middle text-center min-h-[50px] bg-white">
+                                {lessons.length > 0 ? (
+                                  <div className="space-y-1.5 py-0.5">
+                                    {lessons.map((it, dIdx) => (
+                                      <div key={dIdx} className="text-[10px] leading-tight flex flex-col items-center justify-center text-center" title={it.displayText}>
+                                        <span className="font-black text-slate-900 block tracking-tight text-[11px]">
+                                          {it.subject}
+                                        </span>
+                                        <div className="flex items-center justify-center gap-1 text-[9.5px] mt-0.5 font-bold text-slate-800">
+                                          <span>{it.className}</span>
+                                          {it.groupShort && (
+                                            <span className="text-indigo-700 font-extrabold text-[8.5px]">
+                                              ({it.groupShort})
+                                            </span>
+                                          )}
+                                        </div>
+                                        {it.roomName && (
+                                          <span className="text-slate-600 text-[8.5px] font-semibold mt-0.5">
+                                            s. {it.roomName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[9px] text-slate-300 font-bold font-mono">-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+
+                        {/* Duty breaks between lessons */}
+                        {showDutiesInTeacherPlan && matchingBreaks.map(p => {
+                          const hasAnyDuty = [0, 1, 2, 3, 4].some(d => getTeacherDutiesForBreak(teacher.abbr, d, p.num).length > 0);
+                          if (!hasAnyDuty) return null;
+                          return (
+                            <tr key={`break-${hour.num}-${p.num}`} className="bg-amber-50/70 border-y border-amber-200/90 font-medium">
+                              <td className="border border-slate-300 p-1.5 font-mono text-center text-[9.5px] bg-amber-100/60">
+                                <span className="font-extrabold text-amber-950 block">{p.start}–{p.end}</span>
+                                <span className="text-[8px] font-black uppercase text-amber-800 block">Dyżur</span>
+                              </td>
+                              {[0, 1, 2, 3, 4].map(dayIdx => {
+                                const duties = getTeacherDutiesForBreak(teacher.abbr, dayIdx, p.num);
+                                return (
+                                  <td key={dayIdx} className="border border-slate-300 p-1.5 align-middle text-center bg-amber-50/40">
+                                    {duties.length > 0 ? (
+                                      <div className="space-y-0.5">
+                                        {duties.map((d, dIdx) => (
+                                          <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
+                                            <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
+                                            <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                            {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-[8px] text-slate-300 font-mono">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
                           );
                         })}
-                      </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

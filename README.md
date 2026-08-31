@@ -24,6 +24,10 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 
 ### 3. 📊 Moduł Wydruków i Publikacji (Wydruki)
 System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku tradycyjnego lub zapisu cyfrowego:
+*   **Plan Tygodniowy Nauczycieli ze Zintegrowanymi Dyżurami**:
+    *   W każdej komórce lekcji prezentowane są dane w czytelnym układzie pionowym: **Przedmiot** (wyraźny nagłówek), **Klasa / Grupa** (np. `3a (gr1)`) oraz **Sala lekcyjna** (np. `s. 104`).
+    *   **Dyżury Międzylekcyjne**: Pomiędzy godzinami lekcyjnymi automatycznie wstawiane są wiersze przerw z informacją o wyznaczonym dyżurze dla danego nauczyciela (miejsce dyżuru oraz piętro, np. `Parter - Korytarz główny`).
+    *   Opcjonalny przełącznik włączania/wyłączania widoczności dyżurów w widoku pojedynczym i zbiorczym.
 *   **Płachta Gabinetów i Sal (Matryca Sal na A4 Landscape)**:
     *   Czysty, minimalistyczny układ danych w komórkach (**Klasa**, **Grupa**, **Przedmiot**, **Nauczyciel**) ułożonych jedno pod drugim bez rozpraszających ramek i kolorowych obwódek – idealna czytelność dla uczniów i nauczycieli po wydrukowaniu na papierze.
     *   Wbudowany algorytm deduplikacji wpisów eliminujący powtarzanie się tych samych lekcji w jednym oknie godzinowym.
@@ -55,23 +59,27 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape)**:
+1.  **Szczegółowy Plan Tygodniowy Nauczycieli ze Zintegrowanymi Dyżurami**:
+    *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Sala lekcyjna) bez zbędnych obwódek i ozdobników.
+    *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich (z nazwą miejsca i kondygnacją).
+    *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
+2.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape)**:
     *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
     *   Wprowadzono algorytm deduplikacji wpisów oraz oczyszczanie nazw klas ze wstrzykiwanych opisów przedmiotów.
     *   Zaimplementowano sztywne reguły zapobiegania rozcinaniu wierszy i stron przy druku (`break-inside: avoid`).
-2.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej**:
+3.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej**:
     *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF chłopcy/dziewczęta) w tym samym slocie godzinowym bez fałszywych kolizji.
-3.  **Centrum Scalania i Wieloosobowej Pracy**:
+4.  **Centrum Scalania i Wieloosobowej Pracy**:
     *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.
-4.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej**:
+5.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej**:
     *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
-5.  **Automatyzacja Wyboru Roku Szkolnego**:
+6.  **Automatyzacja Wyboru Roku Szkolnego**:
     *   Zlikwidowano twardo zakodowaną wartość `2026/2027` w Kreatorze Szkoły.
     *   Wdrożono funkcję `getDefaultSchoolYear()` opartą o bieżący czas systemowy.
     *   Dodano dynamiczną listę wyboru `getDynamicSchoolYears()` obejmującą lata od -3 do +6 wstecz/w przód.
-6.  **Słownik Przedmiotów dedykowany dla Rodzajów Szkół**:
+7.  **Słownik Przedmiotów dedykowany dla Rodzajów Szkół**:
     *   Zaimplementowano profile szkolne: Szkoła Podstawowa (SP), Liceum Ogólnokształcące (LO), Technikum oraz Szkoła Branżowa.
-7.  **Dynamiczny Modal Podglądu Dyżurów w Wydrukach**:
+8.  **Dynamiczny Modal Podglądu Dyżurów w Wydrukach**:
     *   Dodano przycisk podglądu z suwakiem skali (zoomu) i podglądem lekcji sąsiadujących z dyżurem.
 
 ---
