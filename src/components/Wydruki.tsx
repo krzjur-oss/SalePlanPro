@@ -531,13 +531,15 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   // Helper to format group short representation cleanly (e.g. "G1", "G2", "chł", "dz")
-  const getGroupShort = (groupIdOrName?: string | null): string => {
+  // Filters out subject descriptors, religion, minority language notes to avoid repetitions in cells
+  const getGroupShort = (groupIdOrName?: string | null, subjectContext?: string): string => {
     if (!groupIdOrName) return '';
     const trimmed = String(groupIdOrName).trim();
     if (!trimmed) return '';
     const grpObj = (pl.schoolGroups || []).find(g => g.id === trimmed || g.name.toLowerCase() === trimmed.toLowerCase());
     const name = grpObj ? grpObj.name.trim() : trimmed;
 
+    // Direct group patterns
     if (/^g\s*\d+$/i.test(name)) {
       return name.toUpperCase().replace(/\s+/, '');
     }
@@ -552,9 +554,41 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     if (/^\d+$/.test(name)) {
       return `G${name}`;
     }
+    if (/^1\/2$/i.test(name) || /^gr\.?\s*1\/2$/i.test(name)) return 'G1';
+    if (/^2\/2$/i.test(name) || /^gr\.?\s*2\/2$/i.test(name)) return 'G2';
     if (name.toLowerCase() === 'chłopcy' || name.toLowerCase() === 'chlopcy') return 'chł';
     if (name.toLowerCase() === 'dziewczęta' || name.toLowerCase() === 'dziewczeta') return 'dz';
-    return name;
+
+    // If name is actually a subject qualifier or subject description, NOT a group index
+    const lowerName = name.toLowerCase();
+    if (
+      lowerName.includes('relig') ||
+      lowerName.includes('mniejszoś') ||
+      lowerName.includes('mniejszos') ||
+      lowerName.includes('hiszpań') ||
+      lowerName.includes('hiszpan') ||
+      lowerName.includes('niemieck') ||
+      lowerName.includes('angielsk') ||
+      lowerName.includes('informat') ||
+      lowerName.includes('etyk') ||
+      lowerName.includes('fizyczn') ||
+      lowerName.includes('wf')
+    ) {
+      return '';
+    }
+
+    if (subjectContext) {
+      const sLower = subjectContext.toLowerCase();
+      if (lowerName.includes(sLower) || sLower.includes(lowerName)) {
+        return '';
+      }
+    }
+
+    if (name.length <= 4 && !/^[A-Z0-9]{3,}$/.test(name)) {
+      return name;
+    }
+
+    return '';
   };
 
   // Resolve hours list
@@ -712,21 +746,22 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 const linkedNames = asg.linkedClassIds.map(id => classesMap.get(id)?.name).filter(Boolean);
                 clsName = [clsName, ...linkedNames].join('+');
               }
+              const cleanClsName = clsName.replace(/\s*\([^)]*\)/g, '').trim() || clsName;
 
               const rawGroupId = asg.groupId || keyGroupId;
               const grpObj = rawGroupId ? (pl.schoolGroups.find(g => g.id === rawGroupId) || groupsMap.get(rawGroupId)) : null;
               const groupName = grpObj ? grpObj.name : rawGroupId || undefined;
-              const groupShort = getGroupShort(groupName);
+              const groupShort = getGroupShort(groupName, subjectShort || subjectName);
 
               const tAbbr = asg.teacherId ? (teachersMap.get(asg.teacherId)?.abbr || '') : '';
 
-              const partsFormatted = [clsName, subjectShort, groupShort, tAbbr].filter(Boolean);
+              const partsFormatted = [cleanClsName, subjectShort, groupShort, tAbbr].filter(Boolean);
               const displayText = partsFormatted.join(' ');
 
               lessonsInRoom.push({
                 subject: subjectName,
                 subjectShort,
-                className: clsName,
+                className: cleanClsName,
                 groupName,
                 groupShort,
                 teacherAbbr: tAbbr,
@@ -744,6 +779,14 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         if (!cell) return;
         const rawClass = cell.className || cell.classes?.join('+') || 'Klasa';
 
+        let cleanClass = rawClass;
+        let embeddedGroupInClass = '';
+        const parenMatch = rawClass.match(/\(([^)]+)\)/);
+        if (parenMatch) {
+          embeddedGroupInClass = parenMatch[1].trim();
+          cleanClass = rawClass.replace(/\s*\([^)]*\)/g, '').trim() || rawClass;
+        }
+
         const subjObj = (cell._bridgeMeta?.subjectId ? (subjectsMap.get(cell._bridgeMeta.subjectId) || pl.subjects.find(s => s.id === cell._bridgeMeta?.subjectId)) : null) ||
                         pl.subjects.find(s => s.name.toLowerCase().trim() === (cell.subject || '').toLowerCase().trim());
         const subjectName = cell.subject || subjObj?.name || 'Przedmiot';
@@ -760,32 +803,29 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             rawGroup = matchingAsg.groupId;
           }
         }
+        if (!rawGroup && embeddedGroupInClass) {
+          rawGroup = embeddedGroupInClass;
+        }
         if (!rawGroup && cell.note) {
-          const noteMatch = cell.note.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2)\b/i);
+          const noteMatch = cell.note.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2|chłopcy|dziewczęta)\b/i);
           if (noteMatch) {
             rawGroup = noteMatch[0];
-          }
-        }
-        if (!rawGroup) {
-          const classMatch = rawClass.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2)\b/i);
-          if (classMatch) {
-            rawGroup = classMatch[0];
           }
         }
 
         const grpObj = rawGroup ? (pl.schoolGroups.find(g => g.id === rawGroup) || groupsMap.get(rawGroup)) : null;
         const groupName = grpObj ? grpObj.name : rawGroup || undefined;
-        const groupShort = getGroupShort(groupName);
+        const groupShort = getGroupShort(groupName, subjectShort || subjectName);
 
         const tAbbr = cell.teacherAbbr || '';
 
-        const partsFormatted = [rawClass, subjectShort, groupShort, tAbbr].filter(Boolean);
+        const partsFormatted = [cleanClass, subjectShort, groupShort, tAbbr].filter(Boolean);
         const displayText = partsFormatted.join(' ');
 
         lessonsInRoom.push({
           subject: subjectName,
           subjectShort,
-          className: rawClass,
+          className: cleanClass,
           groupName,
           groupShort,
           teacherAbbr: tAbbr,
@@ -794,7 +834,14 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       });
     }
 
-    return lessonsInRoom;
+    // Deduplicate any repeated identical entries in the same room slot
+    const seenLessonKey = new Set<string>();
+    return lessonsInRoom.filter(it => {
+      const key = `${it.className}|${it.subjectShort}|${it.groupShort}|${it.teacherAbbr}`;
+      if (seenLessonKey.has(key)) return false;
+      seenLessonKey.add(key);
+      return true;
+    });
   };
 
   const generateRoomsMatrixHtml = () => {
@@ -816,32 +863,32 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           const segmentGroups = getSegmentGroups(chunkCols);
 
           // Dynamic styling based on columns count on this specific A4 landscape sheet
-          let thPadding = '6px 4px';
-          let tdPadding = '5px 3px';
-          let clsFontSize = '9.5px';
-          let subjFontSize = '9px';
+          let thPadding = '4px 3px';
+          let tdPadding = '3px 2px';
+          let clsFontSize = '9px';
+          let subjFontSize = '8.5px';
           let tAbbrFontSize = '8px';
-          let headerNameFontSize = '11px';
-          let headerDescFontSize = '8px';
+          let headerNameFontSize = '10.5px';
+          let headerDescFontSize = '7.5px';
           let showHeaderDesc = true;
 
           if (catRoomsCount > 14) {
-            thPadding = '3px 1px';
-            tdPadding = '3px 1px';
+            thPadding = '2px 1px';
+            tdPadding = '2px 1px';
             clsFontSize = '7.5px';
             subjFontSize = '7.5px';
             tAbbrFontSize = '7px';
-            headerNameFontSize = '8.5px';
+            headerNameFontSize = '8px';
             headerDescFontSize = '6.5px';
             showHeaderDesc = false;
           } else if (catRoomsCount > 10) {
-            thPadding = '4px 2px';
-            tdPadding = '4px 2px';
-            clsFontSize = '8.5px';
-            subjFontSize = '8.5px';
-            tAbbrFontSize = '8px';
-            headerNameFontSize = '10px';
-            headerDescFontSize = '7.5px';
+            thPadding = '3px 2px';
+            tdPadding = '2.5px 1.5px';
+            clsFontSize = '8px';
+            subjFontSize = '8px';
+            tAbbrFontSize = '7.5px';
+            headerNameFontSize = '9.5px';
+            headerDescFontSize = '7px';
           }
 
           let rowsHtml = '';
@@ -853,7 +900,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               let cellContent = '<span style="color: #cbd5e1; font-weight: bold; font-family: monospace;">-</span>';
               if (lessonsInRoom.length > 0) {
                 cellContent = lessonsInRoom.map(it => `
-                  <div style="margin-bottom: 3px; line-height: 1.15; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;" title="${escapeHtml(it.displayText)} (${escapeHtml(it.subject)})">
+                  <div style="margin-bottom: 2px; line-height: 1.1; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5px;" title="${escapeHtml(it.displayText)} (${escapeHtml(it.subject)})">
                     <div style="display: flex; align-items: center; justify-content: center; gap: 2px;">
                       <span style="background-color: #fef3c7; border: 1px solid #fde68a; color: #78350f; padding: 0.5px 3px; border-radius: 2px; font-weight: 900; font-size: ${clsFontSize}; display: inline-block;">
                         ${escapeHtml(it.className)}
@@ -885,8 +932,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
             rowsHtml += `
               <tr>
-                <td style="border: 1px solid #94a3b8; padding: 4px 2px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 10px; width: 54px; max-width: 54px; box-sizing: border-box;">
-                  <div style="font-size: 11px; font-weight: 900; color: #0f172a;">${escapeHtml(hour.num)}</div>
+                <td style="border: 1px solid #94a3b8; padding: 3px 2px; text-align: center; font-family: monospace; background-color: #f8fafc; font-weight: bold; font-size: 9.5px; width: 54px; max-width: 54px; box-sizing: border-box;">
+                  <div style="font-size: 10.5px; font-weight: 900; color: #0f172a;">${escapeHtml(hour.num)}</div>
                   <div style="font-size: 7.5px; color: #64748b; margin-top: 0.5px;">${escapeHtml(hour.start)}-${escapeHtml(hour.end)}</div>
                 </td>
                 ${roomsCellsHtml}
@@ -897,18 +944,18 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           const chunkLabel = chunks.length > 1 ? ` — CZĘŚĆ ${chunkIdx + 1}/${chunks.length} (Sal: ${catRoomsCount})` : ` (Sal: ${catRoomsCount})`;
 
           pagesHtml += `
-            <div class="sheet-page" style="page-break-after: always; break-after: page; margin-bottom: 24px; background: white; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box; width: 100%;">
+            <div class="sheet-page" style="page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; margin-bottom: 20px; background: white; padding: 10px 12px; border-radius: 8px; border: 1px solid #cbd5e1; box-sizing: border-box; width: 100%;">
               <!-- Page Header -->
-              <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 6px;">
                 <div>
-                  <div style="font-size: 13px; font-weight: 950; color: #0f172a; letter-spacing: -0.01em;">
+                  <div style="font-size: 12.5px; font-weight: 950; color: #0f172a; letter-spacing: -0.01em;">
                     📅 ${escapeHtml(DAYS_NAMES[dayIdx].toUpperCase())} — ${escapeHtml(cat.name.toUpperCase())}${escapeHtml(chunkLabel)}
                   </div>
-                  <div style="font-size: 9.5px; color: #475569; font-weight: bold; margin-top: 1px;">
+                  <div style="font-size: 9px; color: #475569; font-weight: bold; margin-top: 1px;">
                     ${escapeHtml(appState.school.name)} • ROK SZKOLNY ${escapeHtml(appState.yearLabel)} • ${scheduleVersion === 'etap1' ? 'PLAN BAZOWY KLAS (ETAP 1)' : 'PLAN PRZYDZIAŁU SAL (ETAP 2)'}
                   </div>
                 </div>
-                <div style="text-align: right; font-size: 8.5px; color: #64748b; font-family: monospace; font-weight: bold; line-height: 1.25;">
+                <div style="text-align: right; font-size: 8px; color: #64748b; font-family: monospace; font-weight: bold; line-height: 1.2;">
                   SalePlan Pro · Razem sal: ${roomsToPrint.length}<br>
                   ${new Date().toLocaleDateString('pl-PL')} ${new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}
                 </div>
@@ -919,35 +966,35 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 <thead>
                   <!-- Floor level headers row -->
                   <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                    <th style="border: 1px solid #94a3b8; padding: 4px 2px; text-align: center; font-size: 9.5px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
+                    <th style="border: 1px solid #94a3b8; padding: 3px 2px; text-align: center; font-size: 9px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
                       Godz
                     </th>
                     ${floorGroups.map(g => `
-                      <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 3px; text-align: center; font-size: 9.5px; font-weight: bold; background-color: #f8fafc; color: #334155; box-sizing: border-box;">
+                      <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2.5px 2px; text-align: center; font-size: 9px; font-weight: bold; background-color: #f8fafc; color: #334155; box-sizing: border-box;">
                         📍 ${escapeHtml(localCleanFloorName(g.name, g.buildingName))}
                       </th>
                     `).join('')}
                   </tr>
                   <!-- Segment level headers row -->
                   <tr style="background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                    <th style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 8px; font-weight: 500; background-color: #f8fafc; color: #64748b; width: 54px; max-width: 54px; box-sizing: border-box;">
+                    <th style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 7.5px; font-weight: 500; background-color: #f8fafc; color: #64748b; width: 54px; max-width: 54px; box-sizing: border-box;">
                       -
                     </th>
                     ${segmentGroups.map(g => `
-                      <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 8.5px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase; box-sizing: border-box;">
+                      <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 8px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase; box-sizing: border-box;">
                         🧩 ${escapeHtml(g.name)}
                       </th>
                     `).join('')}
                   </tr>
                   <!-- Room level headers row -->
                   <tr style="background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-                    <th style="border: 1px solid #94a3b8; padding: 4px 2px; text-align: center; font-size: 9.5px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
+                    <th style="border: 1px solid #94a3b8; padding: 3px 2px; text-align: center; font-size: 9px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
                       Nr
                     </th>
                     ${chunkCols.map((col: any) => {
                       const roomDesc = col.room.sub || 'sala ogólna';
                       return `
-                        <th style="border: 1px solid #94a3b8; padding: ${thPadding}; text-align: center; font-size: 10px; font-weight: 950; color: #020617; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
+                        <th style="border: 1px solid #94a3b8; padding: ${thPadding}; text-align: center; font-size: 9.5px; font-weight: 950; color: #020617; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
                           <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">🚪 ${escapeHtml(col.room.num)}</span>
                           ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 0.5px; text-transform: lowercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">(${escapeHtml(roomDesc)})</span>` : ''}
                         </th>
@@ -1033,7 +1080,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           
           @page {
             size: landscape;
-            margin: 6mm 8mm;
+            margin: 4mm 6mm;
           }
           
           @media print {
@@ -1049,7 +1096,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             .sheet-page {
               page-break-after: always !important;
               break-after: page !important;
-              margin: 0 0 20px 0 !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              margin: 0 !important;
               padding: 0 !important;
               border: none !important;
               box-shadow: none !important;
@@ -1058,6 +1107,12 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             table {
               width: 100% !important;
               table-layout: fixed !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            tr {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
             }
             td, th {
               border: 1px solid #000 !important;
