@@ -4399,8 +4399,12 @@ export default function KreatorSzkoly({
                   <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
                     {appState.teachers.map((t) => {
                       const assignedHours = teacherTotalHoursMap[t.id] || 0;
-                      const limitSum = (t.maxHours ?? 18) + (t.overtimeHours || 0);
-                      const exceed = assignedHours > limitSum;
+                      const pensum = t.maxHours ?? 18;
+                      const assignedOvertime = Math.max(0, assignedHours - pensum);
+                      const manualOvertime = t.overtimeHours || 0;
+                      const displayOvertime = assignedOvertime > 0 ? assignedOvertime : manualOvertime;
+                      const isOverloaded = assignedHours > 40;
+
                       return (
                         <div key={t.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
                           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -4427,14 +4431,30 @@ export default function KreatorSzkoly({
                                 </p>
                               )}
                               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                                <span className="text-[10px] text-slate-400 font-semibold shrink-0">
-                                  Pensum: {t.maxHours}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}
+                                <span className="text-[10px] text-slate-500 font-semibold shrink-0">
+                                  Pensum: {pensum}h {displayOvertime > 0 ? `+ ${displayOvertime}h nadg.` : ''}
                                 </span>
-                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-black shrink-0 ${
-                                  exceed ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  Przydział: {assignedHours}h / {limitSum}h
-                                </span>
+                                {assignedHours === 0 ? (
+                                  <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold shrink-0">
+                                    Brak przydziału: 0h / {pensum}h
+                                  </span>
+                                ) : assignedHours < pensum ? (
+                                  <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-bold shrink-0">
+                                    Przydział: {assignedHours}h / {pensum}h (brak {pensum - assignedHours}h)
+                                  </span>
+                                ) : assignedHours === pensum ? (
+                                  <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold shrink-0">
+                                    Przydział: {assignedHours}h (Pełny etat)
+                                  </span>
+                                ) : isOverloaded ? (
+                                  <span className="text-[10px] bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded font-black shrink-0">
+                                    ⚠️ Przydział: {assignedHours}h ({pensum}h + {assignedOvertime}h nadg. &gt;40h)
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-bold shrink-0">
+                                    Przydział: {assignedHours}h ({pensum}h etat + {assignedOvertime}h nadgodzin)
+                                  </span>
+                                )}
                                 {!t.inactive && t.substitutions && t.substitutions.length > 0 && (
                                   <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded font-black border border-indigo-200 truncate shrink-0" title={t.substitutions.join(', ')}>
                                     🔀 Zastępstwa: {t.substitutions.length} lekcji
@@ -4585,8 +4605,9 @@ export default function KreatorSzkoly({
                       {filteredTeachersForQuickEdit.map((t) => {
                         const assigned = teacherTotalHoursMap[t.id] || 0;
                         const maxH = t.maxHours ?? 18;
+                        const assignedOvertime = Math.max(0, assigned - maxH);
                         const otH = t.overtimeHours ?? 0;
-                        const isOver = assigned > (maxH + otH);
+                        const isOverloaded = assigned > 40;
 
                         return (
                           <tr key={t.id} className="hover:bg-slate-50/30 transition-colors">
@@ -4666,11 +4687,27 @@ export default function KreatorSzkoly({
                                 <span className="text-[10px] text-slate-400 font-bold">godz.</span>
                               </div>
                               <div className="mt-1 flex items-center gap-1">
-                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
-                                  isOver ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500'
-                                }`}>
-                                  Przydział: {assigned}h / {maxH + otH}h
-                                </span>
+                                {assigned === 0 ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-100 text-slate-500">
+                                    Brak przydziału (0h)
+                                  </span>
+                                ) : assigned < maxH ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    Przydział: {assigned}h / {maxH}h (brak {maxH - assigned}h)
+                                  </span>
+                                ) : assigned === maxH ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Przydział: {assigned}h (Pełny etat)
+                                  </span>
+                                ) : isOverloaded ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-black bg-rose-100 text-rose-700 border border-rose-200">
+                                    ⚠️ Przydział: {assigned}h (&gt;40h)
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    Łącznie: {assigned}h ({maxH}h + {assignedOvertime}h nadg.)
+                                  </span>
+                                )}
                               </div>
                             </td>
 
@@ -4687,7 +4724,7 @@ export default function KreatorSzkoly({
                                 </button>
                                 <input
                                   type="number"
-                                  className="w-12 text-center border border-indigo-200 rounded py-0.5 text-xs font-bold bg-indigo-50/30 focus:bg-white"
+                                  className="w-12 text-center border border-indigo-200 rounded py-0.5 text-xs font-bold bg-indigo-50/30 focus:bg-white text-indigo-900"
                                   min={0}
                                   max={40}
                                   value={otH}
@@ -4707,6 +4744,21 @@ export default function KreatorSzkoly({
                                   +
                                 </button>
                                 <span className="text-[10px] text-indigo-500 font-bold">godz.</span>
+                              </div>
+                              <div className="mt-1 flex items-center gap-1">
+                                {assignedOvertime > 0 ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-black bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                                    ⚡ +{assignedOvertime}h z przydziału
+                                  </span>
+                                ) : otH > 0 ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                    Planowane: +{otH}h
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded font-normal text-slate-400">
+                                    Brak nadgodzin
+                                  </span>
+                                )}
                               </div>
                             </td>
 
@@ -4767,16 +4819,22 @@ export default function KreatorSzkoly({
                   <div>
                     Wyświetlono <span className="font-extrabold text-slate-700">{filteredTeachersForQuickEdit.length}</span> z <span className="font-extrabold text-slate-700">{appState.teachers.length}</span> nauczycieli.
                   </div>
-                  <div className="flex gap-4">
+                  <div className="flex flex-wrap gap-4">
                     <span>Średnie pensum: <span className="font-extrabold text-slate-700">
                       {appState.teachers.length > 0 
                         ? (appState.teachers.reduce((sum, t) => sum + (t.maxHours ?? 18), 0) / appState.teachers.length).toFixed(1)
                         : 0
                       }h
                     </span></span>
-                    <span>Suma wszystkich nadgodzin: <span className="font-extrabold text-slate-700">
-                      {appState.teachers.reduce((sum, t) => sum + (t.overtimeHours ?? 0), 0)}h
-                    </span></span>
+                    {(() => {
+                      const totalAssignedOvertime = appState.teachers.reduce((sum, t) => sum + Math.max(0, (teacherTotalHoursMap[t.id] || 0) - (t.maxHours ?? 18)), 0);
+                      const totalManualOvertime = appState.teachers.reduce((sum, t) => sum + (t.overtimeHours ?? 0), 0);
+                      return (
+                        <span>Suma nadgodzin: <span className="font-extrabold text-indigo-700">
+                          {totalAssignedOvertime > 0 ? `${totalAssignedOvertime}h (z przydziałów)` : `${totalManualOvertime}h`}
+                        </span></span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -4885,7 +4943,7 @@ export default function KreatorSzkoly({
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[10px] text-indigo-600 font-bold col-span-2">Nadgodziny</label>
+                                <label className="text-[10px] text-indigo-600 font-bold col-span-2">Nadgodziny (plan)</label>
                                 <input 
                                   type="number" 
                                   required
@@ -4897,6 +4955,17 @@ export default function KreatorSzkoly({
                                   onChange={(e) => setNewTOvertimeHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
                                 />
                               </div>
+                              {editingTeacherId && (() => {
+                                const asgHours = teacherTotalHoursMap[editingTeacherId] || 0;
+                                const p = newTMaxHours === '' ? 18 : Number(newTMaxHours);
+                                const ot = Math.max(0, asgHours - p);
+                                if (asgHours === 0) return null;
+                                return (
+                                  <div className="col-span-2 text-[10px] bg-indigo-50/80 border border-indigo-150 p-2 rounded-lg text-indigo-900 font-medium">
+                                    📊 <strong>Aktualny przydział w arkuszu:</strong> {asgHours}h {ot > 0 ? `(${p}h pensum + ${ot}h nadgodzin)` : `(w ramach pensum ${p}h)`}
+                                  </div>
+                                );
+                              })()}
                             </div>
 
                             <div className="space-y-1.5 col-span-2">
@@ -5806,9 +5875,8 @@ export default function KreatorSzkoly({
                           if (teacherAsgs.length === 0) return null;
                           const totalHours = teacherAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0);
                           const limit = t.maxHours ?? 18;
-                          const overtime = (t as any).overtimeHours || 0;
-                          const totalLimit = limit + overtime;
-                          const isOverLimit = t.id && totalHours > totalLimit;
+                          const assignedOvertime = Math.max(0, totalHours - limit);
+                          const isOverloaded = t.id && totalHours > 40;
 
                           return (
                             <div key={t.id || 'wakat'} className="border-b border-slate-100 last:border-none">
@@ -5823,11 +5891,23 @@ export default function KreatorSzkoly({
                                 </span>
                                 {t.id ? (
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 border ${
-                                    isOverLimit 
-                                      ? 'bg-rose-50 text-rose-700 border-rose-200 font-extrabold animate-pulse' 
-                                      : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                    isOverloaded
+                                      ? 'bg-rose-50 text-rose-700 border-rose-200 font-extrabold'
+                                      : totalHours > limit
+                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 font-bold'
+                                      : totalHours === limit
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : 'bg-amber-50 text-amber-700 border-amber-200'
                                   }`}>
-                                    Lekcje: {totalHours}h / pensum: {limit}{overtime > 0 ? `+${overtime}` : ''}h
+                                    {totalHours === 0 ? (
+                                      `Brak przydziału: 0h / ${limit}h`
+                                    ) : totalHours < limit ? (
+                                      `Lekcje: ${totalHours}h / pensum: ${limit}h (brak ${limit - totalHours}h)`
+                                    ) : totalHours === limit ? (
+                                      `Lekcje: ${totalHours}h (Pełny etat: ${limit}h)`
+                                    ) : (
+                                      `Lekcje: ${totalHours}h (${limit}h etat + ${assignedOvertime}h nadgodzin)`
+                                    )}
                                   </span>
                                 ) : (
                                   <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full shrink-0">

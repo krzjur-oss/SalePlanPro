@@ -2553,7 +2553,12 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
               </form>
 
               <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
-                {pl.teachers.map(t => (
+                {pl.teachers.map(t => {
+                  const teacherAssignedHours = pl.assignments.filter(a => a.teacherId === t.id).reduce((sum, a) => sum + a.hoursPerWeek, 0);
+                  const pensum = t.maxHours ?? 18;
+                  const assignedOvertime = Math.max(0, teacherAssignedHours - pensum);
+
+                  return (
                   <div key={t.id} className="py-2.5 flex items-center justify-between text-xs gap-1.5 group">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -2563,8 +2568,21 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                           <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded font-black uppercase">Nieaktywny</span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                        <span>Pensum: {t.maxHours ?? 18}h {t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}</span>
+                      <div className="text-[10px] text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span>Pensum: {pensum}h {assignedOvertime > 0 ? `+ ${assignedOvertime}h nadg.` : t.overtimeHours ? `+ ${t.overtimeHours}h nadg.` : ''}</span>
+                        {teacherAssignedHours > 0 && (
+                          <span className={`px-1.5 py-0.2 rounded font-bold ${
+                            teacherAssignedHours > 40
+                              ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                              : teacherAssignedHours > pensum
+                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                              : teacherAssignedHours === pensum
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            Przydział: {teacherAssignedHours}h
+                          </span>
+                        )}
                         {t.inactive && t.inactiveComment && (
                           <span className="text-rose-600 font-semibold italic">({t.inactiveComment})</span>
                         )}
@@ -2592,7 +2610,8 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

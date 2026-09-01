@@ -267,13 +267,16 @@ interface StatystykiProps {
     return pl.teachers.map(t => {
       const scheduled = hoursScheduled[t.id] || 0;
       const max = t.maxHours ?? 18;
+      const overtime = Math.max(0, scheduled - max);
       const ratio = max > 0 ? (scheduled / max) * 100 : 0;
       return {
         ...t,
         scheduled,
         max,
+        overtime,
         ratio,
-        isOverloaded: scheduled > max
+        isOverloaded: scheduled > 40,
+        hasOvertime: overtime > 0
       };
     }).sort((a, b) => b.scheduled - a.scheduled);
   }, [pl.teachers, scheduledLessonsList]);
@@ -1446,17 +1449,17 @@ interface StatystykiProps {
                   <span className="font-black text-slate-800 text-[10px] uppercase block">Status Systemowy:</span>
                   
                   {totalOveloadedTeachers > 0 ? (
-                    <div className="flex items-start gap-2 text-amber-700 bg-amber-50 border-l-4 border-amber-500 p-2.5 rounded">
+                    <div className="flex items-start gap-2 text-rose-700 bg-rose-50 border-l-4 border-rose-500 p-2.5 rounded">
                       <AlertTriangle className="shrink-0 mt-0.5" size={14} />
                       <div>
-                        <strong>Nauczyciele przeciążeni: {totalOveloadedTeachers}</strong>
-                        <span className="block text-[10px] mt-0.5">W niektórych przydziałach przekroczono zdefiniowane pensum godzin (maxHours).</span>
+                        <strong>Nauczyciele z przekroczeniem normy (&gt;40h): {totalOveloadedTeachers}</strong>
+                        <span className="block text-[10px] mt-0.5">Tygodniowy czas pracy dydaktycznej przekracza maksymalny dopuszczalny limit 40h.</span>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border-l-4 border-emerald-500 p-2.5 rounded">
                       <CheckCircle className="shrink-0" size={14} />
-                      <span>Brak przeciążeń w pensum kadry!</span>
+                      <span>Obciążenie kadry w normie (brak przeciążeń &gt;40h)!</span>
                     </div>
                   )}
 
@@ -1649,21 +1652,27 @@ interface StatystykiProps {
                     <div key={t.id} className="pt-3 first:pt-0 space-y-1.5">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-extrabold text-slate-900">{t.last} {t.first} (<span className="font-mono text-blue-600 font-bold">{t.abbr}</span>)</span>
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <span className={`font-bold ${t.isOverloaded ? 'text-red-600' : 'text-slate-900'}`}>{t.scheduled} h</span>
-                          <span className="text-slate-400">/</span>
-                          <span className="text-slate-500">{t.max} h max</span>
+                        <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                          {t.scheduled === 0 ? (
+                            <span className="text-slate-400">0h / {t.max}h</span>
+                          ) : t.scheduled <= t.max ? (
+                            <span className="font-bold text-emerald-700">{t.scheduled}h / {t.max}h</span>
+                          ) : t.isOverloaded ? (
+                            <span className="font-bold text-rose-600">{t.scheduled}h ({t.max}h + {t.overtime}h &gt;40h)</span>
+                          ) : (
+                            <span className="font-bold text-indigo-700">{t.scheduled}h ({t.max}h etat + {t.overtime}h nadg.)</span>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
                           <div 
-                            className={`h-full rounded-full transition-all ${t.isOverloaded ? 'bg-red-500' : t.ratio > 85 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
-                            style={{ width: `${Math.min(t.ratio, 100)}%` }}
+                            className={`h-full rounded-full transition-all ${t.isOverloaded ? 'bg-rose-500' : t.hasOvertime ? 'bg-indigo-600' : t.ratio >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+                            style={{ width: `${Math.min((t.scheduled / Math.max(t.max, 1)) * 100, 100)}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] font-black font-mono w-10 text-right ${t.isOverloaded ? 'text-red-600' : 'text-slate-500'}`}>
+                        <span className={`text-[10px] font-black font-mono w-10 text-right ${t.isOverloaded ? 'text-rose-600' : t.hasOvertime ? 'text-indigo-700' : 'text-slate-500'}`}>
                           {t.ratio.toFixed(0)}%
                         </span>
                       </div>
