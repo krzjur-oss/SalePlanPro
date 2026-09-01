@@ -19,6 +19,13 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, '&#39;');
 }
 
+const stripIcons = (str: unknown): string => {
+  if (!str) return '';
+  return String(str)
+    .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{FE0F}]/gu, '')
+    .trim();
+};
+
 const getRoomCategory = (room: { name: string; desc?: string }): 'ogolne' | 'indywidualne' | 'sportowe' => {
   const name = room.name.toLowerCase();
   const desc = (room.desc || '').toLowerCase();
@@ -1210,10 +1217,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 4px; margin-bottom: 6px;">
                 <div>
                   <div style="font-size: 12.5px; font-weight: 950; color: #0f172a; letter-spacing: -0.01em;">
-                    📅 ${escapeHtml(DAYS_NAMES[dayIdx].toUpperCase())} — ${escapeHtml(cat.name.toUpperCase())}${escapeHtml(chunkLabel)}
+                    ${escapeHtml(DAYS_NAMES[dayIdx].toUpperCase())} — ${escapeHtml(stripIcons(cat.name).toUpperCase())}${escapeHtml(chunkLabel)}
                   </div>
                   <div style="font-size: 9px; color: #475569; font-weight: bold; margin-top: 1px;">
-                    ${escapeHtml(appState.school.name)} • ROK SZKOLNY ${escapeHtml(appState.yearLabel)} • ${scheduleVersion === 'etap1' ? 'PLAN BAZOWY KLAS (ETAP 1)' : 'PLAN PRZYDZIAŁU SAL (ETAP 2)'}
+                    ${escapeHtml(stripIcons(appState.school.name))} • ROK SZKOLNY ${escapeHtml(appState.yearLabel)} • ${scheduleVersion === 'etap1' ? 'PLAN BAZOWY KLAS (ETAP 1)' : 'PLAN PRZYDZIAŁU SAL (ETAP 2)'}
                   </div>
                 </div>
                 <div style="text-align: right; font-size: 8px; color: #64748b; font-family: monospace; font-weight: bold; line-height: 1.2;">
@@ -1225,29 +1232,29 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               <!-- Matrix Table -->
               <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; table-layout: fixed; box-sizing: border-box;">
                 <thead>
-                  <!-- Floor level headers row -->
+                  <!-- Floor level headers row (Row 1) -->
                   <tr style="background-color: #f1f5f9; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                     <th style="border: 1px solid #94a3b8; padding: 3px 2px; text-align: center; font-size: 9px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
                       Godz
                     </th>
                     ${floorGroups.map(g => `
                       <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2.5px 2px; text-align: center; font-size: 9px; font-weight: bold; background-color: #f8fafc; color: #334155; box-sizing: border-box;">
-                        ${escapeHtml(localCleanFloorName(g.name, g.buildingName))}
+                        ${escapeHtml(stripIcons(localCleanFloorName(g.name, g.buildingName)))}
                       </th>
                     `).join('')}
                   </tr>
-                  <!-- Segment level headers row -->
+                  <!-- Segment level headers row (Row 2) -->
                   <tr style="background-color: #ffffff; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                     <th style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 7.5px; font-weight: 500; background-color: #f8fafc; color: #64748b; width: 54px; max-width: 54px; box-sizing: border-box;">
                       -
                     </th>
                     ${segmentGroups.map(g => `
                       <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 8px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase; box-sizing: border-box;">
-                        ${escapeHtml(g.name)}
+                        ${escapeHtml(stripIcons(g.name))}
                       </th>
                     `).join('')}
                   </tr>
-                  <!-- Room level headers row -->
+                  <!-- Room level headers row (Row 3) -->
                   <tr style="background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
                     <th style="border: 1px solid #94a3b8; padding: 3px 2px; text-align: center; font-size: 9px; font-weight: 900; width: 54px; max-width: 54px; color: #1e293b; box-sizing: border-box;">
                       Nr
@@ -1256,8 +1263,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                       const hostDisplay = getRoomHostDisplay(col);
                       return `
                         <th style="border: 1px solid #94a3b8; padding: ${thPadding}; text-align: center; font-size: 9.5px; font-weight: 950; color: #020617; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
-                          <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">${escapeHtml(col.room.num)}</span>
-                          ${hostDisplay ? `<span style="font-size: ${headerDescFontSize}; color: #334155; font-weight: 800; display: block; margin-top: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(hostDisplay)}</span>` : ''}
+                          <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">${escapeHtml(stripIcons(col.room.num))}</span>
+                          ${hostDisplay ? `<span style="font-size: ${headerDescFontSize}; color: #334155; font-weight: 800; display: block; margin-top: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(stripIcons(hostDisplay))}</span>` : ''}
                         </th>
                       `;
                     }).join('')}
@@ -1386,14 +1393,14 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       <body>
         <div class="no-print-bar">
           <div style="display: flex; flex-direction: column;">
-            <span style="font-weight: 900; font-size: 13px; color: #020617;">🖨️ PODGLĄD WYDRUKU PŁACHTY GABINETÓW (A4 POZIOMO)</span>
+            <span style="font-weight: 900; font-size: 13px; color: #020617;">PODGLĄD WYDRUKU PŁACHTY GABINETÓW (A4 POZIOMO)</span>
             <span style="font-size: 10px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">Automatycznie dopasowano do szerokości arkusza A4 bez ucinania</span>
           </div>
           
           <div style="display: flex; gap: 8px;">
             <button class="btn-close" onclick="window.close()">Zamknij</button>
             <button class="btn-print" onclick="window.print()">
-              🖨️ Drukuj teraz (Ctrl+P)
+              Drukuj teraz (Ctrl+P)
             </button>
           </div>
         </div>
@@ -1417,18 +1424,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   const openRoomsPrintPreview = () => {
-    try {
-      const htmlContent = generateRoomsMatrixHtml();
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      const printWindow = window.open(blobUrl, '_blank');
-      if (!printWindow) {
-        setIsRoomsPrintFriendlyMode(true);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsRoomsPrintFriendlyMode(true);
-    }
+    setIsRoomsPrintFriendlyMode(true);
   };
 
   const generateDutiesHtml = () => {
@@ -1843,15 +1839,15 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       filteredByFloor.forEach(col => {
         const floorKey = `f_${col.floorIdx}`;
         const bld = appState.buildings[col.floor.buildingIdx];
-        const bldName = bld?.name || `Budynek ${col.floor.buildingIdx + 1}`;
-        const fName = localCleanFloorName(col.floor.name || `Piętro ${col.floorIdx + 1}`, bldName);
+        const bldName = stripIcons(bld?.name || `Budynek ${col.floor.buildingIdx + 1}`);
+        const fName = stripIcons(localCleanFloorName(col.floor.name || `Piętro ${col.floorIdx + 1}`, bldName));
         const displayName = `${bldName} — ${fName}`;
 
         if (!floorMap.has(floorKey)) {
           floorMap.set(floorKey, {
             id: floorKey,
             name: displayName,
-            icon: '📍',
+            icon: '',
             floorIdx: col.floorIdx,
             cols: []
           });
@@ -1866,9 +1862,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     }
 
     return [
-      { id: 'main', name: 'Budynek Główny', icon: '🏢', cols: roomsToPrintColumns.main },
-      { id: 'individual', name: 'Nauczanie Indywidualne', icon: '🗣️', cols: roomsToPrintColumns.individual },
-      { id: 'sport', name: 'Sale Sportowe', icon: '🏆', cols: roomsToPrintColumns.sport }
+      { id: 'main', name: 'Budynek Główny', icon: '', cols: roomsToPrintColumns.main },
+      { id: 'individual', name: 'Nauczanie Indywidualne', icon: '', cols: roomsToPrintColumns.individual },
+      { id: 'sport', name: 'Sale Sportowe', icon: '', cols: roomsToPrintColumns.sport }
     ].filter(c => c.cols.length > 0);
   }, [roomsSplitMode, roomsSelectedFloor, roomsToPrintColumns, appState.floors, appState.buildings]);
 
@@ -2056,14 +2052,6 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
             {/* Action buttons */}
             <button
-              onClick={openRoomsPrintPreview}
-              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-              title="Otwórz czysty HTML w nowej karcie"
-            >
-              <ExternalLink size={14} /> W osobnym oknie
-            </button>
-
-            <button
               onClick={() => window.print()}
               className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer"
             >
@@ -2105,10 +2093,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                         <div className="flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-3">
                           <div>
                             <h2 className="text-base md:text-lg font-black text-slate-950 tracking-tight flex items-center gap-2">
-                              <span>📅 {DAYS_NAMES[dayIdx].toUpperCase()} — {cat.name.toUpperCase()}{chunkLabel}</span>
+                              <span>{DAYS_NAMES[dayIdx].toUpperCase()} — {stripIcons(cat.name).toUpperCase()}{chunkLabel}</span>
                             </h2>
                             <p className="text-[10.5px] text-slate-600 font-bold uppercase mt-0.5">
-                              {appState.school.name} • Rok szkolny {appState.yearLabel} • {scheduleVersion === 'etap1' ? 'Plan Bazowy Klas (Etap 1)' : 'Plan Przydziału Sal (Etap 2)'}
+                              {stripIcons(appState.school.name)} • Rok szkolny {appState.yearLabel} • {scheduleVersion === 'etap1' ? 'Plan Bazowy Klas (Etap 1)' : 'Plan Przydziału Sal (Etap 2)'}
                             </p>
                           </div>
                           <div className="text-right text-[9px] font-mono text-slate-400 font-bold uppercase leading-tight">
@@ -2121,7 +2109,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                         <div className="w-full overflow-hidden">
                           <table className="w-full text-xs text-left border-collapse table-fixed bg-white">
                             <thead>
-                              {/* Floor row */}
+                              {/* Floor row (Row 1) */}
                               <tr className="bg-slate-100 uppercase font-black text-slate-800">
                                 <th className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1.5 text-center text-[10px]">
                                   Godz
@@ -2132,12 +2120,12 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                     colSpan={g.span}
                                     className="border border-slate-300 p-1.5 text-center text-[9.5px] bg-slate-50 font-bold text-slate-700"
                                   >
-                                    {localCleanFloorName(g.name, g.buildingName)}
+                                    {stripIcons(localCleanFloorName(g.name, g.buildingName))}
                                   </th>
                                 ))}
                               </tr>
 
-                              {/* Segment row */}
+                              {/* Segment row (Row 2) */}
                               <tr className="bg-white uppercase font-black text-slate-500">
                                 <th className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1 text-center text-[8px] bg-slate-50 font-medium text-slate-400">
                                   -
@@ -2148,12 +2136,12 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                     colSpan={g.span}
                                     className="border border-slate-300 p-1 text-center text-[8.5px] bg-white text-slate-500 uppercase font-semibold"
                                   >
-                                    {g.name}
+                                    {stripIcons(g.name)}
                                   </th>
                                 ))}
                               </tr>
 
-                              {/* Room headers */}
+                              {/* Room headers (Row 3) */}
                               <tr className="bg-slate-50 uppercase font-black text-slate-800">
                                 <th className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1.5 text-center text-[10px]">
                                   Nr
@@ -2167,11 +2155,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                       className="border border-slate-300 p-1.5 text-center"
                                     >
                                       <span className="font-mono text-[10.5px] block text-slate-950 font-black">
-                                        {col.room.num}
+                                        {stripIcons(col.room.num)}
                                       </span>
                                       {hostDisplay && (
                                         <span className="block text-[8px] text-slate-700 font-bold normal-case truncate max-w-full mx-auto mt-0.5" title={hostDisplay}>
-                                          {hostDisplay}
+                                          {stripIcons(hostDisplay)}
                                         </span>
                                       )}
                                     </th>
@@ -3336,7 +3324,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 </p>
               </div>
               <button
-                onClick={openRoomsPrintPreview}
+                onClick={() => setIsRoomsPrintFriendlyMode(true)}
                 className="shrink-0 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 transition select-none cursor-pointer"
               >
                 <Printer size={14} className="animate-pulse" /> Podgląd i Druk Płachty (A4 Poziomo)
@@ -3352,10 +3340,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                     <div key={dayIdx} className="page-break last:pb-0 pb-2">
                       <div className="bg-slate-900 text-white border border-slate-800 px-4 py-2.5 rounded-xl flex justify-between items-center mb-4 print:bg-slate-100 print:text-slate-900 print:border-slate-300">
                         <span className="text-xs font-black uppercase tracking-wide">
-                          📅 {DAYS_NAMES[dayIdx]} — PŁACHTA OBŁOŻENIA GABINETÓW
+                          {DAYS_NAMES[dayIdx]} — PŁACHTA OBŁOŻENIA GABINETÓW
                         </span>
                         <span className="text-[9px] uppercase font-bold font-mono text-slate-400 print:text-slate-500">
-                          Podział na kategorie
+                          {roomsSplitMode === 'floors' ? 'Podział na kondygnacje' : 'Podział na kategorie'}
                         </span>
                       </div>
 
@@ -3367,8 +3355,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                           return (
                             <div key={cat.id} className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/40 p-3 shadow-sm">
                               <div className="flex items-center gap-2 mb-2 px-1">
-                                <span className="text-sm">{cat.icon}</span>
-                                <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{cat.name} ({cat.cols.length})</h4>
+                                <h4 className="text-[11px] font-black text-slate-700 uppercase tracking-wider">{stripIcons(cat.name)} ({cat.cols.length})</h4>
                               </div>
 
                               <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
@@ -3379,7 +3366,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                       <th className="w-24 border border-slate-300 p-2 text-center text-[10.5px]">Lekcja / Godz</th>
                                       {floorGroups.map((g, fIdx) => (
                                         <th key={fIdx} colSpan={g.span} className="border border-slate-300 p-2 text-center text-[10px] bg-slate-50 font-bold text-slate-700">
-                                          {localCleanFloorName(g.name, g.buildingName)}
+                                          {stripIcons(localCleanFloorName(g.name, g.buildingName))}
                                         </th>
                                       ))}
                                     </tr>
@@ -3388,7 +3375,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                       <th className="border border-slate-300 p-1.5 text-center text-[9px] bg-slate-50 font-medium text-slate-400">-</th>
                                       {segmentGroups.map((g, sIdx) => (
                                         <th key={sIdx} colSpan={g.span} className="border border-slate-300 p-1.5 text-center text-[9px] bg-white text-slate-500 uppercase font-semibold">
-                                          {g.name}
+                                          {stripIcons(g.name)}
                                         </th>
                                       ))}
                                     </tr>
@@ -3399,10 +3386,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                         const hostDisplay = getRoomHostDisplay(col);
                                         return (
                                           <th key={cIdx} className="border border-slate-300 p-2 text-center text-[10.5px] min-w-[110px]">
-                                            <span className="font-mono text-[11px] block text-slate-900 font-black">{col.room.num}</span>
+                                            <span className="font-mono text-[11px] block text-slate-900 font-black">{stripIcons(col.room.num)}</span>
                                             {hostDisplay && (
                                               <span className="block text-[8px] text-slate-700 font-bold normal-case truncate max-w-[140px] mx-auto mt-0.5" title={hostDisplay}>
-                                                {hostDisplay}
+                                                {stripIcons(hostDisplay)}
                                               </span>
                                             )}
                                           </th>

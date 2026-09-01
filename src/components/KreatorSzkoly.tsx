@@ -2058,11 +2058,30 @@ export default function KreatorSzkoly({
     showNoti('Usunięto przydział lekcyjny');
   };
 
-  // --- Step 9 States (Special Students / Pupils definition) ---
+  // --- Student support categories definition ---
+  const SUPPORT_CATEGORIES = [
+    { id: 'ni' as const, key: 'ni', label: 'Indywidualne (NI)', sublabel: 'Nauczanie indywidualne', icon: '👤', bgActive: 'bg-purple-50 border-purple-300 text-purple-900', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200', defaultHours: 2 },
+    { id: 'wsp' as const, key: 'wsp', label: 'Wspomaganie w klasie', sublabel: 'Wspomaganie / IPET', icon: '🤝', bgActive: 'bg-emerald-50 border-emerald-300 text-emerald-900', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200', defaultHours: 5 },
+    { id: 'rewa' as const, key: 'rewa', label: 'Rewalidacja', sublabel: 'Zajęcia rewalidacyjne', icon: '⭐', bgActive: 'bg-amber-50 border-amber-300 text-amber-900', badgeClass: 'bg-amber-100 text-amber-800 border-amber-200', defaultHours: 2 },
+    { id: 'korekta' as const, key: 'korekta', label: 'Korekcyjno-kompensacyjne', sublabel: 'Terapia pedagogiczna / korekta', icon: '📝', bgActive: 'bg-blue-50 border-blue-300 text-blue-900', badgeClass: 'bg-blue-100 text-blue-800 border-blue-200', defaultHours: 2 },
+  ] as const;
+
+  // --- Student creation & editing states (Step 8 / Special Students) ---
   const [newStudFirstName, setNewStudFirstName] = useState('');
   const [newStudLastName, setNewStudLastName] = useState('');
   const [newStudClassId, setNewStudClassId] = useState('');
-  const [newStudType, setNewStudType] = useState<'ni' | 'rewa' | 'wsp'>('ni');
+  const [newStudSupportTypes, setNewStudSupportTypes] = useState<Record<string, boolean>>({
+    ni: true,
+    wsp: false,
+    rewa: false,
+    korekta: false
+  });
+  const [newStudSupportHours, setNewStudSupportHours] = useState<Record<string, number>>({
+    ni: 2,
+    wsp: 5,
+    rewa: 2,
+    korekta: 2
+  });
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
 
   // Memoized current active student information for high performance
@@ -2082,7 +2101,18 @@ export default function KreatorSzkoly({
   const [editStudFirstName, setEditStudFirstName] = useState('');
   const [editStudLastName, setEditStudLastName] = useState('');
   const [editStudClassId, setEditStudClassId] = useState('');
-  const [editStudType, setEditStudType] = useState<'ni' | 'rewa' | 'wsp'>('ni');
+  const [editStudSupportTypes, setEditStudSupportTypes] = useState<Record<string, boolean>>({
+    ni: true,
+    wsp: false,
+    rewa: false,
+    korekta: false
+  });
+  const [editStudSupportHours, setEditStudSupportHours] = useState<Record<string, number>>({
+    ni: 2,
+    wsp: 5,
+    rewa: 2,
+    korekta: 2
+  });
 
   const [editStudSubjId, setEditStudSubjId] = useState('');
   const [editStudTeachId, setEditStudTeachId] = useState('');
@@ -2095,9 +2125,20 @@ export default function KreatorSzkoly({
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudLastName.trim()) {
-      showNoti('Nazwisko jest wymagane!', 'info');
+      showNoti('Nazwisko ucznia jest wymagane!', 'info');
       return;
     }
+
+    const activeTypes = (Object.keys(newStudSupportTypes) as ('ni' | 'wsp' | 'rewa' | 'korekta')[]).filter(k => newStudSupportTypes[k]);
+    if (activeTypes.length === 0) {
+      showNoti('Zaznacz przynajmniej jeden rodzaj wsparcia/zajęć dla ucznia!', 'info');
+      return;
+    }
+
+    const activeHours: Record<string, number> = {};
+    activeTypes.forEach(t => {
+      activeHours[t] = Number(newStudSupportHours[t]) || 1;
+    });
 
     const currentStudents = appState.planLekcji.specialStudents || [];
     const newStudent: SpecialStudent = {
@@ -2105,7 +2146,9 @@ export default function KreatorSzkoly({
       firstName: newStudFirstName.trim(),
       lastName: newStudLastName.trim(),
       classId: newStudClassId || null,
-      type: newStudType,
+      type: activeTypes[0] || 'ni',
+      supportTypes: activeTypes,
+      supportHours: activeHours,
       supportTeacherIds: []
     };
 
@@ -2120,8 +2163,10 @@ export default function KreatorSzkoly({
     setNewStudFirstName('');
     setNewStudLastName('');
     setNewStudClassId('');
+    setNewStudSupportTypes({ ni: true, wsp: false, rewa: false, korekta: false });
+    setNewStudSupportHours({ ni: 2, wsp: 5, rewa: 2, korekta: 2 });
     setActiveStudentId(newStudent.id);
-    showNoti(`Dodano ucznia: ${newStudent.firstName} ${newStudent.lastName}`);
+    showNoti(`Dodano profil ucznia: ${newStudent.firstName} ${newStudent.lastName}`);
   };
 
   const handleUpdateStudent = (updatedStudent: SpecialStudent) => {
@@ -2222,8 +2267,33 @@ export default function KreatorSzkoly({
     setEditStudFirstName(student.firstName);
     setEditStudLastName(student.lastName);
     setEditStudClassId(student.classId || '');
-    setEditStudType(student.type);
     
+    const initialTypes: Record<string, boolean> = {
+      ni: false,
+      wsp: false,
+      rewa: false,
+      korekta: false
+    };
+    if (student.supportTypes && student.supportTypes.length > 0) {
+      student.supportTypes.forEach(t => {
+        initialTypes[t] = true;
+      });
+    } else if (student.type) {
+      initialTypes[student.type] = true;
+    } else {
+      initialTypes.ni = true;
+    }
+
+    const initialHours: Record<string, number> = {
+      ni: student.supportHours?.ni ?? 2,
+      wsp: student.supportHours?.wsp ?? 5,
+      rewa: student.supportHours?.rewa ?? 2,
+      korekta: student.supportHours?.korekta ?? 2,
+    };
+
+    setEditStudSupportTypes(initialTypes);
+    setEditStudSupportHours(initialHours);
+
     // reset draft fields
     setEditStudSubjId('');
     setEditStudTeachId('');
@@ -2236,9 +2306,20 @@ export default function KreatorSzkoly({
     e.preventDefault();
     if (!editingStudentId) return;
     if (!editStudLastName.trim()) {
-      showNoti('Nazwisko studenta/ucznia jest wymagane!', 'info');
+      showNoti('Nazwisko ucznia jest wymagane!', 'info');
       return;
     }
+
+    const activeTypes = (Object.keys(editStudSupportTypes) as ('ni' | 'wsp' | 'rewa' | 'korekta')[]).filter(k => editStudSupportTypes[k]);
+    if (activeTypes.length === 0) {
+      showNoti('Zaznacz przynajmniej jeden rodzaj wsparcia/zajęć!', 'info');
+      return;
+    }
+
+    const activeHours: Record<string, number> = {};
+    activeTypes.forEach(t => {
+      activeHours[t] = Number(editStudSupportHours[t]) || 1;
+    });
 
     const currentStudents = appState.planLekcji.specialStudents || [];
     const updatedStudents = currentStudents.map(s => {
@@ -2248,7 +2329,9 @@ export default function KreatorSzkoly({
           firstName: editStudFirstName.trim(),
           lastName: editStudLastName.trim(),
           classId: editStudClassId || null,
-          type: editStudType
+          type: activeTypes[0] || s.type || 'ni',
+          supportTypes: activeTypes,
+          supportHours: activeHours
         };
       }
       return s;
@@ -2494,8 +2577,8 @@ export default function KreatorSzkoly({
             { n: 5, title: 'Przedmioty szkolne', info: 'Lista przedmiotów', icon: BookOpen },
             { n: 6, title: 'Nauczyciele', info: 'Pensum i limity', icon: GraduationCap },
             { n: 7, title: 'Korytarze i Dyżury', info: 'Liczba nauczycieli', icon: Shield },
-            { n: 8, title: 'Przydziały Lekcji', info: 'Łączenie w pary', icon: Layers },
-            { n: 9, title: 'Uczniowie', info: 'IPET, NI i wspomaganie', icon: Users2 },
+            { n: 8, title: 'Uczniowie', info: 'IPET, NI i wsparcie', icon: Users2 },
+            { n: 9, title: 'Przydziały Lekcji', info: 'Łączenie w pary', icon: Layers },
             { n: 10, title: 'Podsumowanie i Start', info: 'Wytyczne układania', icon: CheckCircle }
           ].map((st) => {
             const Icon = st.icon;
@@ -5383,18 +5466,506 @@ export default function KreatorSzkoly({
                   <ArrowLeft size={14} /> Wstecz
                 </button>
                 <button onClick={() => setActiveStep(8)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1.5 transition">
+                  Dalej: Uczniowie i wsparcie <ArrowRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 8: Defining Pupils / Students with special needs (IPET, NI, Rewalidacja, Korekcyjne) */}
+          {activeStep === 8 && (
+            <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
+              <div className="border-b border-slate-200 pb-4">
+                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 8</span>
+                <h2 className="text-xl font-black text-slate-900 mt-2">🎓 Definiowanie uczniów i potrzeb wspomagania</h2>
+                <p className="text-xs text-slate-500 mt-1">Zdefiniuj uczniów wymagających indywidualnych ścieżek edukacyjnych, przypisz ich do klas macierzystych, wybierz formy wsparcia z wymiarem godzin oraz przypisz nauczycieli wspomagających.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Panel Lewy: Formularz dodawania i Lista uczniów */}
+                <div className="space-y-6 lg:col-span-1">
+                  
+                  {/* Formularz dodawania nowego ucznia */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Plus size={14} className="text-blue-500" /> Dodaj nowego ucznia
+                    </h3>
+                    <form onSubmit={handleAddStudent} className="space-y-4">
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Imię</label>
+                          <input 
+                            type="text"
+                            placeholder="np. Jan"
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:border-blue-500 focus:bg-white transition"
+                            value={newStudFirstName}
+                            onChange={(e) => setNewStudFirstName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Nazwisko *</label>
+                          <input 
+                            type="text"
+                            required
+                            placeholder="np. Kowalski"
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:border-blue-500 focus:bg-white transition font-bold"
+                            value={newStudLastName}
+                            onChange={(e) => setNewStudLastName(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-slate-500 font-bold uppercase block">Klasa macierzysta *</label>
+                        <select 
+                          required
+                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none focus:border-blue-500 focus:bg-white transition font-medium"
+                          value={newStudClassId}
+                          onChange={(e) => setNewStudClassId(e.target.value)}
+                        >
+                          <option value="">Wybierz klasę macierzystą...</option>
+                          {appState.classes.map(c => (
+                            <option key={c.id} value={c.id}>Klasa {c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Checkboxy rodzajów wsparcia wraz z liczbą godzin */}
+                      <div className="space-y-2 pt-1 border-t border-slate-100">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] text-slate-600 font-black uppercase tracking-wider block">
+                            Rodzaje wsparcia i godziny / tyg.
+                          </label>
+                          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                            Suma: {SUPPORT_CATEGORIES.reduce((sum, cat) => sum + (newStudSupportTypes[cat.key] ? (Number(newStudSupportHours[cat.key]) || 0) : 0), 0)} h/tyg
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {SUPPORT_CATEGORIES.map(cat => {
+                            const isChecked = !!newStudSupportTypes[cat.key];
+                            const hours = newStudSupportHours[cat.key] ?? cat.defaultHours;
+
+                            return (
+                              <div 
+                                key={cat.key}
+                                className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 ${
+                                  isChecked 
+                                    ? cat.bgActive 
+                                    : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0 select-none">
+                                  <input 
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setNewStudSupportTypes(prev => ({
+                                        ...prev,
+                                        [cat.key]: checked
+                                      }));
+                                    }}
+                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer shrink-0"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-xs font-bold flex items-center gap-1 leading-tight">
+                                      <span>{cat.icon}</span>
+                                      <span className="truncate">{cat.label}</span>
+                                    </div>
+                                    <div className="text-[9.5px] text-slate-400 font-medium truncate">
+                                      {cat.sublabel}
+                                    </div>
+                                  </div>
+                                </label>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <input 
+                                    type="number"
+                                    min={1}
+                                    max={40}
+                                    disabled={!isChecked}
+                                    className={`w-12 px-1.5 py-1 text-xs font-black text-center rounded-lg border outline-none transition ${
+                                      isChecked 
+                                        ? 'bg-white border-slate-300 text-slate-900 shadow-xs' 
+                                        : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                                    }`}
+                                    value={hours}
+                                    onChange={(e) => {
+                                      const val = Math.max(1, parseInt(e.target.value) || 1);
+                                      setNewStudSupportHours(prev => ({
+                                        ...prev,
+                                        [cat.key]: val
+                                      }));
+                                    }}
+                                    title="Liczba godzin tygodniowo"
+                                  />
+                                  <span className="text-[10px] font-bold text-slate-500">h</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <button type="submit" className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5">
+                        <Plus size={14} /> Utwórz profil ucznia
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Lista uczniów */}
+                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
+                    <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Zarejestrowani uczniowie</h3>
+                      <span className="bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-black">
+                        {(appState.planLekcji.specialStudents || []).length}
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
+                      {(appState.planLekcji.specialStudents || []).map((student) => {
+                        const isSelected = activeStudentId === student.id;
+                        const cls = student.classId ? classesMap.get(student.classId) : null;
+                        
+                        const types = student.supportTypes && student.supportTypes.length > 0
+                          ? student.supportTypes
+                          : [student.type || 'ni'];
+
+                        const totalHours = student.supportHours 
+                          ? types.reduce((acc, t) => acc + (Number(student.supportHours?.[t]) || 0), 0)
+                          : undefined;
+
+                        return (
+                          <div 
+                            key={student.id} 
+                            onClick={() => setActiveStudentId(student.id)}
+                            className={`p-3 flex justify-between items-center cursor-pointer transition w-full min-w-0 gap-2.5 ${
+                              isSelected ? 'bg-blue-50/70 border-l-4 border-blue-600' : 'hover:bg-slate-50/60'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <span className={`text-xs font-bold leading-tight block truncate ${isSelected ? 'text-blue-900 font-extrabold' : 'text-slate-800'}`} title={`${student.firstName} ${student.lastName}`}>
+                                {student.firstName} {student.lastName}
+                              </span>
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                {cls ? (
+                                  <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0">
+                                    Klasa {cls.name}
+                                  </span>
+                                ) : (
+                                  <span className="bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded text-[9px] font-bold border border-rose-100 shrink-0">
+                                    Brak klasy
+                                  </span>
+                                )}
+
+                                {types.map(t => {
+                                  const catObj = SUPPORT_CATEGORIES.find(c => c.key === t);
+                                  const hours = student.supportHours?.[t];
+                                  const badgeClass = catObj?.badgeClass || 'bg-slate-100 text-slate-700 border-slate-200';
+                                  const shortLabel = catObj ? catObj.label.split(' ')[0] : String(t).toUpperCase();
+
+                                  return (
+                                    <span key={t} className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded uppercase border shrink-0 ${badgeClass}`}>
+                                      {shortLabel}{hours ? `: ${hours}h` : ''}
+                                    </span>
+                                  );
+                                })}
+
+                                {totalHours !== undefined && totalHours > 0 && types.length > 1 && (
+                                  <span className="bg-slate-800 text-white px-1.5 py-0.2 rounded text-[9px] font-black shrink-0">
+                                    Σ {totalHours}h
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button 
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openEditModal(student); }}
+                                className="p-1 text-slate-400 hover:text-amber-600 rounded transition-colors cursor-pointer"
+                                title="Edytuj szczegóły ucznia w modalu"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={(e) => handleRemoveStudent(student.id, e)}
+                                className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors cursor-pointer"
+                                title="Usuń ucznia"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(appState.planLekcji.specialStudents || []).length === 0 && (
+                        <p className="p-8 text-center text-xs text-slate-400 italic">Brak uczniów w bazie. Dodaj pierwszy profil powyżej!</p>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Panel Prawy: Szczegóły wybranego ucznia */}
+                <div className="lg:col-span-2 space-y-6">
+                  {activeStudentId && activeStudent ? (() => {
+                    const student = activeStudent;
+                    const cls = student.classId ? classesMap.get(student.classId) : null;
+                    const studAssignments = activeStudentAssignments;
+                    const supportTeacherIds = student.supportTeacherIds || [];
+
+                    const types = student.supportTypes && student.supportTypes.length > 0
+                      ? student.supportTypes
+                      : [student.type || 'ni'];
+
+                    const totalAssignedSupportHours = student.supportHours 
+                      ? types.reduce((acc, t) => acc + (Number(student.supportHours?.[t]) || 0), 0)
+                      : 0;
+
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
+                        
+                        {/* Nagłówek Informacyjny Ucznia */}
+                        <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+                          <div className="space-y-1">
+                            <h3 className="text-sm font-black text-slate-950 flex items-center gap-2">
+                              👤 {student.firstName} {student.lastName}
+                              <button 
+                                type="button"
+                                onClick={() => openEditModal(student)}
+                                className="inline-flex items-center gap-1 text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 px-2.5 py-0.5 rounded-lg transition font-extrabold cursor-pointer select-none"
+                                title="Konfiguracja w dedykowanym oknie"
+                              >
+                                <Edit3 size={11} /> Edytuj w modalu
+                              </button>
+                            </h3>
+                            <p className="text-[11px] text-slate-500 font-medium mt-1">
+                              Klasa macierzysta: <strong className="text-slate-800">{cls ? `Klasa ${cls.name}` : 'Brak przypisania'}</strong>
+                            </p>
+                          </div>
+                          <span className="bg-blue-50 text-blue-700 border border-blue-100 rounded-xl px-2.5 py-1 text-xs font-bold font-mono">
+                            ID: {student.id}
+                          </span>
+                        </div>
+
+                        {/* Podsumowanie zadeklarowanych form wsparcia */}
+                        <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3">
+                          <div className="flex justify-between items-center">
+                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                              ✨ Przypisane rodzaje wsparcia i wymiar godzin
+                            </h4>
+                            {totalAssignedSupportHours > 0 && (
+                              <span className="text-[11px] font-black bg-blue-600 text-white px-2.5 py-0.5 rounded-full">
+                                Łącznie: {totalAssignedSupportHours} h / tydzień
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {types.map(t => {
+                              const catObj = SUPPORT_CATEGORIES.find(c => c.key === t);
+                              const hours = student.supportHours?.[t];
+                              return (
+                                <div key={t} className="bg-white border border-slate-200 p-2.5 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">{catObj?.icon || '📌'}</span>
+                                    <div>
+                                      <div className="text-xs font-bold text-slate-800 leading-tight">
+                                        {catObj?.label || t}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 font-medium">
+                                        {catObj?.sublabel || ''}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg">
+                                    {hours ? `${hours} h/tyg` : 'Aktywne'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* SEKCJA 1: Lista indywidualnych przedmiotów (z wymiarem godzin) i nauczyciel prowadzący */}
+                        <div className="space-y-4">
+                          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-150 space-y-3">
+                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">📚 Przypisz konkretny przedmiot / zajęcia do planu</h4>
+                            <form onSubmit={handleAddStudentAssignment} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                              <div className="space-y-1 sm:col-span-1.5">
+                                <label className="text-[10px] text-slate-400 font-bold block">1. Przedmiot *</label>
+                                <select 
+                                  required
+                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none"
+                                  value={newStudSubjId}
+                                  onChange={(e) => setNewStudSubjId(e.target.value)}
+                                >
+                                  <option value="">Wybierz...</option>
+                                  {appState.subjects.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-1 sm:col-span-1.5">
+                                <label className="text-[10px] text-slate-400 font-bold block">2. Nauczyciel prowadzący *</label>
+                                <select
+                                  required
+                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none"
+                                  value={newStudTeachId}
+                                  onChange={(e) => setNewStudTeachId(e.target.value)}
+                                >
+                                  <option value="">Wybierz...</option>
+                                  {appState.teachers.map(t => (
+                                    <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] text-slate-400 font-bold block">3. Godziny / Tydzień *</label>
+                                <input 
+                                  type="number"
+                                  required
+                                  min={1}
+                                  max={40}
+                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-center text-slate-800"
+                                  value={newStudHours}
+                                  onChange={(e) => setNewStudHours(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
+                                />
+                              </div>
+
+                              <button type="submit" className="w-full py-2 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-lg transition shadow-xs flex items-center justify-center gap-1 cursor-pointer">
+                                <Plus size={12} /> Dodaj
+                              </button>
+                            </form>
+                          </div>
+
+                          {/* Lista przypisanych przedmiotów */}
+                          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase">Przedmiot</th>
+                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase">Prowadzący</th>
+                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase text-center">Tygodniowo</th>
+                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase text-right">Usuń</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                                {studAssignments.map(asg => {
+                                  const sName = subjectsMap.get(asg.subjectId)?.name || 'Nieznany';
+                                  const tObj = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
+                                  const tName = tObj ? `${tObj.first[0]}. ${tObj.last} (${tObj.abbr})` : 'Nieprzypisany';
+                                  return (
+                                    <tr key={asg.id} className="hover:bg-slate-50/50">
+                                      <td className="p-3 font-bold text-slate-900">{sName}</td>
+                                      <td className="p-3 font-semibold text-slate-500">{tName}</td>
+                                      <td className="p-3 font-black text-center text-indigo-600">{asg.hoursPerWeek}h / tyg</td>
+                                      <td className="p-3 text-right">
+                                        <button 
+                                          type="button" 
+                                          onClick={() => handleRemoveStudentAssignment(asg.id)}
+                                          className="text-slate-400 hover:text-red-500 p-1 cursor-pointer"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                                {studAssignments.length === 0 && (
+                                  <tr>
+                                    <td colSpan={4} className="p-6 text-center text-slate-400 italic">Brak zdefiniowanych jednostkowych zajęć dla tego ucznia. Szczegóły dodasz powyżej!</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* SEKCJA 2: Nauczyciele wspomagający na lekcjach ogólnych w klasie macierzystej */}
+                        <div className="space-y-3 pt-4 border-t border-slate-100">
+                          <div>
+                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                              🕵️ Nauczyciele wspomagający obecni w klasie macierzystej
+                            </h4>
+                            <p className="text-[10px] text-slate-400 font-semibold mt-1 leading-normal">
+                              Chcesz zadeklarować obecność nauczyciela wspomagającego podczas zajęć ogólnych w klasie macierzystej ({cls ? `Klasa ${cls.name}` : 'brak'})? Zaznacz go na liście poniżej:
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                            {appState.teachers.map((teacher) => {
+                              const isChecked = supportTeacherIds.includes(teacher.id);
+                              return (
+                                <button
+                                  type="button"
+                                  key={teacher.id}
+                                  onClick={() => {
+                                    let newIds = [...supportTeacherIds];
+                                    if (isChecked) {
+                                      newIds = newIds.filter(id => id !== teacher.id);
+                                    } else {
+                                      newIds.push(teacher.id);
+                                    }
+                                    handleUpdateStudent({
+                                      ...student,
+                                      supportTeacherIds: newIds
+                                    });
+                                  }}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition duration-150 flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                                    isChecked
+                                      ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                                  }`}
+                                >
+                                  <span>{isChecked ? '✓' : '+'}</span>
+                                  {teacher.first[0]}. {teacher.last} ({teacher.abbr})
+                                </button>
+                              );
+                            })}
+                            {appState.teachers.length === 0 && (
+                              <p className="text-[10px] text-slate-400 italic">Brak zarejestrowanych nauczycieli. Dodaj ich najpierw w Kroku 6.</p>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })() : (
+                    <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-16 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
+                      <span className="text-3xl">👈</span>
+                      <h4 className="text-slate-800 font-black text-sm">Wybierz profil ucznia lub utwórz nowego po lewej</h4>
+                      <p className="text-[11px] text-slate-400 max-w-sm">Po wybraniu ucznia będziesz mógł zdefiniować listę jego indywidualnych zajęć (np. rewalidacja, SI, korekta) oraz zaznaczyć nauczycieli wspomagających w jego klasie macierzystej.</p>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Dolne przyciski nawigacji */}
+              <div className="flex justify-between pt-2">
+                <button onClick={() => setActiveStep(7)} className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition cursor-pointer">
+                  <ArrowLeft size={14} /> Wstecz: Sale i gabinety
+                </button>
+                <button onClick={() => setActiveStep(9)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1.5 transition cursor-pointer">
                   Dalej: Przydziały lekcyjne <ArrowRight size={14} />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 8: Assignments / Pairing Teachers to Classes in Subjects */}
-          {activeStep === 8 && (
+          {/* STEP 9: Assignments / Pairing Teachers to Classes in Subjects */}
+          {activeStep === 9 && (
             <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
-                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 8</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">🔗 Przypisanie nauczycieli do klas (Przydziałylekcji)</h2>
+                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 9</span>
+                <h2 className="text-xl font-black text-slate-900 mt-2">🔗 Przypisanie nauczycieli do klas (Przydziały lekcji)</h2>
                 <p className="text-xs text-slate-500 mt-1">Zbuduj formalną matrycę przydziałów: który nauczyciel uczy jakiego przedmiotu w sprecyzowanej klasie i w jakim wymiarze godzin tygodniowo.</p>
               </div>
 
@@ -5931,367 +6502,8 @@ export default function KreatorSzkoly({
               </div>
 
               <div className="flex justify-between pt-2">
-                <button onClick={() => setActiveStep(7)} className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
-                  <ArrowLeft size={14} /> Wstecz
-                </button>
-                <button onClick={() => setActiveStep(9)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1.5 transition">
-                  Dalej: Uczniowie i IPET <ArrowRight size={14} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 9: Defining Pupils / Students with special needs (IPET, NI, Rewalidacja) */}
-          {activeStep === 9 && (
-            <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
-              <div className="border-b border-slate-200 pb-4">
-                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 9</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">🎓 Definiowanie uczniów i potrzeb wspomagania</h2>
-                <p className="text-xs text-slate-500 mt-1">Zdefiniuj uczniów wymagających indywidualnych ścieżek edukacyjnych, przypisz ich do klas macierzystych, zdefiniuj program oraz nauczycieli wspomagających.</p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Panel Lewy: Lista i Dodawanie uczniów */}
-                <div className="space-y-6 lg:col-span-1">
-                  
-                  {/* Formularz dodawania nowego ucznia */}
-                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                    <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider flex items-center gap-1">
-                      <Plus size={14} className="text-blue-500" /> Dodaj nowego ucznia
-                    </h3>
-                    <form onSubmit={handleAddStudent} className="space-y-4">
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase">Imię</label>
-                          <input 
-                            type="text"
-                            placeholder="np. Jan"
-                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                            value={newStudFirstName}
-                            onChange={(e) => setNewStudFirstName(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase">Nazwisko *</label>
-                          <input 
-                            type="text"
-                            required
-                            placeholder="np. Kowalski"
-                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                            value={newStudLastName}
-                            onChange={(e) => setNewStudLastName(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-500 font-bold uppercase block">Klasa macierzysta *</label>
-                        <select 
-                          required
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                          value={newStudClassId}
-                          onChange={(e) => setNewStudClassId(e.target.value)}
-                        >
-                          <option value="">Wybierz klasę macierzystą...</option>
-                          {appState.classes.map(c => (
-                            <option key={c.id} value={c.id}>Klasa {c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-500 font-bold uppercase block">Rodzaj wsparcia / program</label>
-                        <select
-                          required
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-blue-600 font-bold"
-                          value={newStudType}
-                          onChange={(e) => setNewStudType(e.target.value as 'ni' | 'rewa' | 'wsp')}
-                        >
-                          <option value="ni">Nauczanie Indywidualne (NI)</option>
-                          <option value="rewa">Rewalidacja / Orzeczenie</option>
-                          <option value="wsp">Wspomaganie w klasie (IPET)</option>
-                        </select>
-                      </div>
-
-                      <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-xs transition">
-                        Utwórz profil ucznia
-                      </button>
-                    </form>
-                  </div>
-
-                  {/* Lista uczniów */}
-                  <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-                    <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Zarejestrowani uczniowie</h3>
-                      <span className="bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded text-[10px] font-black">
-                        {(appState.planLekcji.specialStudents || []).length}
-                      </span>
-                    </div>
-
-                    <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
-                      {(appState.planLekcji.specialStudents || []).map((student) => {
-                        const isSelected = activeStudentId === student.id;
-                        const cls = student.classId ? classesMap.get(student.classId) : null;
-                        
-                        return (
-                          <div 
-                            key={student.id} 
-                            onClick={() => setActiveStudentId(student.id)}
-                            className={`p-3 flex justify-between items-center cursor-pointer transition w-full min-w-0 gap-3 ${
-                              isSelected ? 'bg-blue-50/50 border-l-4 border-blue-600' : 'hover:bg-slate-50/45'
-                            }`}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <span className={`text-xs font-bold leading-tight block truncate ${isSelected ? 'text-blue-900' : 'text-slate-800'}`} title={`${student.firstName} ${student.lastName}`}>
-                                {student.firstName} {student.lastName}
-                              </span>
-                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                {cls ? (
-                                  <span className="bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded text-[9px] font-bold shrink-0">
-                                    Klasa: {cls.name}
-                                  </span>
-                                ) : (
-                                  <span className="bg-rose-50 text-rose-700 px-1.5 py-0.2 rounded text-[9px] font-bold border border-rose-100 shrink-0">
-                                    Brak klasy
-                                  </span>
-                                )}
-                                <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded uppercase shrink-0 ${
-                                  student.type === 'ni'
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : student.type === 'rewa'
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-emerald-100 text-emerald-800'
-                                }`}>
-                                  {student.type === 'ni' ? 'NI' : student.type === 'rewa' ? 'Rewa' : 'Wsp'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button 
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); openEditModal(student); }}
-                                className="p-1 text-slate-400 hover:text-amber-600 rounded transition-colors"
-                                title="Edytuj szczegóły ucznia w modalu"
-                              >
-                                <Edit3 size={13} />
-                              </button>
-                              <button 
-                                type="button"
-                                onClick={(e) => handleRemoveStudent(student.id, e)}
-                                className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
-                                title="Usuń ucznia"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {(appState.planLekcji.specialStudents || []).length === 0 && (
-                        <p className="p-8 text-center text-xs text-slate-400 italic">Brak uczniów w bazie. Dodaj pierwszy profil powyżej!</p>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-
-                {/* Panel Prawy: Szczegóły wybranego ucznia */}
-                <div className="lg:col-span-2 space-y-6">
-                  {activeStudentId && activeStudent ? (() => {
-                    const student = activeStudent;
-                    const cls = student.classId ? classesMap.get(student.classId) : null;
-                    const studAssignments = activeStudentAssignments;
-                    const supportTeacherIds = student.supportTeacherIds || [];
-
-                    return (
-                      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-6">
-                        
-                        {/* Nagłówek Informacyjny Ucznia */}
-                        <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-                          <div className="space-y-1">
-                            <h3 className="text-sm font-black text-slate-950 flex items-center gap-2">
-                              👤 {student.firstName} {student.lastName}
-                              <button 
-                                type="button"
-                                onClick={() => openEditModal(student)}
-                                className="inline-flex items-center gap-1 text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 px-2.5 py-0.5 rounded-lg transition font-extrabold cursor-pointer select-none"
-                                title="Konfiguracja w dedykowanym oknie"
-                              >
-                                <Edit3 size={11} /> Edytuj w modalu
-                              </button>
-                            </h3>
-                            <p className="text-[11px] text-slate-400 font-semibold mt-1">
-                              Edycja planu IPET/indywidualnego • Klasa: <strong className="text-slate-700">{cls ? cls.name : 'nieprzypisana'}</strong> • Wsparcie: <strong className="text-slate-700 uppercase">{student.type === 'ni' ? 'Nauczanie indywidualne' : student.type === 'rewa' ? 'Rewalidacja' : 'Wspomaganie/IPET'}</strong>
-                            </p>
-                          </div>
-                          <span className="bg-blue-50 text-blue-700 border border-blue-100 rounded-xl px-2.5 py-1 text-xs font-bold font-mono">
-                            ID: {student.id}
-                          </span>
-                        </div>
-
-                        {/* SEKCJA 1: Lista indywidualnych przedmiotów (z wymiarem godzin) i nauczyciel prowadzący */}
-                        <div className="space-y-4">
-                          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-150 space-y-3">
-                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">📚 Przypisz nowy przedmiot indywidualny</h4>
-                            <form onSubmit={handleAddStudentAssignment} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-                              <div className="space-y-1 sm:col-span-1.5">
-                                <label className="text-[10px] text-slate-400 font-bold block">1. Przedmiot *</label>
-                                <select 
-                                  required
-                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none"
-                                  value={newStudSubjId}
-                                  onChange={(e) => setNewStudSubjId(e.target.value)}
-                                >
-                                  <option value="">Wybierz...</option>
-                                  {appState.subjects.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="space-y-1 sm:col-span-1.5">
-                                <label className="text-[10px] text-slate-400 font-bold block">2. Nauczyciel prowadzący *</label>
-                                <select
-                                  required
-                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none"
-                                  value={newStudTeachId}
-                                  onChange={(e) => setNewStudTeachId(e.target.value)}
-                                >
-                                  <option value="">Wybierz...</option>
-                                  {appState.teachers.map(t => (
-                                    <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="space-y-1">
-                                <label className="text-[10px] text-slate-400 font-bold block">3. Godziny / Tydzień *</label>
-                                <input 
-                                  type="number"
-                                  required
-                                  min={1}
-                                  max={40}
-                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-bold text-center text-slate-800"
-                                  value={newStudHours}
-                                  onChange={(e) => setNewStudHours(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
-                                />
-                              </div>
-
-                              <button type="submit" className="w-full py-2 bg-slate-900 hover:bg-slate-950 text-white font-bold text-xs rounded-lg transition shadow-xs flex items-center justify-center gap-1">
-                                <Plus size={12} /> Dodaj
-                              </button>
-                            </form>
-                          </div>
-
-                          {/* Lista przypisanych przedmiotów */}
-                          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-                            <table className="w-full text-left border-collapse">
-                              <thead>
-                                <tr className="bg-slate-50 border-b border-slate-200">
-                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase">Przedmiot</th>
-                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase">Prowadzący</th>
-                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase text-center">Tygodniowo</th>
-                                  <th className="p-3 text-[10px] font-black text-slate-500 uppercase text-right">Usuń</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                                {studAssignments.map(asg => {
-                                  const sName = subjectsMap.get(asg.subjectId)?.name || 'Nieznany';
-                                  const tObj = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                                  const tName = tObj ? `${tObj.first[0]}. ${tObj.last} (${tObj.abbr})` : 'Nieprzypisany';
-                                  return (
-                                    <tr key={asg.id} className="hover:bg-slate-50/50">
-                                      <td className="p-3 font-bold text-slate-900">{sName}</td>
-                                      <td className="p-3 font-semibold text-slate-500">{tName}</td>
-                                      <td className="p-3 font-black text-center text-indigo-600">{asg.hoursPerWeek}h / tyg</td>
-                                      <td className="p-3 text-right">
-                                        <button 
-                                          type="button" 
-                                          onClick={() => handleRemoveStudentAssignment(asg.id)}
-                                          className="text-slate-400 hover:text-red-500 p-1"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                                {studAssignments.length === 0 && (
-                                  <tr>
-                                    <td colSpan={4} className="p-6 text-center text-slate-400 italic">Brak zdefiniowanych przedmiotów indywidualnych dla tego ucznia. Szczegóły dodasz powyżej!</td>
-                                  </tr>
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-
-                        {/* SEKCJA 2: Nauczyciele wspomagający na lekcjach ogólnych w klasie macierzystej */}
-                        <div className="space-y-3 pt-4 border-t border-slate-100">
-                          <div>
-                            <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                              🕵️ Nauczyciele wspomagający obecni w klasie macierzystej
-                            </h4>
-                            <p className="text-[10px] text-slate-400 font-semibold mt-1 leading-normal">
-                              Chcesz zadeklarować obecność nauczyciela wspomagającego podczas zajęć ogólnych w klasie macierzystej ({cls ? cls.name : 'brak'})? Zaznacz go na liście poniżej:
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
-                            {appState.teachers.map((teacher) => {
-                              const isChecked = supportTeacherIds.includes(teacher.id);
-                              return (
-                                <button
-                                  type="button"
-                                  key={teacher.id}
-                                  onClick={() => {
-                                    let newIds = [...supportTeacherIds];
-                                    if (isChecked) {
-                                      newIds = newIds.filter(id => id !== teacher.id);
-                                    } else {
-                                      newIds.push(teacher.id);
-                                    }
-                                    handleUpdateStudent({
-                                      ...student,
-                                      supportTeacherIds: newIds
-                                    });
-                                  }}
-                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition duration-150 flex items-center gap-1.5 shrink-0 ${
-                                    isChecked
-                                      ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
-                                  }`}
-                                >
-                                  <span>{isChecked ? '✓' : '+'}</span>
-                                  {teacher.first[0]}. {teacher.last} ({teacher.abbr})
-                                </button>
-                              );
-                            })}
-                            {appState.teachers.length === 0 && (
-                              <p className="text-[10px] text-slate-400 italic">Brak zarejestrowanych nauczycieli. Dodaj ich najpierw w Kroku 6.</p>
-                            )}
-                          </div>
-                        </div>
-
-                      </div>
-                    );
-                  })() : (
-                    <div className="bg-white border-2 border-dashed border-slate-200 rounded-3xl p-16 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
-                      <span className="text-3xl">👈</span>
-                      <h4 className="text-slate-800 font-black text-sm">Wybierz profil ucznia lub utwórz nowego po lewej</h4>
-                      <p className="text-[11px] text-slate-400 max-w-sm">Po wybraniu ucznia będziesz mógł zdefiniować listę jego indywidualnych zajęć (np. rewalidacja, SI, kinezyterapia) oraz zaznaczyć nauczycieli wspomagających w jego klasie macierzystej.</p>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Dolne przyciski nawigacji */}
-              <div className="flex justify-between pt-2">
                 <button onClick={() => setActiveStep(8)} className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
-                  <ArrowLeft size={14} /> Wstecz
+                  <ArrowLeft size={14} /> Wstecz: Uczniowie
                 </button>
                 <button onClick={() => setActiveStep(10)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1.5 transition">
                   Dalej: Podsumowanie bazy danych <ArrowRight size={14} />
@@ -6400,6 +6612,12 @@ export default function KreatorSzkoly({
               {/* Action routes */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2 justify-center">
                 <button 
+                  onClick={() => setActiveStep(9)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 transition cursor-pointer border border-slate-300"
+                >
+                  <ArrowLeft size={14} /> Wstecz: Przydziały lekcyjne
+                </button>
+                <button 
                   onClick={() => setIsTemplateModalOpen(true)}
                   className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer"
                 >
@@ -6455,57 +6673,124 @@ export default function KreatorSzkoly({
               </div>
 
               {/* Formularz głównych danych ucznia */}
-              <form onSubmit={handleSaveStudentEdit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase">Imię</label>
-                  <input 
-                    type="text"
-                    className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-slate-900"
-                    value={editStudFirstName}
-                    onChange={(e) => setEditStudFirstName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase">Nazwisko *</label>
-                  <input 
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-slate-900"
-                    value={editStudLastName}
-                    onChange={(e) => setEditStudLastName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase block text-left">Klasa macierzysta *</label>
-                  <select 
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-slate-900"
-                    value={editStudClassId}
-                    onChange={(e) => setEditStudClassId(e.target.value)}
-                  >
-                    <option value="">Brak / nieprzypisany</option>
-                    {appState.classes.map(c => (
-                      <option key={c.id} value={c.id}>Klasa {c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase block text-left">Rodzaj wsparcia / program *</label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-blue-600 font-bold"
-                    value={editStudType}
-                    onChange={(e) => setEditStudType(e.target.value as 'ni' | 'rewa' | 'wsp')}
-                  >
-                    <option value="ni">Nauczanie Indywidualne (NI)</option>
-                    <option value="rewa">Rewalidacja / Orzeczenie</option>
-                    <option value="wsp">Wspomaganie w klasie (IPET)</option>
-                  </select>
+              <form onSubmit={handleSaveStudentEdit} className="space-y-4 text-left">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase">Imię</label>
+                    <input 
+                      type="text"
+                      className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-slate-900"
+                      value={editStudFirstName}
+                      onChange={(e) => setEditStudFirstName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase">Nazwisko *</label>
+                    <input 
+                      type="text"
+                      required
+                      className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-slate-900"
+                      value={editStudLastName}
+                      onChange={(e) => setEditStudLastName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase block text-left">Klasa macierzysta *</label>
+                    <select 
+                      required
+                      className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-slate-900 font-medium"
+                      value={editStudClassId}
+                      onChange={(e) => setEditStudClassId(e.target.value)}
+                    >
+                      <option value="">Wybierz klasę...</option>
+                      {appState.classes.map(c => (
+                        <option key={c.id} value={c.id}>Klasa {c.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div className="col-span-1 sm:col-span-2 pt-2 flex justify-end">
-                  <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow transition">
-                    Zapisz podstawowe dane
+                {/* Checkboxy rodzajów wsparcia i godziny w modalu */}
+                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] text-slate-700 font-black uppercase tracking-wider block">
+                      ✨ Rodzaje wsparcia i przydział godzin tygodniowo
+                    </label>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                      Suma: {SUPPORT_CATEGORIES.reduce((sum, cat) => sum + (editStudSupportTypes[cat.key] ? (Number(editStudSupportHours[cat.key]) || 0) : 0), 0)} h / tydz.
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {SUPPORT_CATEGORIES.map(cat => {
+                      const isChecked = !!editStudSupportTypes[cat.key];
+                      const hours = editStudSupportHours[cat.key] ?? cat.defaultHours;
+
+                      return (
+                        <div 
+                          key={cat.key}
+                          className={`p-2 rounded-xl border transition-all flex items-center justify-between gap-2 ${
+                            isChecked 
+                              ? cat.bgActive 
+                              : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0 select-none">
+                            <input 
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setEditStudSupportTypes(prev => ({
+                                  ...prev,
+                                  [cat.key]: checked
+                                }));
+                              }}
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold flex items-center gap-1 leading-tight">
+                                <span>{cat.icon}</span>
+                                <span className="truncate">{cat.label}</span>
+                              </div>
+                              <div className="text-[9px] text-slate-400 font-medium truncate">
+                                {cat.sublabel}
+                              </div>
+                            </div>
+                          </label>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <input 
+                              type="number"
+                              min={1}
+                              max={40}
+                              disabled={!isChecked}
+                              className={`w-12 px-1.5 py-1 text-xs font-black text-center rounded-lg border outline-none transition ${
+                                isChecked 
+                                  ? 'bg-white border-slate-300 text-slate-900 shadow-xs' 
+                                  : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                              }`}
+                              value={hours}
+                              onChange={(e) => {
+                                const val = Math.max(1, parseInt(e.target.value) || 1);
+                                setEditStudSupportHours(prev => ({
+                                  ...prev,
+                                  [cat.key]: val
+                                }));
+                              }}
+                              title="Liczba godzin tygodniowo"
+                            />
+                            <span className="text-[10px] font-bold text-slate-500">h</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="pt-1 flex justify-end">
+                  <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                    Zapisz zmiany w profilu ucznia
                   </button>
                 </div>
               </form>

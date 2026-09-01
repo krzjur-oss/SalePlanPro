@@ -76,12 +76,22 @@ export interface LessonsState {
   [key: string]: Lesson; // "classId|day|hour" lub "classId|day|hour|groupId"
 }
 
+export type StudentSupportType = 'ni' | 'wsp' | 'rewa' | 'korekta';
+
 export interface SpecialStudent {
   id: string;
   firstName: string;
   lastName: string;
   classId: string | null;
-  type: 'ni' | 'rewa' | 'wsp';
+  type: 'ni' | 'rewa' | 'wsp' | 'korekta' | string;
+  supportTypes?: ('ni' | 'wsp' | 'rewa' | 'korekta' | string)[];
+  supportHours?: {
+    ni?: number;
+    wsp?: number;
+    rewa?: number;
+    korekta?: number;
+    [key: string]: number | undefined;
+  };
   note?: string;
   supportTeacherIds?: string[]; // Multiple support teachers on regular lessons
 }
