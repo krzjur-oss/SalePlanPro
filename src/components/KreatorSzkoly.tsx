@@ -1924,8 +1924,8 @@ export default function KreatorSzkoly({
   const [newAsgBlockSize, setNewAsgBlockSize] = useState<number>(1); // default single 1h
   const [newAsgLinkedClasses, setNewAsgLinkedClasses] = useState<string[]>([]);
   const [editingAsgId, setEditingAsgId] = useState<string | null>(null);
-  const [assignmentFormMode, setAssignmentFormMode] = useState<'class' | 'teacher'>('class');
-  const [asgListGrouping, setAsgListGrouping] = useState<'flat' | 'class' | 'teacher'>('flat');
+  const [assignmentFormMode, setAssignmentFormMode] = useState<'class' | 'teacher' | 'uspe'>('class');
+  const [asgListGrouping, setAsgListGrouping] = useState<'flat' | 'class' | 'teacher' | 'uspe'>('flat');
 
   const autoSelectGroupForAssignment = (clsId: string, subjId: string) => {
     if (!clsId || !subjId) return;
@@ -2081,7 +2081,7 @@ export default function KreatorSzkoly({
 
   const handleStartEditSpecialAssignment = (sa: SpecialAssignment) => {
     setEditingAsgId(sa.id);
-    setAssignmentFormMode('teacher');
+    setAssignmentFormMode('uspe');
     setNewAsgStudentId(sa.studentId);
     setNewAsgClass('');
     setNewAsgTeacher(sa.teacherId || '');
@@ -2091,7 +2091,7 @@ export default function KreatorSzkoly({
     setNewAsgHours(sa.hoursPerWeek);
     setNewAsgBlockSize(1);
     setNewAsgLinkedClasses([]);
-    showNoti('Edycja przydziału ucznia - uzupełniono formularz', 'info');
+    showNoti('Edycja przydziału ucznia SPE - uzupełniono formularz', 'info');
   };
 
   const handleCancelEditAssignment = () => {
@@ -6075,13 +6075,13 @@ export default function KreatorSzkoly({
                           setAssignmentFormMode('class');
                           handleCancelEditAssignment();
                         }}
-                        className={`flex-1 py-1.5 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
                           assignmentFormMode === 'class'
                             ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-500 hover:text-slate-800'
                         }`}
                       >
-                        🏫 Tryb Klasowy
+                        🏫 Tryb Klasy
                       </button>
                       <button
                         type="button"
@@ -6089,13 +6089,39 @@ export default function KreatorSzkoly({
                           setAssignmentFormMode('teacher');
                           handleCancelEditAssignment();
                         }}
-                        className={`flex-1 py-1.5 rounded-lg text-[10.5px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
                           assignmentFormMode === 'teacher'
                             ? 'bg-white text-slate-900 shadow-xs'
                             : 'text-slate-500 hover:text-slate-800'
                         }`}
                       >
-                        🧑‍🏫 Tryb Nauczycielski
+                        🧑‍🏫 Tryb Nauczyciela
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentFormMode('uspe');
+                          handleCancelEditAssignment();
+                          const firstStudent = (appState.planLekcji.specialStudents || [])[0];
+                          if (firstStudent) {
+                            setNewAsgStudentId(firstStudent.id);
+                            const types = firstStudent.supportTypes && firstStudent.supportTypes.length > 0
+                              ? firstStudent.supportTypes
+                              : (firstStudent.type ? [firstStudent.type] : ['ni']);
+                            const firstType = types[0] || 'ni';
+                            setNewAsgSubject(firstType);
+                            if (firstStudent.supportHours?.[firstType]) {
+                              setNewAsgHours(firstStudent.supportHours[firstType]);
+                            }
+                          }
+                        }}
+                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          assignmentFormMode === 'uspe'
+                            ? 'bg-purple-600 text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        👤 Tryb USPE (SPE)
                       </button>
                     </div>
                   )}
@@ -6175,7 +6201,7 @@ export default function KreatorSzkoly({
                           </div>
                         </div>
                       </>
-                    ) : (
+                    ) : assignmentFormMode === 'teacher' ? (
                       <>
                         {/* TEACHER MODE FIELDS */}
                         <div className="space-y-1">
@@ -6187,6 +6213,7 @@ export default function KreatorSzkoly({
                             onChange={(e) => setNewAsgTeacher(e.target.value)}
                           >
                             <option value="">Wybierz nauczyciela...</option>
+                            <option value="">Brak (Wakat)</option>
                             {appState.teachers.map(t => (
                               <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
                             ))}
@@ -6195,65 +6222,24 @@ export default function KreatorSzkoly({
 
                         <div className="space-y-1">
                           <label className="text-[10px] text-slate-400 font-bold block">
-                            2. Oddział szkolny (klasa lub uczeń ze specjalnymi potrzebami edukacyjnymi) *
+                            2. Oddział Szkolny (Klasa) *
                           </label>
                           <select 
                             required
                             className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-slate-800"
-                            value={newAsgStudentId ? `student:${newAsgStudentId}` : (newAsgClass ? `class:${newAsgClass}` : '')}
+                            value={newAsgClass}
                             onChange={(e) => {
-                              const val = e.target.value;
-                              if (val.startsWith('student:')) {
-                                const studId = val.replace('student:', '');
-                                setNewAsgStudentId(studId);
-                                setNewAsgClass('');
-                                setNewAsgGroup('');
-                                
-                                // Znajdź ucznia i jego zadeklarowane formy wsparcia
-                                const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === studId);
-                                const types = stud?.supportTypes && stud.supportTypes.length > 0 
-                                  ? stud.supportTypes 
-                                  : (stud?.type ? [stud.type] : ['ni']);
-                                
-                                // Jeśli aktualny przedmiot nie pasuje do form wsparcia ucznia ani przedmiotów, ustaw domyślny
-                                if (!types.includes(newAsgSubject as any) && !appState.subjects.some(s => s.id === newAsgSubject)) {
-                                  const firstType = types[0] || 'ni';
-                                  setNewAsgSubject(firstType);
-                                  if (stud?.supportHours?.[firstType]) {
-                                    setNewAsgHours(stud.supportHours[firstType]);
-                                  }
-                                }
-                              } else if (val.startsWith('class:')) {
-                                const clsId = val.replace('class:', '');
-                                setNewAsgClass(clsId);
-                                setNewAsgStudentId(null);
-                                setNewAsgGroup('');
-                                autoSelectGroupForAssignment(clsId, newAsgSubject);
-                              } else {
-                                setNewAsgClass('');
-                                setNewAsgStudentId(null);
-                                setNewAsgGroup('');
-                              }
+                              const clsId = e.target.value;
+                              setNewAsgClass(clsId);
+                              setNewAsgStudentId(null);
+                              setNewAsgGroup('');
+                              autoSelectGroupForAssignment(clsId, newAsgSubject);
                             }}
                           >
-                            <option value="">Wybierz klasę lub ucznia...</option>
-                            <optgroup label="🏫 Oddziały szkolne (Klasy)">
-                              {appState.classes.map(c => (
-                                <option key={c.id} value={`class:${c.id}`}>Oddział {c.name}</option>
-                              ))}
-                            </optgroup>
-                            {(appState.planLekcji.specialStudents || []).length > 0 && (
-                              <optgroup label="👤 Uczniowie ze specjalnymi potrzebami edukacyjnymi (SPE / NI / Rewalidacja)">
-                                {(appState.planLekcji.specialStudents || []).map(s => {
-                                  const cls = appState.classes.find(c => c.id === s.classId);
-                                  return (
-                                    <option key={s.id} value={`student:${s.id}`}>
-                                      Uczeń: {s.firstName} {s.lastName} {cls ? `(kl. ${cls.name})` : '(indywidualny)'}
-                                    </option>
-                                  );
-                                })}
-                              </optgroup>
-                            )}
+                            <option value="">Wybierz klasę...</option>
+                            {appState.classes.map(c => (
+                              <option key={c.id} value={c.id}>Oddział {c.name}</option>
+                            ))}
                           </select>
                         </div>
 
@@ -6277,7 +6263,7 @@ export default function KreatorSzkoly({
                         {/* 4. Przedmiot */}
                         <div className="space-y-1">
                           <label className="text-[10px] text-slate-400 font-bold block">
-                            {newAsgClass && appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).length > 0 ? '4. Przedmiot *' : '4. Przedmiot *'}
+                            4. Przedmiot *
                           </label>
                           <select 
                             required
@@ -6288,7 +6274,113 @@ export default function KreatorSzkoly({
                               setNewAsgSubject(subjVal);
                               if (newAsgClass) {
                                 autoSelectGroupForAssignment(newAsgClass, subjVal);
-                              } else if (newAsgStudentId) {
+                              }
+                            }}
+                          >
+                            <option value="">Wybierz przedmiot...</option>
+                            {appState.subjects.map(s => (
+                              <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* USPE MODE FIELDS (Uczeń ze specjalnymi potrzebami edukacyjnymi) */}
+                        <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3 flex items-start gap-2.5">
+                          <span className="text-lg">👤</span>
+                          <div>
+                            <p className="text-[11px] font-black text-purple-900 leading-tight">Przydział zajęć dla ucznia ze SPE / NI / Rewalidacji</p>
+                            <p className="text-[9.5px] text-purple-700 font-medium mt-0.5">
+                              Wskaż ucznia, formę wsparcia lub przedmiot szkolny oraz nauczyciela prowadzącego.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 1. Uczeń ze SPE */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[10px] text-purple-900 font-extrabold block">
+                              1. Uczeń ze specjalnymi potrzebami (SPE) *
+                            </label>
+                            {(appState.planLekcji.specialStudents || []).length > 0 && (
+                              <span className="text-[9px] font-bold text-purple-600 bg-purple-100 px-1.5 py-0.2 rounded-full">
+                                Baza: {(appState.planLekcji.specialStudents || []).length}
+                              </span>
+                            )}
+                          </div>
+                          {(appState.planLekcji.specialStudents || []).length === 0 ? (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10.5px] text-amber-800 space-y-1">
+                              <p className="font-bold">Brak zarejestrowanych uczniów SPE!</p>
+                              <p className="text-[9.5px] text-amber-700">
+                                Przejdź do kroku <strong>8. Uczniowie SPE / NI</strong> w kreatorze, aby dodać uczniów do bazy.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setActiveStep(8)}
+                                className="mt-1 px-2.5 py-1 bg-amber-600 text-white rounded text-[10px] font-bold hover:bg-amber-700 transition"
+                              >
+                                Przejdź do kroku SPE →
+                              </button>
+                            </div>
+                          ) : (
+                            <select
+                              required
+                              className="w-full px-3 py-1.5 border border-purple-300 bg-purple-50/50 rounded-lg text-xs outline-none font-bold text-purple-950 focus:bg-white focus:border-purple-500"
+                              value={newAsgStudentId || ''}
+                              onChange={(e) => {
+                                const studId = e.target.value;
+                                setNewAsgStudentId(studId);
+                                setNewAsgClass('');
+                                setNewAsgGroup('');
+                                
+                                if (studId) {
+                                  const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === studId);
+                                  const types = stud?.supportTypes && stud.supportTypes.length > 0
+                                    ? stud.supportTypes
+                                    : (stud?.type ? [stud.type] : ['ni']);
+                                  
+                                  if (!types.includes(newAsgSubject as any) && !appState.subjects.some(s => s.id === newAsgSubject)) {
+                                    const firstType = types[0] || 'ni';
+                                    setNewAsgSubject(firstType);
+                                    if (stud?.supportHours?.[firstType]) {
+                                      setNewAsgHours(stud.supportHours[firstType]);
+                                    }
+                                  }
+                                }
+                              }}
+                            >
+                              <option value="">Wybierz ucznia ze specjalnymi potrzebami...</option>
+                              {(appState.planLekcji.specialStudents || []).map(s => {
+                                const cls = appState.classes.find(c => c.id === s.classId);
+                                const types = s.supportTypes && s.supportTypes.length > 0 ? s.supportTypes : (s.type ? [s.type] : ['ni']);
+                                const typesLabel = types.map(t => {
+                                  const cat = SUPPORT_CATEGORIES.find(c => c.key === t);
+                                  return cat ? cat.label : t.toUpperCase();
+                                }).join(', ');
+                                return (
+                                  <option key={s.id} value={s.id}>
+                                    {s.firstName} {s.lastName} {cls ? `(oddz. ${cls.name})` : '(tok indywidualny)'} — [{typesLabel}]
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          )}
+                        </div>
+
+                        {/* 2. Rodzaj zajęć / Przedmiot */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-purple-900 font-extrabold block">
+                            2. Rodzaj wsparcia / Przedmiot szkolny *
+                          </label>
+                          <select 
+                            required
+                            className="w-full px-3 py-1.5 border border-purple-300 bg-purple-50/50 rounded-lg text-xs outline-none font-bold text-slate-800 focus:bg-white focus:border-purple-500"
+                            value={newAsgSubject}
+                            onChange={(e) => {
+                              const subjVal = e.target.value;
+                              setNewAsgSubject(subjVal);
+                              if (newAsgStudentId) {
                                 const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
                                 if (stud?.supportHours?.[subjVal as any]) {
                                   setNewAsgHours(stud.supportHours[subjVal as any]!);
@@ -6296,7 +6388,7 @@ export default function KreatorSzkoly({
                               }
                             }}
                           >
-                            <option value="">Wybierz przedmiot lub rodzaj zajęć...</option>
+                            <option value="">Wybierz rodzaj zajęć lub przedmiot...</option>
                             {newAsgStudentId ? (
                               <>
                                 {(() => {
@@ -6307,7 +6399,7 @@ export default function KreatorSzkoly({
 
                                   return (
                                     <>
-                                      <optgroup label="✨ Zajęcia zaznaczone u ucznia (Wsparcie / SPE)">
+                                      <optgroup label="✨ Formy wsparcia zadeklarowane u ucznia">
                                         {studentSupportTypes.map(stKey => {
                                           const cat = SUPPORT_CATEGORIES.find(c => c.key === stKey);
                                           const hours = stud?.supportHours?.[stKey];
@@ -6319,7 +6411,7 @@ export default function KreatorSzkoly({
                                           );
                                         })}
                                       </optgroup>
-                                      <optgroup label="📚 Przedmioty ze szkolnego planu nauczania">
+                                      <optgroup label="📚 Przedmioty ze szkolnego planu nauczania (dla NI / indywidualnych)">
                                         {appState.subjects.map(s => (
                                           <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
                                         ))}
@@ -6329,10 +6421,40 @@ export default function KreatorSzkoly({
                                 })()}
                               </>
                             ) : (
-                              appState.subjects.map(s => (
-                                <option key={s.id} value={s.id}>{s.name}</option>
-                              ))
+                              <>
+                                <optgroup label="✨ Formy wsparcia (SPE / NI / Rewalidacja)">
+                                  {SUPPORT_CATEGORIES.map(cat => (
+                                    <option key={cat.key} value={cat.key}>
+                                      {cat.icon} {cat.label} ({cat.sublabel})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="📚 Przedmioty ze szkolnego planu nauczania">
+                                  {appState.subjects.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
+                                  ))}
+                                </optgroup>
+                              </>
                             )}
+                          </select>
+                        </div>
+
+                        {/* 3. Nauczyciel */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-purple-900 font-extrabold block">
+                            3. Nauczyciel prowadzący / wspomagający *
+                          </label>
+                          <select 
+                            required
+                            className="w-full px-3 py-1.5 border border-purple-300 bg-purple-50/50 rounded-lg text-xs outline-none font-bold text-slate-800 focus:bg-white focus:border-purple-500"
+                            value={newAsgTeacher}
+                            onChange={(e) => setNewAsgTeacher(e.target.value)}
+                          >
+                            <option value="">Wybierz nauczyciela...</option>
+                            <option value="">Brak (Wakat)</option>
+                            {appState.teachers.map(t => (
+                              <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                            ))}
                           </select>
                         </div>
                       </>
@@ -6340,7 +6462,9 @@ export default function KreatorSzkoly({
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">5. Sugerowana sala</label>
+                        <label className="text-[10px] text-slate-400 font-bold block">
+                          {assignmentFormMode === 'uspe' ? '4. Gabinet / Sala' : '5. Sugerowana sala'}
+                        </label>
                         <select 
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                           value={newAsgRoom}
@@ -6353,7 +6477,7 @@ export default function KreatorSzkoly({
                         </select>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">Wymiar lekcji / tyg</label>
+                        <label className="text-[10px] text-slate-400 font-bold block">Wymiar godzin / tyg *</label>
                         <input 
                           type="number" 
                           required
@@ -6367,7 +6491,9 @@ export default function KreatorSzkoly({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold block">6. Rozkład lekcji (Łączenie w bloki) *</label>
+                      <label className="text-[10px] text-slate-400 font-bold block">
+                        {assignmentFormMode === 'uspe' ? '5. Rozkład lekcji (Łączenie w bloki) *' : '6. Rozkład lekcji (Łączenie w bloki) *'}
+                      </label>
                       <select 
                         required
                         className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-slate-700 font-bold bg-blue-50/40 focus:bg-white"
@@ -6381,7 +6507,7 @@ export default function KreatorSzkoly({
                       </select>
                     </div>
 
-                    {newAsgClass && (
+                    {newAsgClass && assignmentFormMode !== 'uspe' && (
                       <div className="space-y-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                         <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1 select-none">
                           👥 Łączenie oddziałów (Grupa międzyoddziałowa)
@@ -6437,8 +6563,15 @@ export default function KreatorSzkoly({
                         </button>
                       </div>
                     ) : (
-                      <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow mt-3 flex items-center justify-center gap-1.5 transition cursor-pointer">
-                        <Plus size={14} /> Przypisz lekcję
+                      <button 
+                        type="submit" 
+                        className={`w-full py-2 text-white font-bold text-xs rounded-lg shadow mt-3 flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                          assignmentFormMode === 'uspe' 
+                            ? 'bg-purple-600 hover:bg-purple-700' 
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        <Plus size={14} /> {assignmentFormMode === 'uspe' ? 'Przypisz zajęcia dla ucznia SPE' : 'Przypisz lekcję'}
                       </button>
                     )}
                   </form>
@@ -6449,7 +6582,9 @@ export default function KreatorSzkoly({
                   <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
                     <div>
                       <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Siatka Przydziałów Etatowych</h3>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Suma pozycji: {appState.planLekcji.assignments.length}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Suma pozycji: {appState.planLekcji.assignments.length + (appState.planLekcji.specialAssignments || []).length} ({appState.planLekcji.assignments.length} klasowych + {(appState.planLekcji.specialAssignments || []).length} SPE)
+                      </p>
                     </div>
 
                     {/* Grouping Toggle */}
@@ -6480,6 +6615,15 @@ export default function KreatorSzkoly({
                         }`}
                       >
                         Nauczycielami
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAsgListGrouping('uspe')}
+                        className={`px-2.5 py-1 rounded-md text-[9.5px] font-bold transition cursor-pointer ${
+                          asgListGrouping === 'uspe' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        👤 Uczniami SPE
                       </button>
                     </div>
                   </div>
@@ -6769,6 +6913,109 @@ export default function KreatorSzkoly({
                             </div>
                           );
                         });
+                      }
+
+                      if (asgListGrouping === 'uspe') {
+                        const specialStudents = appState.planLekcji.specialStudents || [];
+
+                        if (specialStudents.length === 0 && allSpecialAssignments.length === 0) {
+                          return (
+                            <div className="p-8 text-center space-y-2">
+                              <p className="text-xs font-bold text-slate-600">Brak zarejestrowanych uczniów SPE lub przydziałów specjalnych.</p>
+                              <p className="text-[11px] text-slate-400">
+                                Użyj <strong>Trybu USPE</strong> po lewej stronie, aby przypisać godziny wsparcia lub przejdź do kroku 8 kreatora.
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        const studentSections = specialStudents.map(stud => {
+                          const studSpAsgs = allSpecialAssignments.filter(sa => sa.studentId === stud.id);
+                          const studCls = stud.classId ? classesMap.get(stud.classId) : null;
+                          const totalHours = studSpAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
+                          const declaredHours = Object.values(stud.supportHours || {}).reduce((sum, h) => sum + (Number(h) || 0), 0);
+                          const supportBadges = (stud.supportTypes && stud.supportTypes.length > 0 ? stud.supportTypes : (stud.type ? [stud.type] : ['ni'])).map(t => {
+                            const cat = SUPPORT_CATEGORIES.find(c => c.key === t);
+                            return cat ? cat.label : t.toUpperCase();
+                          });
+
+                          return (
+                            <div key={stud.id} className="border-b border-slate-100 last:border-none">
+                              <div className="bg-purple-50/75 px-4 py-2 flex justify-between items-center border-y border-purple-100 select-none">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-6 h-6 text-[10px] font-black text-purple-700 bg-purple-200 rounded-md flex items-center justify-center shrink-0 shadow-xs">
+                                    👤
+                                  </span>
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-xs font-black text-purple-950">
+                                        {stud.firstName} {stud.lastName}
+                                      </span>
+                                      {studCls ? (
+                                        <span className="text-[9.5px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded">
+                                          Oddział {studCls.name}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[9.5px] font-bold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
+                                          Tok indywidualny
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[9px] text-purple-700 font-medium mt-0.5">
+                                      Formy: {supportBadges.join(', ')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {declaredHours > 0 && (
+                                    <span className="text-[9.5px] text-slate-500 font-medium hidden sm:inline">
+                                      Zadeklarowano: {declaredHours}h/tyg
+                                    </span>
+                                  )}
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 border ${
+                                    totalHours === 0 
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                                      : totalHours >= declaredHours && declaredHours > 0
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                      : 'bg-purple-100 text-purple-800 border-purple-200'
+                                  }`}>
+                                    Przydzielono: {totalHours}h/tyg
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="divide-y divide-slate-100">
+                                {studSpAsgs.length === 0 ? (
+                                  <p className="p-3 text-center text-[10.5px] text-slate-400 italic">
+                                    Brak przydzielonych lekcji dla tego ucznia. Użyj "Trybu USPE" po lewej stronie.
+                                  </p>
+                                ) : (
+                                  studSpAsgs.map(sa => renderSpecialAsgRow(sa))
+                                )}
+                              </div>
+                            </div>
+                          );
+                        });
+
+                        const unlinkedSpAsgs = allSpecialAssignments.filter(sa => !specialStudents.some(s => s.id === sa.studentId));
+
+                        return (
+                          <>
+                            {studentSections}
+                            {unlinkedSpAsgs.length > 0 && (
+                              <div className="border-b border-slate-100 last:border-none">
+                                <div className="bg-slate-50 px-4 py-2 flex justify-between items-center border-y border-slate-200 select-none">
+                                  <span className="text-xs font-black text-slate-700">Pozostałe przydziały SPE</span>
+                                  <span className="text-[10px] font-bold text-slate-600 bg-slate-200 px-2 py-0.5 rounded-full">
+                                    Suma: {unlinkedSpAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0)}h/tyg
+                                  </span>
+                                </div>
+                                <div className="divide-y divide-slate-100">
+                                  {unlinkedSpAsgs.map(sa => renderSpecialAsgRow(sa))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
                       }
 
                       // Default or flat
