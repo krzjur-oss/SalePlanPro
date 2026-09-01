@@ -1008,6 +1008,47 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     });
   }, [scheduleVersion, appState.yearKey, schedData, pl.lessons, pl.assignments, pl.subjects, pl.classes, pl.schoolGroups, pl.rooms, subjectsMap, classesMap, groupsMap, roomsMap, resolveRoomFromColKey]);
 
+  // Helper to resolve host information (class & teacher) for a classroom column
+  const getRoomHostDisplay = useCallback((col: any) => {
+    if (!appState.homerooms || typeof appState.homerooms !== 'object') return null;
+    const cKey = localColKey(col);
+    let hr = appState.homerooms[cKey];
+    if (!hr && col.room?.id) {
+      hr = appState.homerooms[col.room.id];
+    }
+    if (!hr && col.room?.num) {
+      hr = appState.homerooms[col.room.num];
+    }
+    if (!hr && col.room?.num) {
+      const roomNumClean = String(col.room.num).toLowerCase().trim();
+      for (const [k, val] of Object.entries(appState.homerooms)) {
+        if (k.toLowerCase().endsWith(`_${roomNumClean}`) || k.toLowerCase() === roomNumClean) {
+          hr = val;
+          break;
+        }
+      }
+    }
+    if (!hr) return null;
+
+    const formatHost = (cName?: string, tAbbr?: string) => {
+      const c = (cName || '').trim();
+      const t = (tAbbr || '').trim();
+      if (!c && !t) return '';
+      const cLabel = c ? (/^(kl\.|klasa)/i.test(c) ? c : `kl. ${c}`) : '';
+      if (cLabel && t) return `${cLabel} (${t})`;
+      if (cLabel) return cLabel;
+      return t;
+    };
+
+    const host1 = formatHost(hr.className, hr.teacherAbbr);
+    const host2 = formatHost(hr.className2, hr.teacherAbbr2);
+
+    if (host1 && host2) {
+      return `${host1} / ${host2}`;
+    }
+    return host1 || host2 || null;
+  }, [appState.homerooms]);
+
   // Safe builder for teacher's current assigned lessons list
   const getTeacherLessonsList = useCallback((teacher: Teacher) => {
     const lessons: Array<{
@@ -1191,7 +1232,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                     </th>
                     ${floorGroups.map(g => `
                       <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2.5px 2px; text-align: center; font-size: 9px; font-weight: bold; background-color: #f8fafc; color: #334155; box-sizing: border-box;">
-                        📍 ${escapeHtml(localCleanFloorName(g.name, g.buildingName))}
+                        ${escapeHtml(localCleanFloorName(g.name, g.buildingName))}
                       </th>
                     `).join('')}
                   </tr>
@@ -1202,7 +1243,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                     </th>
                     ${segmentGroups.map(g => `
                       <th colspan="${g.span}" style="border: 1px solid #94a3b8; padding: 2px; text-align: center; font-size: 8px; font-weight: bold; background-color: #ffffff; color: #64748b; text-transform: uppercase; box-sizing: border-box;">
-                        🧩 ${escapeHtml(g.name)}
+                        ${escapeHtml(g.name)}
                       </th>
                     `).join('')}
                   </tr>
@@ -1212,11 +1253,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                       Nr
                     </th>
                     ${chunkCols.map((col: any) => {
-                      const roomDesc = col.room.sub || 'sala ogólna';
+                      const hostDisplay = getRoomHostDisplay(col);
                       return `
                         <th style="border: 1px solid #94a3b8; padding: ${thPadding}; text-align: center; font-size: 9.5px; font-weight: 950; color: #020617; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
-                          <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">🚪 ${escapeHtml(col.room.num)}</span>
-                          ${showHeaderDesc ? `<span style="font-size: ${headerDescFontSize}; color: #475569; font-weight: 500; display: block; margin-top: 0.5px; text-transform: lowercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">(${escapeHtml(roomDesc)})</span>` : ''}
+                          <span style="font-family: monospace; font-size: ${headerNameFontSize}; display: block;">${escapeHtml(col.room.num)}</span>
+                          ${hostDisplay ? `<span style="font-size: ${headerDescFontSize}; color: #334155; font-weight: 800; display: block; margin-top: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(hostDisplay)}</span>` : ''}
                         </th>
                       `;
                     }).join('')}
@@ -1378,12 +1419,10 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const openRoomsPrintPreview = () => {
     try {
       const htmlContent = generateRoomsMatrixHtml();
-      const printWindow = window.open('', '_blank', 'noopener');
-      if (printWindow) {
-        printWindow.document.write(htmlContent);
-        printWindow.document.close();
-      } else {
-        // Fallback to interactive in-app print overlay if popup is blocked or inside iframe
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const printWindow = window.open(blobUrl, '_blank');
+      if (!printWindow) {
         setIsRoomsPrintFriendlyMode(true);
       }
     } catch (e) {
@@ -2093,7 +2132,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                     colSpan={g.span}
                                     className="border border-slate-300 p-1.5 text-center text-[9.5px] bg-slate-50 font-bold text-slate-700"
                                   >
-                                    📍 {localCleanFloorName(g.name, g.buildingName)}
+                                    {localCleanFloorName(g.name, g.buildingName)}
                                   </th>
                                 ))}
                               </tr>
@@ -2109,7 +2148,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                     colSpan={g.span}
                                     className="border border-slate-300 p-1 text-center text-[8.5px] bg-white text-slate-500 uppercase font-semibold"
                                   >
-                                    🧩 {g.name}
+                                    {g.name}
                                   </th>
                                 ))}
                               </tr>
@@ -2119,20 +2158,25 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                 <th className="w-[52px] min-w-[52px] max-w-[52px] border border-slate-300 p-1.5 text-center text-[10px]">
                                   Nr
                                 </th>
-                                {chunkCols.map((col: any, cIdx) => (
-                                  <th
-                                    key={cIdx}
-                                    style={{ width: `calc((100% - 52px) / ${catRoomsCount})` }}
-                                    className="border border-slate-300 p-1.5 text-center"
-                                  >
-                                    <span className="font-mono text-[10.5px] block text-slate-950 font-black">
-                                      🚪 {col.room.num}
-                                    </span>
-                                    <span className="block text-[8px] text-slate-500 font-medium normal-case truncate max-w-full mx-auto mt-0.5">
-                                      ({col.room.sub || 'sala ogólna'})
-                                    </span>
-                                  </th>
-                                ))}
+                                {chunkCols.map((col: any, cIdx) => {
+                                  const hostDisplay = getRoomHostDisplay(col);
+                                  return (
+                                    <th
+                                      key={cIdx}
+                                      style={{ width: `calc((100% - 52px) / ${catRoomsCount})` }}
+                                      className="border border-slate-300 p-1.5 text-center"
+                                    >
+                                      <span className="font-mono text-[10.5px] block text-slate-950 font-black">
+                                        {col.room.num}
+                                      </span>
+                                      {hostDisplay && (
+                                        <span className="block text-[8px] text-slate-700 font-bold normal-case truncate max-w-full mx-auto mt-0.5" title={hostDisplay}>
+                                          {hostDisplay}
+                                        </span>
+                                      )}
+                                    </th>
+                                  );
+                                })}
                               </tr>
                             </thead>
 
@@ -2750,7 +2794,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           <div className="flex items-center gap-2 flex-wrap">
             {printType === 'rooms' && (
               <button 
-                onClick={openRoomsPrintPreview}
+                onClick={() => setIsRoomsPrintFriendlyMode(true)}
                 className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer"
               >
                 <Printer size={15} className="animate-pulse" /> Podgląd płachty sal
@@ -2896,7 +2940,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             <div className="space-y-1 flex flex-col justify-end">
               <label className="text-[10px] text-slate-400 font-bold uppercase invisible sm:block">Akcja</label>
               <button
-                onClick={openRoomsPrintPreview}
+                onClick={() => setIsRoomsPrintFriendlyMode(true)}
                 className="w-full h-[38px] px-4 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-amber-600 border-solid"
               >
                 <Printer size={15} /> Podgląd wydruku płachty sal
@@ -3335,7 +3379,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                       <th className="w-24 border border-slate-300 p-2 text-center text-[10.5px]">Lekcja / Godz</th>
                                       {floorGroups.map((g, fIdx) => (
                                         <th key={fIdx} colSpan={g.span} className="border border-slate-300 p-2 text-center text-[10px] bg-slate-50 font-bold text-slate-700">
-                                          📍 {localCleanFloorName(g.name, g.buildingName)}
+                                          {localCleanFloorName(g.name, g.buildingName)}
                                         </th>
                                       ))}
                                     </tr>
@@ -3344,19 +3388,26 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                       <th className="border border-slate-300 p-1.5 text-center text-[9px] bg-slate-50 font-medium text-slate-400">-</th>
                                       {segmentGroups.map((g, sIdx) => (
                                         <th key={sIdx} colSpan={g.span} className="border border-slate-300 p-1.5 text-center text-[9px] bg-white text-slate-500 uppercase font-semibold">
-                                          🧩 {g.name}
+                                          {g.name}
                                         </th>
                                       ))}
                                     </tr>
                                     {/* Row 3: Room headers */}
                                     <tr className="bg-slate-50 uppercase font-black text-slate-800">
                                       <th className="border border-slate-300 p-2 text-center text-[10.5px]">Godzina</th>
-                                      {cat.cols.map((col, cIdx) => (
-                                        <th key={cIdx} className="border border-slate-300 p-2 text-center text-[10.5px] min-w-[110px]">
-                                          <span className="font-mono text-[11px] block text-slate-900">🚪 {col.room.num}</span>
-                                          <span className="block text-[8px] text-slate-500 font-medium normal-case truncate max-w-[140px] mx-auto">({col.room.sub || 'sala ogólna'})</span>
-                                        </th>
-                                      ))}
+                                      {cat.cols.map((col, cIdx) => {
+                                        const hostDisplay = getRoomHostDisplay(col);
+                                        return (
+                                          <th key={cIdx} className="border border-slate-300 p-2 text-center text-[10.5px] min-w-[110px]">
+                                            <span className="font-mono text-[11px] block text-slate-900 font-black">{col.room.num}</span>
+                                            {hostDisplay && (
+                                              <span className="block text-[8px] text-slate-700 font-bold normal-case truncate max-w-[140px] mx-auto mt-0.5" title={hostDisplay}>
+                                                {hostDisplay}
+                                              </span>
+                                            )}
+                                          </th>
+                                        );
+                                      })}
                                     </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-200">
