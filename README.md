@@ -16,13 +16,23 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   **Technikum**: Podział na przedmioty ogólnokształcące, zawodowe, BHP oraz Język Obcy Zawodowy (JOZ).
     *   **Szkoła Branżowa**: Praktyczna nauka zawodu, BHP, przedmioty zawodowe i podstawowe.
 *   **Wizualny Kreator Budynku**: Możliwość szczegółowego odwzorowania pięter oraz sal lekcyjnych z przypisaniem ich typu (np. sala ogólna, pracownia informatyczna, sala gimnastyczna).
+*   **Wsparcie Kształcenia Specjalnego i Uczniów ze SPE**: Dedykowany krok ewidencji uczniów o specjalnych potrzebach edukacyjnych (Nauczanie Indywidualne – NI, Nauczyciel Wspomagający w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna) z deklaracją tygodniowego wymiaru godzin i form wsparcia.
+*   **Zintegrowany Formularz Przydziałów Lekcyjnych (Krok 9)**:
+    *   **Tryb Nauczycielski**: Ergonomiczny ciąg kroków: `1. Nauczyciel` -> `2. Oddział szkolny lub uczeń SPE` -> `3. Opcjonalna podgrupa` -> `4. Przedmiot / rodzaj zajęć wspierających` -> `5. Sugerowana sala` -> `6. Rozkład i bloki lekcyjne`.
+    *   **Inteligentne Podpowiedzi**: Automatyczne sugerowanie zadeklarowanych dla danego ucznia form wsparcia oraz wymiaru godzin.
+    *   **Niezależność Kroków**: Wybór kolejnych pól formularza nie resetuje ani nie nadpisuje wcześniej ustalonych danych.
+*   **Szablony Struktury Szkoły**: Zapisywanie i wczytywanie konfiguracji nowego roku szkolnego z automatyczną promocją klas o jeden poziom wyżej.
 
 ### 2. 👨‍🏫 Zaawansowane Zarządzanie Dyżurami Nauczycielskimi (Dyzury)
 *   **Zarządzanie Obszarami Dyżurów (Miejsca)**: Definiowanie punktów kluczowych w szkole (np. korytarz parter, boisko, stołówka) wraz z przypisaniem ich do pięter.
 *   **Konfiguracja Przerw**: Elastyczny kreator godzin trwania przerw obiadowych i krótkich.
 *   **Matryca Harmonogramu**: Interaktywny panel przydzielania nauczycieli do określonych miejsc i przerw w poszczególne dni tygodnia.
 
-### 3. 📊 Moduł Wydruków i Publikacji (Wydruki)
+### 3. 👥 Równoległe Grupy i Zajęcia Specjalne w Planie Klas
+*   **Obsługa Wielu Grup na Jednej Godzinie**: Możliwość prowadzenia lekcji w grupach (np. Informatyka gr1 i gr2, WF chłopcy i dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w osobnych salach.
+*   **Zajęcia Specjalne i Indywidualne (SPE)**: Przydział nauczycieli prowadzących oraz nauczycieli wspomagających w klasie z automatyczną weryfikacją obecności i braku kolizji w planie oddziału.
+
+### 4. 📊 Moduł Wydruków i Publikacji (Wydruki)
 System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku tradycyjnego lub zapisu cyfrowego:
 *   **Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
     *   W każdej komórce lekcji prezentowane są precyzyjne dane w czytelnym układzie pionowym: **Przedmiot** (wyraźny nagłówek), **Klasa / Grupa** (np. `3a (gr1)`) oraz **Rzeczywista Sala Lekcyjna** (np. `s. 104`).
@@ -34,17 +44,18 @@ System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku trad
     *   Wbudowany algorytm deduplikacji wpisów eliminujący powtarzanie się tych samych lekcji w jednym oknie godzinowym.
     *   Precyzyjne reguły podziału stron `@media print` (`break-inside: avoid`) zapobiegające rozcinaniu wierszy i generowaniu pustych arkuszy.
 *   **Dynamiczny Podgląd Dyżurów (Duties Print Preview & Verification Modal)**:
-    *   Osobny, interaktywny modal umożliwiający podgląd całego harmonogramu dyżurów.
-    *   **Skalowanie w locie (Zoom)**: Regulacja gęstości tabeli (od 70% do 110%) w celu idealnego dopasowania wydruku do jednej strony A4 w układzie poziomym (Landscape).
-    *   **Filtrowanie Dni**: Możliwość wyizolowania konkretnego dnia tygodnia (np. tylko poniedziałek) lub podglądu całego tygodnia zbiorczo.
-*   **Filtry Wydruków Klasowych, Nauczycielskich oraz Sal**: Pełne plany tygodniowe z opcją personalizacji układów graficznych.
+    *   Osobny, interaktywny modal umożliwiający podgląd całego harmonogramu dyżurów ze skalowaniem w locie (Zoom 70-110%) oraz filtrowaniem dni.
+
+### 5. 🤝 Centrum Wieloosobowego Scalania i Baza IndexedDB
+*   **Scalanie Wieloplikowe**: Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.
+*   **Baza IndexedDB**: Bezpieczne, nielimitowane przechowywanie danych szkolnych z automatycznym autozapisem i punktami przywracania stanu.
 
 ---
 
 ## 🧠 Zasady Działania Algorytmów i Generatorów
 
 ### 1. Integracja Planu Lekcji z Harmonogramem Dyżurów (Silnik SchedData)
-Główną innowacją systemu jest ** dynamiczna weryfikacja kontekstowa zajęć lekcyjnych** podczas planowania dyżurów nauczycieli na danej przerwie.
+Główną innowacją systemu jest **dynamiczna weryfikacja kontekstowa zajęć lekcyjnych** podczas planowania dyżurów nauczycieli na danej przerwie.
 Dla każdego przypisanego dyżuru system przeszukuje bazę danych ułożonego planu lekcji (`etap2Schedule`):
 *   **Lekcja Przed Przerwą**: Wyszukuje, jakie zajęcia nauczyciel prowadził bezpośrednio przed przerwą (pobiera klasę, przedmiot oraz numer sali lekcyjnej).
 *   **Lekcja Po Przerwie**: Analizuje zajęcia nauczyciela zaraz po przerwie.
@@ -52,59 +63,46 @@ Dla każdego przypisanego dyżuru system przeszukuje bazę danych ułożonego pl
 
 ### 2. Automatyczny Walidator Kolizji i Ostrzeżeń (Real-Time Safety Checks)
 Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym analizuje harmonogram i zgłasza dwa kluczowe typy alertów:
-1.  **🚨 Kolizja: Jednoczesny dyżur w innych rejonach**: Wykrywa błędy polegające na przypisaniu tego samego nauczyciela na tej samej przerwie w tym samym dniu do dwóch lub więcej różnych fizycznie miejsc (np. jednocześnie dyżur na Parterze i na Boisku).
-2.  **⚠️ Brak innych lekcji w tym dniu**: Ostrzega planistę, jeśli nauczyciel został wyznaczony do dyżuru w dniu, w którym według ułożonego planu lekcji nie ma żadnych zajęć (tzw. "pusty dzień" lub dzień wolny od pracy nauczyciela).
+1.  **🚨 Kolizja: Jednoczesny dyżur w innych rejonach**: Wykrywa błędy polegające na przypisaniu tego samego nauczyciela na tej samej przerwie w tym samym dniu do dwóch lub więcej różnych fizycznie miejsc.
+2.  **⚠️ Brak innych lekcji w tym dniu**: Ostrzega planistę, jeśli nauczyciel został wyznaczony do dyżuru w dniu, w którym według ułożonego planu lekcji nie ma żadnych zajęć.
 
 ---
 
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
-    *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal) bez zbędnych obwódek i ozdobników.
-    *   Poprawiono resolver sal: wyeliminowano pokazywanie sal sugerowanych z notatek; system pobiera salę z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
-    *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich (z nazwą miejsca i kondygnacją).
+1.  **Obsługa Uczniów ze Specjalnymi Potrzebami Edukacyjnymi (SPE / NI / Rewalidacja)**:
+    *   Wdrożono dedykowany krok ewidencji uczniów SPE w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie.
+    *   Zintegrowano formularz przydziałów w trybie nauczycielskim (sekwencja pól: Nauczyciel -> Oddział / Uczeń SPE -> Podgrupa -> Przedmiot -> Sala -> Bloki).
+    *   Wdrożono niezależność kroków w formularzu (brak resetowania wartości przy zmianie innych pól).
+    *   Uwzględniono godziny zajęć specjalnych i indywidualnych w kalkulacji pensum, obciążenia i nadgodzin kadry.
+    *   Rozszerzono podsumowanie przydziałów o widok zajęć SPE dla klas, nauczycieli oraz toku indywidualnego.
+2.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
+    *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal).
+    *   Poprawiono resolver sal z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
+    *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich.
     *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
-2.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape)**:
+3.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape)**:
     *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
-    *   Wprowadzono algorytm deduplikacji wpisów oraz oczyszczanie nazw klas ze wstrzykiwanych opisów przedmiotów.
-    *   Zaimplementowano sztywne reguły zapobiegania rozcinaniu wierszy i stron przy druku (`break-inside: avoid`).
-3.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej**:
-    *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF chłopcy/dziewczęta) w tym samym slocie godzinowym bez fałszywych kolizji.
-4.  **Centrum Scalania i Wieloosobowej Pracy**:
-    *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.
-5.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej**:
+    *   Wprowadzono algorytm deduplikacji wpisów oraz reguły ochrony przed dzieleniem stron (`break-inside: avoid`).
+4.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej**:
+    *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF) w tym samym slocie godzinowym bez fałszywych kolizji.
+5.  **Szablony Struktury Szkoły (SchoolStructureTemplate)**:
+    *   Zapisywanie struktury szkoły jako wielorazowy szablon z automatyczną promocją roczników.
+6.  **Centrum Scalania i Wieloosobowej Pracy**:
+    *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku.
+7.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej**:
     *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
-6.  **Automatyzacja Wyboru Roku Szkolnego**:
-    *   Zlikwidowano twardo zakodowaną wartość `2026/2027` w Kreatorze Szkoły.
-    *   Wdrożono funkcję `getDefaultSchoolYear()` opartą o bieżący czas systemowy.
-    *   Dodano dynamiczną listę wyboru `getDynamicSchoolYears()` obejmującą lata od -3 do +6 wstecz/w przód.
-7.  **Słownik Przedmiotów dedykowany dla Rodzajów Szkół**:
-    *   Zaimplementowano profile szkolne: Szkoła Podstawowa (SP), Liceum Ogólnokształcące (LO), Technikum oraz Szkoła Branżowa.
-8.  **Dynamiczny Modal Podglądu Dyżurów w Wydrukach**:
-    *   Dodano przycisk podglądu z suwakiem skali (zoomu) i podglądem lekcji sąsiadujących z dyżurem.
-
----
-
-### 📅 Co mamy jeszcze do zrobienia (Roadmap)
-1.  **Szybkie Szablony Przerw**: Możliwość wyboru jednego z kilku gotowych szablonów dzwonków (np. lekcje 45-minutowe z przerwami 5, 10 i 20 minut na obiad) zamiast ręcznego wpisywania każdej godziny.
-2.  **Eksport do Formatu XLS / CSV**: Dodanie natywnego pobierania ułożonego harmonogramu dyżurów bezpośrednio do pliku arkusza kalkulacyjnego, ułatwiającego edycję w programach MS Excel lub LibreOffice Calc.
-3.  **Wersjonowanie Dyżurów (Wielowariantowość)**: Możliwość zapisania osobnych wariantów dyżurów (np. "Wariant zimowy" – dyżury wewnątrz szkoły, "Wariant letni" – dyżury na boisku szkolnym).
-
----
-
-### 🛠️ Co należy zmodyfikować / usprawnić
-1.  **Filtrowanie Nauczycieli na Dyżurach**: Wprowadzenie wyszukiwarki/filtru w matrycy dyżurów – przy dużej liczbie nauczycieli (np. powyżej 60) tabela wyboru staje się długa i wyszukiwanie skrótu nauczyciela na liście rozwijanej może być uciążliwe.
-2.  **Optymalizacja Druku Bezpośredniego (CSS print)**: Dostrojenie arkusza stylów `@media print` dla przeglądarek mobilnych, aby zapewnić, że modal wydruku na telefonach poprawnie ukrywa elementy interfejsu systemu operacyjnego.
-3.  **Automatyczne Sugerowanie Zastępstw na Dyżurach**: Powiązanie modułu dyżurów z nieobecnościami nauczycieli, tak aby przy absencji danego pedagoga system automatycznie sugerował innego nauczyciela mającego okienko lub wolną lekcję w pobliżu tego rejonu.
+8.  **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
+    *   Dynamiczny dobór roku szkolnego oraz profile przedmiotów dla SP, LO, Technikum i Szkoły Branżowej.
 
 ---
 
 ## 🛡️ Bezpieczeństwo i Prywatność (Zgodność z RODO)
 
 Program został zaprojektowany z zachowaniem najwyższych standardów ochrony danych osobowych (Privacy by Design):
-*   Wszystkie wprowadzane dane (nazwiska nauczycieli, plany zajęć, oddziały klasowe) są zapisywane wyłącznie w pamięci lokalnej Twojej przeglądarki (`localStorage`).
-*   Narzędzie diagnostyczne i dziennik błędów zapisuje jedynie parametry techniczne (takie jak wersja przeglądarki, rozdzielczość ekranu, rodzaj błędu javascript) w celu rozwiązywania problemów ze zgodnością na różnych przeglądarkach. Dane wprowadzane przez użytkownika są podczas diagnostyki w 100% pomijane.
+*   Wszystkie wprowadzane dane (nazwiska nauczycieli, plany zajęć, oddziały klasowe) są zapisywane wyłącznie w pamięci lokalnej Twojego urządzenia (IndexedDB / LocalStorage).
+*   Narzędzie diagnostyczne i dziennik błędów zapisuje jedynie parametry techniczne w celu rozwiązywania problemów ze zgodnością. Dane wprowadzane przez użytkownika są podczas diagnostyki w 100% pomijane.
 
 ## 📄 Licencja
 

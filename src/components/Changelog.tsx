@@ -24,11 +24,26 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.0',
+      date: 'Wrzesień 2026',
+      title: 'Obsługa Uczniów ze Specjalnymi Potrzebami Edukacyjnymi (SPE / NI / Rewalidacja) i Nowy Formularz Przydziałów',
+      description: 'Kompleksowy moduł wsparcia kształcenia specjalnego i zindywidualizowanego (Nauczanie Indywidualne, Wspomaganie w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna). Wdrożono nowy krok ewidencji uczniów SPE w Kreatorze Szkoły, pełną integrację przydziałów w trybie klasowym i nauczycielskim, rozliczanie pensum kadry z uwzględnieniem zajęć specjalnych oraz automatyczne uwzględnianie jednostek SPE w silniku planu lekcji.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Dodano dedykowany moduł uczniów ze specjalnymi potrzebami edukacyjnymi (SPE) w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie (NI, Wspomaganie / IPET, Rewalidacja, Korekta) i deklaracją tygodniowego wymiaru godzin.', badgeText: 'SPE / IPET' },
+        { type: 'feature', text: 'Zintegrowano formularz przydziałów lekcyjnych w Kreatorze Szkoły w trybie nauczycielskim (1. Nauczyciel -> 2. Oddział szkolny lub uczeń SPE -> 3. Podgrupa -> 4. Przedmiot / rodzaj zajęć -> 5. Sugerowana sala -> 6. Rozkład i bloki) z automatycznym podpowiadaniem zadeklarowanych form wsparcia ucznia.', badgeText: 'Kreator Przydziałów' },
+        { type: 'improvement', text: 'Zapewniono całkowitą niezależność kroków w formularzu przydziałów – wybór kolejnych pól nie resetuje ani nie nadpisuje wcześniej wybranych danych (nauczyciela, oddziału czy podgrupy).', badgeText: 'Ergonomia' },
+        { type: 'feature', text: 'Rozliczanie pensum i nadgodzin: Godziny zajęć indywidualnych i specjalnych są automatycznie wliczane do całkowitego obciążenia nauczycieli oraz wyliczenia nadgodzin w zestawieniach kadrowych.', badgeText: 'Pensum & Nadgodziny' },
+        { type: 'feature', text: 'Rozbudowano zestawienie przydziałów lekcyjnych – zajęcia SPE są czytelnie prezentowane w widoku według klas, według nauczycieli oraz w sekcji toku indywidualnego.', badgeText: 'Zestawienia' },
+        { type: 'improvement', text: 'Zsynchronizowano silnik generatora i walidatora planu lekcji z jednostkami zajęć indywidualnych i specjalnych (unikanie kolizji uczniów oraz nauczycieli prowadzących i wspomagających).', badgeText: 'Silnik Planu' }
+      ]
+    },
+    {
       version: 'v3.7.2',
       date: 'Wrzesień 2026',
       title: 'Szczegółowy Plan Nauczycieli z Właściwymi Salami i Dyżurami Międzylekcyjnymi',
       description: 'Kompleksowa rozbudowa modułu Wydruki i Publikacje: w komórkach planu tygodniowego nauczycieli wyświetlane są pełne dane (przedmiot, klasa z oznaczeniem grupy oraz rzeczywista sala przypisana w Planie Sal / Etap 2, zamiast sal sugerowanych), a pomiędzy godzinami lekcyjnymi zintegrowano wiersze przerw z wyznaczonymi dyżurami nauczycielskimi i ich lokalizacją.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'fix', text: 'Precyzyjne pobieranie sali z Planu Sal: Wyeliminowano problem wyświetlania sal sugerowanych lub notatek – w planach nauczycieli i klas na wydrukach wyświetlana jest teraz rzeczywista sala lekcyjna wynikająca z faktycznego przydziału w matrycy sal (Plan Sal / schedData).', badgeText: 'Plan Sal' },
         { type: 'feature', text: 'Zintegrowano wyświetlanie dyżurów międzylekcyjnych w planie nauczycieli – harmonogram dyżurów jest automatycznie wstrzykiwany w wiersze przerw pomiędzy lekcjami (wraz z nazwą miejsca i piętrem).', badgeText: 'Dyżury' },
