@@ -1913,8 +1913,9 @@ export default function KreatorSzkoly({
     showNoti('Usunięto stanowisko dyżurów');
   };
 
-  // --- Step 8 States (Assignments / Lesson assignment) ---
+  // --- Step 9 States (Assignments / Lesson assignment) ---
   const [newAsgClass, setNewAsgClass] = useState('');
+  const [newAsgStudentId, setNewAsgStudentId] = useState<string | null>(null);
   const [newAsgTeacher, setNewAsgTeacher] = useState('');
   const [newAsgSubject, setNewAsgSubject] = useState('');
   const [newAsgRoom, setNewAsgRoom] = useState('');
@@ -1943,8 +1944,68 @@ export default function KreatorSzkoly({
 
   const handleAddAssignment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAsgClass || !newAsgSubject) {
-      showNoti('Klasa i przedmiot są wymagane!', 'info');
+    if (!newAsgClass && !newAsgStudentId) {
+      showNoti('Wybierz oddział szkolny lub ucznia ze specjalnymi potrzebami!', 'info');
+      return;
+    }
+    if (!newAsgSubject) {
+      showNoti('Przedmiot lub rodzaj zajęć jest wymagany!', 'info');
+      return;
+    }
+
+    // Przypisanie dla konkretnego ucznia ze specjalnymi potrzebami edukacyjnymi (SPE / NI / Rewalidacja)
+    if (newAsgStudentId) {
+      const currentSpAsgs = appState.planLekcji.specialAssignments || [];
+      if (editingAsgId) {
+        const isSp = currentSpAsgs.some(a => a.id === editingAsgId);
+        if (isSp) {
+          const updatedSpAsgs = currentSpAsgs.map(a => {
+            if (a.id === editingAsgId) {
+              return {
+                ...a,
+                studentId: newAsgStudentId,
+                teacherId: newAsgTeacher || null,
+                subjectId: newAsgSubject,
+                roomId: newAsgRoom || null,
+                hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
+                withClass: false
+              };
+            }
+            return a;
+          });
+          onChangeAppState({
+            ...appState,
+            planLekcji: {
+              ...appState.planLekcji,
+              specialAssignments: updatedSpAsgs
+            }
+          });
+          handleCancelEditAssignment();
+          showNoti('Zaktualizowano przydział zajęć dla ucznia');
+          return;
+        }
+      }
+
+      const newSpAsg: SpecialAssignment = {
+        id: 'sasg_' + uid(),
+        studentId: newAsgStudentId,
+        teacherId: newAsgTeacher || null,
+        subjectId: newAsgSubject,
+        roomId: newAsgRoom || null,
+        hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
+        withClass: false
+      };
+
+      onChangeAppState({
+        ...appState,
+        planLekcji: {
+          ...appState.planLekcji,
+          specialAssignments: [...currentSpAsgs, newSpAsg]
+        }
+      });
+
+      handleCancelEditAssignment();
+      showNoti('Dodano przydział zajęć dla ucznia');
       return;
     }
 
@@ -1975,15 +2036,7 @@ export default function KreatorSzkoly({
         }
       });
 
-      setEditingAsgId(null);
-      setNewAsgClass('');
-      setNewAsgTeacher('');
-      setNewAsgSubject('');
-      setNewAsgRoom('');
-      setNewAsgGroup('');
-      setNewAsgHours(2);
-      setNewAsgBlockSize(1);
-      setNewAsgLinkedClasses([]);
+      handleCancelEditAssignment();
       showNoti('Zaktualizowano przydział lekcyjny');
     } else {
       // Add new assignment
@@ -2007,14 +2060,7 @@ export default function KreatorSzkoly({
         }
       });
 
-      setNewAsgClass('');
-      setNewAsgTeacher('');
-      setNewAsgSubject('');
-      setNewAsgRoom('');
-      setNewAsgGroup('');
-      setNewAsgHours(2);
-      setNewAsgBlockSize(1);
-      setNewAsgLinkedClasses([]);
+      handleCancelEditAssignment();
       showNoti('Dodano przydział lekcyjny');
     }
   };
@@ -2022,6 +2068,7 @@ export default function KreatorSzkoly({
   const handleStartEditAssignment = (asg: Assignment) => {
     setEditingAsgId(asg.id);
     setNewAsgClass(asg.classId);
+    setNewAsgStudentId(null);
     setNewAsgTeacher(asg.teacherId || '');
     setNewAsgSubject(asg.subjectId);
     setNewAsgRoom(asg.roomId || '');
@@ -2032,9 +2079,25 @@ export default function KreatorSzkoly({
     showNoti('Edycja przydziału - uzupełniono formularz', 'info');
   };
 
+  const handleStartEditSpecialAssignment = (sa: SpecialAssignment) => {
+    setEditingAsgId(sa.id);
+    setAssignmentFormMode('teacher');
+    setNewAsgStudentId(sa.studentId);
+    setNewAsgClass('');
+    setNewAsgTeacher(sa.teacherId || '');
+    setNewAsgSubject(sa.subjectId);
+    setNewAsgRoom(sa.roomId || '');
+    setNewAsgGroup('');
+    setNewAsgHours(sa.hoursPerWeek);
+    setNewAsgBlockSize(1);
+    setNewAsgLinkedClasses([]);
+    showNoti('Edycja przydziału ucznia - uzupełniono formularz', 'info');
+  };
+
   const handleCancelEditAssignment = () => {
     setEditingAsgId(null);
     setNewAsgClass('');
+    setNewAsgStudentId(null);
     setNewAsgTeacher('');
     setNewAsgSubject('');
     setNewAsgRoom('');
@@ -2056,6 +2119,24 @@ export default function KreatorSzkoly({
       }
     });
     showNoti('Usunięto przydział lekcyjny');
+  };
+
+  const handleRemoveSpecialAssignment = (id: string) => {
+    if (editingAsgId === id) {
+      handleCancelEditAssignment();
+    }
+    const currentSpLessons = appState.planLekcji.specialLessons || {};
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...appState.planLekcji,
+        specialAssignments: (appState.planLekcji.specialAssignments || []).filter(a => a.id !== id),
+        specialLessons: Object.fromEntries(
+          Object.entries(currentSpLessons).filter(([_, l]) => l.assignmentId !== id)
+        )
+      }
+    });
+    showNoti('Usunięto przydział zajęć dla ucznia');
   };
 
   // --- Student support categories definition ---
@@ -2431,8 +2512,13 @@ export default function KreatorSzkoly({
         hours[a.teacherId] = (hours[a.teacherId] || 0) + a.hoursPerWeek;
       }
     });
+    (appState.planLekcji.specialAssignments || []).forEach(sa => {
+      if (sa.teacherId) {
+        hours[sa.teacherId] = (hours[sa.teacherId] || 0) + sa.hoursPerWeek;
+      }
+    });
     return hours;
-  }, [appState.planLekcji.assignments]);
+  }, [appState.planLekcji.assignments, appState.planLekcji.specialAssignments]);
 
   const DAY_NAMES = useMemo(() => ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'], []);
 
@@ -6096,7 +6182,7 @@ export default function KreatorSzkoly({
                           <label className="text-[10px] text-slate-400 font-bold block">1. Nauczyciel *</label>
                           <select 
                             required
-                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-slate-800"
                             value={newAsgTeacher}
                             onChange={(e) => setNewAsgTeacher(e.target.value)}
                           >
@@ -6108,29 +6194,73 @@ export default function KreatorSzkoly({
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] text-slate-400 font-bold block">2. Oddział Szkolny (Klasa) *</label>
+                          <label className="text-[10px] text-slate-400 font-bold block">
+                            2. Oddział szkolny (klasa lub uczeń ze specjalnymi potrzebami edukacyjnymi) *
+                          </label>
                           <select 
                             required
-                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                            value={newAsgClass}
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-slate-800"
+                            value={newAsgStudentId ? `student:${newAsgStudentId}` : (newAsgClass ? `class:${newAsgClass}` : '')}
                             onChange={(e) => {
-                              const clsId = e.target.value;
-                              setNewAsgClass(clsId);
-                              setNewAsgGroup(''); // reset group first
-                              autoSelectGroupForAssignment(clsId, newAsgSubject);
+                              const val = e.target.value;
+                              if (val.startsWith('student:')) {
+                                const studId = val.replace('student:', '');
+                                setNewAsgStudentId(studId);
+                                setNewAsgClass('');
+                                setNewAsgGroup('');
+                                
+                                // Znajdź ucznia i jego zadeklarowane formy wsparcia
+                                const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === studId);
+                                const types = stud?.supportTypes && stud.supportTypes.length > 0 
+                                  ? stud.supportTypes 
+                                  : (stud?.type ? [stud.type] : ['ni']);
+                                
+                                // Jeśli aktualny przedmiot nie pasuje do form wsparcia ucznia ani przedmiotów, ustaw domyślny
+                                if (!types.includes(newAsgSubject as any) && !appState.subjects.some(s => s.id === newAsgSubject)) {
+                                  const firstType = types[0] || 'ni';
+                                  setNewAsgSubject(firstType);
+                                  if (stud?.supportHours?.[firstType]) {
+                                    setNewAsgHours(stud.supportHours[firstType]);
+                                  }
+                                }
+                              } else if (val.startsWith('class:')) {
+                                const clsId = val.replace('class:', '');
+                                setNewAsgClass(clsId);
+                                setNewAsgStudentId(null);
+                                setNewAsgGroup('');
+                                autoSelectGroupForAssignment(clsId, newAsgSubject);
+                              } else {
+                                setNewAsgClass('');
+                                setNewAsgStudentId(null);
+                                setNewAsgGroup('');
+                              }
                             }}
                           >
-                            <option value="">Wybierz klasę...</option>
-                            {appState.classes.map(c => (
-                              <option key={c.id} value={c.id}>Oddział {c.name}</option>
-                            ))}
+                            <option value="">Wybierz klasę lub ucznia...</option>
+                            <optgroup label="🏫 Oddziały szkolne (Klasy)">
+                              {appState.classes.map(c => (
+                                <option key={c.id} value={`class:${c.id}`}>Oddział {c.name}</option>
+                              ))}
+                            </optgroup>
+                            {(appState.planLekcji.specialStudents || []).length > 0 && (
+                              <optgroup label="👤 Uczniowie ze specjalnymi potrzebami edukacyjnymi (SPE / NI / Rewalidacja)">
+                                {(appState.planLekcji.specialStudents || []).map(s => {
+                                  const cls = appState.classes.find(c => c.id === s.classId);
+                                  return (
+                                    <option key={s.id} value={`student:${s.id}`}>
+                                      Uczeń: {s.firstName} {s.lastName} {cls ? `(kl. ${cls.name})` : '(indywidualny)'}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            )}
                           </select>
                         </div>
 
-                        {/* Conditional inner groups */}
+                        {/* 3. Opcjonalna podgrupa (dla klas posiadających grupy) */}
                         {newAsgClass && appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).length > 0 && (
                           <div className="space-y-1">
-                            <label className="text-[10px] text-slate-400 font-bold block">Opcjonalna podgrupa</label>
+                            <label className="text-[10px] text-slate-400 font-bold block">3. Opcjonalna podgrupa</label>
                             <select 
                               className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-blue-600 font-bold"
                               value={newAsgGroup}
@@ -6144,22 +6274,65 @@ export default function KreatorSzkoly({
                           </div>
                         )}
 
+                        {/* 4. Przedmiot */}
                         <div className="space-y-1">
-                          <label className="text-[10px] text-slate-400 font-bold block">3. Przedmiot *</label>
+                          <label className="text-[10px] text-slate-400 font-bold block">
+                            {newAsgClass && appState.planLekcji.schoolGroups.filter(g => g.classId === newAsgClass).length > 0 ? '4. Przedmiot *' : '4. Przedmiot *'}
+                          </label>
                           <select 
                             required
-                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                            className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-slate-800"
                             value={newAsgSubject}
                             onChange={(e) => {
-                              const subjId = e.target.value;
-                              setNewAsgSubject(subjId);
-                              autoSelectGroupForAssignment(newAsgClass, subjId);
+                              const subjVal = e.target.value;
+                              setNewAsgSubject(subjVal);
+                              if (newAsgClass) {
+                                autoSelectGroupForAssignment(newAsgClass, subjVal);
+                              } else if (newAsgStudentId) {
+                                const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
+                                if (stud?.supportHours?.[subjVal as any]) {
+                                  setNewAsgHours(stud.supportHours[subjVal as any]!);
+                                }
+                              }
                             }}
                           >
-                            <option value="">Wybierz przedmiot...</option>
-                            {appState.subjects.map(s => (
-                              <option key={s.id} value={s.id}>{s.name}</option>
-                            ))}
+                            <option value="">Wybierz przedmiot lub rodzaj zajęć...</option>
+                            {newAsgStudentId ? (
+                              <>
+                                {(() => {
+                                  const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
+                                  const studentSupportTypes = stud?.supportTypes && stud.supportTypes.length > 0
+                                    ? stud.supportTypes
+                                    : (stud?.type ? [stud.type] : ['ni']);
+
+                                  return (
+                                    <>
+                                      <optgroup label="✨ Zajęcia zaznaczone u ucznia (Wsparcie / SPE)">
+                                        {studentSupportTypes.map(stKey => {
+                                          const cat = SUPPORT_CATEGORIES.find(c => c.key === stKey);
+                                          const hours = stud?.supportHours?.[stKey];
+                                          const label = cat ? `${cat.icon} ${cat.label} ${hours ? `(${hours} h/tyg)` : ''}` : String(stKey).toUpperCase();
+                                          return (
+                                            <option key={stKey} value={stKey}>
+                                              {label}
+                                            </option>
+                                          );
+                                        })}
+                                      </optgroup>
+                                      <optgroup label="📚 Przedmioty ze szkolnego planu nauczania">
+                                        {appState.subjects.map(s => (
+                                          <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
+                                        ))}
+                                      </optgroup>
+                                    </>
+                                  );
+                                })()}
+                              </>
+                            ) : (
+                              appState.subjects.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))
+                            )}
                           </select>
                         </div>
                       </>
@@ -6167,7 +6340,7 @@ export default function KreatorSzkoly({
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">4. Sugerowana sala</label>
+                        <label className="text-[10px] text-slate-400 font-bold block">5. Sugerowana sala</label>
                         <select 
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                           value={newAsgRoom}
@@ -6194,7 +6367,7 @@ export default function KreatorSzkoly({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold block">5. Rozkład lekcji (Łączenie w bloki) *</label>
+                      <label className="text-[10px] text-slate-400 font-bold block">6. Rozkład lekcji (Łączenie w bloki) *</label>
                       <select 
                         required
                         className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none text-slate-700 font-bold bg-blue-50/40 focus:bg-white"
@@ -6208,15 +6381,15 @@ export default function KreatorSzkoly({
                       </select>
                     </div>
 
-                    <div className="space-y-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                      <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1 select-none">
-                        👥 Łączenie oddziałów (Grupa międzyoddziałowa)
-                      </label>
-                      <p className="text-[9px] text-slate-400 leading-normal select-none">
-                        Chcesz połączyć te zajęcia w grupę międzyoddziałową (np. wspólny WF, religia, język)? Wybierz dodatkowe klasy biorące razem udział w tych lekcjach:
-                      </p>
-                      
-                      {newAsgClass ? (
+                    {newAsgClass && (
+                      <div className="space-y-1.5 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1 select-none">
+                          👥 Łączenie oddziałów (Grupa międzyoddziałowa)
+                        </label>
+                        <p className="text-[9px] text-slate-400 leading-normal select-none">
+                          Chcesz połączyć te zajęcia w grupę międzyoddziałową (np. wspólny WF, religia, język)? Wybierz dodatkowe klasy biorące razem udział w tych lekcjach:
+                        </p>
+                        
                         <div className="flex flex-wrap gap-1 mt-1 max-h-24 overflow-y-auto pr-1">
                           {appState.classes
                             .filter(c => c.id !== newAsgClass)
@@ -6244,10 +6417,8 @@ export default function KreatorSzkoly({
                               );
                             })}
                         </div>
-                      ) : (
-                        <p className="text-[9px] text-slate-400 italic">Najpierw wybierz główną klasę powyżej.</p>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     {editingAsgId ? (
                       <div className="flex gap-2 mt-3">
@@ -6313,7 +6484,7 @@ export default function KreatorSzkoly({
                     </div>
                   </div>
 
-                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto flex-1">
+                    <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto flex-1">
                     {(() => {
                       const renderAsgRow = (asg: Assignment) => {
                         const cls = classesMap.get(asg.classId);
@@ -6402,17 +6573,91 @@ export default function KreatorSzkoly({
                         );
                       };
 
-                      if (appState.planLekcji.assignments.length === 0) {
+                      const renderSpecialAsgRow = (sa: SpecialAssignment) => {
+                        const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === sa.studentId);
+                        const t = sa.teacherId ? teachersMap.get(sa.teacherId) : null;
+                        const s = subjectsMap.get(sa.subjectId);
+                        const cat = SUPPORT_CATEGORIES.find(c => c.key === sa.subjectId);
+                        const room = sa.roomId ? roomsMap.get(sa.roomId) : null;
+                        const isCurrentlyEditing = editingAsgId === sa.id;
+                        const studCls = stud?.classId ? classesMap.get(stud.classId) : null;
+
+                        return (
+                          <div key={sa.id} className={`p-3.5 hover:bg-purple-50/30 flex justify-between items-center transition-colors ${isCurrentlyEditing ? 'bg-purple-100/50 border-l-4 border-purple-500' : ''}`}>
+                            <div className="flex items-center gap-3">
+                              <span className="w-10 h-10 text-[10px] font-black text-purple-700 bg-purple-100 rounded-xl shadow-xs border border-purple-200 flex items-center justify-center shrink-0">
+                                👤 SPE
+                              </span>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs font-black text-slate-900">
+                                    {cat ? `${cat.icon} ${cat.label}` : (s ? s.name : sa.subjectId)}
+                                  </span>
+                                  <span className="bg-purple-100 text-purple-800 font-extrabold px-1.5 py-0.2 rounded text-[8px] uppercase">
+                                    Uczeń: {stud ? `${stud.firstName} ${stud.lastName}` : 'Zajęcia indywidualne'}
+                                  </span>
+                                  {studCls && (
+                                    <span className="bg-slate-100 text-slate-600 font-bold px-1.5 py-0.2 rounded text-[8px]">
+                                      kl. {studCls.name}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
+                                    <GraduationCap size={11} /> Nauczyciel: {t ? `${t.first[0]}. ${t.last} (${t.abbr})` : 'WAKAT'}
+                                  </span>
+                                  {room && (
+                                    <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
+                                      <MapPin size={11} /> Sala {room.name}
+                                    </span>
+                                  )}
+                                  <span className="bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.2 rounded text-[9px] font-black">
+                                    Wymiar: {sa.hoursPerWeek}h/tyg
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0 ml-4">
+                              <button 
+                                onClick={() => handleStartEditSpecialAssignment(sa)}
+                                className={`p-1.5 rounded transition-colors cursor-pointer ${
+                                  isCurrentlyEditing 
+                                    ? 'text-purple-600 bg-purple-100 font-bold' 
+                                    : 'text-slate-400 hover:text-purple-600 hover:bg-slate-100'
+                                }`}
+                                title="Edytuj przydział ucznia"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button 
+                                onClick={() => handleRemoveSpecialAssignment(sa.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                                title="Usuń przydział ucznia"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      };
+
+                      const allAssignments = appState.planLekcji.assignments;
+                      const allSpecialAssignments = appState.planLekcji.specialAssignments || [];
+
+                      if (allAssignments.length === 0 && allSpecialAssignments.length === 0) {
                         return (
                           <p className="p-10 text-center text-xs text-slate-400">Brak zarejestrowanych przydziałów. Stwórz kolejny po lewej!</p>
                         );
                       }
 
                       if (asgListGrouping === 'class') {
-                        return appState.classes.map(cls => {
-                          const classAsgs = appState.planLekcji.assignments.filter(a => a.classId === cls.id || (a.linkedClassIds && a.linkedClassIds.includes(cls.id)));
-                          if (classAsgs.length === 0) return null;
-                          const totalHours = classAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0);
+                        const classSections = appState.classes.map(cls => {
+                          const classAsgs = allAssignments.filter(a => a.classId === cls.id || (a.linkedClassIds && a.linkedClassIds.includes(cls.id)));
+                          const classStudents = (appState.planLekcji.specialStudents || []).filter(s => s.classId === cls.id);
+                          const classSpAsgs = allSpecialAssignments.filter(sa => classStudents.some(cs => cs.id === sa.studentId));
+
+                          if (classAsgs.length === 0 && classSpAsgs.length === 0) return null;
+                          const totalHours = classAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0) + classSpAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
 
                           return (
                             <div key={cls.id} className="border-b border-slate-100 last:border-none">
@@ -6429,10 +6674,40 @@ export default function KreatorSzkoly({
                               </div>
                               <div className="divide-y divide-slate-100">
                                 {classAsgs.map(asg => renderAsgRow(asg))}
+                                {classSpAsgs.map(sa => renderSpecialAsgRow(sa))}
                               </div>
                             </div>
                           );
                         });
+
+                        const indivSpAsgs = allSpecialAssignments.filter(sa => {
+                          const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === sa.studentId);
+                          return !stud?.classId;
+                        });
+
+                        return (
+                          <>
+                            {classSections}
+                            {indivSpAsgs.length > 0 && (
+                              <div className="border-b border-slate-100 last:border-none">
+                                <div className="bg-purple-50/75 px-4 py-2 flex justify-between items-center border-y border-purple-100 select-none">
+                                  <span className="flex items-center gap-2">
+                                    <span className="w-6 h-6 text-[10px] font-black text-purple-700 bg-purple-200 rounded-md flex items-center justify-center shrink-0 shadow-xs">
+                                      👤
+                                    </span>
+                                    <span className="text-xs font-black text-purple-900">Uczniowie w toku indywidualnym</span>
+                                  </span>
+                                  <span className="text-[10px] font-bold text-purple-700 bg-purple-100 border border-purple-200 px-2 py-0.5 rounded-full shrink-0">
+                                    Suma: {indivSpAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0)}h/tyg
+                                  </span>
+                                </div>
+                                <div className="divide-y divide-slate-100">
+                                  {indivSpAsgs.map(sa => renderSpecialAsgRow(sa))}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
                       }
 
                       if (asgListGrouping === 'teacher') {
@@ -6442,9 +6717,10 @@ export default function KreatorSzkoly({
                         ];
 
                         return teachersWithWakat.map(t => {
-                          const teacherAsgs = appState.planLekcji.assignments.filter(a => !t.id ? !a.teacherId : a.teacherId === t.id);
-                          if (teacherAsgs.length === 0) return null;
-                          const totalHours = teacherAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0);
+                          const teacherAsgs = allAssignments.filter(a => !t.id ? !a.teacherId : a.teacherId === t.id);
+                          const teacherSpAsgs = allSpecialAssignments.filter(sa => !t.id ? !sa.teacherId : sa.teacherId === t.id);
+                          if (teacherAsgs.length === 0 && teacherSpAsgs.length === 0) return null;
+                          const totalHours = teacherAsgs.reduce((sum, a) => sum + a.hoursPerWeek, 0) + teacherSpAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
                           const limit = t.maxHours ?? 18;
                           const assignedOvertime = Math.max(0, totalHours - limit);
                           const isOverloaded = t.id && totalHours > 40;
@@ -6488,6 +6764,7 @@ export default function KreatorSzkoly({
                               </div>
                               <div className="divide-y divide-slate-100">
                                 {teacherAsgs.map(asg => renderAsgRow(asg))}
+                                {teacherSpAsgs.map(sa => renderSpecialAsgRow(sa))}
                               </div>
                             </div>
                           );
@@ -6495,7 +6772,12 @@ export default function KreatorSzkoly({
                       }
 
                       // Default or flat
-                      return appState.planLekcji.assignments.map((asg) => renderAsgRow(asg));
+                      return (
+                        <>
+                          {allAssignments.map((asg) => renderAsgRow(asg))}
+                          {allSpecialAssignments.map((sa) => renderSpecialAsgRow(sa))}
+                        </>
+                      );
                     })()}
                   </div>
                 </div>
