@@ -27,7 +27,7 @@ import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, Database
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, Database, Award
 } from 'lucide-react';
 
 function sortAppState(rawInput: any): AppState {
@@ -294,7 +294,7 @@ export default function App() {
     }
   };
 
-  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
+  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'spe' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
 
   const CURRENT_VERSION = '3.6.0';
@@ -1181,6 +1181,7 @@ export default function App() {
             <span className="flex items-center gap-1 leading-none">
               {currentTab === 'kreator' && <><Sparkles size={13} className="text-amber-400 font-bold" /> 🧙‍♀️ Kreator Szkoły</>}
               {currentTab === 'plan_klas' && <><Layers size={13} className="text-blue-400" /> Etap 1: Plan Klas</>}
+              {currentTab === 'spe' && <><Award size={13} className="text-amber-400 font-bold" /> 🌟 Plan SPE & NI</>}
               {currentTab === 'plan_sal' && <><MapPin size={13} className="text-teal-400" /> Etap 2: Plan Sal</>}
               {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-400" /> Etap 3: Dyżury</>}
               {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-400" /> 🖨️ Wydruki</>}
@@ -1231,6 +1232,21 @@ export default function App() {
                     <div>
                       <span className="text-xs font-black block">📚 Etap 1: Plan Klas</span>
                       <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Siatka godzin oddziałowych</span>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => { setCurrentTab('spe'); setHamburgerOpen(false); }}
+                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                      currentTab === 'spe'
+                        ? 'bg-amber-600/10 border-l-4 border-amber-500 text-white font-extrabold pl-2'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Award size={15} className={`shrink-0 mt-0.5 ${currentTab === 'spe' ? 'text-amber-400' : 'text-slate-500'}`} />
+                    <div>
+                      <span className="text-xs font-black block text-amber-300">🌟 Plan SPE & NI</span>
+                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Wsparcie w klasie, NI, rewalidacja</span>
                     </div>
                   </button>
 
@@ -1461,6 +1477,19 @@ export default function App() {
                       setCurrentTab('plan_sal');
                     }}
                     presentationMode={isPresentationMode}
+                    initialTab="plan"
+                  />
+                )}
+                {currentTab === 'spe' && (
+                  <PlanKlas 
+                    appState={appState} 
+                    onChangeAppState={handleUpdateAppState} 
+                    onTransfer={() => {
+                      handleImportFromPlanKlas();
+                      setCurrentTab('plan_sal');
+                    }}
+                    presentationMode={isPresentationMode}
+                    initialTab="special"
                   />
                 )}
                 {currentTab === 'plan_sal' && (

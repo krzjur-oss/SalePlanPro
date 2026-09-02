@@ -207,18 +207,22 @@ export interface Class {
   baseClass?: string;
 }
 
+export type SPESlotMode = 'class_regular' | 'class_support' | 'individual' | 'exempt';
+
 export interface SPESlotAssignment {
-  id: string; // e.g. "studentId|day|hour|type" or unique id
+  id: string; // e.g. "studentId|day|hour"
   studentId: string;
   dayIdx: number;
   hourIdx: number;
-  type: 'wsp' | 'rewa' | 'ni' | 'korekta' | string;
-  withClass: boolean; // true = wsparcie w oddziale na lekcji klasowej, false = indywidualne 1:1
+  mode?: SPESlotMode; // 'class_regular' | 'class_support' | 'individual' | 'exempt'
+  type?: 'wsp' | 'rewa' | 'ni' | 'korekta' | string;
+  withClass: boolean; // true = lekcja w oddziale, false = indywidualne 1:1 lub zwolnienie
   specialAssignmentId?: string | null;
   teacherId?: string | null; // Główny prowadzący lub terapeuta
   supportTeacherId?: string | null; // Nauczyciel wspomagający
   roomId?: string | null;
   subjectId?: string | null;
+  exemptReason?: string; // np. "Zwolnienie z II języka", "Zwolnienie z WF", "Czas wolny"
   note?: string;
 }
 

@@ -4,7 +4,7 @@ import {
 } from '../types';
 import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
-  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award 
+  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award, Zap, RotateCcw, Ban 
 } from 'lucide-react';
 import PlanGenerator from './PlanGenerator';
 
@@ -44,9 +44,18 @@ interface PlanKlasProps {
   onChangeAppState: (newState: AppState) => void;
   onTransfer: () => void;
   presentationMode?: boolean;
+  initialTab?: 'plan' | 'assign' | 'special' | 'teachers';
+  initialStudentId?: string | null;
 }
 
-export default function PlanKlas({ appState, onChangeAppState, onTransfer, presentationMode = false }: PlanKlasProps) {
+export default function PlanKlas({ 
+  appState, 
+  onChangeAppState, 
+  onTransfer, 
+  presentationMode = false,
+  initialTab = 'plan',
+  initialStudentId = null
+}: PlanKlasProps) {
   const pl = appState.planLekcji;
 
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
@@ -64,7 +73,13 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
   const [activeClassId, setActiveClassId] = useState<string | null>(
     pl.classes.length > 0 ? pl.classes[0].id : null
   );
-  const [activeTab, setActiveTab] = useState<'plan' | 'assign' | 'special' | 'teachers'>('plan');
+  const [activeTab, setActiveTab] = useState<'plan' | 'assign' | 'special' | 'teachers'>(initialTab);
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   React.useEffect(() => {
     if (presentationMode && activeTab !== 'plan') {
@@ -134,11 +149,37 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
 
   // Special (NI / Rewa / Wsp) States
   const [specFirstName, setSpecFirstName] = useState('');
-  const [specLastName, setSpecLastName] = useState('');
+  const [specLastName, setSpecLastName] = useState<string>('');
   const [specType, setSpecType] = useState<'ni' | 'rewa' | 'wsp'>('wsp');
   const [specClassId, setSpecClassId] = useState('');
-  const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
+  const [activeStudentId, setActiveStudentId] = useState<string | null>(initialStudentId || null);
   const [speSubTab, setSpeSubTab] = useState<'schedule' | 'profile'>('schedule');
+
+  // SPE Slot Configuration Modal State
+  const [editingSpeSlot, setEditingSpeSlot] = useState<{
+    dayIdx: number;
+    hourIdx: number;
+    mode: 'class_regular' | 'class_support' | 'individual' | 'exempt';
+    supportTeacherId: string;
+    specialAssignmentId: string;
+    customSubjectId: string;
+    customTeacherId: string;
+    customRoomId: string;
+    customType: 'ni' | 'rewa' | 'wsp' | 'korekta';
+    exemptReason: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (initialStudentId) {
+      setActiveStudentId(initialStudentId);
+    }
+  }, [initialStudentId]);
+
+  React.useEffect(() => {
+    if (!activeStudentId && pl.specialStudents && pl.specialStudents.length > 0) {
+      setActiveStudentId(pl.specialStudents[0].id);
+    }
+  }, [activeStudentId, pl.specialStudents]);
   
   // Special Hours States
   const [specSubjectId, setSpecSubjectId] = useState('');
@@ -1341,8 +1382,14 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
 
     const currentSpePlan = pl.spePlan || { slotAssignments: [] };
     let newSlotAssignments = currentSpePlan.slotAssignments.filter(
-      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx && s.withClass)
+      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx)
     );
+
+    const specialKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
+    let updatedSpecialLessons = { ...pl.specialLessons };
+    delete updatedSpecialLessons[specialKey];
+    let updatedSpecialAbsences = { ...(pl.specialAbsences || {}) };
+    delete updatedSpecialAbsences[specialKey];
 
     if (teacherId) {
       newSlotAssignments.push({
@@ -1350,11 +1397,23 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
         studentId: currentStudent.id,
         dayIdx,
         hourIdx,
+        mode: 'class_support',
         type: 'wsp',
         withClass: true,
         supportTeacherId: teacherId,
         teacherId: teacherId
       });
+      notify(`Przypisano wsparcie (${teachersMap.get(teacherId)?.abbr || 'Wsparcie'})`);
+    } else {
+      newSlotAssignments.push({
+        id: `${currentStudent.id}|${dayIdx}|${hourIdx}|reg`,
+        studentId: currentStudent.id,
+        dayIdx,
+        hourIdx,
+        mode: 'class_regular',
+        withClass: true
+      });
+      notify(`Usunięto wsparcie (uczeń realizuje lekcję z klasą).`);
     }
 
     onChangeAppState({
@@ -1362,6 +1421,8 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
       planLekcji: {
         ...pl,
         lessons: updatedLessons,
+        specialLessons: updatedSpecialLessons,
+        specialAbsences: updatedSpecialAbsences,
         spePlan: {
           ...currentSpePlan,
           slotAssignments: newSlotAssignments
@@ -1375,19 +1436,22 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
     const lessonKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
 
     let updatedSpecialLessons = { ...pl.specialLessons };
+    let updatedSpecialAbsences = { ...(pl.specialAbsences || {}) };
     const currentSpePlan = pl.spePlan || { slotAssignments: [] };
     let newSlotAssignments = currentSpePlan.slotAssignments.filter(
-      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx && !s.withClass)
+      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx)
     );
 
     if (specialAssignmentId) {
       updatedSpecialLessons[lessonKey] = { assignmentId: specialAssignmentId };
+      updatedSpecialAbsences[lessonKey] = true;
       const spAsg = pl.specialAssignments.find(a => a.id === specialAssignmentId);
       newSlotAssignments.push({
         id: `${currentStudent.id}|${dayIdx}|${hourIdx}|${spAsg?.supportType || 'ni'}`,
         studentId: currentStudent.id,
         dayIdx,
         hourIdx,
+        mode: 'individual',
         type: spAsg?.supportType || 'ni',
         withClass: false,
         specialAssignmentId,
@@ -1396,8 +1460,11 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
         subjectId: spAsg?.subjectId,
         roomId: spAsg?.roomId
       });
+      notify(`Zastąpiono zajęciami 1:1 (${subjectsMap.get(spAsg?.subjectId || '')?.name || '1:1'}).`);
     } else {
       delete updatedSpecialLessons[lessonKey];
+      delete updatedSpecialAbsences[lessonKey];
+      notify(`Usunięto zajęcia 1:1.`);
     }
 
     onChangeAppState({
@@ -1405,12 +1472,441 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
       planLekcji: {
         ...pl,
         specialLessons: updatedSpecialLessons,
+        specialAbsences: updatedSpecialAbsences,
         spePlan: {
           ...currentSpePlan,
           slotAssignments: newSlotAssignments
         }
       }
     });
+  };
+
+  const handleOpenSpeSlotModal = (dayIdx: number, hourIdx: number) => {
+    if (!currentStudent) return;
+    const classKey = currentStudent.classId ? `${currentStudent.classId}|${dayIdx}|${hourIdx}` : '';
+    const classLesson = classKey ? pl.lessons[classKey] : null;
+    const speSlot = (pl.spePlan?.slotAssignments || []).find(
+      s => s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx
+    );
+    const specialKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
+    const specialLesson = pl.specialLessons ? pl.specialLessons[specialKey] : null;
+    const isAbsent = Boolean(pl.specialAbsences?.[specialKey]);
+
+    let initialMode: 'class_regular' | 'class_support' | 'individual' | 'exempt' = 'class_regular';
+    let initialSupportTeacherId = currentStudent.supportTeacherIds?.[0] || '';
+    let initialSpecialAsgId = '';
+    let initialExemptReason = 'Zwolnienie z realizacji przedmiotu';
+
+    if (speSlot) {
+      if (speSlot.mode) {
+        initialMode = speSlot.mode;
+      } else if (!speSlot.withClass) {
+        initialMode = 'individual';
+      } else if (speSlot.supportTeacherId) {
+        initialMode = 'class_support';
+      }
+      if (speSlot.supportTeacherId) initialSupportTeacherId = speSlot.supportTeacherId;
+      if (speSlot.specialAssignmentId) initialSpecialAsgId = speSlot.specialAssignmentId;
+      if (speSlot.exemptReason) initialExemptReason = speSlot.exemptReason;
+    } else if (specialLesson) {
+      initialMode = 'individual';
+      initialSpecialAsgId = specialLesson.assignmentId;
+    } else if (isAbsent) {
+      initialMode = 'exempt';
+    } else if (classLesson?.supportTeacherId) {
+      initialMode = 'class_support';
+      initialSupportTeacherId = classLesson.supportTeacherId;
+    }
+
+    // Pre-select 1:1 assignment if available and none selected
+    const available1to1 = pl.specialAssignments.filter(a => a.studentId === currentStudent.id && !a.withClass);
+    if (!initialSpecialAsgId && available1to1.length > 0) {
+      initialSpecialAsgId = available1to1[0].id;
+    }
+
+    setEditingSpeSlot({
+      dayIdx,
+      hourIdx,
+      mode: initialMode,
+      supportTeacherId: initialSupportTeacherId,
+      specialAssignmentId: initialSpecialAsgId,
+      customSubjectId: pl.subjects[0]?.id || '',
+      customTeacherId: currentStudent.supportTeacherIds?.[0] || pl.teachers[0]?.id || '',
+      customRoomId: pl.rooms[0]?.id || '',
+      customType: (currentStudent.type as 'ni' | 'wsp' | 'rewa' | 'korekta') || 'ni',
+      exemptReason: initialExemptReason
+    });
+  };
+
+  const handleSaveSpeSlot = (slotConfig: NonNullable<typeof editingSpeSlot>) => {
+    if (!currentStudent) return;
+    const { dayIdx, hourIdx, mode, supportTeacherId, specialAssignmentId, customSubjectId, customTeacherId, customRoomId, customType, exemptReason } = slotConfig;
+    const classKey = currentStudent.classId ? `${currentStudent.classId}|${dayIdx}|${hourIdx}` : '';
+    const existingClassLesson = classKey ? pl.lessons[classKey] : null;
+    const specialKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
+
+    let updatedLessons = { ...pl.lessons };
+    let updatedSpecialLessons = { ...pl.specialLessons };
+    let updatedSpecialAssignments = [...pl.specialAssignments];
+    let updatedSpecialAbsences = { ...(pl.specialAbsences || {}) };
+    const currentSpePlan = pl.spePlan || { slotAssignments: [] };
+    let newSlotAssignments = currentSpePlan.slotAssignments.filter(
+      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx)
+    );
+
+    if (mode === 'class_support') {
+      if (existingClassLesson) {
+        updatedLessons[classKey] = {
+          ...existingClassLesson,
+          supportTeacherId: supportTeacherId || undefined
+        };
+      }
+      delete updatedSpecialLessons[specialKey];
+      delete updatedSpecialAbsences[specialKey];
+
+      newSlotAssignments.push({
+        id: `${currentStudent.id}|${dayIdx}|${hourIdx}|wsp`,
+        studentId: currentStudent.id,
+        dayIdx,
+        hourIdx,
+        mode: 'class_support',
+        type: 'wsp',
+        withClass: true,
+        supportTeacherId: supportTeacherId || undefined,
+        teacherId: supportTeacherId || undefined
+      });
+      notify(`Przypisano wsparcie (${teachersMap.get(supportTeacherId)?.abbr || 'Wsparcie'})`);
+    } else if (mode === 'class_regular') {
+      if (existingClassLesson && existingClassLesson.supportTeacherId) {
+        updatedLessons[classKey] = {
+          ...existingClassLesson,
+          supportTeacherId: undefined
+        };
+      }
+      delete updatedSpecialLessons[specialKey];
+      delete updatedSpecialAbsences[specialKey];
+
+      newSlotAssignments.push({
+        id: `${currentStudent.id}|${dayIdx}|${hourIdx}|reg`,
+        studentId: currentStudent.id,
+        dayIdx,
+        hourIdx,
+        mode: 'class_regular',
+        withClass: true
+      });
+      notify(`Ustawiono uczestnictwo w lekcji z klasą.`);
+    } else if (mode === 'individual') {
+      let targetAsgId = specialAssignmentId;
+      let targetTeacherId = '';
+      let targetSubjectId = '';
+      let targetRoomId: string | undefined = undefined;
+      let targetType: 'ni' | 'wsp' | 'rewa' | 'korekta' = (customType as 'ni' | 'wsp' | 'rewa' | 'korekta') || 'ni';
+
+      if (!targetAsgId && customSubjectId && customTeacherId) {
+        const newAsg: SpecialAssignment = {
+          id: uid(),
+          studentId: currentStudent.id,
+          subjectId: customSubjectId,
+          teacherId: customTeacherId,
+          roomId: customRoomId || undefined,
+          hoursPerWeek: 1,
+          withClass: false,
+          supportType: (customType as 'ni' | 'wsp' | 'rewa' | 'korekta') || 'ni'
+        };
+        updatedSpecialAssignments.push(newAsg);
+        targetAsgId = newAsg.id;
+        targetTeacherId = customTeacherId;
+        targetSubjectId = customSubjectId;
+        targetRoomId = customRoomId || undefined;
+      } else {
+        const existingAsg = updatedSpecialAssignments.find(a => a.id === targetAsgId);
+        if (existingAsg) {
+          targetTeacherId = existingAsg.teacherId;
+          targetSubjectId = existingAsg.subjectId;
+          targetRoomId = existingAsg.roomId;
+          targetType = (existingAsg.supportType as 'ni' | 'wsp' | 'rewa' | 'korekta') || 'ni';
+        }
+      }
+
+      if (targetAsgId) {
+        updatedSpecialLessons[specialKey] = { assignmentId: targetAsgId };
+        updatedSpecialAbsences[specialKey] = true;
+
+        newSlotAssignments.push({
+          id: `${currentStudent.id}|${dayIdx}|${hourIdx}|${targetType}`,
+          studentId: currentStudent.id,
+          dayIdx,
+          hourIdx,
+          mode: 'individual',
+          type: targetType,
+          withClass: false,
+          specialAssignmentId: targetAsgId,
+          teacherId: targetTeacherId,
+          subjectId: targetSubjectId,
+          roomId: targetRoomId
+        });
+        notify(`Zastąpiono zajęciami 1:1 (${subjectsMap.get(targetSubjectId)?.name || '1:1'}).`);
+      }
+    } else if (mode === 'exempt') {
+      delete updatedSpecialLessons[specialKey];
+      updatedSpecialAbsences[specialKey] = true;
+
+      newSlotAssignments.push({
+        id: `${currentStudent.id}|${dayIdx}|${hourIdx}|exempt`,
+        studentId: currentStudent.id,
+        dayIdx,
+        hourIdx,
+        mode: 'exempt',
+        withClass: false,
+        exemptReason: exemptReason || 'Zwolnienie z lekcji'
+      });
+      notify(`Zarejestrowano zwolnienie ucznia z lekcji.`);
+    }
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons,
+        specialLessons: updatedSpecialLessons,
+        specialAssignments: updatedSpecialAssignments,
+        specialAbsences: updatedSpecialAbsences,
+        spePlan: {
+          ...currentSpePlan,
+          slotAssignments: newSlotAssignments
+        }
+      }
+    });
+
+    setEditingSpeSlot(null);
+  };
+
+  const handleToggleExemptSlot = (dayIdx: number, hourIdx: number, defaultReason?: string) => {
+    if (!currentStudent) return;
+    const specialKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
+    const classKey = currentStudent.classId ? `${currentStudent.classId}|${dayIdx}|${hourIdx}` : '';
+    
+    // Check if currently exempt
+    const isCurrentlyExempt = (pl.specialAbsences && pl.specialAbsences[specialKey]) ||
+      (pl.spePlan?.slotAssignments?.some(s => s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx && s.mode === 'exempt'));
+
+    if (isCurrentlyExempt) {
+      // Revert/Restore to normal class lesson
+      handleResetSpeSlot(dayIdx, hourIdx);
+      return;
+    }
+
+    // Set to exempt (nie obowiązuje / zwolniony)
+    let updatedSpecialAbsences = { ...(pl.specialAbsences || {}) };
+    updatedSpecialAbsences[specialKey] = true;
+
+    let updatedSpecialLessons = { ...pl.specialLessons };
+    delete updatedSpecialLessons[specialKey];
+
+    const currentSpePlan = pl.spePlan || { slotAssignments: [] };
+    let newSlotAssignments = currentSpePlan.slotAssignments.filter(
+      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx)
+    );
+
+    const reason = defaultReason || 'Uczeń nie uczęszcza / zwolniony';
+    newSlotAssignments.push({
+      id: `${currentStudent.id}|${dayIdx}|${hourIdx}|exempt`,
+      studentId: currentStudent.id,
+      dayIdx,
+      hourIdx,
+      mode: 'exempt',
+      type: 'zwolniony',
+      withClass: false,
+      exemptReason: reason
+    });
+
+    // Also remove supportTeacher if any on this class lesson
+    let updatedLessons = { ...pl.lessons };
+    if (classKey && updatedLessons[classKey]) {
+      updatedLessons[classKey] = {
+        ...updatedLessons[classKey],
+        supportTeacherId: undefined
+      };
+    }
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons,
+        specialLessons: updatedSpecialLessons,
+        specialAbsences: updatedSpecialAbsences,
+        spePlan: {
+          ...currentSpePlan,
+          slotAssignments: newSlotAssignments
+        }
+      }
+    });
+
+    notify(`Oznaczono: uczeń nie uczestniczy w tej lekcji (${reason}).`);
+  };
+
+  const handleResetSpeSlot = (dayIdx: number, hourIdx: number) => {
+    if (!currentStudent) return;
+    const classKey = currentStudent.classId ? `${currentStudent.classId}|${dayIdx}|${hourIdx}` : '';
+    const specialKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
+
+    let updatedLessons = { ...pl.lessons };
+    if (classKey && updatedLessons[classKey]) {
+      updatedLessons[classKey] = {
+        ...updatedLessons[classKey],
+        supportTeacherId: undefined
+      };
+    }
+    let updatedSpecialLessons = { ...pl.specialLessons };
+    delete updatedSpecialLessons[specialKey];
+    let updatedSpecialAbsences = { ...(pl.specialAbsences || {}) };
+    delete updatedSpecialAbsences[specialKey];
+
+    const currentSpePlan = pl.spePlan || { slotAssignments: [] };
+    let newSlotAssignments = currentSpePlan.slotAssignments.filter(
+      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx)
+    );
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons,
+        specialLessons: updatedSpecialLessons,
+        specialAbsences: updatedSpecialAbsences,
+        spePlan: {
+          ...currentSpePlan,
+          slotAssignments: newSlotAssignments
+        }
+      }
+    });
+    notify(`Przywrócono domyślny status lekcji z klasą.`);
+    setEditingSpeSlot(null);
+  };
+
+  const handleAutoAssignSupport = (teacherId?: string) => {
+    if (!currentStudent || !currentStudent.classId) return;
+    const targetTeacher = teacherId || currentStudent.supportTeacherIds?.[0] || pl.teachers[0]?.id;
+    if (!targetTeacher) {
+      notify('Wybierz lub dodaj nauczyciela do kadry ucznia.', 'err');
+      return;
+    }
+
+    const quota = currentStudent.supportHours?.wsp || (currentStudent.type === 'wsp' ? 8 : 0);
+    if (quota <= 0) {
+      notify('Uczeń ma ustaloną pulę wsparcia: 0 godz. Zwiększ pulę w profilu ucznia.', 'err');
+      return;
+    }
+
+    let assignedCount = 0;
+    let updatedLessons = { ...pl.lessons };
+    const currentSpePlan = pl.spePlan || { slotAssignments: [] };
+    let newSlotAssignments = currentSpePlan.slotAssignments.filter(
+      s => !(s.studentId === currentStudent.id && s.withClass)
+    );
+
+    const classSlots: Array<{ dayIdx: number; hIdx: number; subjName: string; priority: number }> = [];
+    (pl.hours || []).forEach((_, hIdx) => {
+      DAYS.forEach((_, dayIdx) => {
+        const classKey = `${currentStudent.classId}|${dayIdx}|${hIdx}`;
+        const lesson = pl.lessons[classKey];
+        if (lesson) {
+          const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+          const subj = asg ? subjectsMap.get(asg.subjectId) : null;
+          const subjName = (subj?.name || '').toLowerCase();
+          
+          let prio = 5;
+          if (subjName.includes('polski') || subjName.includes('matematyk')) prio = 1;
+          else if (subjName.includes('angielski') || subjName.includes('obcy') || subjName.includes('niemiecki')) prio = 2;
+          else if (subjName.includes('biolog') || subjName.includes('chem') || subjName.includes('fizyk') || subjName.includes('geograf')) prio = 3;
+          else if (subjName.includes('histor') || subjName.includes('wos') || subjName.includes('przyrod')) prio = 4;
+
+          classSlots.push({ dayIdx, hIdx, subjName, priority: prio });
+        }
+      });
+    });
+
+    classSlots.sort((a, b) => a.priority - b.priority || a.dayIdx - b.dayIdx || a.hIdx - b.hIdx);
+
+    for (const slot of classSlots) {
+      if (assignedCount >= quota) break;
+      const classKey = `${currentStudent.classId}|${slot.dayIdx}|${slot.hIdx}`;
+      const lesson = updatedLessons[classKey];
+      if (lesson) {
+        updatedLessons[classKey] = {
+          ...lesson,
+          supportTeacherId: targetTeacher
+        };
+        newSlotAssignments.push({
+          id: `${currentStudent.id}|${slot.dayIdx}|${slot.hIdx}|wsp`,
+          studentId: currentStudent.id,
+          dayIdx: slot.dayIdx,
+          hourIdx: slot.hIdx,
+          mode: 'class_support',
+          type: 'wsp',
+          withClass: true,
+          supportTeacherId: targetTeacher,
+          teacherId: targetTeacher
+        });
+        assignedCount++;
+      }
+    }
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons,
+        spePlan: {
+          ...currentSpePlan,
+          slotAssignments: newSlotAssignments
+        }
+      }
+    });
+
+    notify(`Pomyślnie przydzielono ${assignedCount} godz. wsparcia dla ucznia (${teachersMap.get(targetTeacher)?.abbr || 'Wsparcie'}).`);
+  };
+
+  const handleClearAllStudentAssignments = () => {
+    if (!currentStudent) return;
+    if (!confirm(`Czy na pewno chcesz wyczyścić wszystkie przypisania wsparcia, zajęć 1:1 i zwolnień dla ucznia ${currentStudent.firstName} ${currentStudent.lastName}?`)) return;
+
+    let updatedLessons = { ...pl.lessons };
+    if (currentStudent.classId) {
+      Object.keys(updatedLessons).forEach(k => {
+        if (k.startsWith(`${currentStudent.classId}|`)) {
+          updatedLessons[k] = { ...updatedLessons[k], supportTeacherId: undefined };
+        }
+      });
+    }
+
+    let updatedSpecialLessons = Object.fromEntries(
+      Object.entries(pl.specialLessons || {}).filter(([k]) => !k.startsWith(`${currentStudent.id}|`))
+    );
+
+    let updatedSpecialAbsences = Object.fromEntries(
+      Object.entries(pl.specialAbsences || {}).filter(([k]) => !k.startsWith(`${currentStudent.id}|`))
+    );
+
+    const currentSpePlan = pl.spePlan || { slotAssignments: [] };
+    let newSlotAssignments = currentSpePlan.slotAssignments.filter(s => s.studentId !== currentStudent.id);
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons,
+        specialLessons: updatedSpecialLessons,
+        specialAbsences: updatedSpecialAbsences,
+        spePlan: {
+          ...currentSpePlan,
+          slotAssignments: newSlotAssignments
+        }
+      }
+    });
+
+    notify(`Wyczyszczono rozkład wsparcia i przydziały dla ucznia.`);
   };
 
   const currentStudent = useMemo(() => {
@@ -3248,7 +3744,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                           }`}
                         >
                           <Calendar size={13} />
-                          <span>📅 Plan SPE (Rozkład wsparcia w siatce)</span>
+                          <span>📅 Plan SPE (Rozkład wsparcia i zajęć w siatce)</span>
                           {quotaWsp > 0 && (
                             <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full border ${
                               scheduledWspCount === quotaWsp
@@ -3269,7 +3765,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                           }`}
                         >
                           <Settings size={13} />
-                          <span>👤 Pula orzeczenia i Profil</span>
+                          <span>👤 Pula orzeczenia i Profil ucznia</span>
                         </button>
                       </div>
 
@@ -3290,7 +3786,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                                 Bilans przydziału godzin wsparcia w planie lekcji
                               </span>
                               <p className="text-[10.5px] text-slate-500 font-semibold leading-relaxed mt-0.5">
-                                Przypisuj nauczycieli wspomagających bezpośrednio do konkretnych lekcji klasy {currentStudent.classId ? classesMap.get(currentStudent.classId)?.name : 'macierzystej'} poniżej:
+                                Zarządzaj realizacją zajęć: oznaczaj lekcje z klasą, przypisuj nauczycieli wspomagających, zastępuj nauczaniem indywidualnym (1:1) lub rejestruj zwolnienia.
                               </p>
                             </div>
                             
@@ -3358,6 +3854,38 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                               </div>
                             </div>
                           </div>
+
+                          {/* Pasek Szybkich Akcji i Narzędzi */}
+                          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleAutoAssignSupport()}
+                                className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1.5 cursor-pointer transition active:scale-95"
+                                title="Automatycznie rozdziela godziny wsparcia z orzeczenia na przedmioty wiodące (Polski, Matematyka, Języki)"
+                              >
+                                <Zap size={13} className="text-amber-300" />
+                                <span>⚡ Auto-przydział wsparcia ({quotaWsp}h)</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleClearAllStudentAssignments}
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 rounded-xl text-xs font-bold border border-slate-200 transition cursor-pointer flex items-center gap-1"
+                                title="Usuwa wszystkie modyfikacje SPE dla tego ucznia i przywraca stan domyślny"
+                              >
+                                <RotateCcw size={12} />
+                                <span>Wyczyść plan ucznia</span>
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-3 text-[11px] font-bold text-slate-500">
+                              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Wsparcie w klasie</span>
+                              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block"></span> Z klasą (ogólna)</span>
+                              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span> 1:1 / NI / Rewalidacja</span>
+                              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Zwolnienie</span>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Interaktywna Tygodniowa Siatka Rozkładu Wsparcia SPE */}
@@ -3366,22 +3894,22 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                             <span className="text-2xl">⚠️</span>
                             <h5 className="font-bold text-slate-700 text-sm">Brak przypisanej klasy macierzystej</h5>
                             <p className="text-xs text-slate-500 max-w-md mx-auto">
-                              Przejdź do zakładki <strong>👤 Pula orzeczenia i Profil</strong> i wybierz klasę macierzystą dla tego ucznia, aby wyświetlić siatkę lekcji i przydzielać wsparcie.
+                              Przejdź do zakładki <strong>👤 Pula orzeczenia i Profil ucznia</strong> i wybierz klasę macierzystą dla tego ucznia, aby wyświetlić siatkę lekcji i przydzielać wsparcie.
                             </p>
                           </div>
                         ) : (
                           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3 overflow-x-auto">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                                📅 Tygodniowy Rozkład Wsparcia • Klasa {classesMap.get(currentStudent.classId)?.name}
+                                📅 Tygodniowy Rozkład Zajęć SPE • Uczeń: {currentStudent.firstName} {currentStudent.lastName} (Klasa {classesMap.get(currentStudent.classId)?.name})
                               </span>
                               <span className="text-[10px] font-bold text-slate-400">
-                                Kliknij na lekcję, aby przydzielić lub zmienić nauczyciela wspomagającego
+                                Kliknij na lekcję lub ikonę ⚙️, aby dostosować tryb: wsparcie, 1:1 lub zwolnienie
                               </span>
                             </div>
 
                             {/* Tabela siatki */}
-                            <table className="w-full text-left border-collapse min-w-[700px]">
+                            <table className="w-full text-left border-collapse min-w-[750px]">
                               <thead>
                                 <tr className="border-b border-slate-200 bg-slate-50/80 text-[10px] font-black text-slate-500 uppercase tracking-wider">
                                   <th className="py-2 px-2 text-center w-14">Lekcja</th>
@@ -3395,7 +3923,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                               <tbody className="divide-y divide-slate-150 text-xs">
                                 {(pl.hours || []).map((hour, hIdx) => {
                                   return (
-                                    <tr key={hIdx} className="hover:bg-slate-50/40 transition">
+                                    <tr key={hIdx} className="hover:bg-slate-50/30 transition">
                                       {/* Kolumna godziny */}
                                       <td className="py-2.5 px-2 text-center bg-slate-50/50 border-r border-slate-200 select-none">
                                         <div className="font-mono font-black text-slate-800 text-xs">{hour.num}</div>
@@ -3410,27 +3938,113 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                                         const subj = asg ? (subjectsMap.get(asg.subjectId) || pl.subjects.find(s => s.id === asg.subjectId)) : null;
                                         const leadTeacher = asg?.teacherId ? teachersMap.get(asg.teacherId) : null;
                                         
-                                        // Sprawdź czy jest wsparcie
-                                        const assignedSupportId = lesson?.supportTeacherId || null;
-                                        const supportTeacher = assignedSupportId ? teachersMap.get(assignedSupportId) : null;
+                                        // Wyszukanie przypisania SPE w modelu
+                                        const speSlot = (pl.spePlan?.slotAssignments || []).find(
+                                          s => s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hIdx
+                                        );
 
-                                        // Sprawdź czy jest lekcja indywidualna 1:1
+                                        // Wyszukanie lekcji specjalnej 1:1
                                         const specialLessonKey = `${currentStudent.id}|${dayIdx}|${hIdx}`;
                                         const specialLesson = pl.specialLessons ? pl.specialLessons[specialLessonKey] : null;
                                         const specialAsg = specialLesson ? pl.specialAssignments.find(a => a.id === specialLesson.assignmentId) : null;
                                         const specialSubj = specialAsg ? (subjectsMap.get(specialAsg.subjectId) || pl.subjects.find(s => s.id === specialAsg.subjectId)) : null;
                                         const specialTeacher = specialAsg?.teacherId ? teachersMap.get(specialAsg.teacherId) : null;
+                                        const isAbsent = Boolean(pl.specialAbsences?.[specialLessonKey]);
+
+                                        // Wyznaczenie aktualnego trybu slotu
+                                        let currentMode: 'class_regular' | 'class_support' | 'individual' | 'exempt' | 'empty' = 'empty';
+                                        let currentSupportTeacherId: string | null = null;
+
+                                        if (speSlot?.mode) {
+                                          currentMode = speSlot.mode;
+                                          currentSupportTeacherId = speSlot.supportTeacherId || null;
+                                        } else if (speSlot) {
+                                          if (!speSlot.withClass || speSlot.specialAssignmentId) {
+                                            currentMode = 'individual';
+                                          } else if (speSlot.exemptReason) {
+                                            currentMode = 'exempt';
+                                          } else if (speSlot.supportTeacherId) {
+                                            currentMode = 'class_support';
+                                            currentSupportTeacherId = speSlot.supportTeacherId;
+                                          } else {
+                                            currentMode = 'class_regular';
+                                          }
+                                        } else if (specialLesson) {
+                                          currentMode = 'individual';
+                                        } else if (isAbsent) {
+                                          currentMode = 'exempt';
+                                        } else if (lesson?.supportTeacherId) {
+                                          currentMode = 'class_support';
+                                          currentSupportTeacherId = lesson.supportTeacherId;
+                                        } else if (lesson && asg) {
+                                          currentMode = 'class_regular';
+                                        }
+
+                                        const supportTeacher = currentSupportTeacherId ? teachersMap.get(currentSupportTeacherId) : null;
 
                                         return (
                                           <td key={dayIdx} className="py-2 px-2 border-l border-slate-150 align-top">
-                                            {lesson && asg ? (
-                                              /* Lekcja klasowa */
-                                              <div className={`p-2 rounded-xl border text-xs space-y-1.5 transition-all shadow-3xs ${
-                                                supportTeacher 
-                                                  ? 'bg-emerald-50/80 border-emerald-300' 
-                                                  : 'bg-white border-slate-200 hover:border-slate-300'
-                                              }`}>
-                                                {/* Przedmiot & Prowadzący */}
+                                            {/* TRYB 1: WSPOMAGANIE W KLASIE */}
+                                            {currentMode === 'class_support' && lesson && asg && (
+                                              <div className="p-2.5 rounded-xl border bg-emerald-50/90 border-emerald-300 text-xs space-y-2 transition-all shadow-xs group">
+                                                <div className="flex items-start justify-between gap-1">
+                                                  <div className="min-w-0">
+                                                    <span 
+                                                      className="font-black text-[11px] block truncate leading-tight"
+                                                      style={{ color: subj?.color || '#065f46' }}
+                                                      title={subj?.name}
+                                                    >
+                                                      🏫 {subj?.name || 'Lekcja'}
+                                                    </span>
+                                                    <span className="text-[9.5px] text-slate-600 font-semibold truncate block">
+                                                      Prow: {leadTeacher ? `${leadTeacher.first.charAt(0)}. ${leadTeacher.last} (${leadTeacher.abbr})` : 'Brak'}
+                                                    </span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1 shrink-0">
+                                                    {asg.roomId && (
+                                                      <span className="text-[8.5px] font-bold bg-white/80 px-1 py-0.2 rounded text-emerald-800 border border-emerald-200">
+                                                        s. {roomsMap.get(asg.roomId)?.name || asg.roomId}
+                                                      </span>
+                                                    )}
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleToggleExemptSlot(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-white hover:bg-amber-100 hover:text-amber-800 text-slate-500 transition cursor-pointer border border-emerald-200"
+                                                      title="Oznacz, że uczeń nie uczęszcza na tę lekcję (Zwolnij/Usuń z planu ucznia)"
+                                                    >
+                                                      <Ban size={11} />
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleOpenSpeSlotModal(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-white hover:bg-emerald-100 text-emerald-700 transition cursor-pointer border border-emerald-200"
+                                                      title="Konfiguruj tę godzinę SPE"
+                                                    >
+                                                      <Settings size={11} />
+                                                    </button>
+                                                  </div>
+                                                </div>
+
+                                                {/* Badge Nauczyciela Wspomagającego */}
+                                                <div className="bg-white/90 text-emerald-950 p-1.5 rounded-lg text-[10px] font-black border border-emerald-200 flex items-center justify-between gap-1 shadow-3xs">
+                                                  <span className="truncate flex items-center gap-1 text-emerald-900">
+                                                    🤝 Wsparcie: {supportTeacher ? `${supportTeacher.first.charAt(0)}. ${supportTeacher.last} (${supportTeacher.abbr})` : 'Wyznaczony'}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleSetSlotSupportTeacher(dayIdx, hIdx, null)}
+                                                    className="text-emerald-700 hover:text-rose-600 p-0.5 font-bold cursor-pointer transition text-xs"
+                                                    title="Usuń wsparcie z tej lekcji"
+                                                  >
+                                                    ✕
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* TRYB 2: Z KLASĄ BEZ WSPOMAGANIA */}
+                                            {currentMode === 'class_regular' && lesson && asg && (
+                                              <div className="p-2.5 rounded-xl border bg-white border-slate-200 hover:border-slate-300 text-xs space-y-2 transition-all shadow-3xs group">
                                                 <div className="flex items-start justify-between gap-1">
                                                   <div className="min-w-0">
                                                     <span 
@@ -3444,106 +4058,181 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                                                       Prow: {leadTeacher ? `${leadTeacher.first.charAt(0)}. ${leadTeacher.last} (${leadTeacher.abbr})` : 'Brak'}
                                                     </span>
                                                   </div>
-                                                  {asg.roomId && (
-                                                    <span className="text-[8.5px] font-bold bg-slate-100 px-1 py-0.2 rounded text-slate-600 border border-slate-200 shrink-0">
-                                                      s. {roomsMap.get(asg.roomId)?.name || asg.roomId}
+                                                  <div className="flex items-center gap-1 shrink-0">
+                                                    {asg.roomId && (
+                                                      <span className="text-[8.5px] font-bold bg-slate-100 px-1 py-0.2 rounded text-slate-600 border border-slate-200">
+                                                        s. {roomsMap.get(asg.roomId)?.name || asg.roomId}
+                                                      </span>
+                                                    )}
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleToggleExemptSlot(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-500 transition cursor-pointer border border-slate-200"
+                                                      title="Usuń tę lekcję z planu ucznia (Nie obowiązuje / Zwolniony)"
+                                                    >
+                                                      <Ban size={11} />
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleOpenSpeSlotModal(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition cursor-pointer border border-slate-200"
+                                                      title="Konfiguruj tę godzinę SPE"
+                                                    >
+                                                      <Settings size={11} />
+                                                    </button>
+                                                  </div>
+                                                </div>
+
+                                                {/* Szybkie akcje w komórce */}
+                                                <div className="pt-1 border-t border-slate-100 flex items-center justify-between gap-1">
+                                                  <select
+                                                    className="w-full text-[9px] font-bold bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-slate-600 hover:border-indigo-400 outline-none cursor-pointer"
+                                                    value=""
+                                                    onChange={(e) => {
+                                                      if (e.target.value) {
+                                                        handleSetSlotSupportTeacher(dayIdx, hIdx, e.target.value);
+                                                      }
+                                                    }}
+                                                  >
+                                                    <option value="">+ Przydziel wsparcie...</option>
+                                                    {currentStudent.supportTeacherIds && currentStudent.supportTeacherIds.length > 0 && (
+                                                      <optgroup label="⭐ Kadra ucznia">
+                                                        {currentStudent.supportTeacherIds.map(tId => {
+                                                          const t = teachersMap.get(tId);
+                                                          if (!t) return null;
+                                                          return <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>;
+                                                        })}
+                                                      </optgroup>
+                                                    )}
+                                                    <optgroup label="Wszyscy nauczyciele">
+                                                      {pl.teachers.map(t => (
+                                                        <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                                                      ))}
+                                                    </optgroup>
+                                                  </select>
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* TRYB 3: ZASTĄPIENIE 1:1 / NI / REWALIDACJA */}
+                                            {currentMode === 'individual' && (
+                                              <div className="p-2.5 rounded-xl border bg-purple-50/95 border-purple-300 text-xs space-y-1.5 shadow-xs">
+                                                <div className="flex items-start justify-between gap-1">
+                                                  <div className="min-w-0">
+                                                    <div className="flex items-center gap-1">
+                                                      <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-purple-600 text-white tracking-wider">
+                                                        👤 1:1 {speSlot?.type === 'rewa' ? 'Rewalidacja' : 'NI'}
+                                                      </span>
+                                                    </div>
+                                                    <span className="font-black text-[11px] text-purple-950 truncate block mt-0.5" title={specialSubj?.name || 'Zajęcia 1:1'}>
+                                                      {specialSubj?.name || subjectsMap.get(speSlot?.subjectId || '')?.name || 'Zajęcia 1:1 (NI)'}
+                                                    </span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1 shrink-0">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleResetSpeSlot(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-white hover:bg-rose-100 text-purple-700 hover:text-rose-700 transition cursor-pointer border border-purple-200"
+                                                      title="Usuń przydział 1:1 i przywróć lekcję z klasą"
+                                                    >
+                                                      <Trash2 size={11} />
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleOpenSpeSlotModal(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-white hover:bg-purple-100 text-purple-700 transition cursor-pointer border border-purple-200"
+                                                      title="Edytuj przydział 1:1"
+                                                    >
+                                                      <Settings size={11} />
+                                                    </button>
+                                                  </div>
+                                                </div>
+
+                                                <div className="text-[9.5px] text-purple-800 font-bold leading-tight">
+                                                  Prow: {specialTeacher ? `${specialTeacher.first.charAt(0)}. ${specialTeacher.last} (${specialTeacher.abbr})` : (speSlot?.teacherId ? teachersMap.get(speSlot.teacherId)?.abbr : 'Wyznaczony')}
+                                                  {(specialAsg?.roomId || speSlot?.roomId) && (
+                                                    <span className="ml-1 text-[8.5px] bg-white px-1 py-0.2 rounded border border-purple-200">
+                                                      s. {roomsMap.get(specialAsg?.roomId || speSlot?.roomId || '')?.name}
                                                     </span>
                                                   )}
                                                 </div>
 
-                                                {/* Status Wspomagania & Dropdown */}
-                                                <div className="pt-1 border-t border-slate-200/60">
-                                                  {supportTeacher ? (
-                                                    <div className="space-y-1">
-                                                      <div className="flex items-center justify-between gap-1 bg-emerald-100/90 text-emerald-950 px-1.5 py-0.5 rounded-md text-[9.5px] font-black border border-emerald-200">
-                                                        <span className="truncate flex items-center gap-1">
-                                                          🤝 {supportTeacher.first.charAt(0)}. {supportTeacher.last} ({supportTeacher.abbr})
-                                                        </span>
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => handleSetSlotSupportTeacher(dayIdx, hIdx, null)}
-                                                          className="text-emerald-700 hover:text-rose-700 p-0.5 font-bold cursor-pointer transition"
-                                                          title="Usuń wsparcie z tej lekcji"
-                                                        >
-                                                          ✕
-                                                        </button>
-                                                      </div>
-                                                    </div>
-                                                  ) : (
-                                                    <div className="flex items-center gap-1">
-                                                      <select
-                                                        className="w-full text-[9px] font-bold bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-slate-600 hover:border-indigo-400 outline-none cursor-pointer"
-                                                        value=""
-                                                        onChange={(e) => {
-                                                          if (e.target.value) {
-                                                            handleSetSlotSupportTeacher(dayIdx, hIdx, e.target.value);
-                                                          }
-                                                        }}
-                                                      >
-                                                        <option value="">+ Przydziel wsparcie...</option>
-                                                        {/* Kadra wyznaczona dla ucznia */}
-                                                        {currentStudent.supportTeacherIds && currentStudent.supportTeacherIds.length > 0 && (
-                                                          <optgroup label="⭐ Kadra ucznia">
-                                                            {currentStudent.supportTeacherIds.map(tId => {
-                                                              const t = teachersMap.get(tId);
-                                                              if (!t) return null;
-                                                              return <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>;
-                                                            })}
-                                                          </optgroup>
-                                                        )}
-                                                        {/* Wszyscy nauczyciele */}
-                                                        <optgroup label="Wszyscy nauczyciele">
-                                                          {pl.teachers.map(t => (
-                                                            <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
-                                                          ))}
-                                                        </optgroup>
-                                                      </select>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            ) : specialLesson && specialAsg ? (
-                                              /* Lekcja indywidualna 1:1 */
-                                              <div className="p-2 rounded-xl border bg-purple-50/80 border-purple-200 text-xs space-y-1 shadow-3xs">
-                                                <div className="flex items-start justify-between gap-1">
-                                                  <span className="font-bold text-[10.5px] text-purple-950 truncate">
-                                                    👤 {specialSubj?.name || 'Zajęcia 1:1'}
+                                                {/* Informacja co ma w tym czasie klasa */}
+                                                <div className="pt-1 border-t border-purple-200/70 flex items-center justify-between text-[9px] text-purple-700">
+                                                  <span className="truncate">
+                                                    {lesson && asg ? `W klasie: ${subj?.short || subj?.name}` : 'Klasa ma wolne'}
                                                   </span>
                                                   <button
                                                     type="button"
-                                                    onClick={() => handleAssignSpecialLessonSlot(dayIdx, hIdx, null)}
-                                                    className="text-purple-600 hover:text-rose-600 font-bold text-[10px] p-0.5"
-                                                    title="Usuń zajęcia 1:1"
+                                                    onClick={() => handleResetSpeSlot(dayIdx, hIdx)}
+                                                    className="text-purple-600 hover:text-rose-600 font-bold ml-1 cursor-pointer flex items-center gap-0.5"
+                                                    title="Usuń przydział 1:1 i przywróć lekcję z klasą"
                                                   >
-                                                    ✕
+                                                    <span>✕ usuń</span>
                                                   </button>
                                                 </div>
-                                                <div className="text-[9px] text-purple-800 font-semibold">
-                                                  Prow: {specialTeacher ? `${specialTeacher.first.charAt(0)}. ${specialTeacher.last} (${specialTeacher.abbr})` : 'Brak'}
+                                              </div>
+                                            )}
+
+                                            {/* TRYB 4: ZWOLNIENIE Z LEKCJI (Nie obowiązuje) */}
+                                            {currentMode === 'exempt' && (
+                                              <div className="p-2.5 rounded-xl border bg-amber-50/90 border-amber-300 text-xs space-y-1.5 shadow-3xs">
+                                                <div className="flex items-start justify-between gap-1">
+                                                  <div>
+                                                    <span className="text-[8.5px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-600 text-white tracking-wider inline-flex items-center gap-1">
+                                                      <Ban size={9} /> Nie obowiązuje
+                                                    </span>
+                                                    <span className="font-bold text-[10px] text-amber-950 block mt-0.5 leading-tight" title={speSlot?.exemptReason || 'Uczeń nie uczęszcza na te zajęcia'}>
+                                                      {speSlot?.exemptReason || 'Zwolniony z lekcji'}
+                                                    </span>
+                                                  </div>
+                                                  <div className="flex items-center gap-1 shrink-0">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleResetSpeSlot(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-white hover:bg-emerald-100 text-amber-800 hover:text-emerald-700 transition cursor-pointer border border-amber-200"
+                                                      title="Przywróć lekcję z klasą do planu ucznia"
+                                                    >
+                                                      <RotateCcw size={11} />
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleOpenSpeSlotModal(dayIdx, hIdx)}
+                                                      className="p-1 rounded bg-white hover:bg-amber-100 text-amber-800 transition cursor-pointer border border-amber-200"
+                                                      title="Edytuj zwolnienie"
+                                                    >
+                                                      <Settings size={11} />
+                                                    </button>
+                                                  </div>
+                                                </div>
+
+                                                <div className="pt-1 border-t border-amber-200/70 flex items-center justify-between text-[9px] text-amber-800">
+                                                  <span className="truncate">
+                                                    {lesson && asg ? `Klasa ma: ${subj?.short || subj?.name}` : 'Klasa ma wolne'}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleResetSpeSlot(dayIdx, hIdx)}
+                                                    className="text-amber-700 hover:text-emerald-700 font-bold ml-1 cursor-pointer flex items-center gap-0.5"
+                                                    title="Przywróć tę lekcję do planu ucznia"
+                                                  >
+                                                    <span>↺ przywróć</span>
+                                                  </button>
                                                 </div>
                                               </div>
-                                            ) : (
-                                              /* Puste okienko */
-                                              <div className="h-14 border border-dashed border-slate-200 rounded-xl p-1.5 flex flex-col items-center justify-center text-slate-300 hover:border-slate-300 transition">
-                                                {studentAssignments.some(a => !a.withClass) ? (
-                                                  <select
-                                                    className="w-full text-[8.5px] font-bold bg-white border border-slate-200 rounded px-1 py-0.5 text-slate-500 outline-none cursor-pointer"
-                                                    value=""
-                                                    onChange={(e) => {
-                                                      if (e.target.value) {
-                                                        handleAssignSpecialLessonSlot(dayIdx, hIdx, e.target.value);
-                                                      }
-                                                    }}
-                                                  >
-                                                    <option value="">+ 1:1</option>
-                                                    {studentAssignments.filter(a => !a.withClass).map(a => {
-                                                      const s = subjectsMap.get(a.subjectId);
-                                                      return <option key={a.id} value={a.id}>{s?.name || '1:1'}</option>;
-                                                    })}
-                                                  </select>
-                                                ) : (
-                                                  <span className="text-[9px] text-slate-300 select-none">-</span>
-                                                )}
+                                            )}
+
+                                            {/* TRYB 5: PUSTA KOMÓRKA (Klasa nie ma lekcji) */}
+                                            {currentMode === 'empty' && (
+                                              <div className="h-16 border border-dashed border-slate-200 hover:border-indigo-300 rounded-xl p-1.5 flex flex-col items-center justify-center text-slate-400 transition bg-slate-50/30">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleOpenSpeSlotModal(dayIdx, hIdx)}
+                                                  className="text-[9px] font-bold text-slate-500 hover:text-indigo-600 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 shadow-3xs"
+                                                >
+                                                  <Plus size={10} />
+                                                  <span>Dodaj 1:1</span>
+                                                </button>
                                               </div>
                                             )}
                                           </td>
@@ -4196,6 +4885,344 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
           👤 Nieprzypisany
         </span>
       </div>
+      {/* Modal konfiguracji wybranego slotu / godziny lekcyjnej SPE */}
+      {editingSpeSlot && currentStudent && (() => {
+        const dayName = DAYS[editingSpeSlot.dayIdx] || `Dzień ${editingSpeSlot.dayIdx + 1}`;
+        const hourObj = pl.hours[editingSpeSlot.hourIdx];
+        const classKey = currentStudent.classId ? `${currentStudent.classId}|${editingSpeSlot.dayIdx}|${editingSpeSlot.hourIdx}` : '';
+        const classLesson = classKey ? pl.lessons[classKey] : null;
+        const classAsg = classLesson ? pl.assignments.find(a => a.id === classLesson.assignmentId) : null;
+        const classSubj = classAsg ? subjectsMap.get(classAsg.subjectId) : null;
+        const classTeacher = classAsg?.teacherId ? teachersMap.get(classAsg.teacherId) : null;
+        const available1to1 = pl.specialAssignments.filter(a => a.studentId === currentStudent.id && !a.withClass);
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
+              {/* Nagłówek Modalu */}
+              <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300 block">
+                    Konfiguracja trybu realizacji godziny SPE
+                  </span>
+                  <h3 className="text-base font-black flex items-center gap-2 mt-0.5">
+                    <span>{currentStudent.firstName} {currentStudent.lastName}</span>
+                    <span className="text-xs font-normal text-slate-300">
+                      • {dayName}, lekcja {hourObj?.num} ({hourObj?.start} - {hourObj?.end})
+                    </span>
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingSpeSlot(null)}
+                  className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Informacja o lekcji klasy macierzystej */}
+              <div className="bg-indigo-50/70 border-b border-indigo-100 px-4 py-2.5 flex items-center justify-between text-xs">
+                <span className="text-indigo-900 font-bold flex items-center gap-1.5">
+                  🏫 Lekcja oddziału ({classesMap.get(currentStudent.classId || '')?.name || 'brak klasy'}):
+                </span>
+                <div className="font-bold text-slate-800">
+                  {classLesson && classAsg ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-indigo-700">{classSubj?.name}</span>
+                      <span className="text-slate-400 font-normal">({classTeacher ? `${classTeacher.first.charAt(0)}. ${classTeacher.last}` : 'Brak naucz.'})</span>
+                      {classAsg.roomId && <span className="bg-white px-1.5 py-0.2 rounded border text-[10px] text-slate-600">s. {roomsMap.get(classAsg.roomId)?.name}</span>}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400 italic">Oddział nie ma zaplanowanej lekcji w tej godzinie</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Zawartość / Formularz wyboru trybu */}
+              <div className="p-5 overflow-y-auto space-y-4 custom-scrollbar">
+                <label className="block text-[11px] font-black uppercase text-slate-500 tracking-wider">
+                  Wybierz sposób realizacji tej godziny:
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Karta 1: Z klasą bez wsparcia */}
+                  <div
+                    onClick={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'class_regular' })}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      editingSpeSlot.mode === 'class_regular'
+                        ? 'border-indigo-600 bg-indigo-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-slate-900 flex items-center gap-1.5">
+                        🏫 Z klasą (ogólna)
+                      </span>
+                      <input
+                        type="radio"
+                        name="spe_mode"
+                        checked={editingSpeSlot.mode === 'class_regular'}
+                        onChange={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'class_regular' })}
+                        className="text-indigo-600"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                      Uczeń realizuje lekcję wspólnie z oddziałem bez nauczyciela wspomagającego.
+                    </p>
+                  </div>
+
+                  {/* Karta 2: Z klasą ze wsparciem */}
+                  <div
+                    onClick={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'class_support' })}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      editingSpeSlot.mode === 'class_support'
+                        ? 'border-emerald-600 bg-emerald-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-emerald-950 flex items-center gap-1.5">
+                        🤝 Wsparcie w klasie
+                      </span>
+                      <input
+                        type="radio"
+                        name="spe_mode"
+                        checked={editingSpeSlot.mode === 'class_support'}
+                        onChange={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'class_support' })}
+                        className="text-emerald-600"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                      Uczeń jest na lekcji z klasą z obecnością nauczyciela wspomagającego.
+                    </p>
+                  </div>
+
+                  {/* Karta 3: Nauczanie indywidualne / 1:1 */}
+                  <div
+                    onClick={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'individual' })}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      editingSpeSlot.mode === 'individual'
+                        ? 'border-purple-600 bg-purple-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-purple-950 flex items-center gap-1.5">
+                        👤 Zajęcia 1:1 (NI/Rewa)
+                      </span>
+                      <input
+                        type="radio"
+                        name="spe_mode"
+                        checked={editingSpeSlot.mode === 'individual'}
+                        onChange={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'individual' })}
+                        className="text-purple-600"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                      Lekcja zostaje zastąpiona nauczaniem 1:1, rewalidacją lub terapią.
+                    </p>
+                  </div>
+
+                  {/* Karta 4: Zwolnienie z lekcji */}
+                  <div
+                    onClick={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'exempt' })}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                      editingSpeSlot.mode === 'exempt'
+                        ? 'border-amber-600 bg-amber-50/50 shadow-xs'
+                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-amber-950 flex items-center gap-1.5">
+                        ⛔ Zwolnienie z lekcji
+                      </span>
+                      <input
+                        type="radio"
+                        name="spe_mode"
+                        checked={editingSpeSlot.mode === 'exempt'}
+                        onChange={() => setEditingSpeSlot({ ...editingSpeSlot, mode: 'exempt' })}
+                        className="text-amber-600"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                      Zwolnienie (np. z II języka, WF) lub pobyt w gabinecie / świetlicy.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Sekcja szczegółowa w zależności od wybranego trybu */}
+                {editingSpeSlot.mode === 'class_support' && (
+                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-2 animate-in fade-in">
+                    <label className="block text-[10.5px] font-black text-emerald-950 uppercase tracking-wider">
+                      Wybierz nauczyciela wspomagającego dla tej godziny:
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-xs bg-white font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={editingSpeSlot.supportTeacherId || ''}
+                      onChange={(e) => setEditingSpeSlot({ ...editingSpeSlot, supportTeacherId: e.target.value })}
+                    >
+                      <option value="">-- Wybierz nauczyciela --</option>
+                      {currentStudent.supportTeacherIds && currentStudent.supportTeacherIds.length > 0 && (
+                        <optgroup label="⭐ Wyznaczona kadra ucznia">
+                          {currentStudent.supportTeacherIds.map(tId => {
+                            const t = teachersMap.get(tId);
+                            if (!t) return null;
+                            return <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>;
+                          })}
+                        </optgroup>
+                      )}
+                      <optgroup label="Pozostali nauczyciele">
+                        {pl.teachers.map(t => (
+                          <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+                )}
+
+                {editingSpeSlot.mode === 'individual' && (
+                  <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl space-y-3 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10.5px] font-black text-purple-950 uppercase tracking-wider">
+                        Zajęcia 1:1 dla ucznia:
+                      </label>
+                    </div>
+
+                    {available1to1.length > 0 ? (
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-bold text-purple-900">
+                          Wybierz ze zdefiniowanych przydziałów 1:1:
+                        </label>
+                        <select
+                          className="w-full px-3 py-2 border border-purple-300 rounded-lg text-xs bg-white font-bold text-slate-800 outline-none focus:ring-2 focus:ring-purple-500"
+                          value={editingSpeSlot.specialAssignmentId || ''}
+                          onChange={(e) => setEditingSpeSlot({ ...editingSpeSlot, specialAssignmentId: e.target.value })}
+                        >
+                          <option value="">-- Wybierz przydział 1:1 --</option>
+                          {available1to1.map(asg => {
+                            const s = subjectsMap.get(asg.subjectId);
+                            const t = teachersMap.get(asg.teacherId || '');
+                            return (
+                              <option key={asg.id} value={asg.id}>
+                                {s?.name} • Prow: {t ? `${t.first} ${t.last} (${t.abbr})` : 'Brak'} ({asg.supportType === 'rewa' ? 'Rewalidacja' : 'NI'})
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <div className="text-[10px] text-purple-800 font-bold bg-purple-100/60 p-2 rounded-lg">
+                          💡 Brak wcześniej utworzonych przydziałów 1:1. Zdefiniuj zajęcia poniżej:
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[9.5px] font-bold text-purple-900 mb-1">Przedmiot</label>
+                            <select
+                              className="w-full px-2.5 py-1.5 border border-purple-200 rounded-lg text-xs bg-white font-bold"
+                              value={editingSpeSlot.customSubjectId || ''}
+                              onChange={(e) => setEditingSpeSlot({ ...editingSpeSlot, customSubjectId: e.target.value })}
+                            >
+                              {pl.subjects.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9.5px] font-bold text-purple-900 mb-1">Nauczyciel</label>
+                            <select
+                              className="w-full px-2.5 py-1.5 border border-purple-200 rounded-lg text-xs bg-white font-bold"
+                              value={editingSpeSlot.customTeacherId || ''}
+                              onChange={(e) => setEditingSpeSlot({ ...editingSpeSlot, customTeacherId: e.target.value })}
+                            >
+                              {pl.teachers.map(t => (
+                                <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {editingSpeSlot.mode === 'exempt' && (
+                  <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2.5 animate-in fade-in">
+                    <label className="block text-[10.5px] font-black text-amber-950 uppercase tracking-wider">
+                      Powód zwolnienia z lekcji:
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        'Zwolnienie z II języka obcego',
+                        'Zwolnienie z wychowania fizycznego',
+                        'Pobyt w gabinecie terapeutycznym',
+                        'Pobyt w świetlicy szkolnej',
+                        'Zalecenie orzeczenia PPP'
+                      ].map(template => (
+                        <button
+                          key={template}
+                          type="button"
+                          onClick={() => setEditingSpeSlot({ ...editingSpeSlot, exemptReason: template })}
+                          className={`text-[9.5px] font-bold px-2 py-1 rounded-lg border transition cursor-pointer ${
+                            editingSpeSlot.exemptReason === template
+                              ? 'bg-amber-500 text-white border-amber-600'
+                              : 'bg-white text-amber-900 border-amber-200 hover:bg-amber-100'
+                          }`}
+                        >
+                          {template}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-amber-300 rounded-lg text-xs bg-white font-bold text-slate-800 outline-none focus:ring-2 focus:ring-amber-500"
+                      value={editingSpeSlot.exemptReason || ''}
+                      onChange={(e) => setEditingSpeSlot({ ...editingSpeSlot, exemptReason: e.target.value })}
+                      placeholder="Wpisz lub wybierz powód zwolnienia..."
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Stopka Akcji Modalu */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleResetSpeSlot(editingSpeSlot.dayIdx, editingSpeSlot.hourIdx);
+                    setEditingSpeSlot(null);
+                  }}
+                  className="px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl border border-transparent hover:border-rose-200 transition cursor-pointer"
+                >
+                  🔄 Przywróć stan domyślny
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingSpeSlot(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                  >
+                    Anuluj
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleSaveSpeSlot(editingSpeSlot);
+                      setEditingSpeSlot(null);
+                    }}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl shadow-sm transition cursor-pointer"
+                  >
+                    Zapisz zmiany
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {showGenerator && (
         <PlanGenerator 
           appState={appState} 
