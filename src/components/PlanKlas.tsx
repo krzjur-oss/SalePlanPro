@@ -5,7 +5,7 @@ import {
 import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
   User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award, Zap, RotateCcw, Ban,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, GripVertical, Search
 } from 'lucide-react';
 import PlanGenerator from './PlanGenerator';
 
@@ -98,8 +98,14 @@ export default function PlanKlas({
   const touchDragRef = useRef<HTMLDivElement | null>(null);
   const touchStartPosRef = useRef<{ x: number, y: number } | null>(null);
   const touchDraggedAssignIdRef = useRef<string | null>(null);
+  const touchIsHandleRef = useRef<boolean>(false);
+  const touchDragActiveRef = useRef<boolean>(false);
+  const touchScrollDetectedRef = useRef<boolean>(false);
+  const lastScrollTimeRef = useRef<number>(0);
   const [draggedLessonKey, setDraggedLessonKey] = useState<string | null>(null);
   const touchDraggedLessonKeyRef = useRef<string | null>(null);
+  const [sidebarSearch, setSidebarSearch] = useState<string>('');
+  const [hideCompletedAssignments, setHideCompletedAssignments] = useState<boolean>(false);
 
   // Form states for modal / quick inline adding
   const [newClassName, setNewClassName] = useState('');
@@ -1128,22 +1134,50 @@ export default function PlanKlas({
   };
 
   // Touch Drag-And-Drop Handlers
-  const handleTouchStart = (e: React.TouchEvent, assignId: string, lessonKey?: string) => {
+  const handleTouchStart = (e: React.TouchEvent, assignId: string, lessonKey?: string, isHandle?: boolean) => {
     const touch = e.touches[0];
     touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
     touchDraggedAssignIdRef.current = assignId;
     touchDraggedLessonKeyRef.current = lessonKey || null;
-    console.log('[TOUCH_DND] touchstart:', { assignId, lessonKey, clientX: touch.clientX, clientY: touch.clientY });
+    touchIsHandleRef.current = !!isHandle;
+    touchDragActiveRef.current = false;
+    touchScrollDetectedRef.current = false;
   };
 
   const handleTouchMove = (e: React.TouchEvent, assignId: string) => {
     if (!touchStartPosRef.current) return;
+    if (touchScrollDetectedRef.current) return;
+
     const touch = e.touches[0];
     const diffX = touch.clientX - touchStartPosRef.current.x;
     const diffY = touch.clientY - touchStartPosRef.current.y;
+    const absX = Math.abs(diffX);
+    const absY = Math.abs(diffY);
     const distance = Math.sqrt(diffX * diffX + diffY * diffY);
 
-    if (distance > 8) {
+    const isHandle = touchIsHandleRef.current;
+    const isFromGrid = !!touchDraggedLessonKeyRef.current;
+
+    // If gesture started on a card body in sidebar (not the handle, not the grid):
+    if (!isHandle && !isFromGrid) {
+      if (!touchDragActiveRef.current) {
+        // Natural vertical scroll detected: cancel dragging immediately so native scrolling proceeds freely
+        if (absY > 7 && absY > absX * 1.1) {
+          touchScrollDetectedRef.current = true;
+          touchDraggedAssignIdRef.current = null;
+          lastScrollTimeRef.current = Date.now();
+          return;
+        }
+
+        // Only start drag from sidebar card body if movement is clearly directed leftward toward the plan
+        if (!(diffX < -16 && absX > absY * 1.2)) {
+          return;
+        }
+      }
+    }
+
+    if (distance > 8 || touchDragActiveRef.current) {
+      touchDragActiveRef.current = true;
       if (e.cancelable) {
         e.preventDefault();
       }
@@ -1151,7 +1185,6 @@ export default function PlanKlas({
       // Update coordinates & contents of the floating element directly via DOM
       if (touchDragRef.current) {
         if (touchDragRef.current.style.display === 'none' || touchDragRef.current.style.display === '') {
-          // Initialize display and contents once drag is recognized
           const asgVal = pl.assignments.find(a => a.id === assignId);
           const subjVal = asgVal ? subjectsMap.get(asgVal.subjectId) : null;
           const teacherVal = asgVal && asgVal.teacherId ? teachersMap.get(asgVal.teacherId) : null;
@@ -1169,49 +1202,44 @@ export default function PlanKlas({
           if (labelTeacher) {
             labelTeacher.textContent = teacherVal ? `👤 ${teacherVal.first[0]}. ${teacherVal.last}` : '👤 Nieprzypisany';
           }
-
-          console.log('[TOUCH_DND] Drag visually initialized via DOM:', assignId);
         }
 
         // Apply 3D translation based on current touch position
         touchDragRef.current.style.transform = `translate3d(${touch.clientX - 70}px, ${touch.clientY - 35}px, 0)`;
       }
-
-      console.log('[TOUCH_DND] touchmove坐标:', { clientX: touch.clientX, clientY: touch.clientY });
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     const activeId = touchDraggedAssignIdRef.current;
-    console.log('[TOUCH_DND] touchend triggered. Active assignment ID:', activeId);
+    const wasDragActive = touchDragActiveRef.current;
+
+    if (touchScrollDetectedRef.current) {
+      lastScrollTimeRef.current = Date.now();
+    }
 
     // Hide the floating element immediately before checking elementFromPoint
     if (touchDragRef.current) {
       touchDragRef.current.style.display = 'none';
     }
 
-    if (activeId && touchStartPosRef.current) {
+    if (activeId && wasDragActive && touchStartPosRef.current) {
       const touch = e.changedTouches[0] || (e.touches && e.touches[0]);
       if (touch) {
         const x = touch.clientX;
         const y = touch.clientY;
-        console.log('[TOUCH_DND] Release coordinates:', { x, y });
 
         const element = document.elementFromPoint(x, y);
-        console.log('[TOUCH_DND] Element at release point:', element ? `${element.tagName}.${element.className}` : 'null');
 
         if (element) {
           const deleteZone = element.closest('[data-cell-type="delete-zone"]');
           if (deleteZone) {
             const activeKey = touchDraggedLessonKeyRef.current;
-            console.log('[TOUCH_DND] Dropped into delete-zone. Key:', activeKey);
             if (activeKey) {
               handleRemoveLesson(activeKey);
             }
           } else {
             const cell = element.closest('[data-cell-type="plan-cell"]');
-            console.log('[TOUCH_DND] Resolved target cell element:', cell ? `${cell.tagName}[data-day="${cell.getAttribute('data-day')}"][data-hour="${cell.getAttribute('data-hour')}"]` : 'null');
-
             if (cell) {
               const dayStr = cell.getAttribute('data-day');
               const hourStr = cell.getAttribute('data-hour');
@@ -1223,7 +1251,6 @@ export default function PlanKlas({
                 if (activeKey) {
                   handleRemoveLesson(activeKey);
                 }
-                console.log('[TOUCH_DND] Dropping assignment inside cell:', { day, hour, targetClassId });
                 placeAssignmentOnCell(activeId, day, hour, targetClassId);
               }
             }
@@ -1235,6 +1262,9 @@ export default function PlanKlas({
     touchDraggedAssignIdRef.current = null;
     touchDraggedLessonKeyRef.current = null;
     touchStartPosRef.current = null;
+    touchIsHandleRef.current = false;
+    touchDragActiveRef.current = false;
+    touchScrollDetectedRef.current = false;
   };
 
   const handleRemoveLesson = (key: string) => {
@@ -4787,188 +4817,302 @@ export default function PlanKlas({
               </div>
             )}
           </div>
-        ) : (
-          <aside className="w-full md:w-56 lg:w-60 xl:w-64 border-l border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none transition-all">
-            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 space-y-2 sm:space-y-3">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">🗂️ Lekcje do umieszczenia</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsRightSidebarCollapsed(true)}
-                    className="hidden md:flex p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                    title="Zwiń skrytkę lekcji, aby zyskać maksymalną szerokość na plan"
-                  >
-                    <PanelRightClose size={15} />
-                  </button>
-                </div>
-                <span className="text-[10px] text-slate-400 mt-0.5 block leading-tight">Przeciągnij przedmiot na siatkę lub użyj ułatwienia dotykowego:</span>
-              </div>
+        ) : (() => {
+          const rawSidebarAssignments = (viewMode === 'all' 
+            ? (allViewSelectedClassId 
+                ? pl.assignments.filter(a => a.classId === allViewSelectedClassId || (a.linkedClassIds && a.linkedClassIds.includes(allViewSelectedClassId)))
+                : pl.assignments)
+            : classAssignments);
 
-            {viewMode === 'all' && (
-              <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-150 space-y-2">
-                <div>
-                  <label className="block text-[9px] font-bold text-indigo-850 uppercase tracking-wider mb-1">Klasa (filtr przydziałów):</label>
-                  <select
-                    className="w-full px-2 py-1 bg-white border border-indigo-200 rounded text-xs font-semibold outline-none text-slate-800"
-                    value={allViewSelectedClassId || 'all'}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setAllViewSelectedClassId(val === 'all' ? null : val);
-                    }}
-                  >
-                    <option value="all">🌐 Wszystkie klasy ({pl.assignments.length})</option>
-                    {pl.classes.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} {c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="text-[9.5px] text-indigo-900 leading-normal">
-                  💡 Kliknięcie komórki lub klasy w tabeli automatycznie filtruje przydziały do tej klasy!
-                </div>
-              </div>
-            )}
+          const totalSidebarCount = rawSidebarAssignments.length;
+          const completedSidebarCount = rawSidebarAssignments.filter(a => (placedHours[a.id] || 0) >= a.hoursPerWeek).length;
 
-            <div className="p-2 bg-indigo-50 border border-indigo-150 rounded-lg text-[9.5px] text-indigo-900 font-medium leading-normal">
-              📱 <strong>Ekran dotykowy?</strong> Kliknij lekcję poniżej, a potem tapnij pole w siatce (puste lub zajęte) aby ją wstawić/podmienić. Ten sam przedmiot możesz wstawić w wiele miejsc!
-            </div>
-            
-            {selectedAssignmentId && (
-              <div className="mt-2.5 p-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[9.5px] text-emerald-850 font-bold flex items-center justify-between">
-                <span>🎯 Aktywny pędzel: {subjectsMap.get(pl.assignments.find(as => as.id === selectedAssignmentId)?.subjectId || '')?.name}</span>
-                <button 
-                  onClick={() => setSelectedAssignmentId(null)}
-                  className="font-bold text-[10px] text-emerald-600 bg-white border border-emerald-300 rounded px-1.5 py-0.5 hover:bg-emerald-100 uppercase"
-                >
-                  Anuluj
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="p-3 space-y-2">
-            {/* STREFA USUWANIA Z PLANU (DND) */}
-            <div 
-              data-cell-type="delete-zone"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => {
-                if (draggedLessonKey) {
-                  handleRemoveLesson(draggedLessonKey);
-                  setDraggedLessonKey(null);
-                }
-                setDraggedAssignId(null);
-              }}
-              className="p-4 border-2 border-dashed border-red-300 rounded-xl bg-red-50/50 hover:bg-red-50 hover:border-red-400 transition-all flex flex-col items-center justify-center text-center text-red-700 min-h-[90px] cursor-default gap-1.5 focus-within:ring-2 focus-within:ring-red-400 mb-4"
-            >
-              <Trash2 className="text-red-500 pointer-events-none" size={24} />
-              <div className="pointer-events-none">
-                <span className="text-xs font-bold block">Usuń z planu</span>
-                <span className="text-[10px] text-red-500 font-semibold leading-tight block mt-0.5">Przeciągnij tutaj kafelek lekcji z siatki, aby go usunąć</span>
-              </div>
-            </div>
-
-            {(viewMode === 'all' 
-              ? (allViewSelectedClassId 
-                  ? pl.assignments.filter(a => a.classId === allViewSelectedClassId || (a.linkedClassIds && a.linkedClassIds.includes(allViewSelectedClassId)))
-                  : pl.assignments)
-              : classAssignments
-            ).map(a => {
+          const visibleSidebarAssignments = rawSidebarAssignments.filter(a => {
+            const placed = placedHours[a.id] || 0;
+            if (hideCompletedAssignments && placed >= a.hoursPerWeek) {
+              return false;
+            }
+            if (sidebarSearch.trim()) {
+              const q = sidebarSearch.toLowerCase().trim();
               const s = subjectsMap.get(a.subjectId);
               const t = a.teacherId ? teachersMap.get(a.teacherId) : null;
               const targetClass = classesMap.get(a.classId);
-              const placed = placedHours[a.id] || 0;
-              const limitAchieved = placed >= a.hoursPerWeek;
-              const isSelected = selectedAssignmentId === a.id;
+              const matchSubj = s?.name?.toLowerCase().includes(q) || s?.short?.toLowerCase().includes(q);
+              const matchTeach = t ? `${t.first} ${t.last} ${t.abbr}`.toLowerCase().includes(q) : false;
+              const matchClass = targetClass ? targetClass.name.toLowerCase().includes(q) : false;
+              if (!matchSubj && !matchTeach && !matchClass) {
+                return false;
+              }
+            }
+            return true;
+          });
 
-              return (
-                <div 
-                  key={a.id}
-                  draggable={!isTouchDevice}
-                  onDragStart={(e) => {
-                    if (isTouchDevice) {
-                      e.preventDefault();
-                      return;
-                    }
-                    handleDragStart(a.id);
-                  }}
-                  onTouchStart={(e) => handleTouchStart(e, a.id)}
-                  onTouchMove={(e) => handleTouchMove(e, a.id)}
-                  onTouchEnd={handleTouchEnd}
-                  onClick={() => {
-                    setSelectedAssignmentId(isSelected ? null : a.id);
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer select-none group relative overflow-hidden touch-none ${
-                    isSelected
-                      ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/50 shadow'
-                      : limitAchieved 
-                      ? 'bg-slate-50/70 border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300' 
-                      : 'bg-white border-slate-200 hover:border-blue-400 hover:shadow shadow-sm'
-                  }`}
-                  style={{
-                    WebkitTouchCallout: 'none',
-                    WebkitUserSelect: 'none',
-                    KhtmlUserSelect: 'none',
-                    MozUserSelect: 'none',
-                    msUserSelect: 'none',
-                    userSelect: 'none',
-                    ...({ WebkitUserDrag: 'none' } as any)
-                  }}
-                >
-                  {isSelected && (
-                    <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-bl uppercase tracking-widest leading-none">
-                      Pędzel
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="flex flex-col truncate min-w-0">
-                      {a.groupId && groupsMap.get(a.groupId) && (
-                        <span className={`text-[8.5px] font-black px-1.5 py-0.2 rounded border inline-flex items-center gap-0.5 w-fit mb-0.5 ${getGroupBadgeColor(groupsMap.get(a.groupId)?.name || '')}`}>
-                          👥 {groupsMap.get(a.groupId)?.name}
-                        </span>
-                      )}
-                      <span className="font-bold text-xs truncate" style={{ color: s?.color }}>{s?.name}</span>
-                      {viewMode === 'all' && targetClass && (
-                        <span className="text-[9px] text-slate-400 font-extrabold mt-0.5">Klasa: {targetClass.name}</span>
-                      )}
-                    </div>
-                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${
-                      isSelected
-                        ? 'bg-indigo-600 text-white'
-                        : limitAchieved 
-                          ? 'bg-slate-200 text-slate-600' 
-                          : 'bg-blue-50 text-blue-700'
-                    }`}>
-                      {placed} / {a.hoursPerWeek}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-1 font-medium truncate flex justify-between items-center flex-wrap gap-1">
-                    <span>👤 {t ? `${t.first} ${t.last} (${t.abbr})` : 'Nieprzypisany'}</span>
-                    {a.preferredBlockSize !== undefined && a.preferredBlockSize > 1 && (
-                      <span className="text-[8px] tracking-wider text-purple-700 bg-purple-50 font-black px-1.5 py-0.2 rounded border border-purple-100 uppercase">
-                        🧱 blok {a.preferredBlockSize}h
+          return (
+            <aside className="w-full md:w-60 lg:w-64 xl:w-72 border-l border-slate-200 bg-white flex flex-col h-full shrink-0 select-none transition-all overflow-hidden shadow-xs">
+              {/* STICKY HEADER */}
+              <div className="p-3 border-b border-slate-200 bg-slate-50/80 space-y-2 shrink-0">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>🗂️ Lekcje do umieszczenia</span>
+                      <span className="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded-full">
+                        {visibleSidebarAssignments.length}
                       </span>
-                    )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsRightSidebarCollapsed(true)}
+                      className="hidden md:flex p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition cursor-pointer"
+                      title="Zwiń skrytkę lekcji, aby zyskać maksymalną szerokość na plan"
+                    >
+                      <PanelRightClose size={15} />
+                    </button>
                   </div>
-                  {a.linkedClassIds && a.linkedClassIds.length > 0 && (
-                    <div className="text-[9px] text-indigo-700 font-bold mt-1 bg-indigo-50/80 border border-indigo-100 px-1.5 py-0.5 rounded truncate">
-                      👥 Łączona: {[targetClass?.name, ...a.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(Boolean).join(' + ')}
-                    </div>
+                </div>
+
+                {viewMode === 'all' && (
+                  <div>
+                    <label className="block text-[9px] font-bold text-indigo-850 uppercase tracking-wider mb-1">Klasa (filtr przydziałów):</label>
+                    <select
+                      className="w-full px-2 py-1 bg-white border border-indigo-200 rounded text-xs font-semibold outline-none text-slate-800"
+                      value={allViewSelectedClassId || 'all'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAllViewSelectedClassId(val === 'all' ? null : val);
+                      }}
+                    >
+                      <option value="all">🌐 Wszystkie klasy ({pl.assignments.length})</option>
+                      {pl.classes.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} {c.group && c.group !== 'cała klasa' ? `(${c.group})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Szybka wyszukiwarka przedmiotu / nauczyciela */}
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    placeholder="Szukaj przedmiotu / nauczyciela..."
+                    className="w-full pl-7.5 pr-7 py-1.5 bg-white border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 text-slate-800 focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 outline-none transition"
+                  />
+                  {sidebarSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setSidebarSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+                      title="Wyczyść szukanie"
+                    >
+                      <X size={12} />
+                    </button>
                   )}
                 </div>
-              );
-            })}
-            {(viewMode === 'all' 
-              ? (allViewSelectedClassId 
-                  ? pl.assignments.filter(a => a.classId === allViewSelectedClassId || (a.linkedClassIds && a.linkedClassIds.includes(allViewSelectedClassId)))
-                  : pl.assignments)
-              : classAssignments
-            ).length === 0 && (
-              <div className="text-center p-6 text-slate-400 text-xs">Brak zdefiniowanych przydziałów. Dodaj je w zakładce „📋 Przypisania Godzin".</div>
-            )}
-          </div>
-        </aside>
-        )
+
+                {/* Filtry i wskaźnik zapełnienia */}
+                <div className="flex items-center justify-between text-[10px] text-slate-500 pt-0.5">
+                  <span className="font-medium">
+                    {totalSidebarCount > 0 ? `${visibleSidebarAssignments.length} z ${totalSidebarCount} przedm.` : '0 przedmiotów'}
+                  </span>
+                  {completedSidebarCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setHideCompletedAssignments(prev => !prev)}
+                      className={`px-2 py-0.5 rounded-md font-bold transition flex items-center gap-1 cursor-pointer ${
+                        hideCompletedAssignments
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-200/80 text-slate-700 hover:bg-slate-300'
+                      }`}
+                      title={hideCompletedAssignments ? "Pokaż także w pełni umieszczone lekcje" : "Ukryj lekcje, które mają już umieszczone wszystkie godziny"}
+                    >
+                      {hideCompletedAssignments ? '✓ Ukryto zapełnione' : `Ukryj zapełnione (${completedSidebarCount})`}
+                    </button>
+                  )}
+                </div>
+
+                {selectedAssignmentId && (
+                  <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[9.5px] text-emerald-850 font-bold flex items-center justify-between shadow-xs">
+                    <span className="truncate mr-1">🎯 Pędzel: {subjectsMap.get(pl.assignments.find(as => as.id === selectedAssignmentId)?.subjectId || '')?.name}</span>
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedAssignmentId(null)}
+                      className="font-bold text-[9px] text-emerald-700 bg-white border border-emerald-300 rounded px-1.5 py-0.5 hover:bg-emerald-100 uppercase shrink-0 cursor-pointer"
+                    >
+                      Wyłącz
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* SCROLLABLE LIST OF CARDS */}
+              <div className="flex-1 overflow-y-auto p-2.5 sm:p-3 space-y-2 touch-pan-y overscroll-contain">
+                {/* STREFA USUWANIA Z PLANU (DND) */}
+                <div 
+                  data-cell-type="delete-zone"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (draggedLessonKey) {
+                      handleRemoveLesson(draggedLessonKey);
+                      setDraggedLessonKey(null);
+                    }
+                    setDraggedAssignId(null);
+                  }}
+                  className="p-2.5 border-2 border-dashed border-red-200 rounded-xl bg-red-50/40 hover:bg-red-50 hover:border-red-400 transition-all flex items-center justify-center text-center text-red-700 cursor-default gap-2 focus-within:ring-2 focus-within:ring-red-400"
+                >
+                  <Trash2 className="text-red-500 pointer-events-none shrink-0" size={18} />
+                  <div className="pointer-events-none text-left">
+                    <span className="text-[11px] font-bold block leading-tight">Usuń z planu</span>
+                    <span className="text-[9px] text-red-500 font-medium leading-tight block">Przeciągnij tutaj lekcję z siatki</span>
+                  </div>
+                </div>
+
+                {visibleSidebarAssignments.map(a => {
+                  const s = subjectsMap.get(a.subjectId);
+                  const t = a.teacherId ? teachersMap.get(a.teacherId) : null;
+                  const targetClass = classesMap.get(a.classId);
+                  const placed = placedHours[a.id] || 0;
+                  const limitAchieved = placed >= a.hoursPerWeek;
+                  const isSelected = selectedAssignmentId === a.id;
+
+                  return (
+                    <div 
+                      key={a.id}
+                      draggable={true}
+                      onDragStart={() => {
+                        handleDragStart(a.id);
+                      }}
+                      onTouchStart={(e) => handleTouchStart(e, a.id, undefined, false)}
+                      onTouchMove={(e) => handleTouchMove(e, a.id)}
+                      onTouchEnd={handleTouchEnd}
+                      onClick={() => {
+                        if (touchScrollDetectedRef.current || (lastScrollTimeRef.current && Date.now() - lastScrollTimeRef.current < 200)) {
+                          return;
+                        }
+                        setSelectedAssignmentId(isSelected ? null : a.id);
+                      }}
+                      onContextMenu={(e) => e.preventDefault()}
+                      className={`p-2.5 rounded-xl border transition-all select-none group relative overflow-hidden touch-pan-y ${
+                        isSelected
+                          ? 'ring-2 ring-indigo-500 border-indigo-500 bg-indigo-50/60 shadow-md'
+                          : limitAchieved 
+                          ? 'bg-slate-50/70 border-slate-200 opacity-60 hover:opacity-100 hover:border-slate-300' 
+                          : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow shadow-xs'
+                      }`}
+                      style={{
+                        WebkitTouchCallout: 'none',
+                        WebkitUserSelect: 'none',
+                        userSelect: 'none',
+                      }}
+                    >
+                      {isSelected && (
+                        <div className="absolute top-0 right-0 bg-indigo-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-bl uppercase tracking-widest leading-none">
+                          Pędzel
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-2">
+                        {/* DEDYKOWANY UCHWYT PRZECIĄGANIA (GRIP HANDLE) */}
+                        <div
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            handleDragStart(a.id);
+                          }}
+                          onTouchStart={(e) => {
+                            e.stopPropagation();
+                            handleTouchStart(e, a.id, undefined, true);
+                          }}
+                          onTouchMove={(e) => handleTouchMove(e, a.id)}
+                          onTouchEnd={handleTouchEnd}
+                          className="mt-0.5 p-1 -ml-1 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 rounded-md cursor-grab active:cursor-grabbing touch-none select-none transition shrink-0"
+                          title="Chwyć ten uchwyt, aby przeciągnąć na plan"
+                          aria-label="Uchwyt przeciągania lekcji"
+                        >
+                          <GripVertical size={16} />
+                        </div>
+
+                        {/* TREŚĆ KARTY */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex flex-col truncate min-w-0">
+                              {a.groupId && groupsMap.get(a.groupId) && (
+                                <span className={`text-[8.5px] font-black px-1.5 py-0.2 rounded border inline-flex items-center gap-0.5 w-fit mb-0.5 ${getGroupBadgeColor(groupsMap.get(a.groupId)?.name || '')}`}>
+                                  👥 {groupsMap.get(a.groupId)?.name}
+                                </span>
+                              )}
+                              <span className="font-bold text-xs truncate" style={{ color: s?.color }}>{s?.name}</span>
+                              {viewMode === 'all' && targetClass && (
+                                <span className="text-[9px] text-slate-400 font-extrabold mt-0.5">Klasa: {targetClass.name}</span>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white'
+                                : limitAchieved 
+                                  ? 'bg-slate-200 text-slate-600' 
+                                  : 'bg-blue-50 text-blue-700'
+                            }`}>
+                              {placed} / {a.hoursPerWeek}
+                            </span>
+                          </div>
+
+                          <div className="text-[10px] text-slate-500 mt-1 font-medium truncate flex justify-between items-center flex-wrap gap-1">
+                            <span>👤 {t ? `${t.first} ${t.last} (${t.abbr})` : 'Nieprzypisany'}</span>
+                            {a.preferredBlockSize !== undefined && a.preferredBlockSize > 1 && (
+                              <span className="text-[8px] tracking-wider text-purple-700 bg-purple-50 font-black px-1.5 py-0.2 rounded border border-purple-100 uppercase">
+                                🧱 blok {a.preferredBlockSize}h
+                              </span>
+                            )}
+                          </div>
+
+                          {a.linkedClassIds && a.linkedClassIds.length > 0 && (
+                            <div className="text-[9px] text-indigo-700 font-bold mt-1 bg-indigo-50/80 border border-indigo-100 px-1.5 py-0.5 rounded truncate">
+                              👥 Łączona: {[targetClass?.name, ...a.linkedClassIds.map(id => classesMap.get(id)?.name)].filter(Boolean).join(' + ')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {visibleSidebarAssignments.length === 0 && (
+                  <div className="text-center py-8 px-3 text-slate-400 text-xs">
+                    {sidebarSearch ? (
+                      <div>
+                        <p className="font-bold text-slate-500">Brak wyników wyszukiwania</p>
+                        <p className="text-[10px] mt-1 text-slate-400">Dla frazy „{sidebarSearch}” nie znaleziono żadnych przydziałów.</p>
+                        <button
+                          type="button"
+                          onClick={() => setSidebarSearch('')}
+                          className="mt-2 text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                        >
+                          Wyczyść filtr
+                        </button>
+                      </div>
+                    ) : hideCompletedAssignments ? (
+                      <div>
+                        <p className="font-bold text-slate-500">Wszystkie lekcje umieszczone!</p>
+                        <p className="text-[10px] mt-1 text-slate-400">Wszystkie przydziały tej klasy są już w planie.</p>
+                        <button
+                          type="button"
+                          onClick={() => setHideCompletedAssignments(false)}
+                          className="mt-2 text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                        >
+                          Pokaż zapełnione
+                        </button>
+                      </div>
+                    ) : (
+                      'Brak zdefiniowanych przydziałów. Dodaj je w zakładce „📋 Przypisania Godzin”.'
+                    )}
+                  </div>
+                )}
+              </div>
+            </aside>
+          );
+        })()
       )}
 
       {/* Element pływający (podążający za palcem) przy przeciąganiu dotykowym */}
