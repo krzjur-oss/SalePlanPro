@@ -129,6 +129,17 @@ export default function ArkuszWsparciaUcznia({
         // 1. Check for Individual Special Lessons (1 na 1 / SPE / Rewalidacja / NI)
         const specialLessonsMatches: Array<{ assignmentId: string }> = [];
 
+        // Check spePlan slotAssignments for individual slots
+        if (pl.spePlan?.slotAssignments && Array.isArray(pl.spePlan.slotAssignments)) {
+          pl.spePlan.slotAssignments.forEach(slotAsg => {
+            if (slotAsg.studentId === student.id && slotAsg.dayIdx === dayIdx && slotAsg.hourIdx === hIdx && !slotAsg.withClass) {
+              if (slotAsg.specialAssignmentId) {
+                specialLessonsMatches.push({ assignmentId: slotAsg.specialAssignmentId });
+              }
+            }
+          });
+        }
+
         // Scan pl.specialLessons
         if (pl.specialLessons && typeof pl.specialLessons === 'object') {
           Object.entries(pl.specialLessons).forEach(([k, item]) => {
@@ -136,7 +147,9 @@ export default function ArkuszWsparciaUcznia({
             const parts = k.split('|');
             // Format: "studentId|dayIdx|hourIdx" or "studentId|dayIdx|hourIdx|assignmentId"
             if (parts[0] === student.id && parseInt(parts[1], 10) === dayIdx && parseInt(parts[2], 10) === hIdx) {
-              specialLessonsMatches.push(item);
+              if (!specialLessonsMatches.some(m => m.assignmentId === item.assignmentId)) {
+                specialLessonsMatches.push(item);
+              }
             }
           });
         }
@@ -221,29 +234,25 @@ export default function ArkuszWsparciaUcznia({
               const subjectName = subjObj?.name || 'Przedmiot';
               const leadTeacherObj = asg.teacherId ? (teachersMap.get(asg.teacherId) || pl.teachers.find(t => t.id === asg.teacherId)) : null;
 
-              // Check for support teacher on this lesson
+              // Check for explicit support teacher assigned to this specific slot
               let suppTeacherObj: Teacher | null = null;
+              
+              // A: Explicit support teacher in lesson object
               if (lesson.supportTeacherId) {
                 suppTeacherObj = teachersMap.get(lesson.supportTeacherId) || pl.teachers.find(t => t.id === lesson.supportTeacherId) || null;
               }
 
-              // Check if any specialAssignment for this student covers this subject in class
-              if (!suppTeacherObj) {
-                const matchSa = studentSpAssignments.find(sa => 
-                  sa.withClass && (sa.subjectId === asg.subjectId || sa.supportType === 'wsp') && (sa.teacherId || sa.supportTeacherId)
+              // B: Check spePlan slotAssignments for this student & slot
+              if (!suppTeacherObj && pl.spePlan?.slotAssignments) {
+                const speSlot = pl.spePlan.slotAssignments.find(
+                  sa => sa.studentId === student.id && sa.dayIdx === dayIdx && sa.hourIdx === hIdx && sa.withClass
                 );
-                if (matchSa) {
-                  const sId = matchSa.supportTeacherId || matchSa.teacherId;
+                if (speSlot) {
+                  const sId = speSlot.supportTeacherId || speSlot.teacherId;
                   if (sId) {
                     suppTeacherObj = teachersMap.get(sId) || pl.teachers.find(t => t.id === sId) || null;
                   }
                 }
-              }
-
-              // Fallback to student's designated support teachers if present
-              if (!suppTeacherObj && studentSupportTeachersList.length > 0) {
-                // If there's an assigned support teacher in student profile
-                suppTeacherObj = studentSupportTeachersList[0] || null;
               }
 
               let roomName = '';
@@ -313,18 +322,17 @@ export default function ArkuszWsparciaUcznia({
               
               let suppTeacherObj = cell.supportTeacherAbbr ? (pl.teachers.find(t => t.abbr === cell.supportTeacherAbbr) || (cell._bridgeMeta?.supportTeacherId ? teachersMap.get(cell._bridgeMeta.supportTeacherId) : null)) : null;
 
-              if (!suppTeacherObj) {
-                const matchSa = studentSpAssignments.find(sa => 
-                  sa.withClass && (sa.subjectId === cell._bridgeMeta?.subjectId || sa.supportType === 'wsp') && (sa.teacherId || sa.supportTeacherId)
+              // Check spePlan slot assignments if not embedded directly in cell
+              if (!suppTeacherObj && pl.spePlan?.slotAssignments) {
+                const speSlot = pl.spePlan.slotAssignments.find(
+                  sa => sa.studentId === student.id && sa.dayIdx === dayIdx && sa.hourIdx === hIdx && sa.withClass
                 );
-                if (matchSa) {
-                  const sId = matchSa.supportTeacherId || matchSa.teacherId;
-                  if (sId) suppTeacherObj = teachersMap.get(sId) || pl.teachers.find(t => t.id === sId) || null;
+                if (speSlot) {
+                  const sId = speSlot.supportTeacherId || speSlot.teacherId;
+                  if (sId) {
+                    suppTeacherObj = teachersMap.get(sId) || pl.teachers.find(t => t.id === sId) || null;
+                  }
                 }
-              }
-
-              if (!suppTeacherObj && studentSupportTeachersList.length > 0) {
-                suppTeacherObj = studentSupportTeachersList[0] || null;
               }
 
               if (suppTeacherObj) {
@@ -406,9 +414,24 @@ export default function ArkuszWsparciaUcznia({
 
     const totalHours = coTaughtHours + individualHours + regularClassHours;
 
-    // Declared quotas
-    const declaredBreakdown: Array<{ typeKey: string; label: string; hours: number; allocated: number }> = [];
+    // Declared quotas and actual scheduled hours
+    const declaredBreakdown: Array<{ typeKey: string; label: string; hours: number; allocated: number; scheduled: number }> = [];
     const quotas = student.supportHours || {};
+
+    // Count scheduled hours by support type
+    let scheduledWsp = coTaughtHours;
+    const scheduledByType: Record<string, number> = { wsp: scheduledWsp };
+
+    for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+      hoursList.forEach((_, hIdx) => {
+        const slots = timetableMatrix[dayIdx]?.[hIdx] || [];
+        slots.forEach(slot => {
+          if (slot.type === 'individual' && slot.supportTypeCode) {
+            scheduledByType[slot.supportTypeCode] = (scheduledByType[slot.supportTypeCode] || 0) + 1;
+          }
+        });
+      });
+    }
 
     declaredSupportTypes.forEach(tKey => {
       const meta = SUPPORT_TYPE_INFO[tKey] || { label: tKey.toUpperCase() };
@@ -416,12 +439,14 @@ export default function ArkuszWsparciaUcznia({
       const allocated = studentSpAssignments
         .filter(sa => (sa.supportType === tKey || (!sa.supportType && tKey === student.type)))
         .reduce((sum, sa) => sum + (sa.hoursPerWeek || 0), 0);
+      const scheduled = scheduledByType[tKey] || (tKey === 'wsp' ? coTaughtHours : 0);
 
       declaredBreakdown.push({
         typeKey: tKey,
         label: meta.label,
         hours,
-        allocated
+        allocated,
+        scheduled
       });
     });
 

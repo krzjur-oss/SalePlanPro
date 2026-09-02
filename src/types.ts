@@ -207,6 +207,25 @@ export interface Class {
   baseClass?: string;
 }
 
+export interface SPESlotAssignment {
+  id: string; // e.g. "studentId|day|hour|type" or unique id
+  studentId: string;
+  dayIdx: number;
+  hourIdx: number;
+  type: 'wsp' | 'rewa' | 'ni' | 'korekta' | string;
+  withClass: boolean; // true = wsparcie w oddziale na lekcji klasowej, false = indywidualne 1:1
+  specialAssignmentId?: string | null;
+  teacherId?: string | null; // Główny prowadzący lub terapeuta
+  supportTeacherId?: string | null; // Nauczyciel wspomagający
+  roomId?: string | null;
+  subjectId?: string | null;
+  note?: string;
+}
+
+export interface SPEPlanState {
+  slotAssignments: SPESlotAssignment[];
+}
+
 export interface PlanLekcjiState {
   meta: {
     schoolName: string;
@@ -225,6 +244,7 @@ export interface PlanLekcjiState {
   specialAssignments: SpecialAssignment[];
   specialLessons: SpecialLessonsState;
   specialAbsences: SpecialAbsencesState;
+  spePlan?: SPEPlanState;
 }
 
 export interface MiejsceDyzuru {

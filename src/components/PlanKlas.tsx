@@ -4,7 +4,7 @@ import {
 } from '../types';
 import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
-  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles 
+  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award 
 } from 'lucide-react';
 import PlanGenerator from './PlanGenerator';
 
@@ -135,9 +135,10 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
   // Special (NI / Rewa / Wsp) States
   const [specFirstName, setSpecFirstName] = useState('');
   const [specLastName, setSpecLastName] = useState('');
-  const [specType, setSpecType] = useState<'ni' | 'rewa' | 'wsp'>('ni');
+  const [specType, setSpecType] = useState<'ni' | 'rewa' | 'wsp'>('wsp');
   const [specClassId, setSpecClassId] = useState('');
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
+  const [speSubTab, setSpeSubTab] = useState<'schedule' | 'profile'>('schedule');
   
   // Special Hours States
   const [specSubjectId, setSpecSubjectId] = useState('');
@@ -1321,6 +1322,93 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
         specialLessons: Object.fromEntries(
           Object.entries(pl.specialLessons).filter(([_, l]) => l.assignmentId !== asgId)
         )
+      }
+    });
+  };
+
+  const handleSetSlotSupportTeacher = (dayIdx: number, hourIdx: number, teacherId: string | null) => {
+    if (!currentStudent || !currentStudent.classId) return;
+    const classKey = `${currentStudent.classId}|${dayIdx}|${hourIdx}`;
+    const existingLesson = pl.lessons[classKey];
+
+    let updatedLessons = { ...pl.lessons };
+    if (existingLesson) {
+      updatedLessons[classKey] = {
+        ...existingLesson,
+        supportTeacherId: teacherId || undefined
+      };
+    }
+
+    const currentSpePlan = pl.spePlan || { slotAssignments: [] };
+    let newSlotAssignments = currentSpePlan.slotAssignments.filter(
+      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx && s.withClass)
+    );
+
+    if (teacherId) {
+      newSlotAssignments.push({
+        id: `${currentStudent.id}|${dayIdx}|${hourIdx}|wsp`,
+        studentId: currentStudent.id,
+        dayIdx,
+        hourIdx,
+        type: 'wsp',
+        withClass: true,
+        supportTeacherId: teacherId,
+        teacherId: teacherId
+      });
+    }
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons,
+        spePlan: {
+          ...currentSpePlan,
+          slotAssignments: newSlotAssignments
+        }
+      }
+    });
+  };
+
+  const handleAssignSpecialLessonSlot = (dayIdx: number, hourIdx: number, specialAssignmentId: string | null) => {
+    if (!currentStudent) return;
+    const lessonKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
+
+    let updatedSpecialLessons = { ...pl.specialLessons };
+    const currentSpePlan = pl.spePlan || { slotAssignments: [] };
+    let newSlotAssignments = currentSpePlan.slotAssignments.filter(
+      s => !(s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx && !s.withClass)
+    );
+
+    if (specialAssignmentId) {
+      updatedSpecialLessons[lessonKey] = { assignmentId: specialAssignmentId };
+      const spAsg = pl.specialAssignments.find(a => a.id === specialAssignmentId);
+      newSlotAssignments.push({
+        id: `${currentStudent.id}|${dayIdx}|${hourIdx}|${spAsg?.supportType || 'ni'}`,
+        studentId: currentStudent.id,
+        dayIdx,
+        hourIdx,
+        type: spAsg?.supportType || 'ni',
+        withClass: false,
+        specialAssignmentId,
+        teacherId: spAsg?.teacherId,
+        supportTeacherId: spAsg?.supportTeacherId,
+        subjectId: spAsg?.subjectId,
+        roomId: spAsg?.roomId
+      });
+    } else {
+      delete updatedSpecialLessons[lessonKey];
+    }
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        specialLessons: updatedSpecialLessons,
+        spePlan: {
+          ...currentSpePlan,
+          slotAssignments: newSlotAssignments
+        }
       }
     });
   };
@@ -3096,7 +3184,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
             </div>
  
             {/* Prawy panel: Edycja przypisań, profilu i statystyk wybranego ucznia */}
-            <div className="lg:col-span-8 space-y-6">
+            <div className="lg:col-span-8 space-y-4">
               {currentStudent ? (() => {
                 // Obliczenie statystyk godzin dla wybranego ucznia
                 const classHours = studentAssignments
@@ -3109,380 +3197,793 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
 
                 const totalHours = classHours + individualHours;
 
+                // Quota z orzeczenia
+                const quotaWsp = currentStudent.supportHours?.wsp ?? (currentStudent.type === 'wsp' ? 8 : 0);
+                const quotaRewa = currentStudent.supportHours?.rewa ?? (currentStudent.type === 'rewa' ? 2 : 0);
+                const quotaNi = currentStudent.supportHours?.ni ?? (currentStudent.type === 'ni' ? 10 : 0);
+
+                // Policz ile godzin wsparcia jest faktycznie przydzielonych w siatce lekcji klasy
+                let scheduledWspCount = 0;
+                let scheduledRewaCount = 0;
+                let scheduledNiCount = 0;
+
+                if (currentStudent.classId) {
+                  for (let d = 0; d < 5; d++) {
+                    (pl.hours || []).forEach((_, hIdx) => {
+                      const classKey = `${currentStudent.classId}|${d}|${hIdx}`;
+                      const lesson = pl.lessons[classKey];
+                      const speSlot = pl.spePlan?.slotAssignments?.find(
+                        s => s.studentId === currentStudent.id && s.dayIdx === d && s.hourIdx === hIdx && s.withClass
+                      );
+                      if (lesson?.supportTeacherId || speSlot?.supportTeacherId) {
+                        scheduledWspCount++;
+                      }
+                    });
+                  }
+                }
+
+                // Policz ile godzin 1:1 jest w planie specjalnym
+                Object.keys(pl.specialLessons || {}).forEach(k => {
+                  const parts = k.split('|');
+                  if (parts[0] === currentStudent.id) {
+                    const spLesson = pl.specialLessons[k];
+                    const asg = pl.specialAssignments.find(a => a.id === spLesson.assignmentId);
+                    if (asg?.supportType === 'rewa') scheduledRewaCount++;
+                    else if (asg?.supportType === 'ni') scheduledNiCount++;
+                  }
+                });
+
                 return (
-                  <div className="space-y-6">
-                    
-                    {/* Sekcja 1: Profil i wsparcie w klasie / Edycja uczniów */}
-                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-3 select-none">
-                        <div className="flex items-center gap-2">
-                          <Settings size={15} className="text-indigo-600" />
-                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Edycja Profilu ucznia i Wsparcie w klasie</h4>
-                        </div>
-                        <span className="text-[10px] bg-slate-150 text-slate-700 font-bold px-2.5 py-0.5 rounded-full border border-slate-205 font-mono">
-                          ID: {currentStudent.id.substring(0, 5)}...
-                        </span>
-                      </div>
-
-                      {/* Pola formularza edycji profilu */}
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Imię</label>
-                          <input 
-                            type="text"
-                            value={currentStudent.firstName}
-                            onChange={(e) => {
-                              handleUpdateSpecialStudent({
-                                ...currentStudent,
-                                firstName: e.target.value
-                              });
-                            }}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500 bg-slate-50 font-bold text-slate-850"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Nazwisko</label>
-                          <input 
-                            type="text"
-                            value={currentStudent.lastName}
-                            onChange={(e) => {
-                              handleUpdateSpecialStudent({
-                                ...currentStudent,
-                                lastName: e.target.value
-                              });
-                            }}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500 bg-slate-50 font-bold text-slate-850"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Typ wsparcia</label>
-                          <select
-                            value={currentStudent.type}
-                            onChange={(e) => {
-                              handleUpdateSpecialStudent({
-                                ...currentStudent,
-                                type: e.target.value as any
-                              });
-                            }}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-bold text-slate-850"
-                          >
-                            <option value="ni">Nauczanie Indywidualne (NI)</option>
-                            <option value="rewa">Rewalidacja (Rewa)</option>
-                            <option value="wsp">Wspomaganie (Wsp)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Klasa macierzysta</label>
-                          <select
-                            value={currentStudent.classId || ''}
-                            onChange={(e) => {
-                              handleUpdateSpecialStudent({
-                                ...currentStudent,
-                                classId: e.target.value || null
-                              });
-                            }}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-bold text-slate-850"
-                          >
-                            <option value="">Brak klasy macierzystej</option>
-                            {pl.classes.map(c => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* DODATKOWO: Nauczyciele wspomagający w klasie */}
-                      <div className="pt-3 border-t border-slate-100 space-y-2">
-                        <div>
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5 select-none">
-                            <Users size={12} className="text-indigo-500 shrink-0" />
-                            Nauczyciele wspomagający na lekcjach klasowych (Zajęcia z klasą)
-                          </span>
-                          <p className="text-[9.5px] text-slate-400 font-semibold leading-relaxed mt-0.5 select-none">
-                            Wskąż kadrę wspomagającą, która wspiera ucznia bezpośrednio na jego regularnych zajęciach grupowych z klasą macierzystą (możesz zaznaczyć wielu nauczycieli):
-                          </p>
-                        </div>
-
-                        {/* Lista nauczycieli - grid checkboxów */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 max-h-24 overflow-y-auto pr-1 border border-slate-205 rounded-xl p-2.5 bg-slate-50/50 custom-scrollbar">
-                          {pl.teachers.map(t => {
-                            const isChecked = (currentStudent.supportTeacherIds || []).includes(t.id);
-                            return (
-                              <label 
-                                key={t.id} 
-                                className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-[10px] font-bold cursor-pointer select-none transition-all leading-tight ${
-                                  isChecked 
-                                    ? 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-900 shadow-3xs' 
-                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                }`}
-                              >
-                                <input 
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={(e) => {
-                                    const currentList = currentStudent.supportTeacherIds || [];
-                                    const updatedList = e.target.checked 
-                                      ? [...currentList, t.id]
-                                      : currentList.filter(id => id !== t.id);
-                                    handleUpdateSpecialStudent({
-                                      ...currentStudent,
-                                      supportTeacherIds: updatedList
-                                    });
-                                  }}
-                                  className="rounded border-slate-300 text-indigo-600 h-3 w-3 cursor-pointer shrink-0"
-                                />
-                                <span className="truncate" title={`${t.first} ${t.last}`}>{t.first.charAt(0)}. {t.last} ({t.abbr})</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-
-                        <div className="text-[10px] text-slate-500 font-medium select-none flex items-center gap-1">
-                          Wykaz nauczycieli wspomagających w klasie: {currentStudent.supportTeacherIds && currentStudent.supportTeacherIds.length > 0 ? (
-                            <span className="font-bold text-slate-800 bg-slate-100 py-0.5 px-2 rounded-md border border-slate-200 ml-1">
-                              {currentStudent.supportTeacherIds.length === 1 ? '1 nauczyciel' : `${currentStudent.supportTeacherIds.length} nauczycieli`} (
-                              {currentStudent.supportTeacherIds.map(id => teachersMap.get(id)?.abbr).filter(Boolean).join(', ')}
-                              )
+                  <div className="space-y-4">
+                    {/* Sub-tab Navigation */}
+                    <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 pt-2 rounded-t-2xl shadow-xs">
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSpeSubTab('schedule')}
+                          className={`px-3.5 py-2 text-xs font-black rounded-t-xl border-b-2 transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                            speSubTab === 'schedule'
+                              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/70 shadow-xs'
+                              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Calendar size={13} />
+                          <span>📅 Plan SPE (Rozkład wsparcia w siatce)</span>
+                          {quotaWsp > 0 && (
+                            <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full border ${
+                              scheduledWspCount === quotaWsp
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                : 'bg-amber-100 text-amber-800 border-amber-300'
+                            }`}>
+                              {scheduledWspCount}/{quotaWsp}h
                             </span>
-                          ) : (
-                            <span className="italic text-slate-400">Brak przypisanego wsparcia kadrowego na lekcjach w klasie.</span>
                           )}
-                        </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSpeSubTab('profile')}
+                          className={`px-3.5 py-2 text-xs font-black rounded-t-xl border-b-2 transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                            speSubTab === 'profile'
+                              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/70 shadow-xs'
+                              : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Settings size={13} />
+                          <span>👤 Pula orzeczenia i Profil</span>
+                        </button>
                       </div>
+
+                      <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-full border border-slate-200 font-mono hidden sm:inline-block">
+                        Uczeń: {currentStudent.firstName} {currentStudent.lastName} {currentStudent.classId ? `(${classesMap.get(currentStudent.classId)?.name || 'brak'})` : ''}
+                      </span>
                     </div>
 
-                    {/* Sekcja 2: Statystyki Wymiaru Godzin */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      
-                      {/* Suma godzin */}
-                      <div className="bg-gradient-to-br from-indigo-50 to-blue-50/50 border border-indigo-100 rounded-2xl p-4 flex flex-col justify-between shadow-3xs select-none">
-                        <span className="text-[10px] font-black text-indigo-700 uppercase tracking-widest block">Łączne pensum ucznia</span>
-                        <div className="flex items-baseline gap-1 mt-2">
-                          <span className="text-3xl font-black text-indigo-950 font-mono">{totalHours}</span>
-                          <span className="text-xs font-extrabold text-indigo-500">godz. / tydz.</span>
-                        </div>
-                        <p className="text-[9.5px] text-indigo-805 font-bold leading-normal mt-2">
-                          Sumaryczny tygodniowy wymiar lekcji i innych zajęć dedykowanych.
-                        </p>
-                      </div>
-
-                      {/* Z klasą */}
-                      <div className="bg-gradient-to-br from-emerald-50/90 to-teal-50/30 border border-emerald-150 rounded-2xl p-4 flex flex-col justify-between shadow-3xs select-none">
-                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest block">Zajęcia z klasą</span>
-                        <div className="flex items-baseline gap-1 mt-2">
-                          <span className="text-3xl font-black text-emerald-950 font-mono">{classHours}</span>
-                          <span className="text-xs font-extrabold text-emerald-600 bg-white/40 px-1.5 py-0.2 rounded border border-emerald-100">godz. / tydz.</span>
-                        </div>
-                        <p className="text-[9.5px] text-emerald-805 font-bold leading-normal mt-2">
-                          Lekcje zintegrowane, na których uczeń realizuje program wspólnie ze swoją klasą.
-                        </p>
-                      </div>
-
-                      {/* Indywidualnie */}
-                      <div className="bg-gradient-to-br from-amber-50 to-orange-50/30 border border-amber-150 rounded-2xl p-4 flex flex-col justify-between shadow-3xs select-none">
-                        <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest block">Zajęcia indywidualne</span>
-                        <div className="flex items-baseline gap-1 mt-2">
-                          <span className="text-3xl font-black text-amber-950 font-mono">{individualHours}</span>
-                          <span className="text-xs font-extrabold text-amber-600 bg-white/40 px-1.5 py-0.2 rounded border border-amber-100">godz. / tydz.</span>
-                        </div>
-                        <p className="text-[9.5px] text-amber-805 font-bold leading-normal mt-2">
-                          Przedmioty w systemie zindywidualizowanym (sam na sam z nauczycielem).
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Sekcja 3: Dodawanie nowych zajęć (Z klasą / Indywidualnie) */}
-                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-                      <div className="flex items-center gap-1.5 border-b border-slate-100 pb-3 select-none">
-                        <Sparkles size={15} className="text-indigo-600 animate-pulse" />
-                        <h4 className="text-xs font-black text-slate-805 uppercase tracking-wider">Nowe zajęcia specjalne lub indywidualne</h4>
-                      </div>
-
-                      <form onSubmit={handleAddSpecialAssignment} className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Przedmiot</label>
-                            <select
-                              required
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800"
-                              value={specSubjectId}
-                              onChange={(e) => setSpecSubjectId(e.target.value)}
-                            >
-                              <option value="">Wybierz przedmiot...</option>
-                              {pl.subjects.map(sub => (
-                                <option key={sub.id} value={sub.id}>{sub.name} ({sub.short})</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Nauczyciel Prowadzący</label>
-                            <select
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-805"
-                              value={specTeacherId}
-                              onChange={(e) => setSpecTeacherId(e.target.value)}
-                            >
-                              <option value="">Nauczyciel prowadzący...</option>
-                              {pl.teachers.map(t => (
-                                <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Wspomagający na tym przedmiocie</label>
-                            <select
-                              className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-805"
-                              value={specSupportId}
-                              onChange={(e) => setSpecSupportId(e.target.value)}
-                            >
-                              <option value="">Brak wspomagającego do tych zajęć...</option>
-                              {pl.teachers.map(t => (
-                                <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Forma zajęć: Zajęcia z klasą vs Indywidualne */}
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
-                          <div className="sm:col-span-4">
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Tygodniowy wymiar godzin</label>
+                    {/* ZAKŁADKA 1: TYGODNIOWY PLAN SPE (Siatka rozkładu wsparcia) */}
+                    {speSubTab === 'schedule' && (
+                      <div className="space-y-4 animate-in fade-in duration-150">
+                        {/* Pasek postępu i bilans orzeczenia */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                            <div>
+                              <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                                <Sparkles size={14} className="text-indigo-600" />
+                                Bilans przydziału godzin wsparcia w planie lekcji
+                              </span>
+                              <p className="text-[10.5px] text-slate-500 font-semibold leading-relaxed mt-0.5">
+                                Przypisuj nauczycieli wspomagających bezpośrednio do konkretnych lekcji klasy {currentStudent.classId ? classesMap.get(currentStudent.classId)?.name : 'macierzystej'} poniżej:
+                              </p>
+                            </div>
+                            
+                            {/* Status badge */}
                             <div className="flex items-center gap-2">
-                              <input 
-                                type="number"
-                                min="1"
-                                max="40"
-                                required
-                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-bold"
-                                value={specHoursPerW}
-                                onChange={(e) => setSpecHoursPerW(Number(e.target.value))}
-                              />
-                              <span className="text-xs text-slate-500 font-bold shrink-0">godz. / tydz.</span>
+                              {quotaWsp > 0 && (
+                                <div className={`px-3 py-1.5 rounded-xl border text-xs font-black flex items-center gap-1.5 shadow-xs ${
+                                  scheduledWspCount === quotaWsp
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                    : scheduledWspCount < quotaWsp
+                                      ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                      : 'bg-rose-50 text-rose-800 border-rose-300'
+                                }`}>
+                                  {scheduledWspCount === quotaWsp ? (
+                                    <>
+                                      <CheckCircle size={14} className="text-emerald-600" />
+                                      <span>✓ Komplet: {scheduledWspCount} / {quotaWsp} godz. wsparcia</span>
+                                    </>
+                                  ) : scheduledWspCount < quotaWsp ? (
+                                    <>
+                                      <span>⚠️ Pozostało do przydzielenia: {quotaWsp - scheduledWspCount} godz. ({scheduledWspCount}/{quotaWsp}h)</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span>⚠️ Nadmiar o {scheduledWspCount - quotaWsp} godz. ({scheduledWspCount}/{quotaWsp}h)</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
 
-                          {/* Selektor form i form integracji */}
-                          <div className="sm:col-span-5 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSpecWithClass(true)}
-                              className={`flex-1 p-2 rounded-xl border font-bold text-[10.5px] transition-all flex flex-col items-center justify-center cursor-pointer select-none leading-relaxed border-solid ${
-                                specWithClass 
-                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-3xs' 
-                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              <span className="font-extrabold uppercase text-[7.5px] tracking-wider mb-0.5 text-emerald-600">Forma Integracji</span>
-                              🏫 Zajęcia z klasą
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSpecWithClass(false)}
-                              className={`flex-1 p-2 rounded-xl border font-bold text-[10.5px] transition-all flex flex-col items-center justify-center cursor-pointer select-none leading-relaxed border-solid ${
-                                !specWithClass 
-                                  ? 'bg-amber-50 border-amber-300 text-amber-800 shadow-3xs' 
-                                  : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              <span className="font-extrabold uppercase text-[7.5px] tracking-wider mb-0.5 text-amber-600">Forma Osobna</span>
-                              👤 Indywidualne
-                            </button>
-                          </div>
+                          {/* Karty podsumowania godzin */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                            <div className="bg-indigo-50/70 border border-indigo-150 rounded-xl p-2.5 text-left">
+                              <span className="text-[9.5px] font-black text-indigo-800 uppercase block">Pula orzeczenia (Wsp)</span>
+                              <div className="flex items-baseline gap-1 mt-0.5">
+                                <span className="text-xl font-black text-indigo-950 font-mono">{quotaWsp}</span>
+                                <span className="text-[10px] font-bold text-indigo-600">godz./tyg.</span>
+                              </div>
+                            </div>
 
-                          <div className="sm:col-span-3">
-                            <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 transition-all flex items-center justify-center gap-1 cursor-pointer">
-                              <Plus size={13} /> Dodaj zajęcie
-                            </button>
+                            <div className="bg-emerald-50/70 border border-emerald-150 rounded-xl p-2.5 text-left">
+                              <span className="text-[9.5px] font-black text-emerald-800 uppercase block">Rozdysponowano w klasie</span>
+                              <div className="flex items-baseline gap-1 mt-0.5">
+                                <span className="text-xl font-black text-emerald-950 font-mono">{scheduledWspCount}</span>
+                                <span className="text-[10px] font-bold text-emerald-600">/ {quotaWsp}h</span>
+                              </div>
+                            </div>
+
+                            <div className="bg-purple-50/70 border border-purple-150 rounded-xl p-2.5 text-left">
+                              <span className="text-[9.5px] font-black text-purple-800 uppercase block">Zajęcia 1:1 (Rewa/NI)</span>
+                              <div className="flex items-baseline gap-1 mt-0.5">
+                                <span className="text-xl font-black text-purple-950 font-mono">{scheduledRewaCount + scheduledNiCount}</span>
+                                <span className="text-[10px] font-bold text-purple-600">godz./tyg.</span>
+                              </div>
+                            </div>
+
+                            <div className="bg-slate-100/70 border border-slate-200 rounded-xl p-2.5 text-left">
+                              <span className="text-[9.5px] font-black text-slate-700 uppercase block">Kadra wspomagająca</span>
+                              <div className="text-[10px] font-bold text-slate-800 truncate mt-1" title={currentStudent.supportTeacherIds?.map(id => teachersMap.get(id)?.abbr).join(', ')}>
+                                {currentStudent.supportTeacherIds && currentStudent.supportTeacherIds.length > 0
+                                  ? `${currentStudent.supportTeacherIds.length} naucz. (${currentStudent.supportTeacherIds.map(id => teachersMap.get(id)?.abbr).filter(Boolean).join(', ')})`
+                                  : 'Wszyscy dostępni'}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </form>
-                    </div>
 
-                    {/* Sekcja 4: Wykaz zajęć przypisanych do tego ucznia */}
-                    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3.5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2.5">
-                        <span className="text-xs font-black text-slate-500 uppercase tracking-wider block">Wykaz zdefiniowanych zajęć ({studentAssignments.length})</span>
-                        <p className="text-[10px] text-slate-400 font-bold leading-normal select-none">
-                          Zadania te zostaną udostępnione w bazie do rozpisania planu godzin.
-                        </p>
+                        {/* Interaktywna Tygodniowa Siatka Rozkładu Wsparcia SPE */}
+                        {!currentStudent.classId ? (
+                          <div className="bg-white border border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 space-y-2">
+                            <span className="text-2xl">⚠️</span>
+                            <h5 className="font-bold text-slate-700 text-sm">Brak przypisanej klasy macierzystej</h5>
+                            <p className="text-xs text-slate-500 max-w-md mx-auto">
+                              Przejdź do zakładki <strong>👤 Pula orzeczenia i Profil</strong> i wybierz klasę macierzystą dla tego ucznia, aby wyświetlić siatkę lekcji i przydzielać wsparcie.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3 overflow-x-auto">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                📅 Tygodniowy Rozkład Wsparcia • Klasa {classesMap.get(currentStudent.classId)?.name}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-400">
+                                Kliknij na lekcję, aby przydzielić lub zmienić nauczyciela wspomagającego
+                              </span>
+                            </div>
+
+                            {/* Tabela siatki */}
+                            <table className="w-full text-left border-collapse min-w-[700px]">
+                              <thead>
+                                <tr className="border-b border-slate-200 bg-slate-50/80 text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                                  <th className="py-2 px-2 text-center w-14">Lekcja</th>
+                                  {DAYS.map((dayName, dIdx) => (
+                                    <th key={dIdx} className="py-2 px-2.5 text-left border-l border-slate-200 font-bold">
+                                      {dayName}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-150 text-xs">
+                                {(pl.hours || []).map((hour, hIdx) => {
+                                  return (
+                                    <tr key={hIdx} className="hover:bg-slate-50/40 transition">
+                                      {/* Kolumna godziny */}
+                                      <td className="py-2.5 px-2 text-center bg-slate-50/50 border-r border-slate-200 select-none">
+                                        <div className="font-mono font-black text-slate-800 text-xs">{hour.num}</div>
+                                        <div className="text-[9px] text-slate-400 font-bold leading-tight">{hour.start} - {hour.end}</div>
+                                      </td>
+
+                                      {/* Kolumny poszczególnych dni Pon-Pt */}
+                                      {DAYS.map((_, dayIdx) => {
+                                        const classKey = `${currentStudent.classId}|${dayIdx}|${hIdx}`;
+                                        const lesson = pl.lessons[classKey];
+                                        const asg = lesson ? pl.assignments.find(a => a.id === lesson.assignmentId) : null;
+                                        const subj = asg ? (subjectsMap.get(asg.subjectId) || pl.subjects.find(s => s.id === asg.subjectId)) : null;
+                                        const leadTeacher = asg?.teacherId ? teachersMap.get(asg.teacherId) : null;
+                                        
+                                        // Sprawdź czy jest wsparcie
+                                        const assignedSupportId = lesson?.supportTeacherId || null;
+                                        const supportTeacher = assignedSupportId ? teachersMap.get(assignedSupportId) : null;
+
+                                        // Sprawdź czy jest lekcja indywidualna 1:1
+                                        const specialLessonKey = `${currentStudent.id}|${dayIdx}|${hIdx}`;
+                                        const specialLesson = pl.specialLessons ? pl.specialLessons[specialLessonKey] : null;
+                                        const specialAsg = specialLesson ? pl.specialAssignments.find(a => a.id === specialLesson.assignmentId) : null;
+                                        const specialSubj = specialAsg ? (subjectsMap.get(specialAsg.subjectId) || pl.subjects.find(s => s.id === specialAsg.subjectId)) : null;
+                                        const specialTeacher = specialAsg?.teacherId ? teachersMap.get(specialAsg.teacherId) : null;
+
+                                        return (
+                                          <td key={dayIdx} className="py-2 px-2 border-l border-slate-150 align-top">
+                                            {lesson && asg ? (
+                                              /* Lekcja klasowa */
+                                              <div className={`p-2 rounded-xl border text-xs space-y-1.5 transition-all shadow-3xs ${
+                                                supportTeacher 
+                                                  ? 'bg-emerald-50/80 border-emerald-300' 
+                                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                                              }`}>
+                                                {/* Przedmiot & Prowadzący */}
+                                                <div className="flex items-start justify-between gap-1">
+                                                  <div className="min-w-0">
+                                                    <span 
+                                                      className="font-bold text-[11px] block truncate leading-tight"
+                                                      style={{ color: subj?.color || '#1e293b' }}
+                                                      title={subj?.name}
+                                                    >
+                                                      {subj?.name || 'Lekcja'}
+                                                    </span>
+                                                    <span className="text-[9.5px] text-slate-500 font-semibold truncate block">
+                                                      Prow: {leadTeacher ? `${leadTeacher.first.charAt(0)}. ${leadTeacher.last} (${leadTeacher.abbr})` : 'Brak'}
+                                                    </span>
+                                                  </div>
+                                                  {asg.roomId && (
+                                                    <span className="text-[8.5px] font-bold bg-slate-100 px-1 py-0.2 rounded text-slate-600 border border-slate-200 shrink-0">
+                                                      s. {roomsMap.get(asg.roomId)?.name || asg.roomId}
+                                                    </span>
+                                                  )}
+                                                </div>
+
+                                                {/* Status Wspomagania & Dropdown */}
+                                                <div className="pt-1 border-t border-slate-200/60">
+                                                  {supportTeacher ? (
+                                                    <div className="space-y-1">
+                                                      <div className="flex items-center justify-between gap-1 bg-emerald-100/90 text-emerald-950 px-1.5 py-0.5 rounded-md text-[9.5px] font-black border border-emerald-200">
+                                                        <span className="truncate flex items-center gap-1">
+                                                          🤝 {supportTeacher.first.charAt(0)}. {supportTeacher.last} ({supportTeacher.abbr})
+                                                        </span>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleSetSlotSupportTeacher(dayIdx, hIdx, null)}
+                                                          className="text-emerald-700 hover:text-rose-700 p-0.5 font-bold cursor-pointer transition"
+                                                          title="Usuń wsparcie z tej lekcji"
+                                                        >
+                                                          ✕
+                                                        </button>
+                                                      </div>
+                                                    </div>
+                                                  ) : (
+                                                    <div className="flex items-center gap-1">
+                                                      <select
+                                                        className="w-full text-[9px] font-bold bg-slate-50 border border-slate-200 rounded px-1 py-0.5 text-slate-600 hover:border-indigo-400 outline-none cursor-pointer"
+                                                        value=""
+                                                        onChange={(e) => {
+                                                          if (e.target.value) {
+                                                            handleSetSlotSupportTeacher(dayIdx, hIdx, e.target.value);
+                                                          }
+                                                        }}
+                                                      >
+                                                        <option value="">+ Przydziel wsparcie...</option>
+                                                        {/* Kadra wyznaczona dla ucznia */}
+                                                        {currentStudent.supportTeacherIds && currentStudent.supportTeacherIds.length > 0 && (
+                                                          <optgroup label="⭐ Kadra ucznia">
+                                                            {currentStudent.supportTeacherIds.map(tId => {
+                                                              const t = teachersMap.get(tId);
+                                                              if (!t) return null;
+                                                              return <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>;
+                                                            })}
+                                                          </optgroup>
+                                                        )}
+                                                        {/* Wszyscy nauczyciele */}
+                                                        <optgroup label="Wszyscy nauczyciele">
+                                                          {pl.teachers.map(t => (
+                                                            <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                                                          ))}
+                                                        </optgroup>
+                                                      </select>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ) : specialLesson && specialAsg ? (
+                                              /* Lekcja indywidualna 1:1 */
+                                              <div className="p-2 rounded-xl border bg-purple-50/80 border-purple-200 text-xs space-y-1 shadow-3xs">
+                                                <div className="flex items-start justify-between gap-1">
+                                                  <span className="font-bold text-[10.5px] text-purple-950 truncate">
+                                                    👤 {specialSubj?.name || 'Zajęcia 1:1'}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleAssignSpecialLessonSlot(dayIdx, hIdx, null)}
+                                                    className="text-purple-600 hover:text-rose-600 font-bold text-[10px] p-0.5"
+                                                    title="Usuń zajęcia 1:1"
+                                                  >
+                                                    ✕
+                                                  </button>
+                                                </div>
+                                                <div className="text-[9px] text-purple-800 font-semibold">
+                                                  Prow: {specialTeacher ? `${specialTeacher.first.charAt(0)}. ${specialTeacher.last} (${specialTeacher.abbr})` : 'Brak'}
+                                                </div>
+                                              </div>
+                                            ) : (
+                                              /* Puste okienko */
+                                              <div className="h-14 border border-dashed border-slate-200 rounded-xl p-1.5 flex flex-col items-center justify-center text-slate-300 hover:border-slate-300 transition">
+                                                {studentAssignments.some(a => !a.withClass) ? (
+                                                  <select
+                                                    className="w-full text-[8.5px] font-bold bg-white border border-slate-200 rounded px-1 py-0.5 text-slate-500 outline-none cursor-pointer"
+                                                    value=""
+                                                    onChange={(e) => {
+                                                      if (e.target.value) {
+                                                        handleAssignSpecialLessonSlot(dayIdx, hIdx, e.target.value);
+                                                      }
+                                                    }}
+                                                  >
+                                                    <option value="">+ 1:1</option>
+                                                    {studentAssignments.filter(a => !a.withClass).map(a => {
+                                                      const s = subjectsMap.get(a.subjectId);
+                                                      return <option key={a.id} value={a.id}>{s?.name || '1:1'}</option>;
+                                                    })}
+                                                  </select>
+                                                ) : (
+                                                  <span className="text-[9px] text-slate-300 select-none">-</span>
+                                                )}
+                                              </div>
+                                            )}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
                       </div>
+                    )}
 
-                      {studentAssignments.length === 0 ? (
-                        <div className="p-8 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400 italic text-xs py-10 select-none">
-                          Brak zdefiniowanych zajęć i przedmiotów dla tego ucznia. Użyj formularza powyżej, aby stworzyć pierwszą pozycję.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                          {studentAssignments.map(a => {
-                            const subj = subjectsMap.get(a.subjectId);
-                            const mainTeacher = a.teacherId ? teachersMap.get(a.teacherId) : null;
-                            const supportTeacher = a.supportTeacherId ? teachersMap.get(a.supportTeacherId) : null;
-                            
-                            return (
-                              <div 
-                                key={a.id} 
-                                className={`p-4 border rounded-2xl flex flex-col justify-between text-xs bg-white transition hover:shadow-xs relative border-l-4 group ${
-                                  a.withClass ? 'border-l-emerald-500 border-slate-200' : 'border-l-amber-500 border-slate-200'
-                                }`}
+                    {/* ZAKŁADKA 2: PROFIL, PULA ORZECZENIA I PRZYPISANIA */}
+                    {speSubTab === 'profile' && (
+                      <div className="space-y-6 animate-in fade-in duration-150">
+                        {/* Sekcja 1: Profil i wsparcie w klasie / Edycja uczniów */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-3 select-none">
+                            <div className="flex items-center gap-2">
+                              <Settings size={15} className="text-indigo-600" />
+                              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Edycja Profilu ucznia i Pula Orzeczenia</h4>
+                            </div>
+                            <span className="text-[10px] bg-slate-150 text-slate-700 font-bold px-2.5 py-0.5 rounded-full border border-slate-205 font-mono">
+                              ID: {currentStudent.id.substring(0, 5)}...
+                            </span>
+                          </div>
+
+                          {/* Pola formularza edycji profilu */}
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Imię</label>
+                              <input 
+                                type="text"
+                                value={currentStudent.firstName}
+                                onChange={(e) => {
+                                  handleUpdateSpecialStudent({
+                                    ...currentStudent,
+                                    firstName: e.target.value
+                                  });
+                                }}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500 bg-slate-50 font-bold text-slate-850"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Nazwisko</label>
+                              <input 
+                                type="text"
+                                value={currentStudent.lastName}
+                                onChange={(e) => {
+                                  handleUpdateSpecialStudent({
+                                    ...currentStudent,
+                                    lastName: e.target.value
+                                  });
+                                }}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-indigo-500 bg-slate-50 font-bold text-slate-850"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Główny typ orzeczenia</label>
+                              <select
+                                value={currentStudent.type}
+                                onChange={(e) => {
+                                  handleUpdateSpecialStudent({
+                                    ...currentStudent,
+                                    type: e.target.value as any
+                                  });
+                                }}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-bold text-slate-850"
                               >
-                                {/* Przedmiot i usunięcie */}
-                                <div className="flex items-start justify-between gap-2 mb-2">
-                                  <div className="min-w-0">
-                                    <span className="font-bold text-[12.5px] block truncate leading-tight" style={{ color: subj?.color || '#334155' }}>
-                                      {subj?.name}
-                                    </span>
-                                    <span className={`inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border mt-1 leading-none ${
-                                      a.withClass 
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-150' 
-                                        : 'bg-amber-50 text-amber-700 border-amber-150'
-                                    }`}>
-                                      {a.withClass ? '🏫 Z klasą' : '👤 Indywidualnie'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className="font-black text-[10.5px] bg-slate-100/80 border border-slate-200 text-slate-705 px-1.5 py-0.5 rounded font-mono">
-                                      {a.hoursPerWeek}h/tydz
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveSpecialAssignment(a.id)}
-                                      className="text-slate-400 hover:text-red-500 transition p-1 rounded-md hover:bg-rose-50 bg-transparent border-none cursor-pointer"
-                                      title="Usuń to przypisanie zajęć"
-                                    >
-                                      <Trash2 size={12.5} strokeWidth={2.5} />
-                                    </button>
-                                  </div>
-                                </div>
+                                <option value="wsp">Wspomaganie w oddziale (Wsp)</option>
+                                <option value="rewa">Rewalidacja (Rewa)</option>
+                                <option value="ni">Nauczanie Indywidualne (NI)</option>
+                                <option value="korekta">Terapia pedagogiczna (Korekta)</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-450 uppercase mb-1">Klasa macierzysta</label>
+                              <select
+                                value={currentStudent.classId || ''}
+                                onChange={(e) => {
+                                  handleUpdateSpecialStudent({
+                                    ...currentStudent,
+                                    classId: e.target.value || null
+                                  });
+                                }}
+                                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none bg-slate-50 font-bold text-slate-850"
+                              >
+                                <option value="">Brak klasy macierzystej</option>
+                                {pl.classes.map(c => (
+                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
 
-                                {/* Nauczyciele na lekcji */}
-                                <div className="space-y-1.5 mt-2 font-semibold text-slate-600 text-[10.5px]">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-slate-400 text-[10px] select-none font-sans">Prowadzący:</span>
-                                    {mainTeacher ? (
-                                      <span className="text-slate-800 font-extrabold">{mainTeacher.first} {mainTeacher.last} (<strong className="font-mono">{mainTeacher.abbr}</strong>)</span>
-                                    ) : (
-                                      <span className="text-red-500 italic font-semibold">Brak przydziału</span>
-                                    )}
-                                  </div>
+                          {/* Pula godzin z orzeczenia (Wymiar wsparcia) */}
+                          <div className="pt-3 border-t border-slate-100 space-y-2">
+                            <div>
+                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                                <Award size={12} className="text-indigo-500 shrink-0" />
+                                Tygodniowy wymiar godzin wynikający z orzeczenia (Pula godzin)
+                              </span>
+                              <p className="text-[9.5px] text-slate-400 font-semibold leading-relaxed mt-0.5 select-none">
+                                Wpisz zalecaną liczbę godzin tygodniowo dla poszczególnych form wsparcia ucznia:
+                              </p>
+                            </div>
 
-                                  {supportTeacher ? (
-                                    <div className="flex items-center gap-1.5 p-1 px-1.5 bg-indigo-50/70 border border-indigo-100 rounded-lg mt-1 font-sans">
-                                      <span className="text-indigo-805 text-[8px] font-black uppercase tracking-wider bg-indigo-100 px-1 py-0.5 rounded shrink-0 leading-none">Wspomaganie lekcyjne</span>
-                                      <span className="text-indigo-950 font-bold truncate leading-none">
-                                        {supportTeacher.first} {supportTeacher.last} ({supportTeacher.abbr})
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="text-[9px] text-slate-400 italic select-none font-sans mt-0.5">Brak dodatkowego wspomagania na tym przedmiocie.</div>
-                                  )}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50/70 p-3 rounded-xl border border-slate-200">
+                              <div>
+                                <label className="block text-[9.5px] font-bold text-slate-600 mb-1">🤝 Wspomaganie w klasie</label>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="40"
+                                    className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs bg-white font-bold"
+                                    value={currentStudent.supportHours?.wsp ?? (currentStudent.type === 'wsp' ? 8 : 0)}
+                                    onChange={(e) => {
+                                      handleUpdateSpecialStudent({
+                                        ...currentStudent,
+                                        supportHours: {
+                                          ...(currentStudent.supportHours || {}),
+                                          wsp: Number(e.target.value)
+                                        }
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-bold">h/tyg</span>
                                 </div>
                               </div>
-                            );
-                          })}
+
+                              <div>
+                                <label className="block text-[9.5px] font-bold text-slate-600 mb-1">👤 Rewalidacja (1:1)</label>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="20"
+                                    className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs bg-white font-bold"
+                                    value={currentStudent.supportHours?.rewa ?? (currentStudent.type === 'rewa' ? 2 : 0)}
+                                    onChange={(e) => {
+                                      handleUpdateSpecialStudent({
+                                        ...currentStudent,
+                                        supportHours: {
+                                          ...(currentStudent.supportHours || {}),
+                                          rewa: Number(e.target.value)
+                                        }
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-bold">h/tyg</span>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[9.5px] font-bold text-slate-600 mb-1">📖 Nauczanie Indywidualne</label>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="40"
+                                    className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs bg-white font-bold"
+                                    value={currentStudent.supportHours?.ni ?? (currentStudent.type === 'ni' ? 10 : 0)}
+                                    onChange={(e) => {
+                                      handleUpdateSpecialStudent({
+                                        ...currentStudent,
+                                        supportHours: {
+                                          ...(currentStudent.supportHours || {}),
+                                          ni: Number(e.target.value)
+                                        }
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-bold">h/tyg</span>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[9.5px] font-bold text-slate-600 mb-1">🎯 Terapia pedagogiczna</label>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="20"
+                                    className="w-full px-2.5 py-1 border border-slate-200 rounded-lg text-xs bg-white font-bold"
+                                    value={currentStudent.supportHours?.korekta ?? 0}
+                                    onChange={(e) => {
+                                      handleUpdateSpecialStudent({
+                                        ...currentStudent,
+                                        supportHours: {
+                                          ...(currentStudent.supportHours || {}),
+                                          korekta: Number(e.target.value)
+                                        }
+                                      });
+                                    }}
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-bold">h/tyg</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* DODATKOWO: Nauczyciele wspomagający w klasie */}
+                          <div className="pt-3 border-t border-slate-100 space-y-2">
+                            <div>
+                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                                <Users size={12} className="text-indigo-500 shrink-0" />
+                                Wyznaczona kadra wspomagająca dla ucznia
+                              </span>
+                              <p className="text-[9.5px] text-slate-400 font-semibold leading-relaxed mt-0.5 select-none">
+                                Zaznacz nauczycieli, którzy tworzą zespół wspomagający tego ucznia (będą wyróżnieni na liście szybkiego wyboru w Planie SPE):
+                              </p>
+                            </div>
+
+                            {/* Lista nauczycieli - grid checkboxów */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 max-h-24 overflow-y-auto pr-1 border border-slate-205 rounded-xl p-2.5 bg-slate-50/50 custom-scrollbar">
+                              {pl.teachers.map(t => {
+                                const isChecked = (currentStudent.supportTeacherIds || []).includes(t.id);
+                                return (
+                                  <label 
+                                    key={t.id} 
+                                    className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-[10px] font-bold cursor-pointer select-none transition-all leading-tight ${
+                                      isChecked 
+                                        ? 'bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-900 shadow-3xs' 
+                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <input 
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        const currentList = currentStudent.supportTeacherIds || [];
+                                        const updatedList = e.target.checked 
+                                          ? [...currentList, t.id]
+                                          : currentList.filter(id => id !== t.id);
+                                        handleUpdateSpecialStudent({
+                                          ...currentStudent,
+                                          supportTeacherIds: updatedList
+                                        });
+                                      }}
+                                      className="rounded border-slate-300 text-indigo-600 h-3 w-3 cursor-pointer shrink-0"
+                                    />
+                                    <span className="truncate" title={`${t.first} ${t.last}`}>{t.first.charAt(0)}. {t.last} ({t.abbr})</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
+
+                        {/* Sekcja 3: Dodawanie nowych zajęć dedykowanych (Indywidualne / Rewalidacja) */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                          <div className="flex items-center gap-1.5 border-b border-slate-100 pb-3 select-none">
+                            <Sparkles size={15} className="text-indigo-600 animate-pulse" />
+                            <h4 className="text-xs font-black text-slate-805 uppercase tracking-wider">Nowe zajęcia specjalne lub indywidualne (1:1)</h4>
+                          </div>
+
+                          <form onSubmit={handleAddSpecialAssignment} className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Przedmiot</label>
+                                <select
+                                  required
+                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-800"
+                                  value={specSubjectId}
+                                  onChange={(e) => setSpecSubjectId(e.target.value)}
+                                >
+                                  <option value="">Wybierz przedmiot...</option>
+                                  {pl.subjects.map(sub => (
+                                    <option key={sub.id} value={sub.id}>{sub.name} ({sub.short})</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Nauczyciel Prowadzący / Terapeuta</label>
+                                <select
+                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-805"
+                                  value={specTeacherId}
+                                  onChange={(e) => setSpecTeacherId(e.target.value)}
+                                >
+                                  <option value="">Nauczyciel prowadzący...</option>
+                                  {pl.teachers.map(t => (
+                                    <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Wspomagający na tym przedmiocie</label>
+                                <select
+                                  className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none focus:border-indigo-500 font-bold text-slate-805"
+                                  value={specSupportId}
+                                  onChange={(e) => setSpecSupportId(e.target.value)}
+                                >
+                                  <option value="">Brak wspomagającego do tych zajęć...</option>
+                                  {pl.teachers.map(t => (
+                                    <option key={t.id} value={t.id}>{t.first} {t.last} ({t.abbr})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Forma zajęć */}
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
+                              <div className="sm:col-span-4">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 select-none font-sans">Tygodniowy wymiar godzin</label>
+                                <div className="flex items-center gap-2">
+                                  <input 
+                                    type="number"
+                                    min="1"
+                                    max="40"
+                                    required
+                                    className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-bold"
+                                    value={specHoursPerW}
+                                    onChange={(e) => setSpecHoursPerW(Number(e.target.value))}
+                                  />
+                                  <span className="text-xs text-slate-500 font-bold shrink-0">godz. / tydz.</span>
+                                </div>
+                              </div>
+
+                              {/* Selektor form i form integracji */}
+                              <div className="sm:col-span-5 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setSpecWithClass(false)}
+                                  className={`flex-1 p-2 rounded-xl border font-bold text-[10.5px] transition-all flex flex-col items-center justify-center cursor-pointer select-none leading-relaxed border-solid ${
+                                    !specWithClass 
+                                      ? 'bg-purple-50 border-purple-300 text-purple-800 shadow-3xs' 
+                                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  <span className="font-extrabold uppercase text-[7.5px] tracking-wider mb-0.5 text-purple-600">Forma 1:1</span>
+                                  👤 Indywidualne / Rewalidacja
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSpecWithClass(true)}
+                                  className={`flex-1 p-2 rounded-xl border font-bold text-[10.5px] transition-all flex flex-col items-center justify-center cursor-pointer select-none leading-relaxed border-solid ${
+                                    specWithClass 
+                                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-3xs' 
+                                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-600'
+                                  }`}
+                                >
+                                  <span className="font-extrabold uppercase text-[7.5px] tracking-wider mb-0.5 text-emerald-600">Forma Klasowa</span>
+                                  🏫 Z klasą
+                                </button>
+                              </div>
+
+                              <div className="sm:col-span-3">
+                                <button type="submit" className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shrink-0 transition-all flex items-center justify-center gap-1 cursor-pointer">
+                                  <Plus size={13} /> Dodaj zajęcie
+                                </button>
+                              </div>
+                            </div>
+                          </form>
+                        </div>
+
+                        {/* Sekcja 4: Wykaz zajęć przypisanych do tego ucznia */}
+                        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2.5">
+                            <span className="text-xs font-black text-slate-500 uppercase tracking-wider block">Wykaz zdefiniowanych zajęć ({studentAssignments.length})</span>
+                          </div>
+
+                          {studentAssignments.length === 0 ? (
+                            <div className="p-8 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400 italic text-xs py-10 select-none">
+                              Brak zdefiniowanych zajęć i przedmiotów dla tego ucznia. Użyj formularza powyżej, aby stworzyć pierwszą pozycję.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                              {studentAssignments.map(a => {
+                                const subj = subjectsMap.get(a.subjectId);
+                                const mainTeacher = a.teacherId ? teachersMap.get(a.teacherId) : null;
+                                const supportTeacher = a.supportTeacherId ? teachersMap.get(a.supportTeacherId) : null;
+                                
+                                return (
+                                  <div 
+                                    key={a.id} 
+                                    className={`p-4 border rounded-2xl flex flex-col justify-between text-xs bg-white transition hover:shadow-xs relative border-l-4 group ${
+                                      a.withClass ? 'border-l-emerald-500 border-slate-200' : 'border-l-purple-500 border-slate-200'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                      <div className="min-w-0">
+                                        <span className="font-bold text-[12.5px] block truncate leading-tight" style={{ color: subj?.color || '#334155' }}>
+                                          {subj?.name}
+                                        </span>
+                                        <span className={`inline-block text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border mt-1 leading-none ${
+                                          a.withClass 
+                                            ? 'bg-emerald-50 text-emerald-700 border-emerald-150' 
+                                            : 'bg-purple-50 text-purple-700 border-purple-150'
+                                        }`}>
+                                          {a.withClass ? '🏫 Z klasą' : '👤 Indywidualnie'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <span className="font-black text-[10.5px] bg-slate-100/80 border border-slate-200 text-slate-705 px-1.5 py-0.5 rounded font-mono">
+                                          {a.hoursPerWeek}h/tydz
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveSpecialAssignment(a.id)}
+                                          className="text-slate-400 hover:text-red-500 transition p-1 rounded-md hover:bg-rose-50 bg-transparent border-none cursor-pointer"
+                                          title="Usuń to przypisanie zajęć"
+                                        >
+                                          <Trash2 size={12.5} strokeWidth={2.5} />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="space-y-1.5 mt-2 font-semibold text-slate-600 text-[10.5px]">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-slate-400 text-[10px] select-none font-sans">Prowadzący:</span>
+                                        {mainTeacher ? (
+                                          <span className="text-slate-800 font-extrabold">{mainTeacher.first} {mainTeacher.last} (<strong className="font-mono">{mainTeacher.abbr}</strong>)</span>
+                                        ) : (
+                                          <span className="text-red-500 italic font-semibold">Brak przydziału</span>
+                                        )}
+                                      </div>
+
+                                      {supportTeacher && (
+                                        <div className="flex items-center gap-1.5 p-1 px-1.5 bg-indigo-50/70 border border-indigo-100 rounded-lg mt-1 font-sans">
+                                          <span className="text-indigo-805 text-[8px] font-black uppercase tracking-wider bg-indigo-100 px-1 py-0.5 rounded shrink-0 leading-none">Wspomaganie</span>
+                                          <span className="text-indigo-950 font-bold truncate leading-none">
+                                            {supportTeacher.first} {supportTeacher.last} ({supportTeacher.abbr})
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })() : (
@@ -3490,7 +3991,7 @@ export default function PlanKlas({ appState, onChangeAppState, onTransfer, prese
                   <span className="text-4xl animate-bounce">🎓</span>
                   <span className="text-sm font-semibold mt-3 text-slate-700 font-sans">Wybierz ucznia z lewej listy</span>
                   <p className="text-[11px] text-slate-405 max-w-sm mt-1 leading-relaxed font-semibold">
-                    Zdefiniujesz tutaj klasę macierzystą ucznia, jego formę wsparcia (NI / Rewalidacja / Wspomaganie), indywidualne przedmioty z ich kadrą, wymiarem godzin oraz wieloma nauczycielami wspomagającymi na lekcjach klasowych.
+                    Układaj Plan SPE przed etapem Planu Sal: rozdysponuj pulę godzin wsparcia (np. 8h w klasie) bezpośrednio na siatce lekcji klasy, planuj rewalidację oraz generuj rzetelny Arkusz SPE.
                   </p>
                 </div>
               )}
