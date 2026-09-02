@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell } from '../types';
-import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink } from 'lucide-react';
+import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, SpecialStudent } from '../types';
+import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink, HeartHandshake, Sparkles, BookOpen, Clock, Award } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
+import ArkuszWsparciaUcznia from './ArkuszWsparciaUcznia';
 
 interface WydrukiProps {
   appState: AppState;
@@ -105,7 +106,7 @@ function getSegmentGroups(categoryCols: any[]) {
 }
 
 export default function Wydruki({ appState, schedData }: WydrukiProps) {
-  const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties'>('classes');
+  const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties' | 'special_support'>('classes');
   const [scheduleVersion, setScheduleVersion] = useState<'etap1' | 'etap2'>(() => {
     const yk = appState.yearKey || 'default';
     const yearObj = schedData[yk];
@@ -124,6 +125,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('all');
+  const [selectedSpecialStudentId, setSelectedSpecialStudentId] = useState<string>('all');
+  const [specialSupportFilter, setSpecialSupportFilter] = useState<string>('all');
+  const [showSupportSummaryCards, setShowSupportSummaryCards] = useState<boolean>(true);
+  const [showSupportSignatures, setShowSupportSignatures] = useState<boolean>(true);
+  const [showSupportTeamTable, setShowSupportTeamTable] = useState<boolean>(true);
   const [popupBlocked, setPopupBlocked] = useState<boolean>(false);
   const [isInIframe, setIsInIframe] = useState<boolean>(false);
   const [isPrintFriendlyWeeklyMode, setIsPrintFriendlyWeeklyMode] = useState<boolean>(false);
@@ -1748,6 +1754,21 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     return pl.rooms.filter(r => r.id === selectedRoomId);
   }, [pl.rooms, selectedRoomId]);
 
+  // --- Special Education Students Data Resolution (Arkusz Wsparcia) ---
+  const specialStudentsToPrint = useMemo(() => {
+    let list = pl.specialStudents || [];
+    if (selectedSpecialStudentId !== 'all') {
+      list = list.filter(s => s.id === selectedSpecialStudentId);
+    }
+    if (specialSupportFilter !== 'all') {
+      list = list.filter(s => {
+        const types = s.supportTypes || (s.type ? [s.type] : []);
+        return types.includes(specialSupportFilter);
+      });
+    }
+    return list;
+  }, [pl.specialStudents, selectedSpecialStudentId, specialSupportFilter]);
+
   // Classified and sorted columns (rooms) list for Wydruki
   const roomsToPrintColumns = useMemo(() => {
     const rawCols = localFlattenColumns(appState.floors);
@@ -2317,7 +2338,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             <div className="text-left">
               <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-tight">Tryb przygotowania do druku</span>
               <h3 className="text-sm font-black uppercase text-white leading-tight">
-                Podgląd Tygodniowego Planu • {printType === 'classes' ? 'Oddziały' : 'Nauczyciele'}
+                Podgląd Tygodniowego Planu • {printType === 'classes' ? 'Oddziały' : printType === 'teachers' ? 'Nauczyciele' : 'Arkusz Wsparcia (SPE)'}
               </h3>
             </div>
           </div>
@@ -2340,7 +2361,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               </button>
             </div>
 
-            {/* Quick selector of active class or teacher directly in overlay */}
+            {/* Quick selector of active class or teacher or SPE student directly in overlay */}
             {printType === 'classes' ? (
               <select
                 value={selectedClassId}
@@ -2352,7 +2373,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   <option key={c.id} value={c.id}>Klasa {c.name}</option>
                 ))}
               </select>
-            ) : (
+            ) : printType === 'teachers' ? (
               <div className="flex items-center gap-2">
                 <select
                   value={selectedTeacherId}
@@ -2374,6 +2395,22 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   />
                   <span>Dyżury na przerwach</span>
                 </label>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedSpecialStudentId}
+                  onChange={(e) => setSelectedSpecialStudentId(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Wszyscy uczniowie objęci wsparciem ({specialStudentsToPrint.length})</option>
+                  {(pl.specialStudents || []).map(s => {
+                    const cName = s.classId ? (classesMap.get(s.classId)?.name || s.classId) : 'Tok Indywidualny';
+                    return (
+                      <option key={s.id} value={s.id}>{s.lastName} {s.firstName} (kl. {cName})</option>
+                    );
+                  })}
+                </select>
               </div>
             )}
 
@@ -2499,7 +2536,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 </div>
               );
             })
-          ) : (
+          ) : printType === 'teachers' ? (
             teachersToPrint.map((teacher, idx) => {
               return (
                 <div key={teacher.id} className={`print-card pb-8 border-b border-slate-200 last:border-0 ${idx < teachersToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
@@ -2656,6 +2693,38 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 </div>
               );
             })
+          ) : (
+            /* ======================= SPECIAL SUPPORT (SPE) RENDERING ======================= */
+            specialStudentsToPrint.length === 0 ? (
+              <div className="text-center py-16 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl space-y-3">
+                <p className="text-sm font-black text-slate-800 uppercase">Brak zdefiniowanych uczniów ze specjalnymi potrzebami edukacyjnymi (SPE)</p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Dodaj uczniów w Kreatorze Szkoły (Krok 8 / 9) lub w module Plan Klas, aby wygenerować dedykowany arkusz wsparcia.
+                </p>
+              </div>
+            ) : (
+              specialStudentsToPrint.map((student, idx) => (
+                <div key={student.id} className={idx < specialStudentsToPrint.length - 1 ? 'page-break mb-12' : ''}>
+                  <ArkuszWsparciaUcznia
+                    student={student}
+                    appState={appState}
+                    scheduleVersion={scheduleVersion}
+                    schedData={schedData}
+                    hoursList={hoursList}
+                    subjectsMap={subjectsMap}
+                    classesMap={classesMap}
+                    teachersMap={teachersMap}
+                    roomsMap={roomsMap}
+                    groupsMap={groupsMap}
+                    resolveRoomFromColKey={resolveRoomFromColKey}
+                    showSupportSummaryCards={showSupportSummaryCards}
+                    showSignatures={showSupportSignatures}
+                    showTeamTable={showSupportTeamTable}
+                    isPrintOverlay={true}
+                  />
+                </div>
+              ))
+            )
           )}
         </div>
       </div>
@@ -2796,7 +2865,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 <Printer size={15} className="animate-pulse" /> Podgląd dyżurów
               </button>
             )}
-            {(printType === 'classes' || printType === 'teachers') && (
+            {(printType === 'classes' || printType === 'teachers' || printType === 'special_support') && (
               <button 
                 onClick={() => setIsPrintFriendlyWeeklyMode(true)}
                 className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-indigo-600 border-solid"
@@ -2815,34 +2884,40 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         </div>
 
         {/* Filters and Navigation */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Main Select template */}
-          <div className="space-y-1">
+          <div className="space-y-1 sm:col-span-2 lg:col-span-2">
             <label className="text-[10px] text-slate-400 font-bold uppercase">Typ wydruku</label>
-            <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-lg">
+            <div className="grid grid-cols-5 gap-1 bg-slate-100 p-1 rounded-lg">
               <button
                 onClick={() => setPrintType('classes')}
-                className={`py-1.5 text-[11px] font-black rounded-md transition ${printType === 'classes' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'classes' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Plan Klas
               </button>
               <button
                 onClick={() => setPrintType('teachers')}
-                className={`py-1.5 text-[11px] font-black rounded-md transition ${printType === 'teachers' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'teachers' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Nauczyciele
               </button>
               <button
                 onClick={() => setPrintType('rooms')}
-                className={`py-1.5 text-[11px] font-black rounded-md transition ${printType === 'rooms' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'rooms' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Gabinety
               </button>
               <button
                 onClick={() => setPrintType('duties')}
-                className={`py-1.5 text-[11px] font-black rounded-md transition ${printType === 'duties' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'duties' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Dyżury
+              </button>
+              <button
+                onClick={() => setPrintType('special_support')}
+                className={`py-1.5 text-[10.5px] font-black rounded-md transition flex items-center justify-center gap-1 ${printType === 'special_support' ? 'bg-indigo-600 shadow-xs text-white' : 'text-indigo-700 hover:text-indigo-950 font-black'}`}
+              >
+                <HeartHandshake size={12} /> Arkusz SPE
               </button>
             </div>
           </div>
@@ -2946,6 +3021,78 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 <Printer size={15} /> Podgląd wydruku dyżurów
               </button>
             </div>
+          )}
+
+          {printType === 'special_support' && (
+            <>
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-bold uppercase">Wybierz Ucznia (SPE)</label>
+                <select
+                  value={selectedSpecialStudentId}
+                  onChange={(e) => setSelectedSpecialStudentId(e.target.value)}
+                  className="w-full h-[38px] px-3 border border-slate-200 bg-white text-xs font-semibold rounded-lg text-slate-700 outline-none"
+                >
+                  <option value="all">Wszyscy uczniowie objęci wsparciem (SPE)</option>
+                  {(pl.specialStudents || []).map(s => {
+                    const cName = s.classId ? (classesMap.get(s.classId)?.name || s.classId) : 'Tok Indywidualny';
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {s.lastName} {s.firstName} (kl. {cName})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-bold uppercase">Forma Wsparcia</label>
+                <select
+                  value={specialSupportFilter}
+                  onChange={(e) => setSpecialSupportFilter(e.target.value)}
+                  className="w-full h-[38px] px-3 border border-slate-200 bg-white text-xs font-semibold rounded-lg text-slate-700 outline-none"
+                >
+                  <option value="all">Wszystkie formy wsparcia</option>
+                  <option value="ni">🎯 Nauczanie Indywidualne (NI)</option>
+                  <option value="wsp">🤝 Wspomaganie w oddziale</option>
+                  <option value="rewa">🧩 Rewalidacja</option>
+                  <option value="korekta">💡 Terapia korekcyjno-kompensacyjna</option>
+                </select>
+              </div>
+
+              <div className="space-y-1 flex flex-col justify-end">
+                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 px-3 h-[38px] rounded-lg">
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-700 font-bold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showSupportSummaryCards}
+                      onChange={(e) => setShowSupportSummaryCards(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span>Bilans</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-700 font-bold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showSupportTeamTable}
+                      onChange={(e) => setShowSupportTeamTable(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span>Kadra</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-700 font-bold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showSupportSignatures}
+                      onChange={(e) => setShowSupportSignatures(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span>Podpisy</span>
+                  </label>
+                </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -3554,6 +3701,47 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* ======================= SPECIAL SUPPORT (ARKUSZ WSPARCIA UCZNIA SPE) ======================= */}
+        {printType === 'special_support' && (
+          <div className="space-y-8">
+            {specialStudentsToPrint.length === 0 ? (
+              <div className="p-12 text-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl space-y-4">
+                <div className="w-16 h-16 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
+                  <HeartHandshake size={32} />
+                </div>
+                <div className="max-w-md mx-auto space-y-1.5">
+                  <h3 className="text-base font-black text-slate-900">Brak zarejestrowanych uczniów ze wsparciem (SPE)</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Dodaj uczniów objętych kształceniem specjalnym (Nauczanie Indywidualne, Nauczyciel Wspomagający, Rewalidacja, Terapia) w Kreatorze Szkoły (Krok 8 / 9) lub w module Plan Klas, aby wygenerować dedykowany arkusz wsparcia.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              specialStudentsToPrint.map((student, idx) => (
+                <div key={student.id} className={idx < specialStudentsToPrint.length - 1 ? 'page-break mb-12' : ''}>
+                  <ArkuszWsparciaUcznia
+                    student={student}
+                    appState={appState}
+                    scheduleVersion={scheduleVersion}
+                    schedData={schedData}
+                    hoursList={hoursList}
+                    subjectsMap={subjectsMap}
+                    classesMap={classesMap}
+                    teachersMap={teachersMap}
+                    roomsMap={roomsMap}
+                    groupsMap={groupsMap}
+                    resolveRoomFromColKey={resolveRoomFromColKey}
+                    showSupportSummaryCards={showSupportSummaryCards}
+                    showSignatures={showSupportSignatures}
+                    showTeamTable={showSupportTeamTable}
+                    isPrintOverlay={false}
+                  />
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
