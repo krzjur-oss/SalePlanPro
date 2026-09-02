@@ -4,7 +4,8 @@ import {
 } from '../types';
 import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
-  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award, Zap, RotateCcw, Ban 
+  User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award, Zap, RotateCcw, Ban,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import PlanGenerator from './PlanGenerator';
 
@@ -87,6 +88,8 @@ export default function PlanKlas({
     }
   }, [presentationMode, activeTab]);
   const [viewMode, setViewMode] = useState<'single' | 'all'>('single');
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
   const [activeDayIndex, setActiveDayIndex] = useState<number>(0);
   const [allViewSelectedClassId, setAllViewSelectedClassId] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
@@ -1923,13 +1926,49 @@ export default function PlanKlas({
     <div className="flex flex-col md:flex-row flex-1 overflow-hidden px-0 mx-0" id="page-plan-klas">
       {/* ── LEWY SIDEBAR (Nawigacja) ── */}
       {!presentationMode && !(viewMode === 'all' && activeTab === 'plan') && (
-        <aside className="w-full md:w-64 border-r border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none">
-          
-          {/* Zarządzanie Klasami */}
-          <div className="p-4 border-b border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">🏫 Lista Klas</span>
+        isLeftSidebarCollapsed ? (
+          <div className="hidden md:flex flex-col items-center py-3 px-1 bg-white border-r border-slate-200 shrink-0 select-none shadow-xs w-11 transition-all">
+            <button
+              type="button"
+              onClick={() => setIsLeftSidebarCollapsed(false)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition mb-3 cursor-pointer"
+              title="Rozwiń listę klas"
+            >
+              <PanelLeftOpen size={18} />
+            </button>
+            <div 
+              onClick={() => setIsLeftSidebarCollapsed(false)}
+              className="cursor-pointer [writing-mode:vertical-lr] rotate-180 text-[11px] font-extrabold text-slate-400 hover:text-blue-600 tracking-wider uppercase flex items-center gap-2 py-2"
+              title="Rozwiń listę klas"
+            >
+              <span>🏫 Klasy ({filteredClasses.length})</span>
             </div>
+            {currentClass && (
+              <div 
+                onClick={() => setIsLeftSidebarCollapsed(false)}
+                className="mt-auto mb-2 p-1 rounded-md bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black cursor-pointer text-center"
+                title={`Aktywna klasa: ${currentClass.name}. Kliknij aby rozwinąć.`}
+              >
+                {currentClass.name}
+              </div>
+            )}
+          </div>
+        ) : (
+          <aside className="w-full md:w-52 lg:w-56 xl:w-60 border-r border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none transition-all">
+            
+            {/* Zarządzanie Klasami */}
+            <div className="p-3 sm:p-4 border-b border-slate-100">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">🏫 Lista Klas</span>
+                <button
+                  type="button"
+                  onClick={() => setIsLeftSidebarCollapsed(true)}
+                  className="hidden md:flex p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                  title="Zwiń listę klas, aby zyskać maksymalną szerokość na plan"
+                >
+                  <PanelLeftClose size={15} />
+                </button>
+              </div>
             
             <form onSubmit={handleAddClass} className="flex flex-col gap-1.5 mb-3">
               <input 
@@ -2107,46 +2146,71 @@ export default function PlanKlas({
             </button>
           </div>
         </aside>
+        )
       )}
 
       {/* ── STREFA CENTRALNA (Siatka układania) ── */}
-      <main className="flex-1 bg-slate-50 p-4 md:p-5 overflow-y-auto">
+      <main className="flex-1 bg-slate-50 p-2 sm:p-3 md:p-4 overflow-y-auto min-w-0">
         {activeTab === 'plan' && (
           <div className="flex flex-col h-full animate-fade-in">
             {/* Header i Przyciski Akcji */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm mb-3 sm:mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
-                <h1 className="text-lg font-bold text-slate-900 select-none">
+                <h1 className="text-base sm:text-lg font-bold text-slate-900 select-none">
                   {viewMode === 'all' 
                     ? `Plan lekcji dla wszystkich klas (Dzień po dniu)`
                     : currentClass ? `Plan lekcji dla klasy ${currentClass.name}` : 'Plan lekcji klasowy'}
                 </h1>
-                <p className="text-xs text-slate-500 mt-1 select-none">
+                <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 select-none">
                   {viewMode === 'all'
                     ? `Przeglądaj i układaj plan lekcji dla wszystkich klas jednocześnie. Wybierz dzień tygodnia poniżej.`
                     : currentClass ? `Zdefiniowano zajęcia klasy: ${currentClass.group || 'cała klasa'}. Przeciągaj lekcje ze skrytki po prawej stronie na siatkę.` : 'Wybierz klasę z lewego panelu, aby rozpocząć układanie planu.'}
                 </p>
               </div>
-              {!presentationMode && (
-                <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                {isLeftSidebarCollapsed && (
                   <button 
-                    onClick={() => setShowGenerator(true)}
-                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
+                    type="button"
+                    onClick={() => setIsLeftSidebarCollapsed(false)}
+                    className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-slate-200"
+                    title="Rozwiń listę klas"
                   >
-                    <Sparkles size={14} /> Autogenerator planu lekcji
+                    <PanelLeftOpen size={14} className="text-blue-600" />
+                    <span>Klasy ({currentClass ? currentClass.name : 'wybierz'})</span>
                   </button>
+                )}
+                {isRightSidebarCollapsed && (
                   <button 
-                    onClick={onTransfer}
-                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-1.5"
+                    type="button"
+                    onClick={() => setIsRightSidebarCollapsed(false)}
+                    className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-slate-200"
+                    title="Rozwiń skrytkę lekcji do umieszczenia"
                   >
-                    <RefreshCw size={14} /> Przenieś do planu sal (Etap 2)
+                    <PanelRightOpen size={14} className="text-indigo-600" />
+                    <span>Skrytka lekcji</span>
                   </button>
-                </div>
-              )}
+                )}
+                {!presentationMode && (
+                  <>
+                    <button 
+                      onClick={() => setShowGenerator(true)}
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles size={14} /> <span className="hidden sm:inline">Autogenerator planu lekcji</span><span className="sm:hidden">Generator</span>
+                    </button>
+                    <button 
+                      onClick={onTransfer}
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw size={14} /> <span className="hidden sm:inline">Przenieś do planu sal (Etap 2)</span><span className="sm:hidden">Plan sal</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Przełącznik Widoku */}
-            <div className="flex items-center gap-2 mb-5 bg-slate-100 p-1 rounded-xl self-start">
+            <div className="flex items-center gap-2 mb-3 sm:mb-4 bg-slate-100 p-1 rounded-xl self-start">
               <button
                 type="button"
                 onClick={() => setViewMode('single')}
@@ -2474,14 +2538,17 @@ export default function PlanKlas({
             ) : (
               /* ==================== WIDOK JEDNEJ KLASY ==================== */
               currentClass ? (
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto p-2">
-                  <table className="min-w-full border-collapse">
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-1 sm:p-2 w-full">
+                  <table className="w-full table-fixed border-collapse">
                     <thead>
                       <tr>
-                        <th className="p-3 border-b border-r border-slate-200 text-xs font-bold text-slate-400 text-center w-24">Lekcja</th>
+                        <th className="p-1 sm:p-2 border-b border-r border-slate-200 text-[10px] sm:text-xs font-bold text-slate-400 text-center w-12 sm:w-16 md:w-20 select-none">
+                          Lekcja
+                        </th>
                         {DAYS.map((day, i) => (
-                          <th key={i} className="p-3 border-b border-slate-200 text-xs font-bold text-slate-600 text-center min-w-[140px] select-none">
-                            {day}
+                          <th key={i} className="p-1.5 sm:p-2 border-b border-r last:border-r-0 border-slate-200 text-xs font-bold text-slate-700 text-center select-none w-1/5">
+                            <span className="hidden lg:inline">{day}</span>
+                            <span className="lg:hidden">{day.slice(0, 3)}</span>
                           </th>
                         ))}
                       </tr>
@@ -2490,9 +2557,9 @@ export default function PlanKlas({
                       {pl.hours.map((h, hourIndex) => (
                         <tr key={hourIndex} className="hover:bg-slate-50/50">
                           {/* Godzina */}
-                          <td className="p-3 border-b border-r border-slate-200 text-center bg-slate-50/50 select-none">
-                            <span className="block font-bold text-slate-700">{h.num}</span>
-                            <span className="block text-[10px] text-slate-400 font-mono mt-0.5">{h.start}–{h.end}</span>
+                          <td className="p-1 sm:p-2 border-b border-r border-slate-200 text-center bg-slate-50/50 select-none align-middle">
+                            <span className="block font-bold text-slate-700 text-xs sm:text-sm md:text-base">{h.num}</span>
+                            <span className="block text-[8.5px] sm:text-[9.5px] text-slate-400 font-mono mt-0.5 leading-tight">{h.start}–{h.end}</span>
                           </td>
                           {/* Dni */}
                           {DAYS.map((_, dayIndex) => {
@@ -2504,7 +2571,7 @@ export default function PlanKlas({
                               <td 
                                 key={dayIndex}
                                 title={anyConf ? allConfReasons.join('\n') : undefined}
-                                className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-28 transition-all ${
+                                className={`p-1 sm:p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-24 sm:min-h-28 transition-all overflow-hidden ${
                                   anyConf ? 'bg-red-50/70 border-2 border-red-300' : ''
                                 }`}
                                 data-cell-type="plan-cell"
@@ -2542,7 +2609,7 @@ export default function PlanKlas({
                                           onTouchMove={(e) => handleTouchMove(e, asg.id)}
                                           onTouchEnd={handleTouchEnd}
                                           onContextMenu={(e) => e.preventDefault()}
-                                          className={`rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
+                                          className={`rounded-lg p-1.5 sm:p-2 border-l-2 sm:border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
                                             selectedAssignmentId 
                                               ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
                                               : 'hover:shadow-md'
@@ -2570,7 +2637,7 @@ export default function PlanKlas({
                                                     👥 {group.name}
                                                   </span>
                                                 )}
-                                                <span className="text-xs font-bold truncate leading-tight" style={isConf ? {} : { color: subj?.color }}>
+                                                <span className="text-[11px] sm:text-xs font-bold truncate leading-tight" style={isConf ? {} : { color: subj?.color }}>
                                                   {subj?.name}
                                                 </span>
                                               </div>
@@ -2584,13 +2651,13 @@ export default function PlanKlas({
                                                   e.stopPropagation();
                                                   handleRemoveLesson(key);
                                                 }}
-                                                className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer shrink-0"
+                                                className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-0.5 sm:p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer shrink-0"
                                                 title="Usuń tę lekcję z siatki"
                                               >
                                                 ✕
                                               </button>
                                             </div>
-                                            <div className={`text-[10px] mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
+                                            <div className={`text-[9.5px] sm:text-[10px] mt-0.5 sm:mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
                                               👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
                                             </div>
 
@@ -2703,15 +2770,15 @@ export default function PlanKlas({
                                         placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
                                       }
                                     }}
-                                    className={`h-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-all select-none min-h-[90px] ${
+                                    className={`h-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-all select-none min-h-[60px] sm:min-h-[75px] md:min-h-[85px] p-1 ${
                                       selectedAssignmentId 
                                         ? 'border-indigo-300 bg-indigo-50/40 text-indigo-550 hover:bg-indigo-50/80 hover:border-indigo-400 cursor-pointer' 
                                         : 'border-slate-200 text-slate-300 hover:border-blue-400 hover:text-blue-400 cursor-default'
                                     }`}
                                   >
-                                    <span className="text-lg font-light">+</span>
+                                    <span className="text-base sm:text-lg font-light leading-none">+</span>
                                     {selectedAssignmentId && (
-                                      <span className="text-[8px] font-black uppercase tracking-wider text-indigo-600 px-1.5 py-0.5 bg-white border border-indigo-200 rounded shadow-xs mt-1 animate-pulse">
+                                      <span className="text-[7.5px] sm:text-[8px] font-black uppercase tracking-wider text-indigo-600 px-1 py-0.5 bg-white border border-indigo-200 rounded shadow-xs mt-0.5 animate-pulse">
                                         Wstaw
                                       </span>
                                     )}
@@ -3898,24 +3965,25 @@ export default function PlanKlas({
                             </p>
                           </div>
                         ) : (
-                          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3 overflow-x-auto">
+                          <div className="bg-white border border-slate-200 rounded-2xl p-2 sm:p-4 shadow-sm space-y-3 overflow-hidden w-full">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                                 📅 Tygodniowy Rozkład Zajęć SPE • Uczeń: {currentStudent.firstName} {currentStudent.lastName} (Klasa {classesMap.get(currentStudent.classId)?.name})
                               </span>
                               <span className="text-[10px] font-bold text-slate-400">
-                                Kliknij na lekcję lub ikonę ⚙️, aby dostosować tryb: wsparcie, 1:1 lub zwolnienie
+                                Kliknij na lekcję lub ikonę ⚙️, aby dostosować tryb
                               </span>
                             </div>
 
                             {/* Tabela siatki */}
-                            <table className="w-full text-left border-collapse min-w-[750px]">
+                            <table className="w-full table-fixed text-left border-collapse">
                               <thead>
                                 <tr className="border-b border-slate-200 bg-slate-50/80 text-[10px] font-black text-slate-500 uppercase tracking-wider">
-                                  <th className="py-2 px-2 text-center w-14">Lekcja</th>
+                                  <th className="py-2 px-1 text-center w-12 sm:w-14">Lekcja</th>
                                   {DAYS.map((dayName, dIdx) => (
-                                    <th key={dIdx} className="py-2 px-2.5 text-left border-l border-slate-200 font-bold">
-                                      {dayName}
+                                    <th key={dIdx} className="py-2 px-1 sm:px-2.5 text-left border-l border-slate-200 font-bold w-1/5">
+                                      <span className="hidden lg:inline">{dayName}</span>
+                                      <span className="lg:hidden">{dayName.slice(0, 3)}</span>
                                     </th>
                                   ))}
                                 </tr>
@@ -4692,12 +4760,50 @@ export default function PlanKlas({
 
       {/* ── SKRYTKA LEKCJI DO UMIESZCZENIA (PO_PRAWEJ) ── */}
       {activeTab === 'plan' && (viewMode === 'all' || currentClass) && (
-        <aside className="w-full md:w-64 border-l border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none">
-          <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
-            <div>
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">🗂️ Lekcje do umieszczenia</span>
-              <span className="text-[10px] text-slate-400 mt-1 block">Przeciągnij przedmiot na siatkę lub użyj ułatwienia dotykowego:</span>
+        isRightSidebarCollapsed ? (
+          <div className="hidden md:flex flex-col items-center py-3 px-1 bg-white border-l border-slate-200 shrink-0 select-none shadow-xs w-11 transition-all">
+            <button
+              type="button"
+              onClick={() => setIsRightSidebarCollapsed(false)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition mb-3 cursor-pointer"
+              title="Rozwiń skrytkę lekcji"
+            >
+              <PanelRightOpen size={18} />
+            </button>
+            <div 
+              onClick={() => setIsRightSidebarCollapsed(false)}
+              className="cursor-pointer [writing-mode:vertical-lr] text-[11px] font-extrabold text-slate-400 hover:text-indigo-600 tracking-wider uppercase flex items-center gap-2 py-2"
+              title="Rozwiń skrytkę lekcji"
+            >
+              <span>🗂️ Skrytka lekcji</span>
             </div>
+            {selectedAssignmentId && (
+              <div 
+                onClick={() => setIsRightSidebarCollapsed(false)}
+                className="mt-auto mb-2 p-1 rounded-md bg-indigo-600 text-white text-[9px] font-black cursor-pointer text-center animate-pulse"
+                title="Aktywny pędzel - kliknij aby rozwinąć"
+              >
+                Pędzel
+              </div>
+            )}
+          </div>
+        ) : (
+          <aside className="w-full md:w-56 lg:w-60 xl:w-64 border-l border-slate-200 bg-white flex flex-col overflow-y-auto shrink-0 select-none transition-all">
+            <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/50 space-y-2 sm:space-y-3">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">🗂️ Lekcje do umieszczenia</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsRightSidebarCollapsed(true)}
+                    className="hidden md:flex p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                    title="Zwiń skrytkę lekcji, aby zyskać maksymalną szerokość na plan"
+                  >
+                    <PanelRightClose size={15} />
+                  </button>
+                </div>
+                <span className="text-[10px] text-slate-400 mt-0.5 block leading-tight">Przeciągnij przedmiot na siatkę lub użyj ułatwienia dotykowego:</span>
+              </div>
 
             {viewMode === 'all' && (
               <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-150 space-y-2">
@@ -4862,6 +4968,7 @@ export default function PlanKlas({
             )}
           </div>
         </aside>
+        )
       )}
 
       {/* Element pływający (podążający za palcem) przy przeciąganiu dotykowym */}
