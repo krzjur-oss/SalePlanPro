@@ -1,4 +1,4 @@
-# SalePlan Pro v3 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.8.1 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -37,9 +37,19 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 *   **Konfiguracja Przerw**: Elastyczny kreator godzin trwania przerw obiadowych i krótkich.
 *   **Matryca Harmonogramu**: Interaktywny panel przydzielania nauczycieli do określonych miejsc i przerw w poszczególne dni tygodnia.
 
-### 3. 👥 Równoległe Grupy i Zajęcia Specjalne w Planie Klas
-*   **Obsługa Wielu Grup na Jednej Godzinie**: Możliwość prowadzenia lekcji w grupach (np. Informatyka gr1 i gr2, WF chłopcy i dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w osobnych salach.
-*   **Zajęcia Specjalne i Indywidualne (SPE)**: Przydział nauczycieli prowadzących oraz nauczycieli wspomagających w klasie z automatyczną weryfikacją obecności i braku kolizji w planie oddziału.
+### 3. 👥 Równoległe Grupy oraz Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas
+*   **Obsługa Wielu Grup na Jednej Godzinie**: Możliwość prowadzenia lekcji w grupach (np. Informatyka gr1 i gr2, WF chłopcy i dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w osobnych salach z oznaczeniami graficznymi grup i brakiem fałszywych kolizji.
+*   **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Lewym Pasku Bocznym (Sidebar)**:
+    *   **Jednolita Nawigacja Boczna**: Bezpośrednie przełączanie w lewym panelu między widokiem oddziałów (`🏫 Oddziały klasowe`) a listą uczniów specjalnych (`👤 Uczniowie SPE i NI`), z wbudowaną wyszukiwarką uczniów i szybkim dodawaniem nowego orzeczenia.
+    *   **Ergonomiczne Zwijanie Paska (100% Szerokości Ekranu)**: Panel boczny zwija się do smukłego paska z plakietką wybranego ucznia (`PanelLeftClose` / `PanelLeftOpen`), eliminując podwójne paski i uwalniając pełną szerokość ekranu dla głównej siatki zajęć.
+    *   **Kompleksowy Plan Tygodniowy Ucznia SPE**:
+        *   Wizualne rozróżnienie zajęć w oddziale (**🤝 Wspomaganie** z nauczycielem prowadzącym) oraz zajęć gabinetowych (**👤 1 na 1 / Indywidualne** – Nauczanie Indywidualne, Rewalidacja, Terapia).
+        *   Dynamiczne podsumowanie wymiaru godzin (godziny z klasą vs godziny gabinetowe) aktualizowane na żywo.
+    *   **Karty Wsparcia Psychologiczno-Pedagogicznego**: Wbudowane edytory zintegrowane bezpośrednio z profilem ucznia:
+        *   **Orzeczenie i Profil**: Podstawa orzeczenia, zalecenia poradni PPP, termin ważności.
+        *   **WOPFU**: Wielospecjalistyczna Ocena Poziomu Funkcjonowania Ucznia (mocne strony, trudności, bariery środowiskowe).
+        *   **IPET**: Indywidualny Program Edukacyjno-Terapeutyczny (cele rozwojowe, zintegrowane działania nauczycieli i specjalistów, formy dostosowania wymagań).
+        *   **Rewalidacja / Pomoc PP**: Zakres zajęć rewalidacyjnych, logopedycznych, korekcyjno-kompensacyjnych i socjoterapeutycznych.
 
 ### 4. 📊 Moduł Wydruków i Publikacji (Wydruki)
 System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku tradycyjnego lub zapisu cyfrowego:
@@ -80,29 +90,34 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Obsługa Uczniów ze Specjalnymi Potrzebami Edukacyjnymi (SPE / NI / Rewalidacja)**:
-    *   Wdrożono dedykowany krok ewidencji uczniów SPE w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie.
-    *   Zintegrowano formularz przydziałów w trybie nauczycielskim (sekwencja pól: Nauczyciel -> Oddział / Uczeń SPE -> Podgrupa -> Przedmiot -> Sala -> Bloki).
-    *   Wdrożono niezależność kroków w formularzu (brak resetowania wartości przy zmianie innych pól).
-    *   Uwzględniono godziny zajęć specjalnych i indywidualnych w kalkulacji pensum, obciążenia i nadgodzin kadry.
-    *   Rozszerzono podsumowanie przydziałów o widok zajęć SPE dla klas, nauczycieli oraz toku indywidualnego.
-2.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
+1.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
+    *   Wdrożono jednolitą nawigację w lewym panelu bocznym z przełącznikiem między oddziałami klasowymi a uczniami SPE i NI.
+    *   Zaimplementowano ergonomiczne zwijanie/rozwijanie paska bocznego do wąskiej kolumny (`PanelLeftClose` / `PanelLeftOpen`), uwalniając 100% szerokości ekranu na właściwą siatkę zajęć.
+    *   Wyeliminowano zduplikowany lewy panel boczny wewnątrz modułu SPE, tworząc przejrzysty, harmonijny i spójny interfejs.
+    *   Siatka tygodniowa ucznia ze SPE z podziałem na wspomaganie w oddziale (🤝) oraz zajęcia gabinetowe (👤) wraz z edytorami kart wsparcia: Profil, WOPFU, IPET oraz Rewalidacja.
+2.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
+    *   Dedykowany krok ewidencji uczniów SPE w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie (NI, Wspomaganie w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
+    *   Zintegrowany formularz przydziałów w trybie nauczycielskim oraz dedykowany tryb `👤 USPE` z pulami orzeczeniowymi i dynamicznym licznikiem godzin zadeklarowanych, przydzielonych i pozostałych.
+    *   Wdrożono niezależność kroków w formularzu (brak resetowania wartości przy wyborze kolejnych pól).
+    *   Uwzględniono godziny zajęć specjalnych i indywidualnych w kalkulacji pensum, obciążenia i nadgodzin kadry pedagogicznej.
+    *   Rozszerzono zestawienie przydziałów o czytelny widok zajęć SPE dla klas, nauczycieli oraz toku indywidualnego.
+3.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
     *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal).
     *   Poprawiono resolver sal z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
     *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich.
     *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
-3.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape)**:
+4.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
     *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
     *   Wprowadzono algorytm deduplikacji wpisów oraz reguły ochrony przed dzieleniem stron (`break-inside: avoid`).
-4.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej**:
+5.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
     *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF) w tym samym slocie godzinowym bez fałszywych kolizji.
-5.  **Szablony Struktury Szkoły (SchoolStructureTemplate)**:
+6.  **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
     *   Zapisywanie struktury szkoły jako wielorazowy szablon z automatyczną promocją roczników.
-6.  **Centrum Scalania i Wieloosobowej Pracy**:
+7.  **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
     *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku.
-7.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej**:
+8.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
     *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
-8.  **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
+9.  **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
     *   Dynamiczny dobór roku szkolnego oraz profile przedmiotów dla SP, LO, Technikum i Szkoły Branżowej.
 
 ---

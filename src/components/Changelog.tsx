@@ -24,11 +24,26 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.1',
+      date: 'Wrzesień 2026',
+      title: 'Zintegrowany Moduł Nauczania Specjalnego (SPE / NI) w Lewym Panelu Planu Klas',
+      description: 'Główna ergonomiczna i wizualna ewolucja modułu Plan Klas: przeniesienie listy uczniów ze specjalnymi potrzebami edukacyjnymi (SPE i NI) do głównego lewego panelu bocznego (Sidebar), unifikacja zwijania paska bocznego do wąskiej kolumny (uwalniając 100% szerokości ekranu na siatkę planu ucznia), wyeliminowanie zbędnego podwójnego paska bocznego oraz rozbudowa arkuszy wsparcia IPET/WOPFU i siatki godzinowej.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Zintegrowano listę uczniów SPE i NI bezpośrednio w lewym panelu bocznym Planu Klas z szybkim przełącznikiem zakładek (🏫 Oddziały klasowe vs 👤 Uczniowie SPE i NI).', badgeText: 'Nawigacja' },
+        { type: 'improvement', text: 'Wdrożono jednolite zwijanie i rozwijanie lewego panelu bocznego (PanelLeftClose / PanelLeftOpen) – po zwinięciu panel staje się smukłym paskiem z plakietką aktywnego ucznia, a siatka planu zajęć uzyskuje pełną szerokość ekranu.', badgeText: 'Ergonomia UI' },
+        { type: 'improvement', text: 'Usunięto zduplikowany lewy panel boczny wewnątrz widoku Nauczania Specjalnego, zapewniając czysty, jednolity układ przestrzenny zgodny z widokiem oddziałów klasowych.', badgeText: 'Architektura UI' },
+        { type: 'feature', text: 'Dodano wyszukiwarkę uczniów SPE w lewym pasku oraz formularz szybkiego dodawania nowego orzeczenia/ucznia bez konieczności opuszczania Planu Klas.', badgeText: 'Szybkie Akcje' },
+        { type: 'feature', text: 'Pełna siatka planu tygodniowego ucznia: wizualizacja zajęć realizowanych w oddziale (🤝 wspomaganie z nauczycielem prowadzącym) oraz zajęć indywidualnych (👤 gabinet / 1 na 1), z rozróżnieniem sal i podsumowaniem godzin.', badgeText: 'Plan SPE' },
+        { type: 'improvement', text: 'Zintegrowano arkusze wsparcia w planie ucznia SPE: Profil ucznia, WOPFU, IPET oraz Terapia / Rewalidacja z możliwością zapisu notatek i zaleceń poradni.', badgeText: 'IPET & WOPFU' }
+      ]
+    },
+    {
       version: 'v3.8.0',
       date: 'Wrzesień 2026',
       title: 'Obsługa Uczniów ze Specjalnymi Potrzebami Edukacyjnymi (SPE / NI / Rewalidacja) i Nowy Formularz Przydziałów',
       description: 'Kompleksowy moduł wsparcia kształcenia specjalnego i zindywidualizowanego (Nauczanie Indywidualne, Wspomaganie w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna). Wdrożono nowy krok ewidencji uczniów SPE w Kreatorze Szkoły, pełną integrację przydziałów w trybie klasowym i nauczycielskim, rozliczanie pensum kadry z uwzględnieniem zajęć specjalnych oraz automatyczne uwzględnianie jednostek SPE w silniku planu lekcji.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Dodano dedykowany moduł uczniów ze specjalnymi potrzebami edukacyjnymi (SPE) w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie (NI, Wspomaganie / IPET, Rewalidacja, Korekta) i deklaracją tygodniowego wymiaru godzin.', badgeText: 'SPE / IPET' },
         { type: 'feature', text: 'Zintegrowano formularz przydziałów lekcyjnych w Kreatorze Szkoły w trybie nauczycielskim (1. Nauczyciel -> 2. Oddział szkolny lub uczeń SPE -> 3. Podgrupa -> 4. Przedmiot / rodzaj zajęć -> 5. Sugerowana sala -> 6. Rozkład i bloki) z automatycznym podpowiadaniem zadeklarowanych form wsparcia ucznia.', badgeText: 'Kreator Przydziałów' },

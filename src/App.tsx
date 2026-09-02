@@ -297,7 +297,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'spe' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.6.0';
+  const CURRENT_VERSION = '3.8.1';
   const [showVersionToast, setShowVersionToast] = useState(false);
 
   useEffect(() => {
@@ -1711,9 +1711,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.1!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Obsługa uczniów SPE / NI / Rewalidacja, zintegrowany formularz przydziałów w trybie nauczycielskim oraz automatyczne rozliczanie pensum.
+                  Zintegrowany moduł Nauczania Specjalnego (SPE / NI) w lewym panelu Planu Klas, ergonomiczne zwijanie paska nawigacji, siatka godzinowa oraz arkusze IPET/WOPFU.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button
