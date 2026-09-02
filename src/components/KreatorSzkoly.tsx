@@ -1918,6 +1918,8 @@ export default function KreatorSzkoly({
   const [newAsgStudentId, setNewAsgStudentId] = useState<string | null>(null);
   const [newAsgTeacher, setNewAsgTeacher] = useState('');
   const [newAsgSubject, setNewAsgSubject] = useState('');
+  const [newAsgSupportType, setNewAsgSupportType] = useState<string>('ni');
+  const [newAsgWithClass, setNewAsgWithClass] = useState<boolean>(false);
   const [newAsgRoom, setNewAsgRoom] = useState('');
   const [newAsgGroup, setNewAsgGroup] = useState('');
   const [newAsgHours, setNewAsgHours] = useState<number | ''>(2);
@@ -1953,7 +1955,7 @@ export default function KreatorSzkoly({
       return;
     }
 
-    // Przypisanie dla konkretnego ucznia ze specjalnymi potrzebami edukacyjnymi (SPE / NI / Rewalidacja)
+    // Przypisanie dla konkretnego ucznia ze specjalnymi potrzebami edukacyjnymi (SPE / NI / Rewalidacja / Wspomaganie)
     if (newAsgStudentId) {
       const currentSpAsgs = appState.planLekcji.specialAssignments || [];
       if (editingAsgId) {
@@ -1966,9 +1968,11 @@ export default function KreatorSzkoly({
                 studentId: newAsgStudentId,
                 teacherId: newAsgTeacher || null,
                 subjectId: newAsgSubject,
+                supportType: newAsgSupportType || 'ni',
+                withClass: newAsgWithClass,
                 roomId: newAsgRoom || null,
                 hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
-                withClass: false
+                preferredBlockSize: newAsgBlockSize
               };
             }
             return a;
@@ -1991,9 +1995,11 @@ export default function KreatorSzkoly({
         studentId: newAsgStudentId,
         teacherId: newAsgTeacher || null,
         subjectId: newAsgSubject,
+        supportType: newAsgSupportType || 'ni',
+        withClass: newAsgWithClass,
         roomId: newAsgRoom || null,
         hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
-        withClass: false
+        preferredBlockSize: newAsgBlockSize
       };
 
       onChangeAppState({
@@ -2086,10 +2092,12 @@ export default function KreatorSzkoly({
     setNewAsgClass('');
     setNewAsgTeacher(sa.teacherId || '');
     setNewAsgSubject(sa.subjectId);
+    setNewAsgSupportType(sa.supportType || (sa.subjectId === 'wsp' ? 'wsp' : sa.subjectId === 'rewa' ? 'rewa' : sa.subjectId === 'korekta' ? 'korekta' : 'ni'));
+    setNewAsgWithClass(sa.withClass ?? (sa.supportType === 'wsp' || sa.subjectId === 'wsp'));
     setNewAsgRoom(sa.roomId || '');
     setNewAsgGroup('');
     setNewAsgHours(sa.hoursPerWeek);
-    setNewAsgBlockSize(1);
+    setNewAsgBlockSize(sa.preferredBlockSize !== undefined ? sa.preferredBlockSize : 1);
     setNewAsgLinkedClasses([]);
     showNoti('Edycja przydziału ucznia SPE - uzupełniono formularz', 'info');
   };
@@ -2100,6 +2108,8 @@ export default function KreatorSzkoly({
     setNewAsgStudentId(null);
     setNewAsgTeacher('');
     setNewAsgSubject('');
+    setNewAsgSupportType('ni');
+    setNewAsgWithClass(false);
     setNewAsgRoom('');
     setNewAsgGroup('');
     setNewAsgHours(2);
@@ -6287,40 +6297,40 @@ export default function KreatorSzkoly({
                     ) : (
                       <>
                         {/* USPE MODE FIELDS (Uczeń ze specjalnymi potrzebami edukacyjnymi) */}
-                        <div className="bg-purple-50/80 border border-purple-200 rounded-xl p-3 flex items-start gap-2.5">
-                          <span className="text-lg">👤</span>
-                          <div>
-                            <p className="text-[11px] font-black text-purple-900 leading-tight">Przydział zajęć dla ucznia ze SPE / NI / Rewalidacji</p>
-                            <p className="text-[9.5px] text-purple-700 font-medium mt-0.5">
-                              Wskaż ucznia, formę wsparcia lub przedmiot szkolny oraz nauczyciela prowadzącego.
-                            </p>
+                        <div className="bg-purple-50/90 border border-purple-200 rounded-xl p-3 space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-md bg-purple-200 text-purple-800 flex items-center justify-center font-bold text-xs">👤</span>
+                            <p className="text-[11.5px] font-black text-purple-950">Przydział zajęć dla ucznia ze SPE / NI / Wspomagania</p>
                           </div>
+                          <p className="text-[9.5px] text-purple-800 leading-normal">
+                            W tym trybie przypisujesz nauczycieli i konkretne przedmioty z puli godzin zadeklarowanych w orzeczeniu ucznia (np. Nauczanie Indywidualne, Wspomaganie w klasie, Rewalidacja).
+                          </p>
                         </div>
 
                         {/* 1. Uczeń ze SPE */}
                         <div className="space-y-1">
                           <div className="flex justify-between items-center">
                             <label className="text-[10px] text-purple-900 font-extrabold block">
-                              1. Uczeń ze specjalnymi potrzebami (SPE) *
+                              1. Wybierz ucznia ze specjalnymi potrzebami (SPE) *
                             </label>
                             {(appState.planLekcji.specialStudents || []).length > 0 && (
-                              <span className="text-[9px] font-bold text-purple-600 bg-purple-100 px-1.5 py-0.2 rounded-full">
-                                Baza: {(appState.planLekcji.specialStudents || []).length}
+                              <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded-full">
+                                Baza: {(appState.planLekcji.specialStudents || []).length} uczniów
                               </span>
                             )}
                           </div>
                           {(appState.planLekcji.specialStudents || []).length === 0 ? (
                             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[10.5px] text-amber-800 space-y-1">
-                              <p className="font-bold">Brak zarejestrowanych uczniów SPE!</p>
+                              <p className="font-bold">Brak zarejestrowanych uczniów SPE w bazie!</p>
                               <p className="text-[9.5px] text-amber-700">
-                                Przejdź do kroku <strong>8. Uczniowie SPE / NI</strong> w kreatorze, aby dodać uczniów do bazy.
+                                Przejdź do kroku <strong>8. Uczniowie SPE / NI</strong> w kreatorze, aby dodać uczniów i ich pule orzeczeniowe.
                               </p>
                               <button
                                 type="button"
                                 onClick={() => setActiveStep(8)}
-                                className="mt-1 px-2.5 py-1 bg-amber-600 text-white rounded text-[10px] font-bold hover:bg-amber-700 transition"
+                                className="mt-1 px-2.5 py-1 bg-amber-600 text-white rounded text-[10px] font-bold hover:bg-amber-700 transition cursor-pointer"
                               >
-                                Przejdź do kroku SPE →
+                                Przejdź do kroku 8 (Uczniowie SPE) →
                               </button>
                             </div>
                           ) : (
@@ -6340,12 +6350,20 @@ export default function KreatorSzkoly({
                                     ? stud.supportTypes
                                     : (stud?.type ? [stud.type] : ['ni']);
                                   
-                                  if (!types.includes(newAsgSubject as any) && !appState.subjects.some(s => s.id === newAsgSubject)) {
-                                    const firstType = types[0] || 'ni';
-                                    setNewAsgSubject(firstType);
-                                    if (stud?.supportHours?.[firstType]) {
-                                      setNewAsgHours(stud.supportHours[firstType]);
-                                    }
+                                  const firstType = types[0] || 'ni';
+                                  setNewAsgSupportType(firstType);
+                                  setNewAsgWithClass(firstType === 'wsp');
+                                  
+                                  // Oblicz pozostałe godziny w tej puli
+                                  const existingInPool = (appState.planLekcji.specialAssignments || [])
+                                    .filter(sa => sa.studentId === studId && (sa.supportType === firstType || (!sa.supportType && sa.subjectId === firstType)))
+                                    .reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
+                                  const declaredInPool = stud?.supportHours?.[firstType] || 0;
+                                  const remaining = Math.max(1, declaredInPool - existingInPool);
+                                  setNewAsgHours(remaining || 2);
+
+                                  if (!newAsgSubject) {
+                                    setNewAsgSubject(appState.subjects[0]?.id || '');
                                   }
                                 }
                               }}
@@ -6356,11 +6374,12 @@ export default function KreatorSzkoly({
                                 const types = s.supportTypes && s.supportTypes.length > 0 ? s.supportTypes : (s.type ? [s.type] : ['ni']);
                                 const typesLabel = types.map(t => {
                                   const cat = SUPPORT_CATEGORIES.find(c => c.key === t);
-                                  return cat ? cat.label : t.toUpperCase();
+                                  const h = s.supportHours?.[t];
+                                  return cat ? `${cat.label}${h ? ` (${h}h)` : ''}` : t.toUpperCase();
                                 }).join(', ');
                                 return (
                                   <option key={s.id} value={s.id}>
-                                    {s.firstName} {s.lastName} {cls ? `(oddz. ${cls.name})` : '(tok indywidualny)'} — [{typesLabel}]
+                                    {s.firstName} {s.lastName} {cls ? `(oddz. ${cls.name})` : '(tok indyw.)'} — [{typesLabel}]
                                   </option>
                                 );
                               })}
@@ -6368,81 +6387,179 @@ export default function KreatorSzkoly({
                           )}
                         </div>
 
-                        {/* 2. Rodzaj zajęć / Przedmiot */}
+                        {/* Wizualny bilans i wybór puli godzin dla wybranego ucznia */}
+                        {newAsgStudentId && (() => {
+                          const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
+                          if (!stud) return null;
+                          const studentSupportTypes = stud.supportTypes && stud.supportTypes.length > 0
+                            ? stud.supportTypes
+                            : (stud.type ? [stud.type] : ['ni']);
+                          const currentSpAsgs = (appState.planLekcji.specialAssignments || []).filter(sa => sa.studentId === newAsgStudentId && sa.id !== editingAsgId);
+
+                          return (
+                            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">
+                                  📊 Pule orzeczeniowe ucznia (Krok 8):
+                                </span>
+                                <span className="text-[9px] text-slate-400 font-semibold">
+                                  Kliknij, aby wybrać pulę
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 gap-1.5">
+                                {studentSupportTypes.map(stKey => {
+                                  const cat = SUPPORT_CATEGORIES.find(c => c.key === stKey);
+                                  const declared = stud.supportHours?.[stKey] || 0;
+                                  const assigned = currentSpAsgs
+                                    .filter(sa => (sa.supportType === stKey) || (!sa.supportType && sa.subjectId === stKey))
+                                    .reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
+                                  const remaining = Math.max(0, declared - assigned);
+                                  const isSelected = newAsgSupportType === stKey;
+                                  const percent = declared > 0 ? Math.min(100, Math.round((assigned / declared) * 100)) : 0;
+
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={stKey}
+                                      onClick={() => {
+                                        setNewAsgSupportType(stKey);
+                                        setNewAsgWithClass(stKey === 'wsp');
+                                        if (remaining > 0) {
+                                          setNewAsgHours(remaining);
+                                        }
+                                      }}
+                                      className={`p-2 rounded-lg text-left border transition cursor-pointer ${
+                                        isSelected
+                                          ? 'bg-purple-100/80 border-purple-400 ring-1 ring-purple-400 shadow-xs'
+                                          : 'bg-white border-slate-200 hover:bg-purple-50/50'
+                                      }`}
+                                    >
+                                      <div className="flex justify-between items-center text-[10.5px]">
+                                        <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                                          <span>{cat?.icon || '⭐'}</span>
+                                          <span>{cat?.label || stKey.toUpperCase()}</span>
+                                          {isSelected && (
+                                            <span className="text-[8.5px] font-extrabold bg-purple-600 text-white px-1 py-0.2 rounded">
+                                              WYBRANA
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-right">
+                                          <span className="font-extrabold text-slate-800">
+                                            {assigned} / {declared}h
+                                          </span>
+                                          <span className={`ml-1.5 text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                                            remaining === 0 && declared > 0
+                                              ? 'bg-emerald-100 text-emerald-800'
+                                              : remaining > 0
+                                              ? 'bg-amber-100 text-amber-800'
+                                              : 'bg-slate-100 text-slate-600'
+                                          }`}>
+                                            {remaining === 0 && declared > 0 ? '✓ Pełny przydział' : `Pozostało: ${remaining}h`}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {declared > 0 && (
+                                        <div className="w-full bg-slate-200 h-1 rounded-full mt-1.5 overflow-hidden">
+                                          <div
+                                            className={`h-full transition-all ${
+                                              percent >= 100 ? 'bg-emerald-500' : percent > 0 ? 'bg-purple-600' : 'bg-slate-300'
+                                            }`}
+                                            style={{ width: `${percent}%` }}
+                                          />
+                                        </div>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* 2. Wybór Puli Wsparcia */}
                         <div className="space-y-1">
                           <label className="text-[10px] text-purple-900 font-extrabold block">
-                            2. Rodzaj wsparcia / Przedmiot szkolny *
+                            2. Z której puli wsparcia przydzielasz godziny? *
+                          </label>
+                          <select 
+                            required
+                            className="w-full px-3 py-1.5 border border-purple-300 bg-purple-50/50 rounded-lg text-xs outline-none font-bold text-slate-800 focus:bg-white focus:border-purple-500"
+                            value={newAsgSupportType}
+                            onChange={(e) => {
+                              const stVal = e.target.value;
+                              setNewAsgSupportType(stVal);
+                              setNewAsgWithClass(stVal === 'wsp');
+                              if (newAsgStudentId) {
+                                const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
+                                const declared = stud?.supportHours?.[stVal] || 0;
+                                const assigned = (appState.planLekcji.specialAssignments || [])
+                                  .filter(sa => sa.studentId === newAsgStudentId && (sa.supportType === stVal || (!sa.supportType && sa.subjectId === stVal)) && sa.id !== editingAsgId)
+                                  .reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
+                                const remaining = Math.max(1, declared - assigned);
+                                if (remaining > 0) {
+                                  setNewAsgHours(remaining);
+                                }
+                              }
+                            }}
+                          >
+                            {newAsgStudentId ? (
+                              (() => {
+                                const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
+                                const studentSupportTypes = stud?.supportTypes && stud.supportTypes.length > 0
+                                  ? stud.supportTypes
+                                  : (stud?.type ? [stud.type] : ['ni']);
+                                return studentSupportTypes.map(stKey => {
+                                  const cat = SUPPORT_CATEGORIES.find(c => c.key === stKey);
+                                  const declared = stud?.supportHours?.[stKey] || 0;
+                                  return (
+                                    <option key={stKey} value={stKey}>
+                                      {cat?.icon || '⭐'} {cat?.label || stKey.toUpperCase()} — (Pula orzeczenia: {declared}h/tyg)
+                                    </option>
+                                  );
+                                });
+                              })()
+                            ) : (
+                              SUPPORT_CATEGORIES.map(cat => (
+                                <option key={cat.key} value={cat.key}>
+                                  {cat.icon} {cat.label} ({cat.sublabel})
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+
+                        {/* 3. Przedmiot szkolny / Rodzaj zajęć */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-purple-900 font-extrabold block">
+                            3. Przedmiot szkolny / Rodzaj prowadzonych zajęć *
                           </label>
                           <select 
                             required
                             className="w-full px-3 py-1.5 border border-purple-300 bg-purple-50/50 rounded-lg text-xs outline-none font-bold text-slate-800 focus:bg-white focus:border-purple-500"
                             value={newAsgSubject}
-                            onChange={(e) => {
-                              const subjVal = e.target.value;
-                              setNewAsgSubject(subjVal);
-                              if (newAsgStudentId) {
-                                const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
-                                if (stud?.supportHours?.[subjVal as any]) {
-                                  setNewAsgHours(stud.supportHours[subjVal as any]!);
-                                }
-                              }
-                            }}
+                            onChange={(e) => setNewAsgSubject(e.target.value)}
                           >
-                            <option value="">Wybierz rodzaj zajęć lub przedmiot...</option>
-                            {newAsgStudentId ? (
-                              <>
-                                {(() => {
-                                  const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === newAsgStudentId);
-                                  const studentSupportTypes = stud?.supportTypes && stud.supportTypes.length > 0
-                                    ? stud.supportTypes
-                                    : (stud?.type ? [stud.type] : ['ni']);
-
-                                  return (
-                                    <>
-                                      <optgroup label="✨ Formy wsparcia zadeklarowane u ucznia">
-                                        {studentSupportTypes.map(stKey => {
-                                          const cat = SUPPORT_CATEGORIES.find(c => c.key === stKey);
-                                          const hours = stud?.supportHours?.[stKey];
-                                          const label = cat ? `${cat.icon} ${cat.label} ${hours ? `(${hours} h/tyg)` : ''}` : String(stKey).toUpperCase();
-                                          return (
-                                            <option key={stKey} value={stKey}>
-                                              {label}
-                                            </option>
-                                          );
-                                        })}
-                                      </optgroup>
-                                      <optgroup label="📚 Przedmioty ze szkolnego planu nauczania (dla NI / indywidualnych)">
-                                        {appState.subjects.map(s => (
-                                          <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
-                                        ))}
-                                      </optgroup>
-                                    </>
-                                  );
-                                })()}
-                              </>
-                            ) : (
-                              <>
-                                <optgroup label="✨ Formy wsparcia (SPE / NI / Rewalidacja)">
-                                  {SUPPORT_CATEGORIES.map(cat => (
-                                    <option key={cat.key} value={cat.key}>
-                                      {cat.icon} {cat.label} ({cat.sublabel})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                                <optgroup label="📚 Przedmioty ze szkolnego planu nauczania">
-                                  {appState.subjects.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
-                                  ))}
-                                </optgroup>
-                              </>
-                            )}
+                            <option value="">Wybierz przedmiot ze szkolnego planu lub zajęcia...</option>
+                            <optgroup label="📚 Przedmioty ze szkolnego planu nauczania (Edukacja, Języki, Przedmioty)">
+                              {appState.subjects.map(s => (
+                                <option key={s.id} value={s.id}>{s.name} ({s.short})</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="✨ Formy specjalistyczne i terapeutyczne">
+                              {SUPPORT_CATEGORIES.map(cat => (
+                                <option key={cat.key} value={cat.key}>
+                                  {cat.icon} {cat.label}
+                                </option>
+                              ))}
+                            </optgroup>
                           </select>
                         </div>
 
-                        {/* 3. Nauczyciel */}
+                        {/* 4. Nauczyciel prowadzący / wspomagający */}
                         <div className="space-y-1">
                           <label className="text-[10px] text-purple-900 font-extrabold block">
-                            3. Nauczyciel prowadzący / wspomagający *
+                            4. Nauczyciel prowadzący / wspomagający *
                           </label>
                           <select 
                             required
@@ -6457,13 +6574,57 @@ export default function KreatorSzkoly({
                             ))}
                           </select>
                         </div>
+
+                        {/* 5. Tryb realizacji zajęć (Z klasą czy Indywidualnie) */}
+                        <div className="space-y-1 p-2.5 bg-purple-50/60 border border-purple-200 rounded-xl">
+                          <label className="text-[10px] text-purple-950 font-extrabold block">
+                            5. Tryb realizacji zajęć *
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1">
+                            <button
+                              type="button"
+                              onClick={() => setNewAsgWithClass(false)}
+                              className={`p-2 rounded-lg text-left border transition cursor-pointer ${
+                                !newAsgWithClass
+                                  ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                                <span>👤</span>
+                                <span>Zajęcia indywidualne (1 na 1)</span>
+                              </div>
+                              <p className={`text-[9px] mt-0.5 leading-tight ${!newAsgWithClass ? 'text-purple-100' : 'text-slate-400'}`}>
+                                Odrębne lekcje z uczniem (np. Nauczanie Indywidualne, Rewalidacja w gabinecie)
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setNewAsgWithClass(true)}
+                              className={`p-2 rounded-lg text-left border transition cursor-pointer ${
+                                newAsgWithClass
+                                  ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                                <span>🤝</span>
+                                <span>Na lekcjach w oddziale</span>
+                              </div>
+                              <p className={`text-[9px] mt-0.5 leading-tight ${newAsgWithClass ? 'text-purple-100' : 'text-slate-400'}`}>
+                                Nauczyciel wspomagający w klasie (np. na lekcji edukacji wczesnoszkolnej, informatyki, WF)
+                              </p>
+                            </button>
+                          </div>
+                        </div>
                       </>
                     )}
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <label className="text-[10px] text-slate-400 font-bold block">
-                          {assignmentFormMode === 'uspe' ? '4. Gabinet / Sala' : '5. Sugerowana sala'}
+                          {assignmentFormMode === 'uspe' ? '6. Gabinet / Sala' : '5. Sugerowana sala'}
                         </label>
                         <select 
                           className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
@@ -6477,7 +6638,9 @@ export default function KreatorSzkoly({
                         </select>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold block">Wymiar godzin / tyg *</label>
+                        <label className="text-[10px] text-slate-400 font-bold block">
+                          {assignmentFormMode === 'uspe' ? '7. Godziny z puli / tyg *' : 'Wymiar godzin / tyg *'}
+                        </label>
                         <input 
                           type="number" 
                           required
@@ -6492,7 +6655,7 @@ export default function KreatorSzkoly({
 
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold block">
-                        {assignmentFormMode === 'uspe' ? '5. Rozkład lekcji (Łączenie w bloki) *' : '6. Rozkład lekcji (Łączenie w bloki) *'}
+                        {assignmentFormMode === 'uspe' ? '8. Rozkład lekcji (Łączenie w bloki) *' : '6. Rozkład lekcji (Łączenie w bloki) *'}
                       </label>
                       <select 
                         required
@@ -6571,7 +6734,7 @@ export default function KreatorSzkoly({
                             : 'bg-blue-600 hover:bg-blue-700'
                         }`}
                       >
-                        <Plus size={14} /> {assignmentFormMode === 'uspe' ? 'Przypisz zajęcia dla ucznia SPE' : 'Przypisz lekcję'}
+                        <Plus size={14} /> {assignmentFormMode === 'uspe' ? 'Przypisz zajęcia z puli SPE' : 'Przypisz lekcję'}
                       </button>
                     )}
                   </form>
@@ -6721,7 +6884,11 @@ export default function KreatorSzkoly({
                         const stud = (appState.planLekcji.specialStudents || []).find(s => s.id === sa.studentId);
                         const t = sa.teacherId ? teachersMap.get(sa.teacherId) : null;
                         const s = subjectsMap.get(sa.subjectId);
-                        const cat = SUPPORT_CATEGORIES.find(c => c.key === sa.subjectId);
+                        const poolTypeKey = sa.supportType || (sa.subjectId === 'wsp' ? 'wsp' : sa.subjectId === 'rewa' ? 'rewa' : sa.subjectId === 'korekta' ? 'korekta' : 'ni');
+                        const poolCat = SUPPORT_CATEGORIES.find(c => c.key === poolTypeKey);
+                        const isSubjSpecial = SUPPORT_CATEGORIES.some(c => c.key === sa.subjectId);
+                        const subjCat = SUPPORT_CATEGORIES.find(c => c.key === sa.subjectId);
+                        const displaySubjectName = s ? s.name : (subjCat ? subjCat.label : (poolCat ? poolCat.label : sa.subjectId));
                         const room = sa.roomId ? roomsMap.get(sa.roomId) : null;
                         const isCurrentlyEditing = editingAsgId === sa.id;
                         const studCls = stud?.classId ? classesMap.get(stud.classId) : null;
@@ -6730,34 +6897,65 @@ export default function KreatorSzkoly({
                           <div key={sa.id} className={`p-3.5 hover:bg-purple-50/30 flex justify-between items-center transition-colors ${isCurrentlyEditing ? 'bg-purple-100/50 border-l-4 border-purple-500' : ''}`}>
                             <div className="flex items-center gap-3">
                               <span className="w-10 h-10 text-[10px] font-black text-purple-700 bg-purple-100 rounded-xl shadow-xs border border-purple-200 flex items-center justify-center shrink-0">
-                                👤 SPE
+                                {poolCat?.icon || '👤'}
                               </span>
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-xs font-black text-slate-900">
-                                    {cat ? `${cat.icon} ${cat.label}` : (s ? s.name : sa.subjectId)}
+                                    {displaySubjectName}
                                   </span>
-                                  <span className="bg-purple-100 text-purple-800 font-extrabold px-1.5 py-0.2 rounded text-[8px] uppercase">
-                                    Uczeń: {stud ? `${stud.firstName} ${stud.lastName}` : 'Zajęcia indywidualne'}
+                                  {poolCat && (
+                                    <span className="bg-purple-100 text-purple-900 font-extrabold px-1.5 py-0.2 rounded text-[8.5px] border border-purple-200">
+                                      Pula: {poolCat.label}
+                                    </span>
+                                  )}
+                                  <span className="bg-slate-100 text-slate-800 font-bold px-1.5 py-0.2 rounded text-[8.5px]">
+                                    Uczeń: {stud ? `${stud.firstName} ${stud.lastName}` : 'Zajęcia SPE'}
                                   </span>
                                   {studCls && (
-                                    <span className="bg-slate-100 text-slate-600 font-bold px-1.5 py-0.2 rounded text-[8px]">
+                                    <span className="bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.2 rounded text-[8.5px] border border-indigo-100">
                                       kl. {studCls.name}
                                     </span>
                                   )}
+                                  <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-bold border ${
+                                    sa.withClass 
+                                      ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                                      : 'bg-purple-50 text-purple-700 border-purple-200'
+                                  }`}>
+                                    {sa.withClass ? '🤝 W oddziale z klasą' : '👤 Indywidualnie (1 na 1)'}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
-                                    <GraduationCap size={11} /> Nauczyciel: {t ? `${t.first[0]}. ${t.last} (${t.abbr})` : 'WAKAT'}
+                                  <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-0.5">
+                                    <GraduationCap size={11} /> {sa.withClass ? 'Wspomagający:' : 'Prowadzący:'} {t ? `${t.first[0]}. ${t.last} (${t.abbr})` : 'WAKAT'}
                                   </span>
                                   {room && (
-                                    <span className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5">
+                                    <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-0.5">
                                       <MapPin size={11} /> Sala {room.name}
                                     </span>
                                   )}
-                                  <span className="bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.2 rounded text-[9px] font-black">
+                                  <span className="bg-purple-100 text-purple-800 border border-purple-200 px-1.5 py-0.2 rounded text-[9px] font-black">
                                     Wymiar: {sa.hoursPerWeek}h/tyg
                                   </span>
+                                  {sa.preferredBlockSize !== undefined && (
+                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                      sa.preferredBlockSize === 2 
+                                        ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                                        : sa.preferredBlockSize === 3
+                                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                          : sa.preferredBlockSize === 1
+                                            ? 'bg-slate-50 text-slate-500 border border-slate-200'
+                                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    }`}>
+                                      {sa.preferredBlockSize === 2 
+                                        ? '🧱 Blok 2h'
+                                        : sa.preferredBlockSize === 3
+                                          ? '🧱 Blok 3h'
+                                          : sa.preferredBlockSize === 1
+                                            ? '📄 Lekcje 1h'
+                                            : '🔄 Dowolny rozkład'}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -6934,16 +7132,14 @@ export default function KreatorSzkoly({
                           const studCls = stud.classId ? classesMap.get(stud.classId) : null;
                           const totalHours = studSpAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
                           const declaredHours = Object.values(stud.supportHours || {}).reduce((sum, h) => sum + (Number(h) || 0), 0);
-                          const supportBadges = (stud.supportTypes && stud.supportTypes.length > 0 ? stud.supportTypes : (stud.type ? [stud.type] : ['ni'])).map(t => {
-                            const cat = SUPPORT_CATEGORIES.find(c => c.key === t);
-                            return cat ? cat.label : t.toUpperCase();
-                          });
+                          const studentSupportTypes = stud.supportTypes && stud.supportTypes.length > 0 ? stud.supportTypes : (stud.type ? [stud.type] : ['ni']);
 
                           return (
                             <div key={stud.id} className="border-b border-slate-100 last:border-none">
-                              <div className="bg-purple-50/75 px-4 py-2 flex justify-between items-center border-y border-purple-100 select-none">
+                              {/* Header ucznia */}
+                              <div className="bg-purple-50/90 px-4 py-2.5 flex justify-between items-center border-y border-purple-100 select-none">
                                 <div className="flex items-center gap-2">
-                                  <span className="w-6 h-6 text-[10px] font-black text-purple-700 bg-purple-200 rounded-md flex items-center justify-center shrink-0 shadow-xs">
+                                  <span className="w-7 h-7 text-xs font-black text-purple-700 bg-purple-200 rounded-lg flex items-center justify-center shrink-0 shadow-xs">
                                     👤
                                   </span>
                                   <div>
@@ -6952,7 +7148,7 @@ export default function KreatorSzkoly({
                                         {stud.firstName} {stud.lastName}
                                       </span>
                                       {studCls ? (
-                                        <span className="text-[9.5px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded">
+                                        <span className="text-[9.5px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
                                           Oddział {studCls.name}
                                         </span>
                                       ) : (
@@ -6961,36 +7157,115 @@ export default function KreatorSzkoly({
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-[9px] text-purple-700 font-medium mt-0.5">
-                                      Formy: {supportBadges.join(', ')}
+                                    <p className="text-[9.5px] text-purple-800 font-semibold mt-0.5">
+                                      Pule orzeczeniowe: {studentSupportTypes.map(t => {
+                                        const cat = SUPPORT_CATEGORIES.find(c => c.key === t);
+                                        const h = stud.supportHours?.[t];
+                                        return `${cat?.label || t.toUpperCase()}${h ? ` (${h}h)` : ''}`;
+                                      }).join(' + ')}
                                     </p>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {declaredHours > 0 && (
-                                    <span className="text-[9.5px] text-slate-500 font-medium hidden sm:inline">
+                                    <span className="text-[10px] text-slate-500 font-semibold hidden sm:inline">
                                       Zadeklarowano: {declaredHours}h/tyg
                                     </span>
                                   )}
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 border ${
+                                  <span className={`text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full shrink-0 border ${
                                     totalHours === 0 
                                       ? 'bg-amber-50 text-amber-700 border-amber-200' 
                                       : totalHours >= declaredHours && declaredHours > 0
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                      : 'bg-purple-100 text-purple-800 border-purple-200'
+                                      : 'bg-purple-100 text-purple-900 border-purple-300'
                                   }`}>
-                                    Przydzielono: {totalHours}h/tyg
+                                    Przydzielono: {totalHours}h / {declaredHours || totalHours}h/tyg
                                   </span>
                                 </div>
                               </div>
+
+                              {/* Podział na pule orzeczeniowe ucznia */}
                               <div className="divide-y divide-slate-100">
-                                {studSpAsgs.length === 0 ? (
-                                  <p className="p-3 text-center text-[10.5px] text-slate-400 italic">
-                                    Brak przydzielonych lekcji dla tego ucznia. Użyj "Trybu USPE" po lewej stronie.
-                                  </p>
-                                ) : (
-                                  studSpAsgs.map(sa => renderSpecialAsgRow(sa))
-                                )}
+                                {studentSupportTypes.map(stKey => {
+                                  const poolCat = SUPPORT_CATEGORIES.find(c => c.key === stKey);
+                                  const poolDeclared = stud.supportHours?.[stKey] || 0;
+                                  const poolAsgs = studSpAsgs.filter(sa => (sa.supportType === stKey) || (!sa.supportType && sa.subjectId === stKey));
+                                  const poolAssigned = poolAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
+                                  const poolRemaining = Math.max(0, poolDeclared - poolAssigned);
+
+                                  return (
+                                    <div key={stKey} className="bg-white">
+                                      {/* Podnagłówek puli */}
+                                      <div className="bg-slate-50/70 px-4 py-1.5 flex justify-between items-center border-b border-slate-100 text-[10.5px]">
+                                        <div className="flex items-center gap-1.5 font-black text-slate-800">
+                                          <span>{poolCat?.icon || '⭐'}</span>
+                                          <span>Pula: {poolCat?.label || stKey.toUpperCase()}</span>
+                                          <span className="text-slate-400 font-normal">
+                                            (orzeczenie: {poolDeclared}h/tyg)
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className={`text-[9.5px] font-bold px-2 py-0.2 rounded-full border ${
+                                            poolAssigned >= poolDeclared && poolDeclared > 0
+                                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                              : poolAssigned > 0
+                                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                              : 'bg-slate-100 text-slate-600 border-slate-200'
+                                          }`}>
+                                            Rozdysponowano: {poolAssigned}h / {poolDeclared}h
+                                            {poolRemaining > 0 ? ` (brak ${poolRemaining}h)` : ' ✓'}
+                                          </span>
+                                          {poolRemaining > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setAssignmentFormMode('uspe');
+                                                setNewAsgStudentId(stud.id);
+                                                setNewAsgSupportType(stKey);
+                                                setNewAsgWithClass(stKey === 'wsp');
+                                                setNewAsgHours(poolRemaining);
+                                                if (!newAsgSubject) setNewAsgSubject(appState.subjects[0]?.id || '');
+                                              }}
+                                              className="px-2 py-0.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-[9px] font-bold transition flex items-center gap-1 cursor-pointer shadow-xs"
+                                            >
+                                              <Plus size={10} /> Przypisz z tej puli
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Przypisane lekcje w ramach tej puli */}
+                                      <div className="divide-y divide-slate-100">
+                                        {poolAsgs.length === 0 ? (
+                                          <p className="p-3 text-center text-[10px] text-slate-400 italic">
+                                            Brak przydziału nauczycieli dla puli <strong>{poolCat?.label || stKey}</strong>. Kliknij "+ Przypisz z tej puli" powyżej lub po lewej.
+                                          </p>
+                                        ) : (
+                                          poolAsgs.map(sa => renderSpecialAsgRow(sa))
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+
+                                {/* Ewentualne przydziały spoza zdefiniowanych pul */}
+                                {(() => {
+                                  const otherAsgs = studSpAsgs.filter(sa => {
+                                    const poolKey = sa.supportType || (sa.subjectId === 'wsp' ? 'wsp' : sa.subjectId === 'rewa' ? 'rewa' : sa.subjectId === 'korekta' ? 'korekta' : 'ni');
+                                    return !studentSupportTypes.includes(poolKey as any);
+                                  });
+                                  if (otherAsgs.length === 0) return null;
+                                  return (
+                                    <div className="bg-slate-50/40">
+                                      <div className="px-4 py-1.5 text-[10px] font-bold text-slate-600 border-b border-slate-100">
+                                        Inne przydziały ucznia ({otherAsgs.reduce((s, a) => s + a.hoursPerWeek, 0)}h/tyg):
+                                      </div>
+                                      <div className="divide-y divide-slate-100">
+                                        {otherAsgs.map(sa => renderSpecialAsgRow(sa))}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </div>
                           );

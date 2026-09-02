@@ -16,10 +16,19 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   **Technikum**: Podział na przedmioty ogólnokształcące, zawodowe, BHP oraz Język Obcy Zawodowy (JOZ).
     *   **Szkoła Branżowa**: Praktyczna nauka zawodu, BHP, przedmioty zawodowe i podstawowe.
 *   **Wizualny Kreator Budynku**: Możliwość szczegółowego odwzorowania pięter oraz sal lekcyjnych z przypisaniem ich typu (np. sala ogólna, pracownia informatyczna, sala gimnastyczna).
-*   **Wsparcie Kształcenia Specjalnego i Uczniów ze SPE**: Dedykowany krok ewidencji uczniów o specjalnych potrzebach edukacyjnych (Nauczanie Indywidualne – NI, Nauczyciel Wspomagający w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna) z deklaracją tygodniowego wymiaru godzin i form wsparcia.
+*   **Wsparcie Kształcenia Specjalnego i Uczniów ze SPE (Kroki 8 i 9)**:
+    *   **Krok 8 (Ewidencja i Pule Orzeczeniowe)**: Rejestracja uczniów ze SPE, przypisanie do oddziału lub toku indywidualnego oraz określenie puli godzin w ramach form wsparcia (Nauczanie Indywidualne – NI, Nauczyciel Wspomagający w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
+    *   **Krok 9 (Dedykowany Tryb USPE i Rozdysponowanie Pul)**:
+        *   Wybór ucznia SPE oraz interaktywny panel pul orzeczeniowych z dynamicznym licznikiem godzin zadeklarowanych, przydzielonych i pozostałych.
+        *   Szczegółowy przydział godzin z puli: wskazanie nauczyciela, konkretnego przedmiotu szkolnego (np. Język angielski, Edukacja wczesnoszkolna, Informatyka, WF) lub formy terapeutycznej.
+        *   Tryb realizacji: **Wspomaganie na lekcjach w oddziale** (🤝 z nauczycielem prowadzącym) vs **Zajęcia indywidualne / 1 na 1** (👤 gabinet).
+        *   Wizualizacja siatki przydziałów w widoku **👤 Uczniami SPE** z podziałem na pule i przyciskami szybkiego przydziału `+ Przypisz z tej puli`.
 *   **Zintegrowany Formularz Przydziałów Lekcyjnych (Krok 9)**:
-    *   **Tryb Nauczycielski**: Ergonomiczny ciąg kroków: `1. Nauczyciel` -> `2. Oddział szkolny lub uczeń SPE` -> `3. Opcjonalna podgrupa` -> `4. Przedmiot / rodzaj zajęć wspierających` -> `5. Sugerowana sala` -> `6. Rozkład i bloki lekcyjne`.
-    *   **Inteligentne Podpowiedzi**: Automatyczne sugerowanie zadeklarowanych dla danego ucznia form wsparcia oraz wymiaru godzin.
+    *   **3 Ergonomiczne Tryby Pracy**:
+        *   `Klasami`: `Oddział -> Grupa -> Przedmiot -> Nauczyciel -> Sala -> Wymiar / Bloki`.
+        *   `Nauczycielami`: `Nauczyciel -> Oddział / Grupa -> Przedmiot -> Sala -> Wymiar / Bloki`.
+        *   `👤 USPE (Uczniowie SPE)`: `Uczeń SPE -> Pula orzeczeniowa -> Przedmiot/zajęcia -> Nauczyciel -> Tryb (W oddziale / Indywidualnie) -> Sala -> Wymiar / Bloki`.
+    *   **Inteligentne Podpowiedzi i Pilnowanie Limitów**: Automatyczne sugerowanie zadeklarowanych dla danego ucznia form wsparcia, przedmiotów oraz pozostałego wymiaru godzin z puli.
     *   **Niezależność Kroków**: Wybór kolejnych pól formularza nie resetuje ani nie nadpisuje wcześniej ustalonych danych.
 *   **Szablony Struktury Szkoły**: Zapisywanie i wczytywanie konfiguracji nowego roku szkolnego z automatyczną promocją klas o jeden poziom wyżej.
 

@@ -105,6 +105,8 @@ export interface SpecialAssignment {
   hoursPerWeek: number;
   withClass: boolean;
   subjectId: string;
+  supportType?: 'ni' | 'wsp' | 'rewa' | 'korekta' | string;
+  preferredBlockSize?: number;
 }
 
 export interface SpecialLesson {
