@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { AppState, SchedData, SpecialStudent, Hour, Subject, Class, Teacher, ClassRoom, SchoolGroup } from '../types';
 import { User, Users, HeartHandshake, BookOpen, Clock, Shield, CheckCircle, FileText, Award, Sparkles, MapPin } from 'lucide-react';
+import { sanitizeStudentNotes, sanitizeText, sanitizePrintMetric } from '../utils/sanitizer';
 
 export interface ArkuszWsparciaUczniaProps {
   student: SpecialStudent;
@@ -483,27 +484,27 @@ export default function ArkuszWsparciaUcznia({
                 SPE • Kształcenie Specjalne
               </span>
               <span className="text-xs font-bold text-slate-500 uppercase">
-                {appState.school.name || 'Szkoła'} • Rok szkolny {appState.yearLabel}
+                {sanitizePrintMetric(appState.school.name || 'Szkoła')} • Rok szkolny {sanitizePrintMetric(appState.yearLabel)}
               </span>
             </div>
 
             <h1 className="text-2xl font-black text-slate-950 tracking-tight flex items-center gap-2.5">
               <span>ARKUSZ WSPARCIA UCZNIA:</span>
               <span className="text-indigo-700 underline decoration-indigo-300 underline-offset-4 font-black">
-                {student.firstName} {student.lastName}
+                {sanitizeText(student.firstName)} {sanitizeText(student.lastName)}
               </span>
             </h1>
 
             <div className="flex items-center gap-3 text-xs font-bold text-slate-700 pt-1 flex-wrap">
               <div className="flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
                 <Users size={13} className="text-slate-600" />
-                <span>Oddział / Klasa: <strong className="text-slate-950">{studentClass ? `Klasa ${studentClass.name}` : 'Tok Indywidualny'}</strong></span>
+                <span>Oddział / Klasa: <strong className="text-slate-950">{studentClass ? `Klasa ${sanitizeText(studentClass.name)}` : 'Tok Indywidualny'}</strong></span>
               </div>
 
               {student.note && (
                 <div className="flex items-center gap-1 bg-amber-50 text-amber-900 px-2.5 py-1 rounded-md border border-amber-200">
                   <Shield size={13} className="text-amber-700" />
-                  <span>Zalecenia orzeczenia: <strong>{student.note}</strong></span>
+                  <span>Zalecenia orzeczenia: <strong>{sanitizeStudentNotes(student.note)}</strong></span>
                 </div>
               )}
             </div>
@@ -825,11 +826,11 @@ export default function ArkuszWsparciaUcznia({
                   <tr key={item.teacher.id} className="hover:bg-slate-50">
                     <td className="p-2 font-mono text-slate-400 text-[10px]">{idx + 1}.</td>
                     <td className="p-2 font-black text-slate-900">
-                      {item.teacher.last} {item.teacher.first}
+                      {sanitizeText(item.teacher.last)} {sanitizeText(item.teacher.first)}
                     </td>
                     <td className="p-2 font-mono font-bold text-slate-600 text-[10px]">
                       <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                        {item.teacher.abbr}
+                        {sanitizeText(item.teacher.abbr)}
                       </span>
                     </td>
                     <td className="p-2 text-slate-700 font-medium">

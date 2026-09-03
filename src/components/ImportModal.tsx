@@ -29,6 +29,7 @@ import {
   ClassScope,
   MergeStrategy
 } from '../utils/mergeEngine';
+import { validateImportJson } from '../utils/validationSchemas';
 
 interface LoadedFileItem {
   id: string;
@@ -39,6 +40,9 @@ interface LoadedFileItem {
   decryptError?: string;
   payload: ImportPayload | null;
   config: FileMergeConfig | null;
+  isValidSchema?: boolean;
+  validationErrors?: string[];
+  validationWarnings?: string[];
 }
 
 interface ImportModalProps {
@@ -92,14 +96,25 @@ export default function ImportModal({
         const encrypted = isEncryptedBackup(rf.content);
         let parsedPayload: ImportPayload | null = null;
         let config: FileMergeConfig | null = null;
+        let isValidSchema = true;
+        let validationErrors: string[] = [];
+        let validationWarnings: string[] = [];
 
         if (!encrypted) {
-          try {
-            const raw = JSON.parse(rf.content);
-            parsedPayload = normalizeImportPayload(raw);
+          const valRes = validateImportJson(rf.content);
+          isValidSchema = valRes.isValid;
+          validationErrors = valRes.errors;
+          validationWarnings = valRes.warnings;
+
+          if (valRes.data) {
+            parsedPayload = valRes.data;
             config = createDefaultFileMergeConfig(fileId, rf.name, parsedPayload, idx === 0);
-          } catch (e) {
-            // invalid json
+          } else {
+            try {
+              const raw = JSON.parse(rf.content);
+              parsedPayload = normalizeImportPayload(raw);
+              config = createDefaultFileMergeConfig(fileId, rf.name, parsedPayload, idx === 0);
+            } catch (e) {}
           }
         }
 
@@ -109,7 +124,10 @@ export default function ImportModal({
           rawContent: rf.content,
           isEncrypted: encrypted,
           payload: parsedPayload,
-          config: config
+          config: config,
+          isValidSchema,
+          validationErrors,
+          validationWarnings
         };
       });
 
@@ -137,14 +155,25 @@ export default function ImportModal({
         const encrypted = isEncryptedBackup(rawContent);
         let parsedPayload: ImportPayload | null = null;
         let config: FileMergeConfig | null = null;
+        let isValidSchema = true;
+        let validationErrors: string[] = [];
+        let validationWarnings: string[] = [];
 
         if (!encrypted) {
-          try {
-            const raw = JSON.parse(rawContent);
-            parsedPayload = normalizeImportPayload(raw);
+          const valRes = validateImportJson(rawContent);
+          isValidSchema = valRes.isValid;
+          validationErrors = valRes.errors;
+          validationWarnings = valRes.warnings;
+
+          if (valRes.data) {
+            parsedPayload = valRes.data;
             config = createDefaultFileMergeConfig(fileId, file.name, parsedPayload, files.length === 0);
-          } catch (e) {
-            // invalid json
+          } else {
+            try {
+              const raw = JSON.parse(rawContent);
+              parsedPayload = normalizeImportPayload(raw);
+              config = createDefaultFileMergeConfig(fileId, file.name, parsedPayload, files.length === 0);
+            } catch (e) {}
           }
         }
 
@@ -157,7 +186,10 @@ export default function ImportModal({
               rawContent: rawContent,
               isEncrypted: encrypted,
               payload: parsedPayload,
-              config: config
+              config: config,
+              isValidSchema,
+              validationErrors,
+              validationWarnings
             }
           ];
           if (!activeFileId) setActiveFileId(fileId);
@@ -175,8 +207,8 @@ export default function ImportModal({
     setIsDecryptingId(fileId);
     try {
       const decrypted = await decryptText(file.rawContent, passwordInput);
-      const raw = JSON.parse(decrypted);
-      const parsed: ImportPayload = normalizeImportPayload(raw);
+      const valRes = validateImportJson(decrypted);
+      const parsed: ImportPayload = valRes.data || normalizeImportPayload(JSON.parse(decrypted));
       const config = createDefaultFileMergeConfig(fileId, file.name, parsed, files.indexOf(file) === 0);
 
       setFiles(prev => prev.map(f => {
@@ -186,7 +218,10 @@ export default function ImportModal({
             isEncrypted: false,
             decryptError: undefined,
             payload: parsed,
-            config: config
+            config: config,
+            isValidSchema: valRes.isValid,
+            validationErrors: valRes.errors,
+            validationWarnings: valRes.warnings
           };
         }
         return f;
@@ -739,6 +774,15 @@ export default function ImportModal({
                             {/* Tags / mini stats */}
                             {!file.isEncrypted && stats && (
                               <div className="mt-2 flex flex-wrap gap-1">
+                                {file.isValidSchema ? (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                                    <Check size={10} /> Zod OK
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                                    <AlertTriangle size={10} /> Ostrzeżenie
+                                  </span>
+                                )}
                                 {stats.totalLessons > 0 && (
                                   <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 rounded border border-blue-100 dark:border-blue-900/40">
                                     {stats.totalLessons} lekcji
@@ -855,6 +899,48 @@ export default function ImportModal({
                             <p className="text-[11px] text-slate-500 mt-0.5">
                               Zawiera: {activeStats.classesCount} klas, {activeStats.teachersCount} nauczycieli, {activeStats.totalLessons} lekcji w planie, {activeStats.schedRoomsTotal} przypisań w planie sal, {activeStats.dutyEntries} dyżurów
                             </p>
+                          </div>
+                        </div>
+
+                        {/* Security & Zod Schema Integrity Verification Badge */}
+                        <div className={`p-3 rounded-xl border text-xs ${
+                          activeFile.isValidSchema 
+                            ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200'
+                            : 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200'
+                        }`}>
+                          <div className="flex items-start gap-2.5">
+                            <Shield className={`shrink-0 mt-0.5 ${activeFile.isValidSchema ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} size={16} />
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black uppercase tracking-wider text-[10.5px]">
+                                  Integralność pliku i bezpieczeństwo importu
+                                </span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                  activeFile.isValidSchema 
+                                    ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300'
+                                    : 'bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300'
+                                }`}>
+                                  {activeFile.isValidSchema ? 'Walidacja Zod: ZGODNA' : 'Uwagi do schematu'}
+                                </span>
+                              </div>
+                              <p className="text-[11px] leading-snug opacity-90">
+                                {activeFile.isValidSchema ? (
+                                  <>Struktura pliku została zweryfikowana schematem Zod. Aktywna ochrona przed atakami <strong>Prototype Pollution</strong> (oczyszczono klucze obiektów).</>
+                                ) : (
+                                  <>Wykryto drobne niezgodności typów lub brakujące pola w schemacie Zod (zastosowano bezpieczne domyślne mapowanie).</>
+                                )}
+                              </p>
+                              {activeFile.validationErrors && activeFile.validationErrors.length > 0 && (
+                                <div className="mt-1.5 pt-1.5 border-t border-amber-200/60 dark:border-amber-800/40 text-[10.5px] max-h-24 overflow-y-auto space-y-0.5">
+                                  {activeFile.validationErrors.slice(0, 3).map((err, i) => (
+                                    <div key={i} className="text-amber-800 dark:text-amber-300 font-mono">⚠️ {err}</div>
+                                  ))}
+                                  {activeFile.validationErrors.length > 3 && (
+                                    <div className="text-amber-600 dark:text-amber-400 italic font-sans">+ {activeFile.validationErrors.length - 3} więcej uwag</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
 

@@ -23,6 +23,7 @@ import {
   PlanDyzuryState,
   Hour
 } from '../types';
+import { sanitizeProtoPollution } from './validationSchemas';
 
 export interface ImportPayload {
   version?: string;
@@ -78,12 +79,11 @@ export interface FileMergeConfig {
 
 /**
  * Sanitizes any object to ensure it conforms to a valid AppState schema,
- * preventing any undefined property access in the UI or subcomponents.
+ * preventing any undefined property access in the UI or subcomponents,
+ * and strictly protecting against Prototype Pollution attacks.
  */
-export function sanitizeAppState(raw: any): AppState {
-  if (!raw || typeof raw !== 'object') {
-    raw = {};
-  }
+export function sanitizeAppState(rawInput: any): AppState {
+  const raw = sanitizeProtoPollution(rawInput) || {};
 
   const rawSchool = raw.school || {};
   const school = {
@@ -219,8 +219,10 @@ export function sanitizeAppState(raw: any): AppState {
 /**
  * Normalizes any loaded payload into a consistent ImportPayload object.
  * Handles standard backup files, raw AppState files, snapshots, or wrapped objects.
+ * Strips any potential Prototype Pollution attempts.
  */
-export function normalizeImportPayload(raw: any): ImportPayload {
+export function normalizeImportPayload(rawInput: any): ImportPayload {
+  const raw = sanitizeProtoPollution(rawInput);
   if (!raw || typeof raw !== 'object') {
     return {
       version: '3.0',
@@ -697,6 +699,7 @@ export function applyFileMergeToState(
 
           const nextLessons: Record<string, Lesson> = {};
           Object.entries(nextState.planLekcji.lessons || {}).forEach(([k, lesson]) => {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
             const classId = k.split('|')[0];
             if (!matchingClassIds.has(classId)) {
               nextLessons[k] = lesson;
@@ -705,6 +708,7 @@ export function applyFileMergeToState(
 
           // Add incoming lessons for matching classes
           Object.entries(incomingState.planLekcji.lessons).forEach(([k, lesson]) => {
+            if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
             const classId = k.split('|')[0];
             if (matchingClassIds.has(classId) || config.planLekcjiScope === 'all') {
               nextLessons[k] = JSON.parse(JSON.stringify(lesson));
@@ -807,15 +811,18 @@ export function applyFileMergeToState(
 
       // Traverse incoming SchedData and apply cells safely
       Object.entries(incomingSched).forEach(([yearKey, yearObj]) => {
+        if (yearKey === '__proto__' || yearKey === 'constructor' || yearKey === 'prototype') return;
         if (!yearObj || typeof yearObj !== 'object') return;
         if (!nextSched[yearKey]) nextSched[yearKey] = {};
         
         Object.entries(yearObj).forEach(([dayKey, dayObj]) => {
+          if (dayKey === '__proto__' || dayKey === 'constructor' || dayKey === 'prototype') return;
           if (!dayObj || typeof dayObj !== 'object') return;
           const dayIdx = Number(dayKey);
           if (!nextSched[yearKey][dayIdx]) nextSched[yearKey][dayIdx] = {};
 
           Object.entries(dayObj).forEach(([hourKey, hourObj]) => {
+            if (hourKey === '__proto__' || hourKey === 'constructor' || hourKey === 'prototype') return;
             if (!hourObj || typeof hourObj !== 'object') return;
             if (!nextSched[yearKey][dayIdx][hourKey]) nextSched[yearKey][dayIdx][hourKey] = {};
             const destHourObj = nextSched[yearKey][dayIdx][hourKey];
@@ -823,6 +830,7 @@ export function applyFileMergeToState(
             // If merging specific scope, first remove existing cells matching this scope from destHourObj
             if (targetScope === 'grades_1_3' || targetScope === 'grades_4_8' || targetScope === 'custom') {
               Object.keys(destHourObj).forEach(colKey => {
+                if (colKey === '__proto__' || colKey === 'constructor' || colKey === 'prototype') return;
                 const curCell = destHourObj[colKey];
                 if (!curCell) return;
 
@@ -838,6 +846,7 @@ export function applyFileMergeToState(
 
             // Now insert matching cells from incoming
             Object.entries(hourObj).forEach(([colKey, incomingCell]) => {
+              if (colKey === '__proto__' || colKey === 'constructor' || colKey === 'prototype') return;
               if (targetScope === 'custom_rooms' && !customColKeys.has(colKey)) return;
               if (!incomingCell) return;
 

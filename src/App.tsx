@@ -11,8 +11,10 @@ import {
 } from './services/dbStorage';
 import ExportModal, { ExportOptions } from './components/ExportModal';
 import ImportModal from './components/ImportModal';
+import SecurityModal from './components/SecurityModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { sanitizeAppState } from './utils/mergeEngine';
+import { anonymizeBackupPayload } from './utils/anonymization';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
 const PlanSal = lazy(() => import('./components/PlanSal'));
@@ -402,6 +404,7 @@ export default function App() {
   // States for selective export and import
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [pendingImportFiles, setPendingImportFiles] = useState<{ name: string; content: string }[]>([]);
 
   const handleUpdateAppState = (newState: AppState | ((prev: AppState) => AppState)) => {
@@ -960,7 +963,7 @@ export default function App() {
   };
 
   const handleExecuteExport = async (options: ExportOptions) => {
-    const backupObj: any = {
+    let backupObj: any = {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString()
     };
@@ -980,22 +983,32 @@ export default function App() {
     if (options.includeHistoryLogs) {
       backupObj.historyLogs = historyLogs;
     }
+
+    let isAnonymized = false;
+    let anonSummary: any = null;
+
+    if (options.anonymizeData) {
+      const res = anonymizeBackupPayload(backupObj);
+      backupObj = res.payload;
+      isAnonymized = true;
+      anonSummary = res.summary;
+    }
     
     const rawJson = JSON.stringify(backupObj, null, 2);
-    const schoolTag = appState.school.short?.toLowerCase() || 'szkola';
+    const schoolTag = isAnonymized ? 'rodo' : (appState.school.short?.toLowerCase() || 'szkola');
     const dateStr = new Date().toISOString().slice(0, 10);
-    const fileName = `saleplan-kopia-${schoolTag}-${dateStr}`;
+    const fileName = `saleplan-kopia-${schoolTag}${isAnonymized ? '-anonimowa' : ''}-${dateStr}`;
 
     try {
       if (options.password) {
         const encrypted = await encryptText(rawJson, options.password);
         downloadFile(encrypted, `${fileName}-secured.json`, 'application/json');
-        notify('Wyeksportowano zabezpieczone hasłem archiwum JSON', 'ok');
-        addEventLog('other', 'Wyeksportowano zabezpieczoną kopię JSON', `Zaszyfrowano dane hasłem (AES-256 GCM).`);
+        notify(isAnonymized ? 'Wyeksportowano zabezpieczone hasłem zanonimizowane (RODO) archiwum JSON' : 'Wyeksportowano zabezpieczone hasłem archiwum JSON', 'ok');
+        addEventLog('other', isAnonymized ? 'Wyeksportowano kopię RODO z hasłem' : 'Wyeksportowano zabezpieczoną kopię JSON', `Zaszyfrowano dane hasłem (AES-256 GCM).`);
       } else {
         downloadFile(rawJson, `${fileName}.json`, 'application/json');
-        notify('Wyeksportowano kopię JSON', 'ok');
-        addEventLog('other', 'Wyeksportowano kopię JSON', `Pobrano plik konfiguracyjny bez hasła.`);
+        notify(isAnonymized ? `Wyeksportowano zanonimizowaną kopię RODO (${anonSummary?.teachersAnonymized || 0} n-li, ${anonSummary?.studentsAnonymized || 0} uczniów SPE)` : 'Wyeksportowano kopię JSON', 'ok');
+        addEventLog('other', isAnonymized ? 'Wyeksportowano kopię RODO' : 'Wyeksportowano kopię JSON', isAnonymized ? 'Zanonimizowano dane osobowe nauczycieli i uczniów SPE do celów zewnętrznych.' : 'Pobrano plik konfiguracyjny bez hasła.');
       }
       setShowExportModal(false);
     } catch (err) {
@@ -1393,6 +1406,16 @@ export default function App() {
             </button>
           </div>
 
+          <button
+            onClick={() => setShowSecurityModal(true)}
+            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1.5 bg-slate-950 px-2.5 py-2 border border-slate-800/85 hover:border-emerald-500/50 cursor-pointer"
+            title="Tarcza Bezpieczeństwa & RODO (Szyfrowanie bazy, Anonimizacja)"
+          >
+            <Shield size={15} className="text-emerald-400" />
+            <span className="hidden xl:inline leading-none">Bezpieczeństwo & RODO</span>
+            <span className="xl:hidden leading-none">RODO</span>
+          </button>
+
           <button 
             onClick={() => setShowSnapshotManager(true)}
             className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1.5 bg-slate-950 px-3 py-2 border border-slate-800/85 hover:border-violet-500/50 cursor-pointer"
@@ -1657,6 +1680,13 @@ export default function App() {
         currentSnapshots={snapshots}
         currentHistoryLogs={historyLogs}
         onExecuteMultiImport={handleExecuteMultiImport}
+      />
+
+      <SecurityModal
+        isOpen={showSecurityModal}
+        onClose={() => setShowSecurityModal(false)}
+        onRefreshStorage={refreshStorageStats}
+        onOpenExportAnonymized={() => setShowExportModal(true)}
       />
 
       {isRestoring && (

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Lock, Key, Download, X, Eye, EyeOff, CheckSquare, Square, 
-  Calendar, Building2, Archive, Camera, History, Sparkles, AlertCircle, ShieldCheck
+  Calendar, Building2, Archive, Camera, History, Sparkles, AlertCircle, ShieldCheck,
+  Shield, UserX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppState, SchedData, ArchiveEntry, SnapshotEntry, AppEventLog } from '../types';
@@ -23,6 +24,7 @@ export interface ExportOptions {
   includeArchive: boolean;
   includeSnapshots: boolean;
   includeHistoryLogs: boolean;
+  anonymizeData?: boolean;
   password?: string;
 }
 
@@ -41,6 +43,7 @@ export default function ExportModal({
   const [includeArchive, setIncludeArchive] = useState(archive.length > 0);
   const [includeSnapshots, setIncludeSnapshots] = useState(snapshots.length > 0);
   const [includeHistoryLogs, setIncludeHistoryLogs] = useState(false);
+  const [anonymizeData, setAnonymizeData] = useState(false);
 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -98,6 +101,7 @@ export default function ExportModal({
       includeArchive,
       includeSnapshots,
       includeHistoryLogs,
+      anonymizeData,
       password: password.trim() ? password.trim() : undefined,
     });
   };
@@ -334,12 +338,58 @@ export default function ExportModal({
               </label>
             </div>
 
+            {/* RODO / Data Protection Anonymization Section */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserX size={13} className="text-violet-500" />
+                  2. Anonimizacja danych RODO:
+                </span>
+                {anonymizeData && (
+                  <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1">
+                    <Shield size={12} /> Ochrona RODO aktywna
+                  </span>
+                )}
+              </div>
+
+              <label 
+                className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition ${
+                  anonymizeData 
+                    ? 'bg-violet-50/60 dark:bg-violet-950/20 border-violet-300 dark:border-violet-700/60' 
+                    : 'bg-slate-50/50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                }`}
+              >
+                <div className="pt-0.5 text-violet-600 dark:text-violet-400 shrink-0">
+                  {anonymizeData ? <CheckSquare size={17} /> : <Square size={17} className="text-slate-400" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      Wygeneruj zanonimizowaną kopię zapasową (SPE i nauczyciele)
+                    </span>
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-300 uppercase">
+                      RODO
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                    Zastępuje nazwiska nauczycieli (np. Nauczyciel 1, N1) oraz maskuje dane uczniów SPE (imiona, orzeczenia, notatki wsparcia). Bezpieczna do celów audytu, wsparcia technicznego lub prezentacji.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={anonymizeData}
+                  onChange={(e) => setAnonymizeData(e.target.checked)}
+                  className="sr-only"
+                />
+              </label>
+            </div>
+
             {/* Password Security Section */}
             <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                   <Lock size={13} className="text-indigo-500" />
-                  2. Zabezpieczenie hasłem (opcjonalne):
+                  3. Zabezpieczenie hasłem pliku kopii (opcjonalne):
                 </span>
                 {password.trim() ? (
                   <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">

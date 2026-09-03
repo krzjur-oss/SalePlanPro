@@ -161,3 +161,125 @@ function base64ToArrayBuffer(base64: string): Uint8Array {
   }
   return bytes;
 }
+
+// ── LOCAL STORAGE / DATABASE ENCRYPTION ENGINE (AES-256 GCM) ──
+
+export const STORAGE_ENC_META_KEY = 'saleplan_v3_storage_enc_meta';
+const SESSION_PWD_KEY = 'saleplan_session_pwd_v1';
+const VERIFICATION_MAGIC = 'SALEPLAN_MASTER_UNLOCK_VALID_V1';
+
+let inMemoryMasterPassword: string | null = null;
+
+export interface StorageEncMeta {
+  enabled: boolean;
+  verificationToken: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Checks if local database encryption is currently activated.
+ */
+export function isDatabaseEncryptionActive(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_ENC_META_KEY);
+    if (!raw) return false;
+    const meta: StorageEncMeta = JSON.parse(raw);
+    return !!meta.enabled;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns current StorageEncMeta or null.
+ */
+export function getStorageEncryptionMeta(): StorageEncMeta | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_ENC_META_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sets the active master password for this session (both in-memory and in sessionStorage).
+ */
+export function setSessionPassword(password: string | null): void {
+  inMemoryMasterPassword = password;
+  try {
+    if (password) {
+      sessionStorage.setItem(SESSION_PWD_KEY, password);
+    } else {
+      sessionStorage.removeItem(SESSION_PWD_KEY);
+    }
+  } catch {}
+}
+
+/**
+ * Retrieves the session password (from memory or sessionStorage).
+ */
+export function getSessionPassword(): string | null {
+  if (inMemoryMasterPassword) return inMemoryMasterPassword;
+  try {
+    const fromSession = sessionStorage.getItem(SESSION_PWD_KEY);
+    if (fromSession) {
+      inMemoryMasterPassword = fromSession;
+      return fromSession;
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Checks if the current session is unlocked and ready to read/write encrypted data.
+ */
+export function isSessionUnlocked(): boolean {
+  if (!isDatabaseEncryptionActive()) return true;
+  const pwd = getSessionPassword();
+  return !!pwd;
+}
+
+/**
+ * Verifies a password against the stored encryption metadata verification token.
+ */
+export async function verifyMasterPassword(password: string): Promise<boolean> {
+  const meta = getStorageEncryptionMeta();
+  if (!meta || !meta.enabled) return true;
+  if (!password) return false;
+
+  try {
+    const decrypted = await decryptText(meta.verificationToken, password);
+    return decrypted === VERIFICATION_MAGIC;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sets up and stores the database encryption metadata with a verification token.
+ */
+export async function setupStorageEncryptionMeta(password: string): Promise<void> {
+  const verificationToken = await encryptText(VERIFICATION_MAGIC, password);
+  const meta: StorageEncMeta = {
+    enabled: true,
+    verificationToken,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  localStorage.setItem(STORAGE_ENC_META_KEY, JSON.stringify(meta));
+  setSessionPassword(password);
+}
+
+/**
+ * Disables database encryption and clears metadata and session keys.
+ */
+export function removeStorageEncryptionMeta(): void {
+  try {
+    localStorage.removeItem(STORAGE_ENC_META_KEY);
+    setSessionPassword(null);
+  } catch {}
+}
+
