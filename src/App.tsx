@@ -29,7 +29,7 @@ import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, Database, Award
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database, Award
 } from 'lucide-react';
 
 function sortAppState(rawInput: any): AppState {
@@ -1165,300 +1165,325 @@ export default function App() {
   return (
     <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
       
-      {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY ── */}
+      {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY (ORGANIZACJA DWUPOZIOMOWA DLA TABLETÓW I DESKTOPU) ── */}
       {!isPresentationMode && (
-        <header className="bg-slate-900 text-white px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between shadow-md select-none shrink-0 border-b border-slate-950">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 rounded-lg p-2 text-white flex items-center justify-center font-black">
-            SP
-          </div>
-          <div>
-            <h1 className="font-extrabold text-sm md:text-base tracking-tight text-white flex items-center gap-1.5 leading-none">
-              SalePlan Pro <span className="bg-blue-600/30 text-blue-400 font-bold px-1.5 py-0.5 rounded text-[10px] uppercase font-mono tracking-wide">PWA App</span>
-            </h1>
-            <p className="text-[10px] md:text-xs text-slate-400 font-semibold mt-0.5 max-w-sm truncate">
-              {appState.school.name} ({appState.yearLabel})
-            </p>
-          </div>
-        </div>
-
-        {/* Dynamic Navigation Tabs configured as hamburger menu */}
-        <div className="relative my-3 md:my-0 z-30">
-          <button
-            onClick={() => setHamburgerOpen(!hamburgerOpen)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl hover:bg-slate-900 text-xs text-white font-extrabold shadow transition select-none cursor-pointer"
-            id="hamburger-navigation-trigger"
-          >
-            {hamburgerOpen ? <X size={15} className="text-red-500 animate-pulse" /> : <Menu size={15} className="text-blue-500" />}
-            <span className="text-slate-500 font-bold uppercase pointer-events-none">Nawigacja:</span>
-            <span className="flex items-center gap-1 leading-none">
-              {currentTab === 'kreator' && <><Sparkles size={13} className="text-amber-400 font-bold" /> 🧙‍♀️ Kreator Szkoły</>}
-              {currentTab === 'plan_klas' && <><Layers size={13} className="text-blue-400" /> Etap 1: Plan Klas</>}
-              {currentTab === 'spe' && <><Award size={13} className="text-amber-400 font-bold" /> 🌟 Plan SPE & NI</>}
-              {currentTab === 'plan_sal' && <><MapPin size={13} className="text-teal-400" /> Etap 2: Plan Sal</>}
-              {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-400" /> Etap 3: Dyżury</>}
-              {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-400" /> 🖨️ Wydruki</>}
-              {currentTab === 'statystyki' && <><BarChart2 size={13} className="text-rose-400" /> 📊 Statystyki</>}
-              {currentTab === 'ustawienia_generatorow' && <><Sliders size={13} className="text-indigo-400 font-bold" /> ⚙️ Ustawienia generatorów</>}
-              {currentTab === 'o_programie' && <><HelpCircle size={13} className="text-sky-400 font-bold" /> ℹ️ O programie & regulamin</>}
-            </span>
-          </button>
-
-          {hamburgerOpen && (
-            <>
-              {/* Overlay close click hook */}
-              <div 
-                className="fixed inset-0 bg-transparent z-40" 
-                onClick={() => setHamburgerOpen(false)} 
-              />
-              
-              <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-800 p-2.5 rounded-2xl shadow-xl z-50 overflow-hidden text-left">
-                <div className="px-3.5 py-2.5 border-b border-slate-800/80 mb-2">
-                  <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider block">Główne moduły programu</span>
-                </div>
-
-                <div className="space-y-0.5">
-                  <button
-                    onClick={() => { setCurrentTab('kreator'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'kreator'
-                        ? 'bg-amber-600/10 border-l-4 border-amber-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Sparkles size={15} className={`shrink-0 mt-0.5 ${currentTab === 'kreator' ? 'text-amber-400' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">🧙‍♀️ Kreator Szkoły</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Klasy, nauczyciele, gabinety</span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => { setCurrentTab('plan_klas'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'plan_klas'
-                        ? 'bg-blue-600/10 border-l-4 border-blue-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Layers size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_klas' ? 'text-blue-500' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">📚 Etap 1: Plan Klas</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Siatka godzin oddziałowych</span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => { setCurrentTab('spe'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'spe'
-                        ? 'bg-amber-600/10 border-l-4 border-amber-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Award size={15} className={`shrink-0 mt-0.5 ${currentTab === 'spe' ? 'text-amber-400' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block text-amber-300">🌟 Plan SPE & NI</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Wsparcie w klasie, NI, rewalidacja</span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => { setCurrentTab('plan_sal'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'plan_sal'
-                        ? 'bg-teal-600/10 border-l-4 border-teal-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <MapPin size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_sal' ? 'text-teal-400' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">🎨 Etap 2: Plan Sal</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Lokalizacje & obłożenie sal</span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => { setCurrentTab('dyzury'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'dyzury'
-                        ? 'bg-indigo-600/10 border-l-4 border-indigo-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Shield size={15} className={`shrink-0 mt-0.5 ${currentTab === 'dyzury' ? 'text-indigo-400' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">🛡️ Etap 3: Dyżury</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opieka na przerwach</span>
-                    </div>
-                  </button>
-
-                  <div className="border-t border-slate-800/60 my-1 pb-1" />
-
-                  <button
-                    onClick={() => { setCurrentTab('wydruki'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'wydruki'
-                        ? 'bg-emerald-600/10 border-l-4 border-emerald-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Printer size={15} className={`shrink-0 mt-0.5 ${currentTab === 'wydruki' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">🖨️ Wydruki i Publikacje</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Plany klas, nauczycieli, sal</span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => { setCurrentTab('statystyki'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'statystyki'
-                        ? 'bg-rose-600/10 border-l-4 border-rose-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <BarChart2 size={15} className={`shrink-0 mt-0.5 ${currentTab === 'statystyki' ? 'text-rose-450 px' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">📊 Statystyki i Diagnoza</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Okienka, limity, obciążenia</span>
-                    </div>
-                  </button>
-
-                  <div className="border-t border-slate-800/60 my-1 pb-1" />
-
-                  <button
-                    onClick={() => { setCurrentTab('ustawienia_generatorow'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'ustawienia_generatorow'
-                        ? 'bg-indigo-600/10 border-l-4 border-indigo-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <Sliders size={15} className={`shrink-0 mt-0.5 ${currentTab === 'ustawienia_generatorow' ? 'text-indigo-400' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">⚙️ Ustawienia generatorów</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Kryteria i wagi algorytmów</span>
-                    </div>
-                  </button>
-
-                  <div className="border-t border-slate-800/60 my-1 pb-1" />
-
-                  <button
-                    onClick={() => { setCurrentTab('o_programie'); setOProgramieTab('info'); setHamburgerOpen(false); }}
-                    className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                      currentTab === 'o_programie'
-                        ? 'bg-sky-600/10 border-l-4 border-sky-500 text-white font-extrabold pl-2'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <HelpCircle size={15} className={`shrink-0 mt-0.5 ${currentTab === 'o_programie' ? 'text-sky-400' : 'text-slate-500'}`} />
-                    <div>
-                      <span className="text-xs font-black block">ℹ️ O programie & regulamin</span>
-                      <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opis, licencja i warunki</span>
-                    </div>
-                  </button>
-                </div>
+        <header className="bg-slate-900 text-white shadow-md select-none shrink-0 border-b border-slate-950 z-30">
+          {/* Poziom 1: Tożsamość szkoły, moduł nawigacji oraz narzędzia widoku */}
+          <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-800/70">
+            {/* Lewa strona: Logo + Nazwa programu + Nazwa szkoły */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="bg-blue-600 rounded-lg p-1.5 sm:p-2 text-white flex items-center justify-center font-black text-xs sm:text-sm shrink-0 shadow-xs">
+                SP
               </div>
-            </>
-          )}
-        </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 leading-none">
+                  <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-white leading-none whitespace-nowrap">
+                    SalePlan Pro
+                  </h1>
+                  <span className="bg-blue-600/25 text-blue-400 border border-blue-500/30 font-bold px-1.5 py-0.5 rounded text-[9px] uppercase font-mono tracking-wide hidden sm:inline-block leading-none">
+                    PWA App
+                  </span>
+                </div>
+                <p 
+                  className="text-[10px] sm:text-xs text-slate-400 font-semibold mt-0.5 truncate max-w-[160px] sm:max-w-xs md:max-w-sm lg:max-w-md"
+                  title={`${appState.school.name || 'Wersja Demonstracyjna'} • Rok szkolny ${appState.yearLabel}`}
+                >
+                  {appState.school.name || 'Wersja Demonstracyjna'} • {appState.yearLabel}
+                </p>
+              </div>
+            </div>
 
-        {/* Global Toolbar actions */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          
-          {/* Undo / Redo */}
-          <div className="flex items-center gap-1 border-r border-slate-800 pr-2.5">
-            <button 
-              onClick={handleUndo}
-              disabled={undoStack.length === 0}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-40 transition select-none cursor-pointer"
-              title="Cofnij ostatnie działanie (Undo)"
-            >
-              <RotateCcw size={15} />
-            </button>
-            <button 
-              onClick={handleRedo}
-              disabled={redoStack.length === 0}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-40 transition select-none cursor-pointer"
-              title="Ponów cofnięte działanie (Redo)"
-            >
-              <RotateCw size={15} />
-            </button>
-            <button 
-              onClick={handleToggleFullscreen}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition select-none cursor-pointer"
-              title={isFullscreen ? "Wyjdź z pełnego ekranu" : "Pełny ekran (Fullscreen)"}
-            >
-              {isFullscreen ? <Minimize2 size={15} className="text-amber-400" /> : <Maximize2 size={15} />}
-            </button>
-            <button 
-              onClick={() => {
-                setIsPresentationMode(!isPresentationMode);
-                notify(isPresentationMode ? 'Wyłączono tryb prezentacji' : 'Włączono tryb prezentacji (Esc aby wyjść)', 'info');
-              }}
-              className={`p-1.5 rounded-lg transition select-none cursor-pointer ${
-                isPresentationMode ? 'text-amber-400 bg-slate-800 hover:bg-slate-750' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-              title={isPresentationMode ? "Wyjdź z trybu prezentacji" : "Włącz tryb prezentacji (Prezentacja)"}
-            >
-              {isPresentationMode ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
+            {/* Prawa strona: Nawigacja po modułach oraz Kontrola widoku i historii */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              {/* Dynamic Navigation Tabs configured as dropdown menu */}
+              <div className="relative z-40">
+                <button
+                  onClick={() => setHamburgerOpen(!hamburgerOpen)}
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl hover:bg-slate-850 text-xs text-white font-extrabold shadow-xs transition select-none cursor-pointer"
+                  id="hamburger-navigation-trigger"
+                  title="Wybierz moduł programu"
+                >
+                  {hamburgerOpen ? <X size={14} className="text-red-400 animate-pulse" /> : <Menu size={14} className="text-blue-400" />}
+                  <span className="text-slate-500 font-bold uppercase hidden md:inline text-[10px] tracking-wider pointer-events-none">Nawigacja:</span>
+                  <span className="flex items-center gap-1 leading-none text-xs">
+                    {currentTab === 'kreator' && <><Sparkles size={13} className="text-amber-400 font-bold" /> <span className="hidden sm:inline">Kreator Szkoły</span><span className="sm:hidden">Kreator</span></>}
+                    {currentTab === 'plan_klas' && <><Layers size={13} className="text-blue-400" /> <span className="hidden sm:inline">Etap 1: Plan Klas</span><span className="sm:hidden">Plan Klas</span></>}
+                    {currentTab === 'spe' && <><Award size={13} className="text-amber-400 font-bold" /> <span className="hidden sm:inline">Plan SPE & NI</span><span className="sm:hidden">SPE & NI</span></>}
+                    {currentTab === 'plan_sal' && <><MapPin size={13} className="text-teal-400" /> <span className="hidden sm:inline">Etap 2: Plan Sal</span><span className="sm:hidden">Plan Sal</span></>}
+                    {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-400" /> <span className="hidden sm:inline">Etap 3: Dyżury</span><span className="sm:hidden">Dyżury</span></>}
+                    {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-400" /> <span className="hidden sm:inline">Wydruki</span><span className="sm:hidden">Druk</span></>}
+                    {currentTab === 'statystyki' && <><BarChart2 size={13} className="text-rose-400" /> <span className="hidden sm:inline">Statystyki</span><span className="sm:hidden">Stats</span></>}
+                    {currentTab === 'ustawienia_generatorow' && <><Sliders size={13} className="text-indigo-400 font-bold" /> <span className="hidden sm:inline">Generator</span><span className="sm:hidden">Algorytmy</span></>}
+                    {currentTab === 'o_programie' && <><HelpCircle size={13} className="text-sky-400 font-bold" /> <span className="hidden sm:inline">O programie</span><span className="sm:hidden">Info</span></>}
+                  </span>
+                  <ChevronDown size={13} className="text-slate-400 ml-0.5" />
+                </button>
+
+                {hamburgerOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 bg-transparent z-40" 
+                      onClick={() => setHamburgerOpen(false)} 
+                    />
+                    
+                    <div className="absolute right-0 top-full mt-2 w-72 max-h-[calc(100vh-5rem)] overflow-y-auto bg-slate-900 border border-slate-800 p-2.5 rounded-2xl shadow-2xl z-50 text-left">
+                      <div className="px-3.5 py-2 border-b border-slate-800/80 mb-2">
+                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block">Główne moduły programu</span>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <button
+                          onClick={() => { setCurrentTab('kreator'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'kreator'
+                              ? 'bg-amber-600/10 border-l-4 border-amber-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Sparkles size={15} className={`shrink-0 mt-0.5 ${currentTab === 'kreator' ? 'text-amber-400' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">🧙‍♀️ Kreator Szkoły</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Klasy, nauczyciele, gabinety</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('plan_klas'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'plan_klas'
+                              ? 'bg-blue-600/10 border-l-4 border-blue-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Layers size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_klas' ? 'text-blue-500' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">📚 Etap 1: Plan Klas</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Siatka godzin oddziałowych</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('spe'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'spe'
+                              ? 'bg-amber-600/10 border-l-4 border-amber-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Award size={15} className={`shrink-0 mt-0.5 ${currentTab === 'spe' ? 'text-amber-400' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block text-amber-300">🌟 Plan SPE & NI</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Wsparcie w klasie, NI, rewalidacja</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('plan_sal'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'plan_sal'
+                              ? 'bg-teal-600/10 border-l-4 border-teal-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <MapPin size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_sal' ? 'text-teal-400' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">🎨 Etap 2: Plan Sal</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Lokalizacje & obłożenie sal</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('dyzury'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'dyzury'
+                              ? 'bg-indigo-600/10 border-l-4 border-indigo-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Shield size={15} className={`shrink-0 mt-0.5 ${currentTab === 'dyzury' ? 'text-indigo-400' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">🛡️ Etap 3: Dyżury</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opieka na przerwach</span>
+                          </div>
+                        </button>
+
+                        <div className="border-t border-slate-800/60 my-1 pb-1" />
+
+                        <button
+                          onClick={() => { setCurrentTab('wydruki'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'wydruki'
+                              ? 'bg-emerald-600/10 border-l-4 border-emerald-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Printer size={15} className={`shrink-0 mt-0.5 ${currentTab === 'wydruki' ? 'text-emerald-400' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">🖨️ Wydruki i Publikacje</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Plany klas, nauczycieli, sal</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('statystyki'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'statystyki'
+                              ? 'bg-rose-600/10 border-l-4 border-rose-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <BarChart2 size={15} className={`shrink-0 mt-0.5 ${currentTab === 'statystyki' ? 'text-rose-450 px' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">📊 Statystyki i Diagnoza</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Okienka, limity, obciążenia</span>
+                          </div>
+                        </button>
+
+                        <div className="border-t border-slate-800/60 my-1 pb-1" />
+
+                        <button
+                          onClick={() => { setCurrentTab('ustawienia_generatorow'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'ustawienia_generatorow'
+                              ? 'bg-indigo-600/10 border-l-4 border-indigo-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Sliders size={15} className={`shrink-0 mt-0.5 ${currentTab === 'ustawienia_generatorow' ? 'text-indigo-400' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">⚙️ Ustawienia generatorów</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Kryteria i wagi algorytmów</span>
+                          </div>
+                        </button>
+
+                        <div className="border-t border-slate-800/60 my-1 pb-1" />
+
+                        <button
+                          onClick={() => { setCurrentTab('o_programie'); setOProgramieTab('info'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'o_programie'
+                              ? 'bg-sky-600/10 border-l-4 border-sky-500 text-white font-extrabold pl-2'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <HelpCircle size={15} className={`shrink-0 mt-0.5 ${currentTab === 'o_programie' ? 'text-sky-400' : 'text-slate-500'}`} />
+                          <div>
+                            <span className="text-xs font-black block">ℹ️ O programie & regulamin</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opis, licencja i warunki</span>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Segmented Controls: Wstecz / Ponów / Pełen ekran / Tryb czytania */}
+              <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 shadow-xs">
+                <button 
+                  onClick={handleUndo}
+                  disabled={undoStack.length === 0}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent transition select-none cursor-pointer"
+                  title="Cofnij ostatnie działanie (Undo) • Ctrl+Z"
+                >
+                  <RotateCcw size={14} />
+                </button>
+                <button 
+                  onClick={handleRedo}
+                  disabled={redoStack.length === 0}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent transition select-none cursor-pointer"
+                  title="Ponów cofnięte działanie (Redo) • Ctrl+Y"
+                >
+                  <RotateCw size={14} />
+                </button>
+                <div className="h-3.5 w-px bg-slate-800 mx-0.5" />
+                <button 
+                  onClick={handleToggleFullscreen}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition select-none cursor-pointer"
+                  title={isFullscreen ? "Wyjdź z pełnego ekranu" : "Pełny ekran (Fullscreen)"}
+                >
+                  {isFullscreen ? <Minimize2 size={14} className="text-amber-400" /> : <Maximize2 size={14} />}
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsPresentationMode(!isPresentationMode);
+                    notify(isPresentationMode ? 'Wyłączono tryb czytania' : 'Włączono tryb czytania / prezentacji (Esc aby wyjść)', 'info');
+                  }}
+                  className={`p-1.5 rounded-lg transition select-none cursor-pointer ${
+                    isPresentationMode ? 'text-amber-400 bg-slate-800 hover:bg-slate-750' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                  title={isPresentationMode ? "Wyjdź z trybu czytania" : "Tryb czytania i prezentacji"}
+                >
+                  {isPresentationMode ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={() => setShowSecurityModal(true)}
-            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1.5 bg-slate-950 px-2.5 py-2 border border-slate-800/85 hover:border-emerald-500/50 cursor-pointer"
-            title="Tarcza Bezpieczeństwa & RODO (Szyfrowanie bazy, Anonimizacja)"
-          >
-            <Shield size={15} className="text-emerald-400" />
-            <span className="hidden xl:inline leading-none">Bezpieczeństwo & RODO</span>
-            <span className="xl:hidden leading-none">RODO</span>
-          </button>
+          {/* Poziom 2: Pasek operacyjny — Bezpieczeństwo & RODO, Punkty przywracania, Eksport i Import ze scalaniem */}
+          <div className="px-3 sm:px-4 md:px-6 py-1.5 bg-slate-950/75 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+            {/* Lewa grupa: Ochrona danych i historia migawek */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setShowSecurityModal(true)}
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 cursor-pointer shadow-xs"
+                title="Tarcza Bezpieczeństwa & RODO (Szyfrowanie bazy AES-256, Anonimizacja)"
+              >
+                <Shield size={14} className="text-emerald-400 shrink-0" />
+                <span className="leading-none">Bezpieczeństwo & RODO</span>
+              </button>
 
-          <button 
-            onClick={() => setShowSnapshotManager(true)}
-            className="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1.5 bg-slate-950 px-3 py-2 border border-slate-800/85 hover:border-violet-500/50 cursor-pointer"
-            title="Zarządzaj punktami przywracania planu (Snapshots)"
-          >
-            <History size={15} className="text-violet-400" />
-            <span className="hidden lg:inline leading-none">Punkty przywracania</span>
-            <span className="lg:hidden leading-none">Kopie planu</span>
-            {snapshots.length > 0 && (
-              <span className="bg-violet-600 font-extrabold text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center">
-                {snapshots.length}
-              </span>
-            )}
-          </button>
+              <button 
+                onClick={() => setShowSnapshotManager(true)}
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-violet-500/60 cursor-pointer shadow-xs"
+                title="Zarządzaj punktami przywracania planu (Snapshots)"
+              >
+                <History size={14} className="text-violet-400 shrink-0" />
+                <span className="leading-none">Punkty przywracania</span>
+                {snapshots.length > 0 && (
+                  <span className="bg-violet-600 font-black text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center">
+                    {snapshots.length}
+                  </span>
+                )}
+              </button>
+            </div>
 
-          <button 
-            onClick={handleExportBackup}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1"
-            title="Pobierz pełny plik konfiguracyjny (JSON)"
-          >
-            <Download size={15} /> Export
-          </button>
-          
-          <label className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-extrabold flex items-center gap-1 cursor-pointer">
-            <Upload size={15} /> Import / Scalanie
-            <input 
-              type="file" 
-              multiple
-              accept=".json" 
-              className="hidden" 
-              onChange={handleImportBackup} 
-            />
-          </label>
+            {/* Prawa grupa: Eksport, Import ze scalaniem i Reset danych */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button 
+                onClick={handleExportBackup}
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-blue-500/60 cursor-pointer shadow-xs"
+                title="Pobierz pełny plik konfiguracyjny lub zanonimizowaną kopię RODO (JSON)"
+              >
+                <Download size={14} className="text-blue-400 shrink-0" />
+                <span className="leading-none">Eksport</span>
+              </button>
+              
+              <label 
+                className="px-2.5 py-1.5 text-emerald-300 hover:text-white hover:bg-emerald-950/40 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-emerald-800/60 hover:border-emerald-500/80 cursor-pointer shadow-xs"
+                title="Wczytaj kopię planu lub scal dane z wielu plików JSON"
+              >
+                <Upload size={14} className="text-emerald-400 shrink-0" />
+                <span className="leading-none whitespace-nowrap">Import i scalanie</span>
+                <input 
+                  type="file" 
+                  multiple
+                  accept=".json" 
+                  className="hidden" 
+                  onChange={handleImportBackup} 
+                />
+              </label>
 
-          <button 
-            onClick={handleResetTimetable}
-            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-950/40 rounded-lg transition"
-            title="Resetuj dane"
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
-      </header>
+              <button 
+                onClick={handleResetTimetable}
+                className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition border border-transparent hover:border-rose-900/50 cursor-pointer"
+                title="Resetuj dane i przywróć stan początkowy"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        </header>
       )}
 
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
