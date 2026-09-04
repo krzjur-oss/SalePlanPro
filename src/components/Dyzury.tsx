@@ -10,6 +10,12 @@ import {
   isClassGrade1, 
   AdaptationDutiesResult 
 } from '../utils/adaptationDuty';
+import { 
+  calculatePESupervisionDuties, 
+  getTeacherPESupervision, 
+  isPESubject, 
+  PESupervisionResult 
+} from '../utils/peDuty';
 
 const getBreakDuration = (p: Przerwa): number => {
   const [sh, sm] = p.start.split(':').map(Number);
@@ -64,6 +70,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const [countAdaptationInFTE, setCountAdaptationInFTE] = useState<boolean>(() => dyz.settings.countAdaptationInFTE !== false);
   const [firstGradeCustomClassIds, setFirstGradeCustomClassIds] = useState<string[]>(() => dyz.settings.firstGradeCustomClassIds || []);
 
+  const [peSupervisionDuty, setPeSupervisionDuty] = useState<boolean>(() => dyz.settings.peSupervisionDuty !== false);
+  const [peSupervisionBreaks, setPeSupervisionBreaks] = useState<'before_and_after' | 'after_only' | 'before_only'>(() => dyz.settings.peSupervisionBreaks || 'before_and_after');
+  const [peCustomSubjectIds, setPeCustomSubjectIds] = useState<string[]>(() => dyz.settings.peCustomSubjectIds || []);
+  const [countPeSupervisionInFTE, setCountPeSupervisionInFTE] = useState<boolean>(() => !!dyz.settings.countPeSupervisionInFTE);
+
   React.useEffect(() => {
     setAutoBalance(dyz.settings.autoBalance !== false);
     setMaxMinutesPerTeacher(dyz.settings.maxMinutesPerTeacher || 60);
@@ -77,6 +88,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     setFirstGradeEscortDuration(dyz.settings.firstGradeEscortDuration || 15);
     setCountAdaptationInFTE(dyz.settings.countAdaptationInFTE !== false);
     setFirstGradeCustomClassIds(dyz.settings.firstGradeCustomClassIds || []);
+    setPeSupervisionDuty(dyz.settings.peSupervisionDuty !== false);
+    setPeSupervisionBreaks(dyz.settings.peSupervisionBreaks || 'before_and_after');
+    setPeCustomSubjectIds(dyz.settings.peCustomSubjectIds || []);
+    setCountPeSupervisionInFTE(!!dyz.settings.countPeSupervisionInFTE);
   }, [dyz.settings]);
 
   const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number } | null>(null);
@@ -138,6 +153,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return calculateAdaptationDuties(appState, schedData);
   }, [appState, schedData]);
 
+  // Calculated PE locker room and gym supervision duties
+  const peDuties: PESupervisionResult = useMemo(() => {
+    return calculatePESupervisionDuties(appState, schedData);
+  }, [appState, schedData]);
+
   // Current corridor-only duty minutes per teacher
   const teacherCorridorMinutes = useMemo(() => {
     const mins: { [abbr: string]: number } = {};
@@ -155,7 +175,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return mins;
   }, [dyz.harmonogram, dyz.przerwy]);
 
-  // Current total duty allocation minutes per teacher (including adaptation duty if enabled)
+  // Current total duty allocation minutes per teacher (including adaptation duty and PE supervision if enabled)
   const teacherDutyMinutes = useMemo(() => {
     const mins: { [abbr: string]: number } = { ...teacherCorridorMinutes };
     if (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false && adaptationDuties.totalTeacherMinutes) {
@@ -163,8 +183,13 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
         mins[abbr] = (mins[abbr] || 0) + m;
       });
     }
+    if (dyz.settings.peSupervisionDuty !== false && dyz.settings.countPeSupervisionInFTE && peDuties.totalTeacherMinutes) {
+      Object.entries(peDuties.totalTeacherMinutes).forEach(([abbr, m]) => {
+        mins[abbr] = (mins[abbr] || 0) + m;
+      });
+    }
     return mins;
-  }, [teacherCorridorMinutes, dyz.settings.firstGradeAdaptationDuty, dyz.settings.countAdaptationInFTE, adaptationDuties]);
+  }, [teacherCorridorMinutes, dyz.settings.firstGradeAdaptationDuty, dyz.settings.countAdaptationInFTE, adaptationDuties, dyz.settings.peSupervisionDuty, dyz.settings.countPeSupervisionInFTE, peDuties]);
 
   // Target max minutes for each teacher based on FTE
   const teacherMaxMinutes = useMemo(() => {
@@ -744,6 +769,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     }
 
     const nextHarm = { ...dyz.harmonogram };
+    const yk = appState.yearKey || 'default';
 
     const fullTimeHours = 18;
     const teacherProportions: { [abbr: string]: number } = {};
@@ -789,7 +815,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
         ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
         : 0;
-      assignedMinutes[t.abbr] = adaptMins;
+      // If counting PE locker room supervision in FTE, pre-populate with PE supervision minutes
+      const peMins = (dyz.settings.peSupervisionDuty !== false && dyz.settings.countPeSupervisionInFTE)
+        ? (peDuties.totalTeacherMinutes[t.abbr] || 0)
+        : 0;
+      assignedMinutes[t.abbr] = adaptMins + peMins;
     });
 
     // Populate assignedMinutes with currently locked duties
@@ -825,6 +855,22 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       if (dyz.settings.firstGradeAdaptationDuty !== false) {
         const busyWithAdaptation = getTeacherAdaptationDuty(adaptationDuties.byDay, t.abbr, day, przerwa.num);
         if (busyWithAdaptation) {
+          return false;
+        }
+      }
+
+      // Check if teacher is busy with PE locker room / gym supervision during this break
+      if (dyz.settings.peSupervisionDuty !== false) {
+        const busyWithPE = getTeacherPESupervision(
+          schedData,
+          yk,
+          day,
+          przerwa.num,
+          t.abbr,
+          appState.subjects,
+          dyz.settings
+        );
+        if (busyWithPE) {
           return false;
         }
       }
@@ -1072,7 +1118,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
           firstGradeAdaptationDurationMonths,
           firstGradeEscortDuration,
           countAdaptationInFTE,
-          firstGradeCustomClassIds
+          firstGradeCustomClassIds,
+          peSupervisionDuty,
+          peSupervisionBreaks,
+          peCustomSubjectIds,
+          countPeSupervisionInFTE
         }
       }
     });
@@ -1352,6 +1402,71 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     </table>
                   </div>
                 )}
+
+                {/* ── HARMONOGRAM NADZORU SZATNI I SAL SPORTOWYCH (WF) ── */}
+                {dyz.settings.peSupervisionDuty !== false && (peDuties.byDay[activeDay]?.length || 0) > 0 && (
+                  <div className="mt-4 bg-emerald-50/40 border border-emerald-200/80 rounded-xl p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-200/60 pb-2.5">
+                      <div>
+                        <h4 className="text-xs font-bold text-emerald-950 flex items-center gap-1.5 uppercase tracking-wide">
+                          <span>🏃 Nadzór szatni i sal sportowych (WF) — {DAYS[activeDay]}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-200/70 text-emerald-900 text-[10px] font-extrabold">
+                            {peDuties.byDay[activeDay]?.length || 0} przerw
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-emerald-800/80 mt-0.5">
+                          Nauczyciele prowadzący lekcje WF zapewniają opiekę nad klasą w szatniach sportowych/na sali gimnastycznej podczas przerw przyległych do tych lekcji (są automatycznie zwolnieni z dyżuru korytarzowego).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-lg border border-emerald-200/70 bg-white">
+                      <table className="min-w-full border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-emerald-50/70 border-b border-emerald-200 text-emerald-950 font-bold">
+                            <th className="p-2.5 text-left">Przerwa</th>
+                            <th className="p-2.5 text-left">Nauczyciel WF</th>
+                            <th className="p-2.5 text-left">Rodzaj nadzoru</th>
+                            <th className="p-2.5 text-left">Klasa & Przedmiot</th>
+                            <th className="p-2.5 text-left">Lekcja powiązana</th>
+                            <th className="p-2.5 text-center">Czas</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-emerald-100/60">
+                          {(peDuties.byDay[activeDay] || []).map((duty, idx) => (
+                            <tr key={idx} className="hover:bg-emerald-50/30 transition">
+                              <td className="p-2.5 text-slate-700 font-mono font-bold">
+                                Przerwa po {duty.breakNum}. lekcji ({duty.timeRange})
+                              </td>
+                              <td className="p-2.5">
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 bg-emerald-100 border border-emerald-200 rounded text-[10px] font-mono text-emerald-800">
+                                    {duty.teacherAbbr}
+                                  </span>
+                                  <span>{duty.teacherName}</span>
+                                </span>
+                              </td>
+                              <td className="p-2.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100/80 text-emerald-900 font-bold text-[11px] border border-emerald-200">
+                                  {duty.type === 'between_pe' ? '🏃🏃 Między lekcjami WF' : duty.type === 'after_pe' ? '👟 Opuszczenie szatni po lekcji' : '🚪 Otwarcie szatni przed lekcją'}
+                                </span>
+                              </td>
+                              <td className="p-2.5 font-semibold text-slate-700">
+                                kl. {duty.className || '–'} ({duty.subjectName})
+                              </td>
+                              <td className="p-2.5 text-slate-600 font-medium">
+                                {duty.lessonHour ? `Lekcja nr ${duty.lessonHour}` : '–'}
+                              </td>
+                              <td className="p-2.5 text-center font-mono font-bold text-emerald-900">
+                                {duty.durationMinutes} min
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1368,6 +1483,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     const cm = teacherCorridorMinutes[t.abbr] || 0;
                     const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
                       ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
+                      : 0;
+                    const peMins = (dyz.settings.peSupervisionDuty !== false && dyz.settings.countPeSupervisionInFTE)
+                      ? (peDuties.totalTeacherMinutes[t.abbr] || 0)
                       : 0;
                     const maxMins = teacherMaxMinutes[t.abbr] || 0;
                     const hours = teacherHours[t.abbr] || 0;
@@ -1386,6 +1504,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                           {adaptMins > 0 && (
                             <span className="text-[9px] text-amber-700 font-medium flex items-center gap-1 mt-0.5">
                               🎒 w tym {adaptMins} min opieki w kl. 1
+                            </span>
+                          )}
+                          {peMins > 0 && (
+                            <span className="text-[9px] text-emerald-700 font-medium flex items-center gap-1 mt-0.5">
+                              🏃 w tym {peMins} min nadzoru szatni WF
                             </span>
                           )}
                         </div>
@@ -1864,6 +1987,118 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     )}
                   </div>
 
+                  {/* 🏃 Nadzór szatni i sal gimnastycznych przy lekcjach WF */}
+                  <div className="border-t border-slate-100 pt-3 space-y-2.5">
+                    <div className="flex items-start gap-2.5 p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-lg select-none">
+                      <input 
+                        type="checkbox" 
+                        id="opt_peSupervisionDuty"
+                        className="mt-0.5 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
+                        checked={peSupervisionDuty}
+                        onChange={(e) => setPeSupervisionDuty(e.target.checked)}
+                      />
+                      <label htmlFor="opt_peSupervisionDuty" className="cursor-pointer select-none space-y-0.5 flex-1">
+                        <span className="text-[11px] font-extrabold text-emerald-950 block flex items-center gap-1.5">
+                          <span>🏃 Lekcje WF a dyżury korytarzowe (nadzór szatni i sal sportowych)</span>
+                        </span>
+                        <span className="text-[9px] text-emerald-800/90 block leading-tight font-medium">
+                          Gdy nauczyciel ma lekcję Wychowania Fizycznego, ma obowiązek czuwać nad uczniami w szatni/na sali i nie otrzymuje dyżuru korytarzowego. Gdy ten sam nauczyciel uczy innych przedmiotów (np. biologii, edukacji zdrowotnej), system normalnie planuje mu dyżury na korytarzach szkolnych.
+                        </span>
+                      </label>
+                    </div>
+
+                    {peSupervisionDuty && (
+                      <div className="pl-2 space-y-2.5 bg-emerald-50/30 p-2.5 rounded-lg border border-emerald-100 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-[10px] font-bold text-slate-600">Przerwy z nadzorem szatni:</label>
+                          <select
+                            value={peSupervisionBreaks}
+                            onChange={(e) => setPeSupervisionBreaks(e.target.value as any)}
+                            className="px-2 py-1 border border-slate-200 rounded-md bg-white text-xs font-bold text-slate-800"
+                          >
+                            <option value="before_and_after">Przed i po lekcji WF (przebieranie & opuszczenie szatni)</option>
+                            <option value="after_only">Tylko po lekcji WF (opuszczenie szatni)</option>
+                            <option value="before_only">Tylko przed lekcją WF (wpuszczenie do szatni)</option>
+                          </select>
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-slate-700 select-none pt-1 border-t border-emerald-100">
+                          <input
+                            type="checkbox"
+                            checked={countPeSupervisionInFTE}
+                            onChange={(e) => setCountPeSupervisionInFTE(e.target.checked)}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
+                          />
+                          <span>Wliczaj czas nadzoru szatni do tygodniowego limitu dyżurów</span>
+                        </label>
+
+                        {/* Wybór przedmiotów sportowych/WF */}
+                        <div className="pt-2 border-t border-emerald-100/80 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-slate-700">Wykryte przedmioty sportowe / WF w szkole:</span>
+                            <span className="text-[9px] text-slate-400 font-medium">Kliknij, aby dodać/wykluczyć</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto pr-1">
+                            {(appState.subjects || []).map(s => {
+                              const isAutoPE = isPESubject(s);
+                              const isExplicitExcluded = peCustomSubjectIds.includes(`!${s.id}`);
+                              const isExplicitIncluded = peCustomSubjectIds.includes(s.id);
+                              const isSelected = isExplicitIncluded || (isAutoPE && !isExplicitExcluded);
+
+                              return (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      if (isAutoPE) {
+                                        setPeCustomSubjectIds([...peCustomSubjectIds.filter(id => id !== s.id), `!${s.id}`]);
+                                      } else {
+                                        setPeCustomSubjectIds(peCustomSubjectIds.filter(id => id !== s.id));
+                                      }
+                                    } else {
+                                      setPeCustomSubjectIds([...peCustomSubjectIds.filter(id => id !== `!${s.id}`), s.id]);
+                                    }
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition cursor-pointer flex items-center gap-1 ${
+                                    isSelected
+                                      ? 'bg-emerald-600 text-white border-emerald-700 shadow-xs'
+                                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                  title={isSelected ? 'Przedmiot traktowany jako WF (nadzór szatni)' : 'Kliknij, aby zakwalifikować jako WF'}
+                                >
+                                  <span>{s.name}</span>
+                                  {isSelected ? <span className="text-[9px] font-bold">✓</span> : <span className="text-[9px] text-slate-400">+</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {peDuties.dualRoleTeachers.length > 0 && (
+                          <div className="p-2 bg-white rounded-md border border-emerald-200/60 text-[10px] space-y-1">
+                            <span className="font-extrabold text-emerald-900 block">
+                              ℹ️ Wykryto nauczycieli łączących WF z innymi przedmiotami:
+                            </span>
+                            <div className="flex flex-col gap-1">
+                              {peDuties.dualRoleTeachers.map(d => (
+                                <div key={d.abbr} className="p-1.5 rounded bg-emerald-50 border border-emerald-100/70 text-slate-700 leading-snug">
+                                  <span className="font-bold text-emerald-950">{d.name} ({d.abbr}):</span>
+                                  <div className="text-[9px] text-slate-600 mt-0.5">
+                                    • <span className="font-semibold text-emerald-800">WF / sport:</span> {d.peSubjects.join(', ')} ➔ <span className="text-emerald-900 font-semibold">nadzór szatni (brak dyżuru na korytarzu)</span>
+                                  </div>
+                                  <div className="text-[9px] text-slate-600">
+                                    • <span className="font-semibold text-blue-800">Inne przedmioty:</span> {d.otherSubjects.join(', ')} ➔ <span className="text-blue-900 font-semibold">dostępny na dyżury korytarzowe ✅</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="pt-2">
                     <button 
                       onClick={handleSaveSettings}
@@ -1966,6 +2201,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
             const busyAdaptation = dyz.settings.firstGradeAdaptationDuty !== false
               ? getTeacherAdaptationDuty(adaptationDuties.byDay, t.abbr, activeDay, prw)
               : undefined;
+
+            const busyPE = dyz.settings.peSupervisionDuty !== false
+              ? getTeacherPESupervision(schedData, appState.yearKey, activeDay, prw, t.abbr, appState.subjects, dyz.settings)
+              : null;
             
             const currentMins = teacherDutyMinutes[t.abbr] || 0;
             const maxMins = teacherMaxMinutes[t.abbr] || 0;
@@ -1980,6 +2219,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
               reason = busyAdaptation.type === 'classroom'
                 ? `🎒 Dyżur w sali: opieka nad kl. ${busyAdaptation.className} (${busyAdaptation.roomNum})`
                 : `🎒 Dyżur odprowadzający: kl. ${busyAdaptation.className} (${busyAdaptation.timeRange})`;
+            } else if (busyPE) {
+              score = -1;
+              reason = `🏃 ${busyPE.reason} (obowiązek opieki w szatni/na sali WF)`;
             } else if (isAlreadyOnBreak) {
               score = -1;
               reason = 'Zajęty - pełni inny dyżur na tej przerwie';
@@ -1993,12 +2235,13 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
               if (roomBeforeConnected || roomAfterConnected) {
                 score = 3;
                 const matchingRoom = roomBeforeConnected ? lessonBefore.roomName : lessonAfter.roomName;
-                reason = `⭐⭐⭐ Polecany obok: Lekcja w sali ${matchingRoom}`;
+                const matchingSubj = roomBeforeConnected ? lessonBefore.subject : lessonAfter.subject;
+                reason = `⭐⭐⭐ Polecany obok: Lekcja w sali ${matchingRoom} (${matchingSubj})`;
               } else if (lessonBefore || lessonAfter) {
                 score = 2;
-                const preInfo = lessonBefore ? `sala ${lessonBefore.roomName}` : '';
-                const postInfo = lessonAfter ? `sala ${lessonAfter.roomName}` : '';
-                reason = `👍 Dobra: Lekcja blisko (${[preInfo, postInfo].filter(Boolean).join(' / ')})`;
+                const preInfo = lessonBefore ? `${lessonBefore.subject} (s. ${lessonBefore.roomName})` : '';
+                const postInfo = lessonAfter ? `${lessonAfter.subject} (s. ${lessonAfter.roomName})` : '';
+                reason = `👍 Dostępny: Lekcja blisko (${[preInfo, postInfo].filter(Boolean).join(' / ')})`;
               }
             }
 

@@ -1,4 +1,4 @@
-# SalePlan Pro v3.8.1 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.8.2 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -36,6 +36,16 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 *   **Zarządzanie Obszarami Dyżurów (Miejsca)**: Definiowanie punktów kluczowych w szkole (np. korytarz parter, boisko, stołówka) wraz z przypisaniem ich do pięter.
 *   **Konfiguracja Przerw**: Elastyczny kreator godzin trwania przerw obiadowych i krótkich.
 *   **Matryca Harmonogramu**: Interaktywny panel przydzielania nauczycieli do określonych miejsc i przerw w poszczególne dni tygodnia.
+*   **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni i Sal Sportowych)**:
+    *   **Inteligentne rozróżnianie zajęć**: system weryfikuje charakter lekcji prowadzonej przez danego nauczyciela. Podczas zajęć wychowania fizycznego i sportowych nauczyciel ma obowiązek sprawować bezpośrednią opiekę nad klasą w szatniach sportowych/na sali gimnastycznej i jest automatycznie zwalniany z dyżurów korytarzowych na przyległych przerwach.
+    *   **Pełna elastyczność dla nauczycieli dwuprzedmiotowych**: jeśli ten sam pedagog uczy innych przedmiotów (np. biologii, edukacji dla bezpieczeństwa, edukacji zdrowotnej), w trakcie tych lekcji system traktuje go jako w pełni dyspozycyjnego i normalnie planuje mu dyżury na korytarzach szkolnych.
+    *   **Konfiguracja trybu opieki**: wybór przerw podlegających nadzorowi (przed i po lekcji WF, tylko po lekcji – opuszczenie szatni, tylko przed lekcją).
+    *   **Wliczanie do pensum dyżurów**: opcjonalne zaliczanie minut spędzonych na nadzorze szatni do tygodniowego limitu dyżurów nauczyciela (FTE).
+    *   **Wykaz i edycja przedmiotów sportowych**: interaktywny selektor przedmiotów umożliwiający dodanie lub wykluczenie dowolnych nietypowych nazw przedmiotów sportowych w szkole.
+    *   **Dedykowany podgląd i bilans**: harmonogram dzienny z tabelą nadzoru szatni sportowych oraz wyszczególnieniem czasu WF w podsumowaniu obciążeń kadry.
+*   **Dyżury Adaptacyjne i Odprowadzające w Klasach 1**:
+    *   **Dyżur w sali lekcyjnej**: opieka wychowawców i nauczycieli edukacji wczesnoszkolnej w salach lekcyjnych klas pierwszych podczas przerw, chroniąca przed równoczesnym wyznaczeniem dyżuru na korytarzu.
+    *   **Dyżur odprowadzający**: dedykowany czas (np. 15 minut) na bezpieczne odprowadzenie uczniów do szatni lub świetlicy po zakończeniu zajęć.
 
 ### 3. 👥 Równoległe Grupy oraz Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas
 *   **Obsługa Wielu Grup na Jednej Godzinie**: Możliwość prowadzenia lekcji w grupach (np. Informatyka gr1 i gr2, WF chłopcy i dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w osobnych salach z oznaczeniami graficznymi grup i brakiem fałszywych kolizji.
@@ -85,39 +95,50 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 1.  **🚨 Kolizja: Jednoczesny dyżur w innych rejonach**: Wykrywa błędy polegające na przypisaniu tego samego nauczyciela na tej samej przerwie w tym samym dniu do dwóch lub więcej różnych fizycznie miejsc.
 2.  **⚠️ Brak innych lekcji w tym dniu**: Ostrzega planistę, jeśli nauczyciel został wyznaczony do dyżuru w dniu, w którym według ułożonego planu lekcji nie ma żadnych zajęć.
 
+### 3. Inteligentny Silnik Optymalizacji Dyżurów z Ochroną Szatni WF i Klas 1 (v3.8.2)
+*   **Wielozadaniowość i kontekst przedmiotowy**: System weryfikuje charakter prowadzonych lekcji przez każdego nauczyciela. W czasie przerw przyległych do lekcji WF nauczyciel sprawuje opiekę nad klasą w szatniach i salach sportowych – algorytm automatycznie chroni go przed wyznaczeniem dyżuru na korytarzach szkolnych. W czasie lekcji z przedmiotów ogólnych ten sam pedagog jest traktowany jako w pełni dyspozycyjny.
+*   **Ochrona edukacji wczesnoszkolnej**: Automatyczne uwzględnianie dyżurów adaptacyjnych w salach klas pierwszych oraz dyżurów odprowadzających do szatni/świetlicy.
+
 ---
 
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
+1.  **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni) oraz Dyżury Adaptacyjne Klas 1 (v3.8.2)**:
+    *   Wdrożono inteligentne rozróżnianie charakteru prowadzonych zajęć – zwolnienie z dyżurów korytarzowych przy lekcjach WF i nakierowanie uwagi na nadzór szatni sportowych.
+    *   Obsługa nauczycieli łączących WF z innymi przedmiotami (np. biologia, edukacja zdrowotna) – pełna dyspozycyjność do dyżurów korytarzowych w blokach przedmiotów ogólnych.
+    *   Konfiguracja przerw z nadzorem szatni (przed i po, tylko po, tylko przed) oraz opcja wliczania minut opieki do pensum dyżurów (FTE).
+    *   Interaktywny selektor przedmiotów sportowych z dynamicznym wykrywaniem i możliwością ręcznego wykluczania/dodawania.
+    *   Dedykowany podgląd harmonogramu dziennego nadzoru szatni i sal sportowych oraz integracja z bilansem tygodniowym.
+    *   Wsparcie dla dyżurów adaptacyjnych i odprowadzających w klasach 1.
+2.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
     *   Wdrożono jednolitą nawigację w lewym panelu bocznym z przełącznikiem między oddziałami klasowymi a uczniami SPE i NI.
     *   Zaimplementowano ergonomiczne zwijanie/rozwijanie paska bocznego do wąskiej kolumny (`PanelLeftClose` / `PanelLeftOpen`), uwalniając 100% szerokości ekranu na właściwą siatkę zajęć.
     *   Wyeliminowano zduplikowany lewy panel boczny wewnątrz modułu SPE, tworząc przejrzysty, harmonijny i spójny interfejs.
     *   Siatka tygodniowa ucznia ze SPE z podziałem na wspomaganie w oddziale (🤝) oraz zajęcia gabinetowe (👤) wraz z edytorami kart wsparcia: Profil, WOPFU, IPET oraz Rewalidacja.
-2.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
+3.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
     *   Dedykowany krok ewidencji uczniów SPE w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie (NI, Wspomaganie w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
     *   Zintegrowany formularz przydziałów w trybie nauczycielskim oraz dedykowany tryb `👤 USPE` z pulami orzeczeniowymi i dynamicznym licznikiem godzin zadeklarowanych, przydzielonych i pozostałych.
     *   Wdrożono niezależność kroków w formularzu (brak resetowania wartości przy wyborze kolejnych pól).
     *   Uwzględniono godziny zajęć specjalnych i indywidualnych w kalkulacji pensum, obciążenia i nadgodzin kadry pedagogicznej.
     *   Rozszerzono zestawienie przydziałów o czytelny widok zajęć SPE dla klas, nauczycieli oraz toku indywidualnego.
-3.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
+4.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
     *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal).
     *   Poprawiono resolver sal z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
     *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich.
     *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
-4.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
+5.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
     *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
     *   Wprowadzono algorytm deduplikacji wpisów oraz reguły ochrony przed dzieleniem stron (`break-inside: avoid`).
-5.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
+6.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
     *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF) w tym samym slocie godzinowym bez fałszywych kolizji.
-6.  **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
+7.  **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
     *   Zapisywanie struktury szkoły jako wielorazowy szablon z automatyczną promocją roczników.
-7.  **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
+8.  **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
     *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku.
-8.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
+9.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
     *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
-9.  **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
+10. **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
     *   Dynamiczny dobór roku szkolnego oraz profile przedmiotów dla SP, LO, Technikum i Szkoły Branżowej.
 
 ---

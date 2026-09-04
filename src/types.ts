@@ -295,6 +295,10 @@ export interface PlanDyzuryState {
     firstGradeEscortDuration?: number; // np. 15 min na odprowadzenie
     firstGradeCustomClassIds?: string[];
     countAdaptationInFTE?: boolean; // czy wliczać czas dyżurów w sali/odprowadzania do limitu tygodniowego
+    peSupervisionDuty?: boolean; // Nadzór szatni i sal sportowych przy lekcjach WF
+    peSupervisionBreaks?: 'before_and_after' | 'after_only' | 'before_only'; // Przerwy objęte nadzorem przy WF
+    peCustomSubjectIds?: string[]; // Przedmioty uznawane za WF / sportowe
+    countPeSupervisionInFTE?: boolean; // Wliczanie nadzoru szatni do tygodniowego limitu dyżurów
   };
 }
 

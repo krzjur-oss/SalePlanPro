@@ -24,11 +24,26 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.2',
+      date: 'Wrzesień 2026',
+      title: 'Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni i Sal Sportowych) oraz Dyżury Adaptacyjne Klas 1',
+      description: 'Zaawansowana integracja modułu Dyżurów Nauczycielskich z planem lekcji: automatyczne rozróżnianie charakteru prowadzonych zajęć przez nauczycieli wieloprzedmiotowych (WF i sport vs przedmioty ogólne). Nauczyciele podczas lekcji WF sprawują opiekę w szatniach sportowych/na sali i są zwalniani z dyżurów korytarzowych, natomiast przy innych przedmiotach są normalnie kierowani na korytarze. Dodano pełne wsparcie dla dyżurów adaptacyjnych i odprowadzających w klasach 1.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Lekcje WF a dyżury korytarzowe: Automatyczne rozróżnianie charakteru lekcji – nauczyciel prowadzący WF sprawuje bezpośredni nadzór nad uczniami w szatniach sportowych i nie otrzymuje dyżurów korytarzowych na przyległych przerwach.', badgeText: 'Nadzór WF' },
+        { type: 'feature', text: 'Wsparcie nauczycieli dwuprzedmiotowych: Gdy ten sam nauczyciel uczy innych przedmiotów (np. biologii, edukacji zdrowotnej), system traktuje go jako w pełni dyspozycyjnego i normalnie planuje mu dyżury na korytarzach szkolnych.', badgeText: 'Optymalizacja' },
+        { type: 'feature', text: 'Elastyczna konfiguracja przerw szatniowych: Wybór przerw objętych nadzorem (przed i po lekcji WF, tylko po lekcji na opuszczenie szatni, tylko przed lekcją) oraz opcja wliczania minut nadzoru do tygodniowego limitu dyżurów (FTE).', badgeText: 'Przerwy i Limity' },
+        { type: 'feature', text: 'Interaktywny selektor przedmiotów sportowych: Automatyczne wykrywanie zajęć WF, gimnastyki, basenu i tańca z możliwością manualnego włączania lub wykluczania dowolnych przedmiotów w szkole.', badgeText: 'Słownik WF' },
+        { type: 'improvement', text: 'Dedykowana tabela nadzoru szatni i sal sportowych w Harmonogramie Dziennym oraz wyszczególnienie czasu WF w bilansie tygodniowym obciążenia kadry.', badgeText: 'Harmonogram' },
+        { type: 'feature', text: 'Dyżury adaptacyjne klas 1: Obsługa opieki nauczycieli w salach lekcyjnych klas pierwszych oraz dyżurów odprowadzających uczniów do szatni/świetlicy z blokadą kolizji na korytarzu.', badgeText: 'Edukacja Wczesnoszkolna' }
+      ]
+    },
+    {
       version: 'v3.8.1',
       date: 'Wrzesień 2026',
       title: 'Zintegrowany Moduł Nauczania Specjalnego (SPE / NI) w Lewym Panelu Planu Klas',
       description: 'Główna ergonomiczna i wizualna ewolucja modułu Plan Klas: przeniesienie listy uczniów ze specjalnymi potrzebami edukacyjnymi (SPE i NI) do głównego lewego panelu bocznego (Sidebar), unifikacja zwijania paska bocznego do wąskiej kolumny (uwalniając 100% szerokości ekranu na siatkę planu ucznia), wyeliminowanie zbędnego podwójnego paska bocznego oraz rozbudowa arkuszy wsparcia IPET/WOPFU i siatki godzinowej.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Zintegrowano listę uczniów SPE i NI bezpośrednio w lewym panelu bocznym Planu Klas z szybkim przełącznikiem zakładek (🏫 Oddziały klasowe vs 👤 Uczniowie SPE i NI).', badgeText: 'Nawigacja' },
         { type: 'improvement', text: 'Wdrożono jednolite zwijanie i rozwijanie lewego panelu bocznego (PanelLeftClose / PanelLeftOpen) – po zwinięciu panel staje się smukłym paskiem z plakietką aktywnego ucznia, a siatka planu zajęć uzyskuje pełną szerokość ekranu.', badgeText: 'Ergonomia UI' },
