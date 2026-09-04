@@ -4,7 +4,7 @@ import {
   Calendar, Building2, Archive, Camera, History, AlertCircle, Check, 
   FileText, ShieldAlert, Sparkles, X, Info, Plus, Trash2, Layers, 
   GitMerge, Shield, Users, BookOpen, Clock, ChevronDown, ChevronRight, 
-  Filter, CheckCircle2, AlertTriangle, ArrowRight
+  Filter, CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -30,6 +30,33 @@ import {
   MergeStrategy
 } from '../utils/mergeEngine';
 import { validateImportJson } from '../utils/validationSchemas';
+
+/**
+ * Sprawdza czy plik .json posiada nagłówek wskazujący na szyfrowanie przed próbą zaimportowania do bazy danych.
+ * Wykrywa standardowy format 'encrypted-v1' (PBKDF2 + AES-GCM 256) oraz inne nagłówki szyfrowania.
+ */
+export function checkIsEncryptedFile(rawContent: string): boolean {
+  if (!rawContent || typeof rawContent !== 'string') return false;
+  const trimmed = rawContent.trim();
+  if (trimmed.includes('"type":"encrypted-v1"') || trimmed.includes('"type": "encrypted-v1"')) {
+    return true;
+  }
+  if (isEncryptedBackup(trimmed)) {
+    return true;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object') return false;
+    if (parsed.type === 'encrypted-v1' && parsed.ciphertext) return true;
+    if (parsed.ciphertext && (parsed.salt || parsed.iv || parsed.tag)) return true;
+    if (parsed.encrypted === true || parsed.isEncrypted === true) return true;
+    if (parsed.header && (parsed.header.type === 'encrypted-v1' || parsed.header.encrypted === true)) return true;
+    if (parsed.security && (parsed.security.encrypted === true || parsed.security.type === 'encrypted-v1')) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 interface LoadedFileItem {
   id: string;
@@ -79,6 +106,7 @@ export default function ImportModal({
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
   const [isDecryptingId, setIsDecryptingId] = useState<string | null>(null);
+  const [justDecryptedId, setJustDecryptedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'files' | 'preview'>('files');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     base: true,
@@ -93,13 +121,14 @@ export default function ImportModal({
     if (isOpen && initialRawFiles && initialRawFiles.length > 0) {
       const loaded: LoadedFileItem[] = initialRawFiles.map((rf, idx) => {
         const fileId = `file_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
-        const encrypted = isEncryptedBackup(rf.content);
+        const encrypted = checkIsEncryptedFile(rf.content);
         let parsedPayload: ImportPayload | null = null;
         let config: FileMergeConfig | null = null;
         let isValidSchema = true;
         let validationErrors: string[] = [];
         let validationWarnings: string[] = [];
 
+        // Nie sprawdzamy schematu ani nie parsujemy payloadu dla zaszyfrowanych danych
         if (!encrypted) {
           const valRes = validateImportJson(rf.content);
           isValidSchema = valRes.isValid;
@@ -125,9 +154,9 @@ export default function ImportModal({
           isEncrypted: encrypted,
           payload: parsedPayload,
           config: config,
-          isValidSchema,
-          validationErrors,
-          validationWarnings
+          isValidSchema: encrypted ? undefined : isValidSchema,
+          validationErrors: encrypted ? undefined : validationErrors,
+          validationWarnings: encrypted ? undefined : validationWarnings
         };
       });
 
@@ -152,13 +181,14 @@ export default function ImportModal({
         if (!rawContent) return;
 
         const fileId = `file_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
-        const encrypted = isEncryptedBackup(rawContent);
+        const encrypted = checkIsEncryptedFile(rawContent);
         let parsedPayload: ImportPayload | null = null;
         let config: FileMergeConfig | null = null;
         let isValidSchema = true;
         let validationErrors: string[] = [];
         let validationWarnings: string[] = [];
 
+        // Jeśli plik posiada nagłówek szyfrowania, nie parsować przed podaniem hasła
         if (!encrypted) {
           const valRes = validateImportJson(rawContent);
           isValidSchema = valRes.isValid;
@@ -187,9 +217,9 @@ export default function ImportModal({
               isEncrypted: encrypted,
               payload: parsedPayload,
               config: config,
-              isValidSchema,
-              validationErrors,
-              validationWarnings
+              isValidSchema: encrypted ? undefined : isValidSchema,
+              validationErrors: encrypted ? undefined : validationErrors,
+              validationWarnings: encrypted ? undefined : validationWarnings
             }
           ];
           if (!activeFileId) setActiveFileId(fileId);
@@ -206,7 +236,7 @@ export default function ImportModal({
 
     setIsDecryptingId(fileId);
     try {
-      const decrypted = await decryptText(file.rawContent, passwordInput);
+      const decrypted = await decryptText(file.rawContent, passwordInput.trim());
       const valRes = validateImportJson(decrypted);
       const parsed: ImportPayload = valRes.data || normalizeImportPayload(JSON.parse(decrypted));
       const config = createDefaultFileMergeConfig(fileId, file.name, parsed, files.indexOf(file) === 0);
@@ -226,12 +256,14 @@ export default function ImportModal({
         }
         return f;
       }));
+      setJustDecryptedId(fileId);
+      setTimeout(() => setJustDecryptedId(null), 5000);
     } catch (err: any) {
       setFiles(prev => prev.map(f => {
         if (f.id === fileId) {
           return {
             ...f,
-            decryptError: err.message || 'Niepoprawne hasło lub błąd odszyfrowywania.'
+            decryptError: err.message || 'Niepoprawne hasło lub błąd odszyfrowywania. Upewnij się, że wpisujesz hasło ustalone podczas eksportu.'
           };
         }
         return f;
@@ -514,6 +546,14 @@ export default function ImportModal({
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const encFile = files.find(f => f.isEncrypted);
+    if (encFile) {
+      setActiveFileId(encFile.id);
+      setActiveTab('files');
+      alert(`Plik "${encFile.name}" posiada nagłówek wskazujący na szyfrowanie i wymaga podania hasła. Odszyfruj go przed wykonaniem scalenia danych.`);
+      return;
+    }
+
     const validConfigs = files.map(f => f.config).filter(Boolean) as FileMergeConfig[];
     if (validConfigs.length === 0) {
       alert('Brak poprawnie skonfigurowanych plików do zaimportowania.');
@@ -634,48 +674,55 @@ export default function ImportModal({
                   </button>
                 )}
                 {activeFileId && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => applyRolePreset(activeFileId, 'plan_klas')}
-                      className="px-2 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                      title="Ustaw ten plik jako źródło siatki lekcji klas"
-                    >
-                      🎓 Siatka lekcji
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyRolePreset(activeFileId, 'sal_1_3')}
-                      className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                      title="Ustaw ten plik jako przydział sal dla edukacji wczesnoszkolnej"
-                    >
-                      🧸 Sale klas 1-3
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyRolePreset(activeFileId, 'sal_4_8')}
-                      className="px-2 py-1 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                      title="Ustaw ten plik jako przydział sal dla klas 4-8"
-                    >
-                      🏫 Sale klas 4-8
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyRolePreset(activeFileId, 'dyzury')}
-                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                      title="Ustaw ten plik jako źródło dyżurów"
-                    >
-                      🛡️ Dyżury
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyRolePreset(activeFileId, 'all_replace')}
-                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                      title="Zastąp wszystko danymi z tego pliku"
-                    >
-                      🔄 Wszystko (Zastąp)
-                    </button>
-                  </>
+                  activeFile?.isEncrypted ? (
+                    <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5 bg-amber-100/80 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800 px-2.5 py-1 rounded-lg">
+                      <Lock size={12} className="text-amber-600 shrink-0" />
+                      Plik zaszyfrowany – wpisz hasło i kliknij „Odszyfruj”, aby odblokować profile
+                    </span>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => applyRolePreset(activeFileId, 'plan_klas')}
+                        className="px-2 py-1 bg-white dark:bg-slate-800 hover:bg-slate-100 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                        title="Ustaw ten plik jako źródło siatki lekcji klas"
+                      >
+                        🎓 Siatka lekcji
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyRolePreset(activeFileId, 'sal_1_3')}
+                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                        title="Ustaw ten plik jako przydział sal dla edukacji wczesnoszkolnej"
+                      >
+                        🧸 Sale klas 1-3
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyRolePreset(activeFileId, 'sal_4_8')}
+                        className="px-2 py-1 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                        title="Ustaw ten plik jako przydział sal dla klas 4-8"
+                      >
+                        🏫 Sale klas 4-8
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyRolePreset(activeFileId, 'dyzury')}
+                        className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                        title="Ustaw ten plik jako źródło dyżurów"
+                      >
+                        🛡️ Dyżury
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyRolePreset(activeFileId, 'all_replace')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                        title="Zastąp wszystko danymi z tego pliku"
+                      >
+                        🔄 Wszystko (Zastąp)
+                      </button>
+                    </>
+                  )
                 )}
               </div>
             </div>
@@ -828,63 +875,134 @@ export default function ImportModal({
                 <div className="flex-1 p-5 overflow-y-auto custom-scrollbar space-y-4">
                   {activeFile ? (
                     activeFile.isEncrypted ? (
-                      /* Encrypted Password Form */
-                      <div className="p-6 max-w-md mx-auto bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-4 mt-6">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
-                            <Lock size={20} />
+                      /* Dedykowany formularz odszyfrowywania */
+                      <div className="max-w-xl mx-auto my-6 p-6 sm:p-8 bg-gradient-to-b from-amber-50/80 to-white dark:from-amber-950/30 dark:to-slate-900 border border-amber-300 dark:border-amber-800/80 rounded-2xl shadow-xl space-y-6">
+                        {/* Header z odznaką nagłówka AES-256 */}
+                        <div className="flex items-start gap-4">
+                          <div className="p-3.5 rounded-2xl bg-amber-500 text-white shadow-lg shadow-amber-500/25 shrink-0 mt-0.5">
+                            <Lock size={26} />
                           </div>
-                          <div>
-                            <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
-                              Odszyfruj plik: {activeFile.name}
+                          <div className="space-y-1.5 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+                                Wykryto nagłówek szyfrowania (AES-256 GCM)
+                              </span>
+                            </div>
+                            <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">
+                              Plik jest zaszyfrowany hasłem
                             </h3>
-                            <p className="text-xs text-slate-500">Podaj hasło AES-256 zdefiniowane przy eksporcie</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                              Plik <span className="font-mono font-bold text-slate-800 dark:text-slate-200">"{activeFile.name}"</span> posiada nagłówek wskazujący na zaszyfrowanie kopii zapasowej. Przed weryfikacją struktury danych i scaleniem z bazą programu należy podać hasło i odszyfrować plik.
+                            </p>
                           </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Hasło:</label>
-                          <div className="relative">
-                            <input
-                              type={showPassword[activeFile.id] ? 'text' : 'password'}
-                              value={activeFile.password || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setFiles(prev => prev.map(f => f.id === activeFile.id ? { ...f, password: val, decryptError: undefined } : f));
-                              }}
-                              placeholder="Wprowadź hasło..."
-                              className="w-full text-sm bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-3.5 py-2.5 pr-10 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                            />
+                        {/* Dedykowany Formularz z polem typu 'password' i przyciskiem 'Odszyfruj' */}
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleDecryptFile(activeFile.id, activeFile.password || '');
+                          }}
+                          className="space-y-4 pt-1"
+                        >
+                          <div className="space-y-1.5">
+                            <label 
+                              htmlFor="import-modal-password-input"
+                              className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <Key size={14} className="text-amber-600" />
+                                Hasło deszyfrujące:
+                              </span>
+                              <span className="text-[11px] font-normal text-slate-500">
+                                Wymagane przed scaleniem
+                              </span>
+                            </label>
+                            
+                            <div className="relative">
+                              <input
+                                id="import-modal-password-input"
+                                type={showPassword[activeFile.id] ? 'text' : 'password'}
+                                autoFocus
+                                disabled={isDecryptingId === activeFile.id}
+                                value={activeFile.password || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setFiles(prev => prev.map(f => f.id === activeFile.id ? { ...f, password: val, decryptError: undefined } : f));
+                                }}
+                                placeholder="Wpisz hasło do odszyfrowania pliku..."
+                                className="w-full text-sm bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 pr-11 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition shadow-inner font-mono tracking-wide"
+                              />
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={() => setShowPassword(p => ({ ...p, [activeFile.id]: !p[activeFile.id] }))}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer rounded-lg"
+                                title={showPassword[activeFile.id] ? 'Ukryj hasło' : 'Pokaż hasło'}
+                              >
+                                {showPassword[activeFile.id] ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {activeFile.decryptError && (
+                            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300 rounded-xl text-xs font-semibold flex items-start gap-2.5">
+                              <AlertCircle size={16} className="shrink-0 mt-0.5 text-rose-600" />
+                              <div className="space-y-0.5">
+                                <p className="font-bold">Błąd odszyfrowywania</p>
+                                <p className="text-[11px] opacity-90">{activeFile.decryptError}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-3 pt-2">
+                            <button
+                              type="submit"
+                              disabled={!activeFile.password?.trim() || isDecryptingId === activeFile.id}
+                              className="flex-1 py-3 px-5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:hover:bg-amber-600 text-white rounded-xl text-sm font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-amber-600/20"
+                            >
+                              {isDecryptingId === activeFile.id ? (
+                                <>
+                                  <RefreshCw size={16} className="animate-spin" />
+                                  <span>Odszyfrowywanie...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Unlock size={16} />
+                                  <span>Odszyfruj</span>
+                                </>
+                              )}
+                            </button>
+
                             <button
                               type="button"
-                              onClick={() => setShowPassword(p => ({ ...p, [activeFile.id]: !p[activeFile.id] }))}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                              onClick={() => handleRemoveFile(activeFile.id)}
+                              className="py-3 px-4 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition cursor-pointer"
+                              title="Usuń ten plik z listy importu"
                             >
-                              {showPassword[activeFile.id] ? <EyeOff size={15} /> : <Eye size={15} />}
+                              Usuń plik
                             </button>
                           </div>
+                        </form>
+
+                        {/* Bezpieczeństwo Web Crypto API */}
+                        <div className="pt-3 border-t border-amber-200/70 dark:border-amber-900/50 flex items-start gap-2.5 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                          <ShieldCheck size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+                          <span>
+                            Deszyfrowanie odbywa się w 100% lokalnie w przeglądarce za pomocą standardu Web Crypto API (PBKDF2 + AES-GCM 256-bit). Hasło ani odszyfrowane dane nie są przesyłane do zewnętrznych serwerów.
+                          </span>
                         </div>
-
-                        {activeFile.decryptError && (
-                          <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold flex items-center gap-2">
-                            <AlertCircle size={15} />
-                            <span>{activeFile.decryptError}</span>
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          disabled={!activeFile.password?.trim() || isDecryptingId === activeFile.id}
-                          onClick={() => handleDecryptFile(activeFile.id, activeFile.password || '')}
-                          className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center gap-2 shadow-xs"
-                        >
-                          <Unlock size={14} />
-                          {isDecryptingId === activeFile.id ? 'Odszyfrowywanie...' : 'Odszyfruj i Konfiguruj'}
-                        </button>
                       </div>
                     ) : activeConfig && activeStats ? (
                       /* Decrypted / Valid JSON Configurator */
                       <div className="space-y-4">
+                        {/* Decryption Success Banner */}
+                        {justDecryptedId === activeFile.id && (
+                          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 rounded-xl text-xs font-bold flex items-center gap-2.5 shadow-xs">
+                            <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                            <span>Plik został pomyślnie odszyfrowany! Schemat został sprawdzony – możesz teraz zweryfikować dane i skonfigurować reguły scalenia z bazą danych.</span>
+                          </div>
+                        )}
                         {/* File Header Details */}
                         <div className="p-4 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-3">
                           <div>
@@ -1447,6 +1565,30 @@ export default function ImportModal({
                   </div>
                 </div>
 
+                {files.some(f => f.isEncrypted) && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl text-amber-900 dark:text-amber-200 text-xs flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Lock size={16} className="text-amber-600 shrink-0" />
+                      <span>
+                        <strong>Uwaga:</strong> Część plików oczekuje na podanie hasła i odszyfrowanie. Nie są one jeszcze uwzględnione w podglądzie scalenia.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const enc = files.find(f => f.isEncrypted);
+                        if (enc) {
+                          setActiveFileId(enc.id);
+                          setActiveTab('files');
+                        }
+                      }}
+                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shrink-0"
+                    >
+                      Odszyfruj teraz
+                    </button>
+                  </div>
+                )}
+
                 {previewSummary && (
                   <>
                     {/* Metric Cards Grid */}
@@ -1513,13 +1655,19 @@ export default function ImportModal({
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/70">
             <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Shield size={14} className="text-emerald-500" />
+              <Shield size={14} className="text-emerald-500 shrink-0" />
               <span>Przed scaleniem program automatycznie utworzy punkt przywracania (Undo).</span>
             </div>
 
             <div className="flex items-center gap-3">
+              {files.some(f => f.isEncrypted) && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-xl text-amber-800 dark:text-amber-300 text-xs font-bold">
+                  <Lock size={13} className="text-amber-600 shrink-0" />
+                  <span>Wykryto plik zaszyfrowany (wymaga hasła)</span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -1529,11 +1677,17 @@ export default function ImportModal({
               </button>
               <button
                 type="button"
-                disabled={files.length === 0}
+                disabled={files.length === 0 || files.every(f => f.isEncrypted)}
                 onClick={handleFinalSubmit}
-                className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 shadow-sm"
+                title={files.some(f => f.isEncrypted) ? "Pliki zaszyfrowane muszą zostać odszyfrowane przed scaleniem" : undefined}
+                className={`py-2.5 px-6 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-2 shadow-sm ${
+                  files.every(f => f.isEncrypted)
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white opacity-60'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
-                <GitMerge size={16} /> Scal i Zastosuj w Programie
+                <GitMerge size={16} /> 
+                {files.every(f => f.isEncrypted) ? 'Wymaga odszyfrowania' : 'Scal i Zastosuj w Programie'}
               </button>
             </div>
           </div>
