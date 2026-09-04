@@ -24,11 +24,26 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.3',
+      date: 'Wrzesień 2026',
+      title: 'Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Module Statystyki',
+      description: 'Rozszerzenie modułu Statystyki i analityki higieny pracy kadry: automatyczna detekcja nauczycieli mających ponad 2 godziny okienek (przestojów) w tygodniowym planie zajęć, wyraziste wyróżnienie kolorystyczne z gradientem i plakietkami ostrzegawczymi, filtry szybkiego dostępu, dedykowany baner wykonawczy w zakładce Analiza Okienek oraz rozszerzenie automatycznego audytu planu lekcji.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Wizualne wyróżnienie nauczycieli z >2h okienek: W zakładce "Praca & Dyżury Kadry" wiersze nauczycieli z ponad 2 godzinami okienek otrzymują charakterystyczne, bursztynowe tło z obramowaniem, plakietkę ostrzegawczą oraz zestawienie rozkładu dni i lekcji.', badgeText: 'Wyróżnienie UI' },
+        { type: 'feature', text: 'Filtry szybkiego dostępu: Dodano przełączniki filtrujące widok nauczycieli ("Wszyscy" vs "⚠️ >2h okienek") w zestawieniu obciążenia godzinowego kadry oraz w zakładce Analizy Okienek.', badgeText: 'Ergonomia' },
+        { type: 'feature', text: 'Panel wykonawczy w zakładce Analiza Okienek: Wprowadzono baner podsumowujący liczbę pedagogów wymagających optymalizacji planu wraz z kafelkami szybkiego podglądu dni i godzin przestoju.', badgeText: 'Optymalizacja' },
+        { type: 'improvement', text: 'Integracja z Automatycznym Audytem i Higieną Planu: Do raportu audytu dodano dedykowaną sekcję "Optymalizacja higieny pracy" oraz ostrzeżenia w statusie systemowym dla dyrekcji szkoły.', badgeText: 'Audyt i Walidacja' },
+        { type: 'improvement', text: 'Dynamiczne wskaźniki na zakładkach: Przyciski zakładek "Praca & Dyżury Kadry" oraz "Analiza Okienek" prezentują licznik pedagogów z nadmiarowymi okienkami.', badgeText: 'Nawigacja' },
+        { type: 'improvement', text: 'Uporządkowanie głównego menu nawigacji: Usunięto nadmiarowy przycisk "Plan SPE & NI" z głównego paska nawigacji – obsługa uczniów SPE i toku NI jest w pełni zintegrowana wewnątrz Etapu 1 (Plan Klas) poprzez bezpośredni przełącznik "Klasy / Uczniowie SPE" w lewym panelu bocznym.', badgeText: 'Czysty UI' }
+      ]
+    },
+    {
       version: 'v3.8.2',
       date: 'Wrzesień 2026',
       title: 'Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni i Sal Sportowych) oraz Dyżury Adaptacyjne Klas 1',
       description: 'Zaawansowana integracja modułu Dyżurów Nauczycielskich z planem lekcji: automatyczne rozróżnianie charakteru prowadzonych zajęć przez nauczycieli wieloprzedmiotowych (WF i sport vs przedmioty ogólne). Nauczyciele podczas lekcji WF sprawują opiekę w szatniach sportowych/na sali i są zwalniani z dyżurów korytarzowych, natomiast przy innych przedmiotach są normalnie kierowani na korytarze. Dodano pełne wsparcie dla dyżurów adaptacyjnych i odprowadzających w klasach 1.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Lekcje WF a dyżury korytarzowe: Automatyczne rozróżnianie charakteru lekcji – nauczyciel prowadzący WF sprawuje bezpośredni nadzór nad uczniami w szatniach sportowych i nie otrzymuje dyżurów korytarzowych na przyległych przerwach.', badgeText: 'Nadzór WF' },
         { type: 'feature', text: 'Wsparcie nauczycieli dwuprzedmiotowych: Gdy ten sam nauczyciel uczy innych przedmiotów (np. biologii, edukacji zdrowotnej), system traktuje go jako w pełni dyspozycyjnego i normalnie planuje mu dyżury na korytarzach szkolnych.', badgeText: 'Optymalizacja' },

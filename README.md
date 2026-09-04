@@ -1,4 +1,4 @@
-# SalePlan Pro v3.8.2 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.8.3 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -79,6 +79,18 @@ System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku trad
 *   **Scalanie Wieloplikowe**: Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.
 *   **Baza IndexedDB**: Bezpieczne, nielimitowane przechowywanie danych szkolnych z automatycznym autozapisem i punktami przywracania stanu.
 
+### 6. 📈 Moduł Statystyk, Diagnostyki i Higieny Pracy Kadry (Statystyki v3.8.3)
+*   **Wizualne Wyróżnienie Nauczycieli z Ponad 2h Okienek**:
+    *   W widoku *Praca & Dyżury Kadry* wiersze nauczycieli z ponad 2 godzinami przestojów w planie zajęć są dynamicznie podświetlane na kolor bursztynowo-pomarańczowy wraz z plakietką ostrzegawczą `⚠️ Xh okienek w planie`.
+    *   Prezentacja szczegółowego rozkładu okienek: wyszczególnienie dni tygodnia oraz numerów lekcji, w których pedagog ma przerwę w zajęciach.
+    *   Szybkie odnośniki diagnostyczne `Analizuj w okienkach →` przenoszące bezpośrednio do szczegółowego audytu.
+*   **Filtry Szybkiego Dostępu**:
+    *   Dedykowane przyciski filtrowania `Wszyscy` vs `⚠️ >2h okienek` w zestawieniu wymiaru godzin kadry oraz w zakładce analizy okienek.
+*   **Panel Wykonawczy Okienek Kadry**:
+    *   Baner podsumowujący wykryte przestoje powyżej dopuszczalnej normy wraz z kafelkami pedagogów wymagających optymalizacji planu.
+*   **Rozszerzenie Automatycznego Audytu Planu i Statusu Dyrektorskiego**:
+    *   Do siatki kontroli dodano sekcję *Optymalizacja higieny pracy: Nauczyciele z ponad 2h okienek w planie* oraz wskaźniki w statusie walidacji.
+
 ---
 
 ## 🧠 Zasady Działania Algorytmów i Generatorów
@@ -104,41 +116,48 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni) oraz Dyżury Adaptacyjne Klas 1 (v3.8.2)**:
+1.  **Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Statystykach (v3.8.3)**:
+    *   Wdrożono automatyczne wykrywanie nauczycieli mających ponad 2 godziny okienek przestojowych w tygodniowym rozkładzie lekcji.
+    *   Wprowadzono wyraziste wyróżnienie kolorystyczne wierszy kadry (bursztynowe tło, obramowanie, plakietka `⚠️ Xh okienek w planie`) w zakładce "Praca & Dyżury Kadry".
+    *   Dodano filtry szybkiego przełączania widoku ("Wszyscy" vs "⚠️ >2h okienek") w zestawieniu pensum oraz w module analizy okienek.
+    *   Utworzono panel wykonawczy z kafelkami szybkiego wglądu w brakujące lekcje oraz bezpośrednie przekierowania diagnostyczne.
+    *   Zintegrowano diagnostykę z kartami Automatycznego Audytu i walidacji higieny planu lekcji.
+    *   Uproszczono menu główne programu – usunięto zbędny, zduplikowany przycisk "Plan SPE & NI" z głównego paska nawigacji (obsługa uczniów SPE oraz nauczania indywidualnego odbywa się bezpośrednio i intuicyjnie w Etapie 1: Plan Klas za pomocą przełącznika "Klasy / Uczniowie SPE").
+2.  **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni) oraz Dyżury Adaptacyjne Klas 1 (v3.8.2)**:
     *   Wdrożono inteligentne rozróżnianie charakteru prowadzonych zajęć – zwolnienie z dyżurów korytarzowych przy lekcjach WF i nakierowanie uwagi na nadzór szatni sportowych.
     *   Obsługa nauczycieli łączących WF z innymi przedmiotami (np. biologia, edukacja zdrowotna) – pełna dyspozycyjność do dyżurów korytarzowych w blokach przedmiotów ogólnych.
     *   Konfiguracja przerw z nadzorem szatni (przed i po, tylko po, tylko przed) oraz opcja wliczania minut opieki do pensum dyżurów (FTE).
     *   Interaktywny selektor przedmiotów sportowych z dynamicznym wykrywaniem i możliwością ręcznego wykluczania/dodawania.
     *   Dedykowany podgląd harmonogramu dziennego nadzoru szatni i sal sportowych oraz integracja z bilansem tygodniowym.
     *   Wsparcie dla dyżurów adaptacyjnych i odprowadzających w klasach 1.
-2.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
+3.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
     *   Wdrożono jednolitą nawigację w lewym panelu bocznym z przełącznikiem między oddziałami klasowymi a uczniami SPE i NI.
     *   Zaimplementowano ergonomiczne zwijanie/rozwijanie paska bocznego do wąskiej kolumny (`PanelLeftClose` / `PanelLeftOpen`), uwalniając 100% szerokości ekranu na właściwą siatkę zajęć.
     *   Wyeliminowano zduplikowany lewy panel boczny wewnątrz modułu SPE, tworząc przejrzysty, harmonijny i spójny interfejs.
     *   Siatka tygodniowa ucznia ze SPE z podziałem na wspomaganie w oddziale (🤝) oraz zajęcia gabinetowe (👤) wraz z edytorami kart wsparcia: Profil, WOPFU, IPET oraz Rewalidacja.
-3.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
+4.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
     *   Dedykowany krok ewidencji uczniów SPE w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie (NI, Wspomaganie w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
     *   Zintegrowany formularz przydziałów w trybie nauczycielskim oraz dedykowany tryb `👤 USPE` z pulami orzeczeniowymi i dynamicznym licznikiem godzin zadeklarowanych, przydzielonych i pozostałych.
     *   Wdrożono niezależność kroków w formularzu (brak resetowania wartości przy wyborze kolejnych pól).
     *   Uwzględniono godziny zajęć specjalnych i indywidualnych w kalkulacji pensum, obciążenia i nadgodzin kadry pedagogicznej.
     *   Rozszerzono zestawienie przydziałów o czytelny widok zajęć SPE dla klas, nauczycieli oraz toku indywidualnego.
-4.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
+5.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
     *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal).
     *   Poprawiono resolver sal z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
     *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich.
     *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
-5.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
+6.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
     *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
     *   Wprowadzono algorytm deduplikacji wpisów oraz reguły ochrony przed dzieleniem stron (`break-inside: avoid`).
-6.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
+7.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
     *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF) w tym samym slocie godzinowym bez fałszywych kolizji.
-7.  **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
+8.  **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
     *   Zapisywanie struktury szkoły jako wielorazowy szablon z automatyczną promocją roczników.
-8.  **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
+9.  **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
     *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku.
-9.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
+10. **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
     *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
-10. **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
+11. **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
     *   Dynamiczny dobór roku szkolnego oraz profile przedmiotów dla SP, LO, Technikum i Szkoły Branżowej.
 
 ---

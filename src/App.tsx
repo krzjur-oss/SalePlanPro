@@ -29,7 +29,7 @@ import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database, Award
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database
 } from 'lucide-react';
 
 function sortAppState(rawInput: any): AppState {
@@ -296,10 +296,10 @@ export default function App() {
     }
   };
 
-  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'spe' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
+  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.8.2';
+  const CURRENT_VERSION = '3.8.3';
   const [showVersionToast, setShowVersionToast] = useState(false);
 
   useEffect(() => {
@@ -1208,7 +1208,6 @@ export default function App() {
                   <span className="flex items-center gap-1 leading-none text-xs">
                     {currentTab === 'kreator' && <><Sparkles size={13} className="text-amber-400 font-bold" /> <span className="hidden sm:inline">Kreator Szkoły</span><span className="sm:hidden">Kreator</span></>}
                     {currentTab === 'plan_klas' && <><Layers size={13} className="text-blue-400" /> <span className="hidden sm:inline">Etap 1: Plan Klas</span><span className="sm:hidden">Plan Klas</span></>}
-                    {currentTab === 'spe' && <><Award size={13} className="text-amber-400 font-bold" /> <span className="hidden sm:inline">Plan SPE & NI</span><span className="sm:hidden">SPE & NI</span></>}
                     {currentTab === 'plan_sal' && <><MapPin size={13} className="text-teal-400" /> <span className="hidden sm:inline">Etap 2: Plan Sal</span><span className="sm:hidden">Plan Sal</span></>}
                     {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-400" /> <span className="hidden sm:inline">Etap 3: Dyżury</span><span className="sm:hidden">Dyżury</span></>}
                     {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-400" /> <span className="hidden sm:inline">Wydruki</span><span className="sm:hidden">Druk</span></>}
@@ -1259,21 +1258,6 @@ export default function App() {
                           <div>
                             <span className="text-xs font-black block">📚 Etap 1: Plan Klas</span>
                             <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Siatka godzin oddziałowych</span>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => { setCurrentTab('spe'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
-                            currentTab === 'spe'
-                              ? 'bg-amber-600/10 border-l-4 border-amber-500 text-white font-extrabold pl-2'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <Award size={15} className={`shrink-0 mt-0.5 ${currentTab === 'spe' ? 'text-amber-400' : 'text-slate-500'}`} />
-                          <div>
-                            <span className="text-xs font-black block text-amber-300">🌟 Plan SPE & NI</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Wsparcie w klasie, NI, rewalidacja</span>
                           </div>
                         </button>
 
@@ -1528,18 +1512,6 @@ export default function App() {
                     initialTab="plan"
                   />
                 )}
-                {currentTab === 'spe' && (
-                  <PlanKlas 
-                    appState={appState} 
-                    onChangeAppState={handleUpdateAppState} 
-                    onTransfer={() => {
-                      handleImportFromPlanKlas();
-                      setCurrentTab('plan_sal');
-                    }}
-                    presentationMode={isPresentationMode}
-                    initialTab="special"
-                  />
-                )}
                 {currentTab === 'plan_sal' && (
                   <PlanSal 
                     appState={appState} 
@@ -1766,9 +1738,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.2!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.3!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Lekcje WF a dyżury korytarzowe (nadzór szatni i sal sportowych), wsparcie nauczycieli dwuprzedmiotowych oraz dyżury adaptacyjne klas 1.
+                  Wizualne wyróżnienie i analityka nauczycieli z ponad 2h okienek w planie pracy, filtry widoku oraz integracja z audytem higieny pracy kadry.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

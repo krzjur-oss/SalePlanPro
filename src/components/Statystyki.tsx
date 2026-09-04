@@ -23,6 +23,8 @@ interface StatystykiProps {
   const [logSearch, setLogSearch] = useState('');
   const [logFilterType, setLogFilterType] = useState<string>('all');
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'all'>('all');
+  const [teacherGapFilter, setTeacherGapFilter] = useState<'all' | 'excessive'>('all');
+  const [teacherLoadFilter, setTeacherLoadFilter] = useState<'all' | 'excessive_gaps'>('all');
 
   const [errorLogs, setErrorLogs] = useState<AppErrorLog[]>(() => {
     const saved = getStorageItemSync<AppErrorLog[]>(STORAGE_KEYS.ERROR_LOGS);
@@ -244,6 +246,158 @@ interface StatystykiProps {
     return list;
   }, [pl.lessons, pl.assignments]);
 
+  // --- Calculation: Schedule Gaps ("Okienka") & Teacher Gap Diagnostics ---
+  const gapsStats = useMemo(() => {
+    const classGaps: Array<{ className: string; dayName: string; missingHours: number[] }> = [];
+    const teacherGaps: Array<{ 
+      teacherId: string;
+      teacherName: string; 
+      teacherAbbr: string;
+      dayIdx: number;
+      dayName: string; 
+      missingHours: number[];
+      gapCount: number;
+      teacherTotalGaps: number;
+      hasExcessiveGaps: boolean;
+    }> = [];
+
+    // 1. Check Classes for gaps
+    pl.classes.forEach(c => {
+      for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+        const dayHours: Record<number, boolean> = {};
+        let minHour = 999;
+        let maxHour = -1;
+
+        hoursList.forEach((_, hIdx) => {
+          const key = `${c.id}|${dayIdx}|${hIdx}`;
+          const lesson = pl.lessons[key];
+          if (lesson) {
+            dayHours[hIdx] = true;
+            if (hIdx < minHour) minHour = hIdx;
+            if (hIdx > maxHour) maxHour = hIdx;
+          }
+        });
+
+        if (maxHour > minHour) {
+          const missing: number[] = [];
+          for (let i = minHour + 1; i < maxHour; i++) {
+            if (!dayHours[i]) {
+              const hourNumber = (pl.hours[i]?.num || (i + 1));
+              missing.push(hourNumber);
+            }
+          }
+          if (missing.length > 0) {
+            classGaps.push({
+              className: c.name,
+              dayName: DAYS[dayIdx],
+              missingHours: missing
+            });
+          }
+        }
+      }
+    });
+
+    // 2. Check Teachers for gaps and aggregate per teacher
+    const teacherGapSummaries: Record<string, {
+      teacherId: string;
+      teacherName: string;
+      teacherAbbr: string;
+      totalGapHours: number;
+      hasExcessiveGaps: boolean;
+      days: Array<{ dayIdx: number; dayName: string; missingHours: number[]; gapCount: number }>;
+    }> = {};
+
+    pl.teachers.forEach(t => {
+      const teacherDays: Array<{ dayIdx: number; dayName: string; missingHours: number[]; gapCount: number }> = [];
+      let totalGaps = 0;
+
+      for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
+        const teacherDayHours: Record<number, boolean> = {};
+        let minHour = 999;
+        let maxHour = -1;
+
+        Object.entries(pl.lessons).forEach(([key, lesson]) => {
+          const parts = key.split('|');
+          const dIdx = parseInt(parts[1], 10);
+          const hIdx = parseInt(parts[2], 10);
+          
+          if (dIdx === dayIdx) {
+            const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+            const isTeacherPresent = (asg && asg.teacherId === t.id) || (lesson.supportTeacherId === t.id);
+            if (isTeacherPresent) {
+              teacherDayHours[hIdx] = true;
+              if (hIdx < minHour) minHour = hIdx;
+              if (hIdx > maxHour) maxHour = hIdx;
+            }
+          }
+        });
+
+        if (maxHour > minHour) {
+          const missing: number[] = [];
+          for (let i = minHour + 1; i < maxHour; i++) {
+            if (!teacherDayHours[i]) {
+              const hourNumber = (pl.hours[i]?.num || (i + 1));
+              missing.push(hourNumber);
+            }
+          }
+          if (missing.length > 0) {
+            totalGaps += missing.length;
+            teacherDays.push({
+              dayIdx,
+              dayName: DAYS[dayIdx],
+              missingHours: missing,
+              gapCount: missing.length
+            });
+          }
+        }
+      }
+
+      const hasExcessive = totalGaps > 2;
+      teacherGapSummaries[t.id] = {
+        teacherId: t.id,
+        teacherName: `${t.last} ${t.first}`,
+        teacherAbbr: t.abbr,
+        totalGapHours: totalGaps,
+        hasExcessiveGaps: hasExcessive,
+        days: teacherDays
+      };
+
+      teacherDays.forEach(dayInfo => {
+        teacherGaps.push({
+          teacherId: t.id,
+          teacherName: `${t.last} ${t.first} (${t.abbr})`,
+          teacherAbbr: t.abbr,
+          dayIdx: dayInfo.dayIdx,
+          dayName: dayInfo.dayName,
+          missingHours: dayInfo.missingHours,
+          gapCount: dayInfo.gapCount,
+          teacherTotalGaps: totalGaps,
+          hasExcessiveGaps: hasExcessive || dayInfo.gapCount > 2
+        });
+      });
+    });
+
+    const excessiveTeachers = Object.values(teacherGapSummaries)
+      .filter(t => t.totalGapHours > 2)
+      .sort((a, b) => b.totalGapHours - a.totalGapHours);
+
+    // Sort teacher gaps: excessive first, then by totalGapHours desc
+    teacherGaps.sort((a, b) => {
+      if (a.hasExcessiveGaps !== b.hasExcessiveGaps) {
+        return a.hasExcessiveGaps ? -1 : 1;
+      }
+      return b.teacherTotalGaps - a.teacherTotalGaps;
+    });
+
+    return { 
+      classGaps, 
+      teacherGaps,
+      teacherGapsByTeacher: teacherGapSummaries,
+      excessiveTeachers,
+      excessiveTeachersCount: excessiveTeachers.length
+    };
+  }, [pl.classes, pl.teachers, pl.lessons, pl.assignments, hoursList, pl.hours]);
+
   // --- Calculation: Teacher loads ---
   const teacherStats = useMemo(() => {
     const hoursScheduled: Record<string, number> = {};
@@ -269,6 +423,10 @@ interface StatystykiProps {
       const max = t.maxHours ?? 18;
       const overtime = Math.max(0, scheduled - max);
       const ratio = max > 0 ? (scheduled / max) * 100 : 0;
+      const gapInfo = gapsStats.teacherGapsByTeacher[t.id];
+      const gapHours = gapInfo?.totalGapHours || 0;
+      const hasExcessiveGaps = gapHours > 2;
+
       return {
         ...t,
         scheduled,
@@ -276,10 +434,13 @@ interface StatystykiProps {
         overtime,
         ratio,
         isOverloaded: scheduled > 40,
-        hasOvertime: overtime > 0
+        hasOvertime: overtime > 0,
+        gapHours,
+        hasExcessiveGaps,
+        gapInfo
       };
     }).sort((a, b) => b.scheduled - a.scheduled);
-  }, [pl.teachers, scheduledLessonsList]);
+  }, [pl.teachers, scheduledLessonsList, gapsStats.teacherGapsByTeacher]);
 
   // --- Calculation: Room Occupancy ---
   const roomStats = useMemo(() => {
@@ -545,93 +706,6 @@ interface StatystykiProps {
     }
     return null;
   };
-
-  // --- Calculation: Schedule Gaps ("Okienka") ---
-  const gapsStats = useMemo(() => {
-    const classGaps: Array<{ className: string; dayName: string; missingHours: number[] }> = [];
-    const teacherGaps: Array<{ teacherName: string; dayName: string; missingHours: number[] }> = [];
-
-    // 1. Check Classes for gaps
-    pl.classes.forEach(c => {
-      for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-        // check scheduled hours for this class on this day
-        const dayHours: Record<number, boolean> = {};
-        let minHour = 999;
-        let maxHour = -1;
-
-        hoursList.forEach((_, hIdx) => {
-          const key = `${c.id}|${dayIdx}|${hIdx}`;
-          const lesson = pl.lessons[key];
-          if (lesson) {
-            dayHours[hIdx] = true;
-            if (hIdx < minHour) minHour = hIdx;
-            if (hIdx > maxHour) maxHour = hIdx;
-          }
-        });
-
-        if (maxHour > minHour) {
-          const missing: number[] = [];
-          for (let i = minHour + 1; i < maxHour; i++) {
-            if (!dayHours[i]) {
-              const hourNumber = (pl.hours[i]?.num || (i + 1));
-              missing.push(hourNumber);
-            }
-          }
-          if (missing.length > 0) {
-            classGaps.push({
-              className: c.name,
-              dayName: DAYS[dayIdx],
-              missingHours: missing
-            });
-          }
-        }
-      }
-    });
-
-    // 2. Check Teachers for gaps
-    pl.teachers.forEach(t => {
-      for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-        // Collect scheduled hour indexes for this teacher from pl.lessons
-        const teacherDayHours: Record<number, boolean> = {};
-        let minHour = 999;
-        let maxHour = -1;
-
-        Object.entries(pl.lessons).forEach(([key, lesson]) => {
-          const parts = key.split('|');
-          const dIdx = parseInt(parts[1], 10);
-          const hIdx = parseInt(parts[2], 10);
-          
-          if (dIdx === dayIdx) {
-            const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-            if (asg && asg.teacherId === t.id) {
-              teacherDayHours[hIdx] = true;
-              if (hIdx < minHour) minHour = hIdx;
-              if (hIdx > maxHour) maxHour = hIdx;
-            }
-          }
-        });
-
-        if (maxHour > minHour) {
-          const missing: number[] = [];
-          for (let i = minHour + 1; i < maxHour; i++) {
-            if (!teacherDayHours[i]) {
-              const hourNumber = (pl.hours[i]?.num || (i + 1));
-              missing.push(hourNumber);
-            }
-          }
-          if (missing.length > 0) {
-            teacherGaps.push({
-              teacherName: `${t.last} ${t.first} (${t.abbr})`,
-              dayName: DAYS[dayIdx],
-              missingHours: missing
-            });
-          }
-        }
-      }
-    });
-
-    return { classGaps, teacherGaps };
-  }, [pl.classes, pl.teachers, pl.lessons, pl.assignments, hoursList, pl.hours]);
 
   // --- Calculation: Automatic Audit (Automatyczny audyt) ---
   const teacherConflicts = useMemo(() => {
@@ -924,6 +998,15 @@ interface StatystykiProps {
   
   const totalOveloadedTeachers = teacherStats.filter(t => t.isOverloaded).length;
   const totalOverassignedDuties = teacherDutiesStats.filter(t => t.isOverLimit).length;
+  const totalExcessiveGapTeachers = gapsStats.excessiveTeachersCount;
+
+  const displayedTeacherLoadStats = teacherLoadFilter === 'excessive_gaps'
+    ? teacherStats.filter(t => t.hasExcessiveGaps)
+    : teacherStats;
+
+  const displayedTeacherGaps = teacherGapFilter === 'excessive'
+    ? gapsStats.teacherGaps.filter(g => g.hasExcessiveGaps)
+    : gapsStats.teacherGaps;
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 relative">
@@ -1008,11 +1091,16 @@ interface StatystykiProps {
           </button>
           <button
             onClick={() => setActiveTab('teachers')}
-            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 flex items-center gap-1.5 ${
               activeTab === 'teachers' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
-            Praca & Dyżury Kadry ({totalOveloadedTeachers + totalOverassignedDuties} uwagi)
+            <span>Praca & Dyżury Kadry ({totalOveloadedTeachers + totalOverassignedDuties} uwag)</span>
+            {totalExcessiveGapTeachers > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black">
+                ⚠️ {totalExcessiveGapTeachers} &gt;2h
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('rooms')}
@@ -1024,11 +1112,16 @@ interface StatystykiProps {
           </button>
           <button
             onClick={() => setActiveTab('gaps')}
-            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 ${
+            className={`px-5 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition shrink-0 flex items-center gap-1.5 ${
               activeTab === 'gaps' ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-900'
             }`}
           >
-            Analiza Okienek ({gapsStats.classGaps.length + gapsStats.teacherGaps.length} wykrytych)
+            <span>Analiza Okienek ({gapsStats.classGaps.length + gapsStats.teacherGaps.length})</span>
+            {totalExcessiveGapTeachers > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black">
+                ⚠️ {totalExcessiveGapTeachers} kadry &gt;2h
+              </span>
+            )}
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -1097,11 +1190,29 @@ interface StatystykiProps {
                     <div className="p-3 bg-emerald-100/80 text-emerald-700 rounded-2xl shrink-0">
                       <CheckCircle className="w-6 h-6" />
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       <h4 className="text-sm font-black text-emerald-900 uppercase tracking-wider">Brak wykrytych konfliktów!</h4>
                       <p className="text-xs text-emerald-750 font-medium leading-relaxed">
                         Gratulacje! Twój plan lekcji jest w pełni spójny i wolny od błędów. Wszyscy nauczyciele uczą tylko w jednym miejscu naraz, każda zaplanowana lekcja ma przydzielony gabinet, a dyżury nauczycieli nie nakładają się na siebie.
                       </p>
+                      {gapsStats.excessiveTeachersCount > 0 && (
+                        <div className="mt-2.5 pt-2.5 border-t border-emerald-200/80 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs text-amber-900 font-bold flex items-center gap-1.5">
+                            <span>⚠️</span>
+                            <span>Zwróć uwagę: <strong>{gapsStats.excessiveTeachersCount} nauczycieli</strong> ma ponad 2 godziny okienek w planie pracy.</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('gaps');
+                              setTeacherGapFilter('excessive');
+                            }}
+                            className="text-xs font-black text-amber-950 underline hover:text-amber-900 cursor-pointer"
+                          >
+                            Zobacz analizę okienek &rarr;
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1139,6 +1250,18 @@ interface StatystykiProps {
                           <span className="bg-purple-100 text-purple-950 font-bold font-mono px-2.5 py-1 rounded-md text-[10px] uppercase">
                             Zajęte sale: {roomConflicts.length}
                           </span>
+                        )}
+                        {gapsStats.excessiveTeachersCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('gaps');
+                              setTeacherGapFilter('excessive');
+                            }}
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold font-mono px-2.5 py-1 rounded-md text-[10px] uppercase cursor-pointer transition flex items-center gap-1"
+                          >
+                            ⚠️ Kadra &gt;2h okienek: {gapsStats.excessiveTeachersCount}
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1379,6 +1502,67 @@ interface StatystykiProps {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SECTION 6: TEACHERS WITH >2H GAPS (OPTIMIZATION WARNING) */}
+                  <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col space-y-4 lg:col-span-2">
+                    <div className="border-b border-slate-100 pb-3">
+                      <div className="flex justify-between items-center">
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                          <Clock size={14} className="text-amber-500" />
+                          Optymalizacja higieny pracy: Nauczyciele z ponad 2h okienek w planie
+                        </h4>
+                        <span className={`text-[10px] font-black font-mono px-2.5 py-0.5 rounded-full ${gapsStats.excessiveTeachersCount > 0 ? 'bg-amber-100 text-amber-950 border border-amber-300' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {gapsStats.excessiveTeachersCount}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+                        Przypadki nauczycieli, którzy w swoim tygodniowym rozkładzie zajęć mają łącznie więcej niż 2 godziny przestoju (okienek)
+                      </p>
+                    </div>
+
+                    {gapsStats.excessiveTeachersCount === 0 ? (
+                      <div className="p-6 text-center text-xs text-emerald-750 bg-emerald-50 rounded-xl font-bold border-l-4 border-emerald-500">
+                        Wszyscy nauczyciele mają zwarte plany lekcji (maksymalnie 2 godziny okienek w tygodniu lub brak okienek). Wzorcowy rozkład!
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                          {gapsStats.excessiveTeachers.map(t => (
+                            <div key={t.teacherId} className="bg-gradient-to-r from-amber-50 via-orange-50/50 to-amber-50 border-2 border-amber-300/80 p-3 rounded-xl text-xs space-y-2 shadow-xs ring-1 ring-amber-200/50">
+                              <div className="flex justify-between items-center">
+                                <span className="font-extrabold text-slate-900">{t.teacherName}</span>
+                                <span className="bg-amber-200 text-amber-950 font-black font-mono px-2 py-0.5 rounded text-[10px] border border-amber-300">
+                                  ⚠️ {t.totalGapHours}h okienek
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-600 space-y-0.5">
+                                <p className="text-[10px] font-bold text-amber-900">Rozkład dni z przerwami:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {t.days.map(d => (
+                                    <span key={d.dayIdx} className="bg-white border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-700">
+                                      {d.dayName.slice(0, 3)}: {d.missingHours.length}h (lekcje #{d.missingHours.join(', ')})
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-end pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab('gaps');
+                              setTeacherGapFilter('excessive');
+                            }}
+                            className="text-xs font-black text-amber-900 hover:text-amber-950 underline flex items-center gap-1 cursor-pointer"
+                          >
+                            Przejdź do pełnej analizy okienek &rarr;
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1641,44 +1825,142 @@ interface StatystykiProps {
             
             {/* Lesson Loads */}
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <div>
-                <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Wymiar godzin lekcyjnych kadry</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Pensum kontraktowe (maxHours) vs zaplanowane lekcje</p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>Wymiar godzin lekcyjnych kadry</span>
+                    {gapsStats.excessiveTeachersCount > 0 && (
+                      <span className="bg-amber-100 text-amber-950 border border-amber-300 font-extrabold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                        ⚠️ {gapsStats.excessiveTeachersCount} kadry &gt;2h okienek
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Pensum kontraktowe (maxHours) vs zaplanowane lekcje</p>
+                </div>
+
+                {/* Filter toggle */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setTeacherLoadFilter('all')}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition ${
+                      teacherLoadFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Wszyscy ({teacherStats.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeacherLoadFilter('excessive_gaps')}
+                    className={`px-2.5 py-1 text-[10px] font-black rounded-md transition flex items-center gap-1 ${
+                      teacherLoadFilter === 'excessive_gaps'
+                        ? 'bg-amber-500 text-white shadow-xs'
+                        : 'text-amber-800 hover:bg-amber-100'
+                    }`}
+                  >
+                    ⚠️ &gt;2h okienek ({gapsStats.excessiveTeachersCount})
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-4 max-h-[480px] overflow-y-auto pr-2 divide-y divide-slate-100">
-                {teacherStats.map(t => {
-                  return (
-                    <div key={t.id} className="pt-3 first:pt-0 space-y-1.5">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-extrabold text-slate-900">{t.last} {t.first} (<span className="font-mono text-blue-600 font-bold">{t.abbr}</span>)</span>
-                        <div className="flex items-center gap-1.5 font-mono text-[11px]">
-                          {t.scheduled === 0 ? (
-                            <span className="text-slate-400">0h / {t.max}h</span>
-                          ) : t.scheduled <= t.max ? (
-                            <span className="font-bold text-emerald-700">{t.scheduled}h / {t.max}h</span>
-                          ) : t.isOverloaded ? (
-                            <span className="font-bold text-rose-600">{t.scheduled}h ({t.max}h + {t.overtime}h &gt;40h)</span>
-                          ) : (
-                            <span className="font-bold text-indigo-700">{t.scheduled}h ({t.max}h etat + {t.overtime}h nadg.)</span>
-                          )}
-                        </div>
-                      </div>
+              <div className="space-y-3 max-h-[480px] overflow-y-auto pr-2">
+                {displayedTeacherLoadStats.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-400 font-medium bg-slate-50 rounded-xl">
+                    {teacherLoadFilter === 'excessive_gaps'
+                      ? 'Brak nauczycieli z ponad 2 godzinami okienek w planie pracy! Wzorcowy rozkład.'
+                      : 'Brak nauczycieli w bazie danych.'}
+                  </div>
+                ) : (
+                  displayedTeacherLoadStats.map(t => {
+                    const hasExcessiveGaps = t.hasExcessiveGaps;
+                    const gapInfo = t.gapInfo;
 
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full transition-all ${t.isOverloaded ? 'bg-rose-500' : t.hasOvertime ? 'bg-indigo-600' : t.ratio >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
-                            style={{ width: `${Math.min((t.scheduled / Math.max(t.max, 1)) * 100, 100)}%` }}
-                          />
+                    return (
+                      <div 
+                        key={t.id} 
+                        className={`rounded-xl transition-all space-y-1.5 ${
+                          hasExcessiveGaps 
+                            ? 'bg-gradient-to-r from-amber-50/95 via-orange-50/40 to-amber-50/90 border-2 border-amber-400 p-3.5 shadow-xs ring-1 ring-amber-200' 
+                            : 'p-3 bg-white border border-slate-150 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center text-xs">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-slate-900">
+                              {t.last} {t.first} (<span className="font-mono text-blue-600 font-bold">{t.abbr}</span>)
+                            </span>
+                            {hasExcessiveGaps && (
+                              <span 
+                                className="bg-amber-100 text-amber-950 border border-amber-400 font-black text-[9.5px] px-2 py-0.5 rounded-md flex items-center gap-1 shadow-xs"
+                                title={`Nauczyciel ma ${t.gapHours}h okienek w planie pracy (${gapInfo?.days.map(d => `${d.dayName.slice(0, 3)}: ${d.gapCount}h`).join(', ')})`}
+                              >
+                                <span>⚠️</span>
+                                <span>{t.gapHours}h okienek w planie</span>
+                              </span>
+                            )}
+                            {gapInfo && gapInfo.totalGapHours > 0 && gapInfo.totalGapHours <= 2 && (
+                              <span 
+                                className="text-slate-500 text-[9px] font-medium bg-slate-100 px-1.5 py-0.5 rounded"
+                                title={`${gapInfo.totalGapHours}h okienek w tygodniu (w normie)`}
+                              >
+                                ☕ {gapInfo.totalGapHours}h okienek
+                              </span>
+                            )}
+                            {gapInfo && gapInfo.totalGapHours === 0 && t.scheduled > 0 && (
+                              <span className="text-emerald-700 text-[9px] font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                ✓ ciągły plan
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 font-mono text-[11px] shrink-0">
+                            {t.scheduled === 0 ? (
+                              <span className="text-slate-400">0h / {t.max}h</span>
+                            ) : t.scheduled <= t.max ? (
+                              <span className="font-bold text-emerald-700">{t.scheduled}h / {t.max}h</span>
+                            ) : t.isOverloaded ? (
+                              <span className="font-bold text-rose-600">{t.scheduled}h ({t.max}h + {t.overtime}h &gt;40h)</span>
+                            ) : (
+                              <span className="font-bold text-indigo-700">{t.scheduled}h ({t.max}h etat + {t.overtime}h nadg.)</span>
+                            )}
+                          </div>
                         </div>
-                        <span className={`text-[10px] font-black font-mono w-10 text-right ${t.isOverloaded ? 'text-rose-600' : t.hasOvertime ? 'text-indigo-700' : 'text-slate-500'}`}>
-                          {t.ratio.toFixed(0)}%
-                        </span>
+
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all ${t.isOverloaded ? 'bg-rose-500' : t.hasOvertime ? 'bg-indigo-600' : t.ratio >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
+                              style={{ width: `${Math.min((t.scheduled / Math.max(t.max, 1)) * 100, 100)}%` }}
+                            />
+                          </div>
+                          <span className={`text-[10px] font-black font-mono w-10 text-right ${t.isOverloaded ? 'text-rose-600' : t.hasOvertime ? 'text-indigo-700' : 'text-slate-500'}`}>
+                            {t.ratio.toFixed(0)}%
+                          </span>
+                        </div>
+
+                        {hasExcessiveGaps && (
+                          <div className="flex items-center justify-between text-[10px] text-amber-900 bg-amber-100/70 border border-amber-200/80 rounded-lg px-2.5 py-1 mt-1">
+                            <span className="truncate">
+                              <strong>Rozkład okienek:</strong> {gapInfo?.days.map(d => `${d.dayName.slice(0, 3)}: lekcje [${d.missingHours.join(', ')}] (${d.gapCount}h)`).join(' · ')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveTab('gaps');
+                                setTeacherGapFilter('excessive');
+                              }}
+                              className="text-amber-950 font-black underline hover:text-amber-900 shrink-0 ml-2 cursor-pointer"
+                            >
+                              Analizuj w okienkach &rarr;
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -1777,76 +2059,219 @@ interface StatystykiProps {
 
         {/* ======================= TAB: GAPS CONTENT ======================= */}
         {activeTab === 'gaps' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Class Timetable gaps */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={16} className="text-amber-500" />
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Okienka Lekcyjne Oddziałów (Klasy)</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Wykryto {gapsStats.classGaps.length} pustych slotów lekcyjnych rozdzielających lekcje</p>
-                </div>
-              </div>
-
-              {gapsStats.classGaps.length === 0 ? (
-                <div className="p-8 text-center rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold border-l-4 border-emerald-500">
-                  Wszystkie klasy mają ciągłe plany lekcji! Brak wykrytych okienek. Perfect!
-                </div>
-              ) : (
-                <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-2">
-                  {gapsStats.classGaps.map((gap, gIdx) => (
-                    <div key={gIdx} className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-xs hover:bg-slate-100 transition">
-                      <div className="flex justify-between font-bold text-slate-800 mb-1">
-                        <span>Klasa {gap.className}</span>
-                        <span className="text-amber-700 font-black">{gap.dayName}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        Bariera wolnego czasu na lekcjach oznaczonych numerami:{' '}
-                        <strong className="text-slate-900 font-mono">
-                          {gap.missingHours.join(', ')}
-                        </strong>
+          <div className="space-y-6">
+            {/* Executive Highlight Banner for Teachers with >2h gaps */}
+            {gapsStats.excessiveTeachersCount > 0 && (
+              <div className="bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 border-2 border-amber-400 rounded-2xl p-5 shadow-sm space-y-3 ring-1 ring-amber-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/80 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs shrink-0">
+                      <AlertTriangle size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-amber-950 uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                        <span>Wykryto {gapsStats.excessiveTeachersCount} nauczycieli z ponad 2h okienek w planie pracy</span>
+                      </h3>
+                      <p className="text-[11px] text-amber-800 font-medium">
+                        Zgodnie z zasadami higieny pracy i ergonomii planu lekcji, nauczyciele z przestojami powyżej 2 godzin tygodniowo zostali specjalnie wyróżnieni.
                       </p>
+                    </div>
+                  </div>
+                  <span className="self-start sm:self-auto bg-amber-200 text-amber-950 font-mono font-black text-xs px-3 py-1 rounded-lg border border-amber-400 shrink-0">
+                    Wymaga optymalizacji
+                  </span>
+                </div>
+
+                {/* Quick teacher cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                  {gapsStats.excessiveTeachers.map(t => (
+                    <div 
+                      key={t.teacherId}
+                      className="bg-white/95 border border-amber-300 hover:border-amber-400 rounded-xl p-3 text-xs shadow-xs space-y-1.5 transition"
+                    >
+                      <div className="flex items-center justify-between font-extrabold text-slate-900">
+                        <span className="truncate">{t.teacherName}</span>
+                        <span className="bg-amber-100 text-amber-950 border border-amber-300 font-black text-[10px] px-2 py-0.5 rounded-md shrink-0 ml-1">
+                          ⚠️ {t.totalGapHours}h okienek
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-600 flex flex-wrap gap-1">
+                        {t.days.map(d => (
+                          <span key={d.dayIdx} className="bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded font-medium text-amber-900">
+                            {d.dayName.slice(0, 3)}: lekcje [{d.missingHours.join(', ')}] ({d.gapCount}h)
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Teacher gaps */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={16} className="text-purple-500" />
-                <div>
-                  <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Okienka Lekcyjne Nauczycieli</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Wykryto {gapsStats.teacherGaps.length} przestojów między lekcjami w ciągu dnia</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Class Timetable gaps */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-amber-100 text-amber-700 rounded-lg shrink-0">
+                    <AlertTriangle size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">Okienka Lekcyjne Oddziałów (Klasy)</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Wykryto {gapsStats.classGaps.length} pustych slotów lekcyjnych rozdzielających lekcje</p>
+                  </div>
                 </div>
+
+                {gapsStats.classGaps.length === 0 ? (
+                  <div className="p-8 text-center rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold border-l-4 border-emerald-500">
+                    Wszystkie klasy mają ciągłe plany lekcji! Brak wykrytych okienek. Perfect!
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[440px] overflow-y-auto pr-2">
+                    {gapsStats.classGaps.map((gap, gIdx) => (
+                      <div key={gIdx} className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs hover:bg-slate-100 transition space-y-1">
+                        <div className="flex justify-between font-bold text-slate-800">
+                          <span>Klasa {gap.className}</span>
+                          <span className="text-amber-700 font-black">{gap.dayName}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Bariera wolnego czasu na lekcjach oznaczonych numerami:{' '}
+                          <strong className="text-slate-900 font-mono">
+                            {gap.missingHours.join(', ')}
+                          </strong>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {gapsStats.teacherGaps.length === 0 ? (
-                <div className="p-8 text-center rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold border-l-4 border-emerald-500">
-                  Nauczyciele mają ciągłe i zwięzłe plany lekcji! Brak okienek przestojowych.
-                </div>
-              ) : (
-                <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-2">
-                  {gapsStats.teacherGaps.map((gap, gIdx) => (
-                    <div key={gIdx} className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-xs hover:bg-slate-100 transition">
-                      <div className="flex justify-between font-bold text-slate-800 mb-1">
-                        <span>{gap.teacherName}</span>
-                        <span className="text-purple-700 font-black">{gap.dayName}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-500">
-                        Przerwa lekcyjna (oczekiwanie na lekcję) w slocie o numerze:{' '}
-                        <strong className="text-slate-900 font-mono">
-                          {gap.missingHours.join(', ')}
-                        </strong>
+              {/* Teacher gaps */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-amber-100 text-amber-700 rounded-lg shrink-0">
+                      <Clock size={16} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Okienka Lekcyjne Nauczycieli</span>
+                        {gapsStats.excessiveTeachersCount > 0 && (
+                          <span className="bg-amber-100 text-amber-950 border border-amber-300 font-extrabold text-[9.5px] px-2 py-0.5 rounded-full">
+                            ⚠️ {gapsStats.excessiveTeachersCount} &gt;2h
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                        Wykryto {gapsStats.teacherGaps.length} przestojów między lekcjami w ciągu dnia
                       </p>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </div>
 
+                  {/* Filter toggle */}
+                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setTeacherGapFilter('all')}
+                      className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition ${
+                        teacherGapFilter === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-900'
+                      }`}
+                    >
+                      Wszystkie ({gapsStats.teacherGaps.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTeacherGapFilter('excessive')}
+                      className={`px-2.5 py-1 text-[10px] font-black rounded-md transition flex items-center gap-1 ${
+                        teacherGapFilter === 'excessive'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'text-amber-800 hover:bg-amber-100'
+                      }`}
+                    >
+                      ⚠️ &gt;2h ({gapsStats.excessiveTeachersCount})
+                    </button>
+                  </div>
+                </div>
+
+                {gapsStats.teacherGaps.length === 0 ? (
+                  <div className="p-8 text-center rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold border-l-4 border-emerald-500">
+                    Nauczyciele mają ciągłe i zwięzłe plany lekcji! Brak okienek przestojowych.
+                  </div>
+                ) : displayedTeacherGaps.length === 0 ? (
+                  <div className="p-8 text-center rounded-xl bg-slate-50 text-slate-600 text-xs font-medium">
+                    Brak pozycji spełniających wybrany filtr.
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[440px] overflow-y-auto pr-2">
+                    {displayedTeacherGaps.map((gap, gIdx) => {
+                      const isExcessive = gap.hasExcessiveGaps;
+                      return (
+                        <div 
+                          key={gIdx} 
+                          className={`p-3.5 rounded-xl text-xs transition-all space-y-2 ${
+                            isExcessive 
+                              ? 'bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50/90 border-2 border-amber-400 shadow-xs ring-1 ring-amber-300/60' 
+                              : 'bg-slate-50 border border-slate-200 hover:bg-slate-100/80'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-black text-slate-900 text-xs">{gap.teacherName}</span>
+                                {isExcessive ? (
+                                  <span className="bg-amber-100 text-amber-950 border border-amber-300 font-extrabold text-[9.5px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow-xs">
+                                    <span>⚠️</span>
+                                    <span>&gt;2h okienek (łącznie {gap.teacherTotalGaps}h w planie)</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500 text-[9px] font-semibold bg-slate-200/70 px-1.5 py-0.5 rounded">
+                                    w normie (łącznie {gap.teacherTotalGaps}h)
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-500">
+                                Dzień tygodnia: <span className="font-bold text-slate-800">{gap.dayName}</span> • Długość okienka w tym dniu: <strong className="font-mono text-slate-900">{gap.gapCount}h</strong>
+                              </p>
+                            </div>
+
+                            <span className={`px-2 py-0.5 rounded font-black font-mono text-[10px] shrink-0 ${
+                              isExcessive 
+                                ? 'bg-amber-200 text-amber-950 border border-amber-300' 
+                                : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {gap.dayName}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                            <span className="text-[10.5px] text-slate-600 font-medium shrink-0">
+                              Puste godziny lekcyjne:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {gap.missingHours.map(hourNum => (
+                                <span 
+                                  key={hourNum} 
+                                  className={`font-mono font-black text-xs px-2 py-0.5 rounded shadow-xs ${
+                                    isExcessive 
+                                      ? 'bg-amber-500 text-white ring-1 ring-amber-600/30' 
+                                      : 'bg-slate-700 text-white'
+                                  }`}
+                                >
+                                  lekcja #{hourNum}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         )}
 
