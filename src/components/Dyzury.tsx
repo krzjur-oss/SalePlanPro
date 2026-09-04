@@ -4,6 +4,12 @@ import { esc, colKey, flattenColumns, uid } from '../utils';
 import { 
   Shield, Timer, RefreshCcw, Trash2, Edit3, Plus, Settings, Check, HelpCircle 
 } from 'lucide-react';
+import { 
+  calculateAdaptationDuties, 
+  getTeacherAdaptationDuty, 
+  isClassGrade1, 
+  AdaptationDutiesResult 
+} from '../utils/adaptationDuty';
 
 const getBreakDuration = (p: Przerwa): number => {
   const [sh, sm] = p.start.split(':').map(Number);
@@ -52,6 +58,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const [excludeTeachers, setExcludeTeachers] = useState<string[]>(dyz.settings.excludeTeachers || []);
   const [excludeAfterLastLesson, setExcludeAfterLastLesson] = useState<boolean>(() => !!dyz.settings.excludeAfterLastLesson);
   const [skipDutyIfNoClassesOnCorridor, setSkipDutyIfNoClassesOnCorridor] = useState<boolean>(() => !!dyz.settings.skipDutyIfNoClassesOnCorridor);
+  const [firstGradeAdaptationDuty, setFirstGradeAdaptationDuty] = useState<boolean>(() => dyz.settings.firstGradeAdaptationDuty !== false);
+  const [firstGradeAdaptationDurationMonths, setFirstGradeAdaptationDurationMonths] = useState<number>(() => dyz.settings.firstGradeAdaptationDurationMonths || 2);
+  const [firstGradeEscortDuration, setFirstGradeEscortDuration] = useState<number>(() => dyz.settings.firstGradeEscortDuration || 15);
+  const [countAdaptationInFTE, setCountAdaptationInFTE] = useState<boolean>(() => dyz.settings.countAdaptationInFTE !== false);
+  const [firstGradeCustomClassIds, setFirstGradeCustomClassIds] = useState<string[]>(() => dyz.settings.firstGradeCustomClassIds || []);
 
   React.useEffect(() => {
     setAutoBalance(dyz.settings.autoBalance !== false);
@@ -61,6 +72,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     setExcludeTeachers(dyz.settings.excludeTeachers || []);
     setExcludeAfterLastLesson(!!dyz.settings.excludeAfterLastLesson);
     setSkipDutyIfNoClassesOnCorridor(!!dyz.settings.skipDutyIfNoClassesOnCorridor);
+    setFirstGradeAdaptationDuty(dyz.settings.firstGradeAdaptationDuty !== false);
+    setFirstGradeAdaptationDurationMonths(dyz.settings.firstGradeAdaptationDurationMonths || 2);
+    setFirstGradeEscortDuration(dyz.settings.firstGradeEscortDuration || 15);
+    setCountAdaptationInFTE(dyz.settings.countAdaptationInFTE !== false);
+    setFirstGradeCustomClassIds(dyz.settings.firstGradeCustomClassIds || []);
   }, [dyz.settings]);
 
   const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number } | null>(null);
@@ -117,8 +133,13 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return counts;
   }, [dyz.harmonogram]);
 
-  // Current duty allocation minutes per teacher
-  const teacherDutyMinutes = useMemo(() => {
+  // Calculated adaptation duties for grade 1 classes
+  const adaptationDuties: AdaptationDutiesResult = useMemo(() => {
+    return calculateAdaptationDuties(appState, schedData);
+  }, [appState, schedData]);
+
+  // Current corridor-only duty minutes per teacher
+  const teacherCorridorMinutes = useMemo(() => {
     const mins: { [abbr: string]: number } = {};
     Object.entries(dyz.harmonogram).forEach(([key, entry]) => {
       if (entry.teacherAbbr) {
@@ -133,6 +154,17 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     });
     return mins;
   }, [dyz.harmonogram, dyz.przerwy]);
+
+  // Current total duty allocation minutes per teacher (including adaptation duty if enabled)
+  const teacherDutyMinutes = useMemo(() => {
+    const mins: { [abbr: string]: number } = { ...teacherCorridorMinutes };
+    if (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false && adaptationDuties.totalTeacherMinutes) {
+      Object.entries(adaptationDuties.totalTeacherMinutes).forEach(([abbr, m]) => {
+        mins[abbr] = (mins[abbr] || 0) + m;
+      });
+    }
+    return mins;
+  }, [teacherCorridorMinutes, dyz.settings.firstGradeAdaptationDuty, dyz.settings.countAdaptationInFTE, adaptationDuties]);
 
   // Target max minutes for each teacher based on FTE
   const teacherMaxMinutes = useMemo(() => {
@@ -753,7 +785,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     // Track assigned minutes for each teacher
     const assignedMinutes: { [abbr: string]: number } = {};
     eligibleTeachers.forEach(t => {
-      assignedMinutes[t.abbr] = 0;
+      // If counting adaptation duties in FTE, pre-populate with their adaptation minutes
+      const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
+        ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
+        : 0;
+      assignedMinutes[t.abbr] = adaptMins;
     });
 
     // Populate assignedMinutes with currently locked duties
@@ -784,6 +820,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     ): boolean => {
       // Check if they are active on this day and during this break
       if (!isTeacherAvailableForBreak(t.abbr, day, przerwa)) return false;
+
+      // Check if teacher is busy with grade 1 adaptation duty during this break (classroom or escort)
+      if (dyz.settings.firstGradeAdaptationDuty !== false) {
+        const busyWithAdaptation = getTeacherAdaptationDuty(adaptationDuties.byDay, t.abbr, day, przerwa.num);
+        if (busyWithAdaptation) {
+          return false;
+        }
+      }
 
       // Check if they have already hit their limit (with buffer)
       const dur = getBreakDuration(przerwa);
@@ -1023,7 +1067,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
           maxConsecutiveDuties,
           excludeTeachers,
           excludeAfterLastLesson,
-          skipDutyIfNoClassesOnCorridor
+          skipDutyIfNoClassesOnCorridor,
+          firstGradeAdaptationDuty,
+          firstGradeAdaptationDurationMonths,
+          firstGradeEscortDuration,
+          countAdaptationInFTE,
+          firstGradeCustomClassIds
         }
       }
     });
@@ -1195,6 +1244,115 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
               ) : (
                 <div className="p-8 text-center text-slate-400 text-xs">Brak zdefiniowanych miejsc dyżurowania. Przejdź do zakładki „Miejsca Dyżurowania”, aby dodać pierwsze punkty.</div>
               )}
+
+              {/* ── OKRES ADAPTACYJNY KLAS PIERWSZYCH ── */}
+              <div className="mt-6 border-t border-slate-200 pt-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                      <span>🎒 Okres adaptacyjny klas 1 — Dyżury w salach & odprowadzanie</span>
+                      <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-2 py-0.5 rounded-full border border-amber-200">
+                        {DAYS[activeDay]}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-amber-800/80 mt-0.5">
+                      Przez pierwsze 1–2 miesiące roku szkolnego uczniowie klas 1 spędzają przerwy w swojej sali pod opieką nauczyciela, a po zakończonych lekcjach nauczyciel odprowadza ich do szatni/świetlicy/rodziców.
+                    </p>
+                  </div>
+                  {dyz.settings.firstGradeAdaptationDuty !== false && (
+                    <span className="text-xs font-mono font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 self-start sm:self-auto shrink-0">
+                      {(adaptationDuties.byDay[activeDay] || []).length} przydziałów dzisiaj
+                    </span>
+                  )}
+                </div>
+
+                {dyz.settings.firstGradeAdaptationDuty === false ? (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2">
+                    <p className="text-xs text-slate-500 font-medium">
+                      Moduł dyżurów adaptacyjnych klas 1 jest wyłączony.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChangeAppState({
+                          ...appState,
+                          dyzury: {
+                            ...dyz,
+                            settings: {
+                              ...dyz.settings,
+                              firstGradeAdaptationDuty: true
+                            }
+                          }
+                        });
+                        setFirstGradeAdaptationDuty(true);
+                        notify('Włączono dyżury adaptacyjne dla klas 1');
+                      }}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                    >
+                      Włącz dyżury adaptacyjne klas 1
+                    </button>
+                  </div>
+                ) : (adaptationDuties.byDay[activeDay] || []).length === 0 ? (
+                  <div className="p-4 bg-amber-50/40 border border-amber-200/50 rounded-xl text-xs text-amber-800/80 italic">
+                    Brak lekcji klas pierwszych w tym dniu lub w szkole nie ma zdefiniowanych klas pierwszych.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-amber-200/70 rounded-xl bg-white shadow-xs">
+                    <table className="min-w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-amber-50/70 border-b border-amber-200 text-amber-950 font-bold">
+                          <th className="p-2.5 text-left">Klasa</th>
+                          <th className="p-2.5 text-left">Rodzaj opieki</th>
+                          <th className="p-2.5 text-left">Sala</th>
+                          <th className="p-2.5 text-left">Czas trwania / Przerwa</th>
+                          <th className="p-2.5 text-left">Nauczyciel odpowiedzialny</th>
+                          <th className="p-2.5 text-center">Czas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-amber-100/60">
+                        {(adaptationDuties.byDay[activeDay] || []).map((duty, idx) => (
+                          <tr key={idx} className="hover:bg-amber-50/30 transition">
+                            <td className="p-2.5 font-bold text-amber-950 font-mono">
+                              {duty.className}
+                            </td>
+                            <td className="p-2.5">
+                              {duty.type === 'classroom' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/80 text-amber-900 font-bold text-[11px] border border-amber-200">
+                                  🏫 Opieka w sali lekcyjnej
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100/80 text-blue-900 font-bold text-[11px] border border-blue-200">
+                                  🚶‍♂️ Odprowadzanie po lekcji
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-2.5 font-semibold text-slate-700">
+                              Sala {duty.roomNum}
+                            </td>
+                            <td className="p-2.5 text-slate-600 font-mono font-medium">
+                              {duty.type === 'classroom' 
+                                ? `Przerwa po ${duty.breakNum}. lekcji (${duty.timeRange})`
+                                : `Po ${duty.breakNum}. lekcji (${duty.timeRange})`
+                              }
+                            </td>
+                            <td className="p-2.5">
+                              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-mono text-slate-700">
+                                  {duty.teacherAbbr}
+                                </span>
+                                <span>{duty.teacherName}</span>
+                              </span>
+                            </td>
+                            <td className="p-2.5 text-center font-mono font-bold text-amber-900">
+                              {duty.durationMinutes} min
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Panel statystyk dyżurów */}
@@ -1207,6 +1365,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   {appState.teachers.map(t => {
                     const dc = teacherDutyCounts[t.abbr] || 0;
                     const dm = teacherDutyMinutes[t.abbr] || 0;
+                    const cm = teacherCorridorMinutes[t.abbr] || 0;
+                    const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
+                      ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
+                      : 0;
                     const maxMins = teacherMaxMinutes[t.abbr] || 0;
                     const hours = teacherHours[t.abbr] || 0;
                     const isOver = dm > maxMins;
@@ -1221,6 +1383,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                           <span className="text-[10px] text-slate-400 font-mono mt-0.5">
                             Siatka: {hours}h lekcyjnych (etat: {hours >= 18 ? '1.00' : (hours / 18).toFixed(2)})
                           </span>
+                          {adaptMins > 0 && (
+                            <span className="text-[9px] text-amber-700 font-medium flex items-center gap-1 mt-0.5">
+                              🎒 w tym {adaptMins} min opieki w kl. 1
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           {isExcluded ? (
@@ -1233,8 +1400,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : 'bg-slate-50 text-slate-500 border-slate-100'
                             }`}>
-                              <span className="font-bold">{dc} dyżurów</span>
-                              <span className="text-[9px] text-slate-400 font-normal mt-0.5">{dm} / {maxMins} min</span>
+                              <span className="font-bold">{dc} dyżurów korytarz.</span>
+                              <span className="text-[9px] text-slate-400 font-normal mt-0.5">
+                                Łącznie: {dm} / {maxMins} min
+                              </span>
                             </span>
                           )}
                         </div>
@@ -1631,6 +1800,70 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     <span className="text-[10px] text-slate-400 mt-1 block">Maksymalny limit przerw pod rząd, na których nauczyciel może pełnić dyżur.</span>
                   </div>
 
+                  {/* Okres adaptacyjny klas 1 */}
+                  <div className="border-t border-slate-100 pt-3 space-y-2.5">
+                    <div className="flex items-start gap-2.5 p-2.5 bg-amber-50/70 border border-amber-200/80 rounded-lg select-none">
+                      <input 
+                        type="checkbox" 
+                        id="opt_firstGradeAdaptationDuty"
+                        className="mt-0.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500 h-4 w-4 cursor-pointer"
+                        checked={firstGradeAdaptationDuty}
+                        onChange={(e) => setFirstGradeAdaptationDuty(e.target.checked)}
+                      />
+                      <label htmlFor="opt_firstGradeAdaptationDuty" className="cursor-pointer select-none space-y-0.5 flex-1">
+                        <span className="text-[11px] font-extrabold text-amber-950 block flex items-center gap-1.5">
+                          <span>🎒 Okres adaptacyjny klas 1 (dyżury w sali & odprowadzanie)</span>
+                        </span>
+                        <span className="text-[9px] text-amber-800/90 block leading-tight font-medium">
+                          Nauczyciele uczący klasę 1 mają automatycznie przydzielony dyżur w sali lekcyjnej podczas przerw, a po zakończonych lekcjach odprowadzają dzieci (do szatni/świetlicy/rodziców). Nauczyciel nie otrzymuje w tym czasie dyżuru na korytarzu.
+                        </span>
+                      </label>
+                    </div>
+
+                    {firstGradeAdaptationDuty && (
+                      <div className="pl-2 space-y-2.5 bg-amber-50/30 p-2.5 rounded-lg border border-amber-100 text-xs">
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-[10px] font-bold text-slate-600">Czas trwania okresu adaptacyjnego:</label>
+                          <select
+                            value={firstGradeAdaptationDurationMonths}
+                            onChange={(e) => setFirstGradeAdaptationDurationMonths(Number(e.target.value))}
+                            className="px-2 py-1 border border-slate-200 rounded-md bg-white text-xs font-bold text-slate-800"
+                          >
+                            <option value={1}>1 miesiąc (wrzesień)</option>
+                            <option value={2}>2 miesiące (wrzesień – październik)</option>
+                            <option value={3}>3 miesiące (I kwartał)</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-[10px] font-bold text-slate-600">Czas dyżuru odprowadzającego:</label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={5}
+                              max={30}
+                              step={5}
+                              value={firstGradeEscortDuration}
+                              onChange={(e) => setFirstGradeEscortDuration(Number(e.target.value))}
+                              className="w-16 px-2 py-1 border border-slate-200 rounded-md bg-white text-xs font-bold font-mono text-slate-800 text-center"
+                            />
+                            <span className="text-[10px] text-slate-500 font-semibold">min</span>
+                          </div>
+                        </div>
+
+                        <label className="flex items-center gap-2 cursor-pointer text-[10px] font-bold text-slate-700 select-none pt-1 border-t border-amber-100">
+                          <input
+                            type="checkbox"
+                            checked={countAdaptationInFTE}
+                            onChange={(e) => setCountAdaptationInFTE(e.target.checked)}
+                            className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
+                          />
+                          <span>Wliczaj czas opieki w sali i odprowadzania do tygodniowego limitu dyżurów</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="pt-2">
                     <button 
                       onClick={handleSaveSettings}
@@ -1729,6 +1962,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
               m.id !== pl.id && 
               dyz.harmonogram[`${m.id}|${activeDay}|${prw}`]?.teacherAbbr === t.abbr
             );
+
+            const busyAdaptation = dyz.settings.firstGradeAdaptationDuty !== false
+              ? getTeacherAdaptationDuty(adaptationDuties.byDay, t.abbr, activeDay, prw)
+              : undefined;
             
             const currentMins = teacherDutyMinutes[t.abbr] || 0;
             const maxMins = teacherMaxMinutes[t.abbr] || 0;
@@ -1738,7 +1975,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
             let score = 1; // standard neutral
             let reason = 'Wolny (brak przyległych lekcji)';
 
-            if (isAlreadyOnBreak) {
+            if (busyAdaptation) {
+              score = -1;
+              reason = busyAdaptation.type === 'classroom'
+                ? `🎒 Dyżur w sali: opieka nad kl. ${busyAdaptation.className} (${busyAdaptation.roomNum})`
+                : `🎒 Dyżur odprowadzający: kl. ${busyAdaptation.className} (${busyAdaptation.timeRange})`;
+            } else if (isAlreadyOnBreak) {
               score = -1;
               reason = 'Zajęty - pełni inny dyżur na tej przerwie';
             } else if (isOverLimit) {

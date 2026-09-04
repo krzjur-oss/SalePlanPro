@@ -290,7 +290,25 @@ export interface PlanDyzuryState {
     maxConsecutiveDuties?: number;
     excludeAfterLastLesson?: boolean;
     skipDutyIfNoClassesOnCorridor?: boolean;
+    firstGradeAdaptationDuty?: boolean;
+    firstGradeAdaptationDurationMonths?: number; // np. 1 lub 2 miesiące
+    firstGradeEscortDuration?: number; // np. 15 min na odprowadzenie
+    firstGradeCustomClassIds?: string[];
+    countAdaptationInFTE?: boolean; // czy wliczać czas dyżurów w sali/odprowadzania do limitu tygodniowego
   };
+}
+
+export interface AdaptationDutySlot {
+  dayIdx: number;
+  breakNum: number;
+  type: 'classroom' | 'escort'; // 'classroom' = opieka w sali, 'escort' = odprowadzanie
+  classId: string;
+  className: string;
+  roomNum?: string;
+  teacherAbbr: string;
+  teacherName?: string;
+  durationMinutes: number;
+  timeRange: string;
 }
 
 export interface GeneratorSettings {

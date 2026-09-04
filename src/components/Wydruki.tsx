@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, SpecialStudent } from '../types';
 import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink, HeartHandshake, Sparkles, BookOpen, Clock, Award } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
+import { calculateAdaptationDuties } from '../utils/adaptationDuty';
 import ArkuszWsparciaUcznia from './ArkuszWsparciaUcznia';
 
 interface WydrukiProps {
@@ -1437,6 +1438,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     const places = appState.dyzury.miejsca;
     const breaks = appState.dyzury.przerwy;
     const recommendedScale = Math.min(1.0, Math.max(0.45, 8 / Math.max(places.length, 1)));
+    const adaptationDuties = calculateAdaptationDuties(appState, schedData);
+    const showAdaptation = appState.dyzury.settings.firstGradeAdaptationDuty !== false;
 
     let daysHtml = '';
 
@@ -1480,6 +1483,8 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
         `;
       });
 
+      const dayAdaptationList = showAdaptation ? (adaptationDuties.byDay[dayIdx] || []) : [];
+
       daysHtml += `
         <div class="day-section" style="page-break-inside: avoid; break-inside: avoid; margin-bottom: 32px;">
           <div style="background-color: #0f172a; color: #fff; padding: 8px 14px; margin-bottom: 12px; font-weight: 900; font-size: 11.5px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
@@ -1507,6 +1512,58 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
               </tbody>
             </table>
           `}
+
+          ${dayAdaptationList.length > 0 ? `
+            <div style="margin-top: 14px; border: 1px solid #fde68a; border-radius: 8px; overflow: hidden; background: #fffbeb;">
+              <div style="background-color: #fef3c7; border-bottom: 1px solid #fde68a; padding: 6px 12px; display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 10px; font-weight: 900; color: #78350f; text-transform: uppercase; letter-spacing: 0.03em;">
+                  🎒 OKRES ADAPTACYJNY KLAS 1 — OPIEKA W SALACH I ODPROWADZANIE UCZNIÓW
+                </span>
+                <span style="font-size: 9px; font-weight: bold; color: #92400e;">
+                  (Pierwsze ${appState.dyzury.settings.firstGradeAdaptationDurationMonths || 2} mies. roku szkolnego)
+                </span>
+              </div>
+              <table style="width: 100%; border-collapse: collapse; font-family: system-ui, -apple-system, sans-serif; font-size: 9.5px; background: #fff;">
+                <thead>
+                  <tr style="background-color: #fffbeb; border-bottom: 1px solid #fde68a; color: #78350f;">
+                    <th style="border: 1px solid #fde68a; padding: 5px 8px; text-align: left; font-weight: 900; width: 60px;">KLASA</th>
+                    <th style="border: 1px solid #fde68a; padding: 5px 8px; text-align: left; font-weight: 900; width: 140px;">RODZAJ OPIEKI</th>
+                    <th style="border: 1px solid #fde68a; padding: 5px 8px; text-align: left; font-weight: 900; width: 80px;">SALA</th>
+                    <th style="border: 1px solid #fde68a; padding: 5px 8px; text-align: left; font-weight: 900;">CZAS / PRZERWA</th>
+                    <th style="border: 1px solid #fde68a; padding: 5px 8px; text-align: left; font-weight: 900;">NAUCZYCIEL ODPOWIEDZIALNY</th>
+                    <th style="border: 1px solid #fde68a; padding: 5px 8px; text-align: center; font-weight: 900; width: 50px;">CZAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${dayAdaptationList.map(duty => `
+                    <tr>
+                      <td style="border: 1px solid #fef3c7; padding: 6px 8px; font-weight: 900; color: #78350f; font-family: monospace;">
+                        ${escapeHtml(duty.className)}
+                      </td>
+                      <td style="border: 1px solid #fef3c7; padding: 6px 8px; font-weight: bold; color: ${duty.type === 'classroom' ? '#92400e' : '#1e40af'};">
+                        ${duty.type === 'classroom' ? '🏫 Opieka w sali' : '🚶‍♂️ Odprowadzanie'}
+                      </td>
+                      <td style="border: 1px solid #fef3c7; padding: 6px 8px; font-weight: bold; color: #334155;">
+                        Sala ${escapeHtml(duty.roomNum)}
+                      </td>
+                      <td style="border: 1px solid #fef3c7; padding: 6px 8px; color: #475569; font-family: monospace; font-size: 9px;">
+                        ${duty.type === 'classroom' ? `Przerwa po ${duty.breakNum}. lekcji (${escapeHtml(duty.timeRange)})` : `Po ${duty.breakNum}. lekcji (${escapeHtml(duty.timeRange)})`}
+                      </td>
+                      <td style="border: 1px solid #fef3c7; padding: 6px 8px; font-weight: bold; color: #0f172a;">
+                        <span style="background: #f1f5f9; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 8.5px; border: 1px solid #e2e8f0; margin-right: 4px;">
+                          ${escapeHtml(duty.teacherAbbr)}
+                        </span>
+                        ${escapeHtml(duty.teacherName)}
+                      </td>
+                      <td style="border: 1px solid #fef3c7; padding: 6px 8px; text-align: center; font-weight: 900; color: #78350f; font-family: monospace;">
+                        ${duty.durationMinutes} min
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : ''}
         </div>
       `;
     });

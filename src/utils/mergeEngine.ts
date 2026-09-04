@@ -176,7 +176,16 @@ export function sanitizeAppState(rawInput: any): AppState {
     settings: {
       autoBalance: rawDyzury.settings?.autoBalance !== false,
       maxPerTeacher: typeof rawDyzury.settings?.maxPerTeacher === 'number' ? rawDyzury.settings.maxPerTeacher : 2,
-      excludeTeachers: Array.isArray(rawDyzury.settings?.excludeTeachers) ? rawDyzury.settings.excludeTeachers : []
+      excludeTeachers: Array.isArray(rawDyzury.settings?.excludeTeachers) ? rawDyzury.settings.excludeTeachers : [],
+      maxMinutesPerTeacher: typeof rawDyzury.settings?.maxMinutesPerTeacher === 'number' ? rawDyzury.settings.maxMinutesPerTeacher : 60,
+      maxConsecutiveDuties: typeof rawDyzury.settings?.maxConsecutiveDuties === 'number' ? rawDyzury.settings.maxConsecutiveDuties : 2,
+      excludeAfterLastLesson: !!rawDyzury.settings?.excludeAfterLastLesson,
+      skipDutyIfNoClassesOnCorridor: !!rawDyzury.settings?.skipDutyIfNoClassesOnCorridor,
+      firstGradeAdaptationDuty: rawDyzury.settings?.firstGradeAdaptationDuty !== undefined ? !!rawDyzury.settings?.firstGradeAdaptationDuty : true,
+      firstGradeAdaptationDurationMonths: typeof rawDyzury.settings?.firstGradeAdaptationDurationMonths === 'number' ? rawDyzury.settings.firstGradeAdaptationDurationMonths : 2,
+      firstGradeEscortDuration: typeof rawDyzury.settings?.firstGradeEscortDuration === 'number' ? rawDyzury.settings.firstGradeEscortDuration : 15,
+      firstGradeCustomClassIds: Array.isArray(rawDyzury.settings?.firstGradeCustomClassIds) ? rawDyzury.settings.firstGradeCustomClassIds : [],
+      countAdaptationInFTE: rawDyzury.settings?.countAdaptationInFTE !== false
     }
   };
 
