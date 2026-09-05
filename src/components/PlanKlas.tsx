@@ -1159,6 +1159,25 @@ export default function PlanKlas({
     const isHandle = touchIsHandleRef.current;
     const isFromGrid = !!touchDraggedLessonKeyRef.current;
 
+    // If gesture started on a card in the grid (from schedule):
+    if (isFromGrid) {
+      if (!touchDragActiveRef.current) {
+        // Natural vertical scroll detected in grid: cancel dragging immediately so native scrolling of the schedule proceeds freely
+        if (absY > 7 && absY > absX * 1.0) {
+          touchScrollDetectedRef.current = true;
+          touchDraggedAssignIdRef.current = null;
+          touchDraggedLessonKeyRef.current = null;
+          lastScrollTimeRef.current = Date.now();
+          return;
+        }
+
+        // Only start drag from grid if movement is clearly directed horizontally (e.g. toward sidebar or adjacent column)
+        if (absX < 14 || absX < absY * 1.2) {
+          return;
+        }
+      }
+    }
+
     // If gesture started on a card body in sidebar (not the handle, not the grid):
     if (!isHandle && !isFromGrid) {
       if (!touchDragActiveRef.current) {
@@ -1954,7 +1973,7 @@ export default function PlanKlas({
   }, [activeStudentId, pl.specialAssignments]);
 
   return (
-    <div className="flex flex-col md:flex-row flex-1 overflow-hidden px-0 mx-0" id="page-plan-klas">
+    <div className="flex flex-col md:flex-row flex-1 overflow-hidden h-full min-h-0 px-0 mx-0" id="page-plan-klas">
       {/* ── LEWY SIDEBAR (Nawigacja) ── */}
       {!presentationMode && !(viewMode === 'all' && activeTab === 'plan') && (
         isLeftSidebarCollapsed ? (
@@ -2384,9 +2403,9 @@ export default function PlanKlas({
       )}
 
       {/* ── STREFA CENTRALNA (Siatka układania) ── */}
-      <main className="flex-1 bg-slate-50 p-2 sm:p-3 md:p-4 overflow-y-auto min-w-0">
+      <main className="flex-1 bg-slate-50 p-2 sm:p-3 md:p-4 overflow-y-auto min-w-0 min-h-0 touch-pan-y overscroll-contain">
         {activeTab === 'plan' && (
-          <div className="flex flex-col h-full animate-fade-in">
+          <div className="flex flex-col min-h-full animate-fade-in pb-12 sm:pb-8">
             {/* Header i Przyciski Akcji */}
             <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm mb-3 sm:mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
@@ -2584,7 +2603,7 @@ export default function PlanKlas({
                                         onTouchMove={(e) => handleTouchMove(e, asg.id)}
                                         onTouchEnd={handleTouchEnd}
                                         onContextMenu={(e) => e.preventDefault()}
-                                        className={`rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
+                                        className={`rounded-lg p-2 border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-pan-y ${
                                           selectedAssignmentId 
                                             ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
                                             : 'hover:shadow-md'
@@ -2772,15 +2791,15 @@ export default function PlanKlas({
             ) : (
               /* ==================== WIDOK JEDNEJ KLASY ==================== */
               currentClass ? (
-                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-1 sm:p-2 w-full">
-                  <table className="w-full table-fixed border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="p-1 sm:p-2 border-b border-r border-slate-200 text-[10px] sm:text-xs font-bold text-slate-400 text-center w-12 sm:w-16 md:w-20 select-none">
+                <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto p-1 sm:p-2 w-full touch-pan-y">
+                  <table className="w-full table-fixed border-collapse min-w-[550px] sm:min-w-[650px] md:min-w-full">
+                    <thead className="sticky top-0 bg-white z-20 shadow-xs">
+                      <tr className="bg-slate-50/95 backdrop-blur-xs">
+                        <th className="p-1 sm:p-2 border-b border-r border-slate-200 text-[10px] sm:text-xs font-bold text-slate-400 text-center w-12 sm:w-16 md:w-20 select-none bg-slate-50">
                           Lekcja
                         </th>
                         {DAYS.map((day, i) => (
-                          <th key={i} className="p-1.5 sm:p-2 border-b border-r last:border-r-0 border-slate-200 text-xs font-bold text-slate-700 text-center select-none w-1/5">
+                          <th key={i} className="p-1.5 sm:p-2 border-b border-r last:border-r-0 border-slate-200 text-xs font-bold text-slate-700 text-center select-none w-1/5 bg-slate-50">
                             <span className="hidden lg:inline">{day}</span>
                             <span className="lg:hidden">{day.slice(0, 3)}</span>
                           </th>
@@ -2843,7 +2862,7 @@ export default function PlanKlas({
                                           onTouchMove={(e) => handleTouchMove(e, asg.id)}
                                           onTouchEnd={handleTouchEnd}
                                           onContextMenu={(e) => e.preventDefault()}
-                                          className={`rounded-lg p-1.5 sm:p-2 border-l-2 sm:border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-none ${
+                                          className={`rounded-lg p-1.5 sm:p-2 border-l-2 sm:border-l-4 relative select-none flex flex-col justify-between group transition-all cursor-grab active:cursor-grabbing touch-pan-y ${
                                             selectedAssignmentId 
                                               ? 'ring-2 ring-indigo-400 ring-offset-1 cursor-pointer hover:bg-slate-50' 
                                               : 'hover:shadow-md'

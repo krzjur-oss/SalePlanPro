@@ -1,4 +1,4 @@
-# SalePlan Pro v3.8.3 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.8.4 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -116,7 +116,12 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Statystykach (v3.8.3)**:
+1.  **Płynne Przewijanie i Responsywność Siatki Planu Lekcji (v3.8.4)**:
+    *   **Odblokowanie pełnego przewijania pionowego**: Usunięto sztywne ograniczenia wysokości (`h-full` zastąpione elastycznym `min-h-full` z marginesem `pb-12 sm:pb-8`) oraz dodano właściwości `min-h-0` w strukturze kontenerów flexbox, co przywróciło pełne, płynne przewijanie do wszystkich godzin lekcyjnych (5, 6, 7, 8+).
+    *   **Przyklejony nagłówek dni tygodnia (`sticky thead`)**: Wprowadzono zamrożony nagłówek tabeli z dniami tygodnia (`Poniedziałek` – `Piątek`), który pozostaje czytelny na samej górze siatki podczas przewijania planu w dół do późniejszych godzin.
+    *   **Inteligentna obsługa gestów dotykowych (Touch DND & Scroll)**: Zaktualizowano zachowanie kart zajęć na urządzeniach dotykowych (`touch-pan-y` zamiast `touch-none`) wraz z automatyczną detekcją ruchu w pionie, co pozwala na naturalne, płynne scrollowanie ekranu bez przypadkowego blokowania dotyku przez karty.
+    *   **Responsywność horyzontalna**: Wprowadzono bezpieczną minimalną szerokość siatki (`min-w-[550px]`) z horyzontalnym przewijaniem na mniejszych ekranach laptopów i tabletów.
+2.  **Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Statystykach (v3.8.3)**:
     *   Wdrożono automatyczne wykrywanie nauczycieli mających ponad 2 godziny okienek przestojowych w tygodniowym rozkładzie lekcji.
     *   Wprowadzono wyraziste wyróżnienie kolorystyczne wierszy kadry (bursztynowe tło, obramowanie, plakietka `⚠️ Xh okienek w planie`) w zakładce "Praca & Dyżury Kadry".
     *   Dodano filtry szybkiego przełączania widoku ("Wszyscy" vs "⚠️ >2h okienek") w zestawieniu pensum oraz w module analizy okienek.

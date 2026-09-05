@@ -1471,7 +1471,7 @@ export default function App() {
       )}
 
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
-      <div className="flex-1 flex overflow-hidden px-0 mx-0">
+      <div className="flex-1 flex overflow-hidden px-0 mx-0 min-h-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentTab}
@@ -1479,7 +1479,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.18, ease: 'easeInOut' }}
-            className="flex-1 flex overflow-hidden"
+            className="flex-1 flex overflow-hidden min-h-0"
           >
             <Suspense fallback={
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400 gap-2">
@@ -1738,9 +1738,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.3!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.4!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Wizualne wyróżnienie i analityka nauczycieli z ponad 2h okienek w planie pracy, filtry widoku oraz integracja z audytem higieny pracy kadry.
+                  Optymalizacja przewijania i responsywności siatki planu lekcji, przyklejony nagłówek dni tygodnia oraz płynna obsługa dotyku.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

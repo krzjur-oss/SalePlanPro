@@ -259,8 +259,6 @@ function SnapshotManagerInner({
     return snapshots.find(s => s && s.id === selectedSnapshotId) || null;
   }, [snapshots, selectedSnapshotId, autosaveVersions]);
 
-  if (!isOpen) return null;
-
   // Helper function to count occupied lessons in schedData
   const countLessons = (sData: SchedData): number => {
     let count = 0;
@@ -615,6 +613,8 @@ function SnapshotManagerInner({
   const approximateSize = useMemo(() => {
     return JSON.stringify(snapshots).length;
   }, [snapshots]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[1000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">

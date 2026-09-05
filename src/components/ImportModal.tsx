@@ -167,8 +167,6 @@ export default function ImportModal({
     }
   }, [isOpen, initialRawFiles]);
 
-  if (!isOpen) return null;
-
   const handleAddMoreFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []) as File[];
     if (selectedFiles.length === 0) return;
@@ -481,6 +479,7 @@ export default function ImportModal({
 
   // Calculate live preview of combined merge
   const previewSummary = useMemo(() => {
+    if (!isOpen || files.length === 0) return null;
     try {
       const validConfigs = files.map(f => f.config).filter(Boolean) as FileMergeConfig[];
       if (validConfigs.length === 0) return null;
@@ -542,7 +541,7 @@ export default function ImportModal({
       console.warn('Błąd podczas generowania podglądu scalania:', err);
       return null;
     }
-  }, [files, currentAppState, currentSchedData]);
+  }, [isOpen, files, currentAppState, currentSchedData]);
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -581,7 +580,8 @@ export default function ImportModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5">
+      {isOpen && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -1693,6 +1693,7 @@ export default function ImportModal({
           </div>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 }

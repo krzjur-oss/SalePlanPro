@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.4',
+      date: 'Wrzesień 2026',
+      title: 'Optymalizacja Przewijania i Responsywności Siatki Planu Lekcji',
+      description: 'Kompleksowe rozwiązanie problemu przewijania w widoku pojedynczej klasy i widoku zbiorczym: odblokowanie przewijania pionowego poprzez usunięcie sztywnych ograniczeń wysokości flexboxa, inteligentna obsługa gestów dotykowych bez blokowania natywnego scrollowania przeglądarki oraz przyklejony nagłówek tabeli z dniami tygodnia.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'fix', text: 'Pełne przewijanie pionowe w widoku klasy: Zastąpiono sztywną klasę h-full elastycznym min-h-full z marginesem dolnym pb-12 oraz dodano reguły min-h-0 w nadrzędnych kontenerach flexbox, co odblokowało scrollowanie do wszystkich godzin popołudniowych (5, 6, 7, 8+).', badgeText: 'Przewijanie UI' },
+        { type: 'improvement', text: 'Przyklejony nagłówek dni tygodnia (sticky thead): Nagłówek tabeli z dniami tygodnia (Poniedziałek – Piątek) pozostaje zablokowany u góry podczas przewijania planu w dół, zapewniając stałą orientację w dniach tygodnia.', badgeText: 'Ergonomia' },
+        { type: 'improvement', text: 'Płynna obsługa dotyku na kartach lekcji: Zmieniono regułę touch-none na touch-pan-y na komórkach planu oraz zaktualizowano detekcję gestów w handleTouchMove, umożliwiając natychmiastowe, naturalne przewijanie ekranu palcem.', badgeText: 'Dotyk / Mobile' },
+        { type: 'improvement', text: 'Bezpieczna szerokość tabeli i horyzontalny scroll: Dodano minimalną szerokość siatki (min-w-[550px]) z obsługą przewijania w poziomie, chroniąc przed ściskaniem kolumn na ekranach tabletów i laptopów.', badgeText: 'Responsywność' }
+      ]
+    },
+    {
       version: 'v3.8.3',
       date: 'Wrzesień 2026',
       title: 'Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Module Statystyki',
       description: 'Rozszerzenie modułu Statystyki i analityki higieny pracy kadry: automatyczna detekcja nauczycieli mających ponad 2 godziny okienek (przestojów) w tygodniowym planie zajęć, wyraziste wyróżnienie kolorystyczne z gradientem i plakietkami ostrzegawczymi, filtry szybkiego dostępu, dedykowany baner wykonawczy w zakładce Analiza Okienek oraz rozszerzenie automatycznego audytu planu lekcji.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Wizualne wyróżnienie nauczycieli z >2h okienek: W zakładce "Praca & Dyżury Kadry" wiersze nauczycieli z ponad 2 godzinami okienek otrzymują charakterystyczne, bursztynowe tło z obramowaniem, plakietkę ostrzegawczą oraz zestawienie rozkładu dni i lekcji.', badgeText: 'Wyróżnienie UI' },
         { type: 'feature', text: 'Filtry szybkiego dostępu: Dodano przełączniki filtrujące widok nauczycieli ("Wszyscy" vs "⚠️ >2h okienek") w zestawieniu obciążenia godzinowego kadry oraz w zakładce Analizy Okienek.', badgeText: 'Ergonomia' },
