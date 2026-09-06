@@ -1920,6 +1920,9 @@ export default function KreatorSzkoly({
   const [newAsgSubject, setNewAsgSubject] = useState('');
   const [newAsgSupportType, setNewAsgSupportType] = useState<string>('ni');
   const [newAsgWithClass, setNewAsgWithClass] = useState<boolean>(false);
+  const [newAsgIsGroup, setNewAsgIsGroup] = useState<boolean>(false);
+  const [newAsgGroupName, setNewAsgGroupName] = useState<string>('');
+  const [newAsgLinkedStudents, setNewAsgLinkedStudents] = useState<string[]>([]);
   const [newAsgRoom, setNewAsgRoom] = useState('');
   const [newAsgGroup, setNewAsgGroup] = useState('');
   const [newAsgHours, setNewAsgHours] = useState<number | ''>(2);
@@ -1970,6 +1973,9 @@ export default function KreatorSzkoly({
                 subjectId: newAsgSubject,
                 supportType: newAsgSupportType || 'ni',
                 withClass: newAsgWithClass,
+                isGroup: newAsgIsGroup,
+                groupName: newAsgIsGroup ? (newAsgGroupName.trim() || undefined) : undefined,
+                linkedStudentIds: newAsgIsGroup ? newAsgLinkedStudents : undefined,
                 roomId: newAsgRoom || null,
                 hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
                 preferredBlockSize: newAsgBlockSize
@@ -1997,6 +2003,9 @@ export default function KreatorSzkoly({
         subjectId: newAsgSubject,
         supportType: newAsgSupportType || 'ni',
         withClass: newAsgWithClass,
+        isGroup: newAsgIsGroup,
+        groupName: newAsgIsGroup ? (newAsgGroupName.trim() || undefined) : undefined,
+        linkedStudentIds: newAsgIsGroup ? newAsgLinkedStudents : undefined,
         roomId: newAsgRoom || null,
         hoursPerWeek: newAsgHours === '' ? 2 : Number(newAsgHours),
         preferredBlockSize: newAsgBlockSize
@@ -2094,6 +2103,9 @@ export default function KreatorSzkoly({
     setNewAsgSubject(sa.subjectId);
     setNewAsgSupportType(sa.supportType || (sa.subjectId === 'wsp' ? 'wsp' : sa.subjectId === 'rewa' ? 'rewa' : sa.subjectId === 'korekta' ? 'korekta' : 'ni'));
     setNewAsgWithClass(sa.withClass ?? (sa.supportType === 'wsp' || sa.subjectId === 'wsp'));
+    setNewAsgIsGroup(Boolean(sa.isGroup));
+    setNewAsgGroupName(sa.groupName || '');
+    setNewAsgLinkedStudents(sa.linkedStudentIds || []);
     setNewAsgRoom(sa.roomId || '');
     setNewAsgGroup('');
     setNewAsgHours(sa.hoursPerWeek);
@@ -2110,6 +2122,9 @@ export default function KreatorSzkoly({
     setNewAsgSubject('');
     setNewAsgSupportType('ni');
     setNewAsgWithClass(false);
+    setNewAsgIsGroup(false);
+    setNewAsgGroupName('');
+    setNewAsgLinkedStudents([]);
     setNewAsgRoom('');
     setNewAsgGroup('');
     setNewAsgHours(2);
@@ -2151,10 +2166,13 @@ export default function KreatorSzkoly({
 
   // --- Student support categories definition ---
   const SUPPORT_CATEGORIES = [
-    { id: 'ni' as const, key: 'ni', label: 'Indywidualne (NI)', sublabel: 'Nauczanie indywidualne', icon: '👤', bgActive: 'bg-purple-50 border-purple-300 text-purple-900', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200', defaultHours: 2 },
-    { id: 'wsp' as const, key: 'wsp', label: 'Wspomaganie w klasie', sublabel: 'Wspomaganie / IPET', icon: '🤝', bgActive: 'bg-emerald-50 border-emerald-300 text-emerald-900', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200', defaultHours: 5 },
-    { id: 'rewa' as const, key: 'rewa', label: 'Rewalidacja', sublabel: 'Zajęcia rewalidacyjne', icon: '⭐', bgActive: 'bg-amber-50 border-amber-300 text-amber-900', badgeClass: 'bg-amber-100 text-amber-800 border-amber-200', defaultHours: 2 },
-    { id: 'korekta' as const, key: 'korekta', label: 'Korekcyjno-kompensacyjne', sublabel: 'Terapia pedagogiczna / korekta', icon: '📝', bgActive: 'bg-blue-50 border-blue-300 text-blue-900', badgeClass: 'bg-blue-100 text-blue-800 border-blue-200', defaultHours: 2 },
+    { id: 'ni' as const, key: 'ni', label: 'Indywidualne (NI)', sublabel: 'Nauczanie indywidualne', icon: '👤', bgActive: 'bg-purple-50 border-purple-300 text-purple-900', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200', defaultHours: 2, canBeGroup: false },
+    { id: 'wsp' as const, key: 'wsp', label: 'Wspomaganie w klasie', sublabel: 'Wspomaganie / IPET', icon: '🤝', bgActive: 'bg-emerald-50 border-emerald-300 text-emerald-900', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200', defaultHours: 5, canBeGroup: false },
+    { id: 'rewa' as const, key: 'rewa', label: 'Rewalidacja', sublabel: 'Zajęcia rewalidacyjne', icon: '⭐', bgActive: 'bg-amber-50 border-amber-300 text-amber-900', badgeClass: 'bg-amber-100 text-amber-800 border-amber-200', defaultHours: 2, canBeGroup: true },
+    { id: 'korekta' as const, key: 'korekta', label: 'Korekcyjno-kompensacyjne', sublabel: 'Terapia pedagogiczna / korekta', icon: '📝', bgActive: 'bg-blue-50 border-blue-300 text-blue-900', badgeClass: 'bg-blue-100 text-blue-800 border-blue-200', defaultHours: 2, canBeGroup: true },
+    { id: 'logopedia' as const, key: 'logopedia', label: 'Zajęcia logopedyczne', sublabel: 'Terapia logopedyczna / mowy (możliwe grupy łączone)', icon: '🗣️', bgActive: 'bg-teal-50 border-teal-300 text-teal-900', badgeClass: 'bg-teal-100 text-teal-800 border-teal-200', defaultHours: 1, canBeGroup: true },
+    { id: 'psycholog' as const, key: 'psycholog', label: 'Zajęcia z psychologiem', sublabel: 'Wsparcie psychologiczne / emocjonalno-społeczne (grupy/1:1)', icon: '🧠', bgActive: 'bg-rose-50 border-rose-300 text-rose-900', badgeClass: 'bg-rose-100 text-rose-800 border-rose-200', defaultHours: 1, canBeGroup: true },
+    { id: 'pedagog' as const, key: 'pedagog', label: 'Zajęcia z pedagogiem', sublabel: 'Wsparcie pedagogiczne / TUS / rozwijanie kompetencji (grupy/1:1)', icon: '💡', bgActive: 'bg-sky-50 border-sky-300 text-sky-900', badgeClass: 'bg-sky-100 text-sky-800 border-sky-200', defaultHours: 1, canBeGroup: true },
   ] as const;
 
   // --- Student creation & editing states (Step 8 / Special Students) ---
@@ -2165,13 +2183,19 @@ export default function KreatorSzkoly({
     ni: true,
     wsp: false,
     rewa: false,
-    korekta: false
+    korekta: false,
+    logopedia: false,
+    psycholog: false,
+    pedagog: false
   });
   const [newStudSupportHours, setNewStudSupportHours] = useState<Record<string, number>>({
     ni: 2,
     wsp: 5,
     rewa: 2,
-    korekta: 2
+    korekta: 2,
+    logopedia: 1,
+    psycholog: 1,
+    pedagog: 1
   });
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
 
@@ -2196,13 +2220,19 @@ export default function KreatorSzkoly({
     ni: true,
     wsp: false,
     rewa: false,
-    korekta: false
+    korekta: false,
+    logopedia: false,
+    psycholog: false,
+    pedagog: false
   });
   const [editStudSupportHours, setEditStudSupportHours] = useState<Record<string, number>>({
     ni: 2,
     wsp: 5,
     rewa: 2,
-    korekta: 2
+    korekta: 2,
+    logopedia: 1,
+    psycholog: 1,
+    pedagog: 1
   });
 
   const [editStudSubjId, setEditStudSubjId] = useState('');
@@ -2220,7 +2250,7 @@ export default function KreatorSzkoly({
       return;
     }
 
-    const activeTypes = (Object.keys(newStudSupportTypes) as ('ni' | 'wsp' | 'rewa' | 'korekta')[]).filter(k => newStudSupportTypes[k]);
+    const activeTypes = Object.keys(newStudSupportTypes).filter(k => newStudSupportTypes[k]);
     if (activeTypes.length === 0) {
       showNoti('Zaznacz przynajmniej jeden rodzaj wsparcia/zajęć dla ucznia!', 'info');
       return;
@@ -2254,8 +2284,24 @@ export default function KreatorSzkoly({
     setNewStudFirstName('');
     setNewStudLastName('');
     setNewStudClassId('');
-    setNewStudSupportTypes({ ni: true, wsp: false, rewa: false, korekta: false });
-    setNewStudSupportHours({ ni: 2, wsp: 5, rewa: 2, korekta: 2 });
+    setNewStudSupportTypes({
+      ni: true,
+      wsp: false,
+      rewa: false,
+      korekta: false,
+      logopedia: false,
+      psycholog: false,
+      pedagog: false
+    });
+    setNewStudSupportHours({
+      ni: 2,
+      wsp: 5,
+      rewa: 2,
+      korekta: 2,
+      logopedia: 1,
+      psycholog: 1,
+      pedagog: 1
+    });
     setActiveStudentId(newStudent.id);
     showNoti(`Dodano profil ucznia: ${newStudent.firstName} ${newStudent.lastName}`);
   };
@@ -2363,7 +2409,10 @@ export default function KreatorSzkoly({
       ni: false,
       wsp: false,
       rewa: false,
-      korekta: false
+      korekta: false,
+      logopedia: false,
+      psycholog: false,
+      pedagog: false
     };
     if (student.supportTypes && student.supportTypes.length > 0) {
       student.supportTypes.forEach(t => {
@@ -2380,6 +2429,9 @@ export default function KreatorSzkoly({
       wsp: student.supportHours?.wsp ?? 5,
       rewa: student.supportHours?.rewa ?? 2,
       korekta: student.supportHours?.korekta ?? 2,
+      logopedia: student.supportHours?.logopedia ?? 1,
+      psycholog: student.supportHours?.psycholog ?? 1,
+      pedagog: student.supportHours?.pedagog ?? 1,
     };
 
     setEditStudSupportTypes(initialTypes);
@@ -2401,7 +2453,7 @@ export default function KreatorSzkoly({
       return;
     }
 
-    const activeTypes = (Object.keys(editStudSupportTypes) as ('ni' | 'wsp' | 'rewa' | 'korekta')[]).filter(k => editStudSupportTypes[k]);
+    const activeTypes = Object.keys(editStudSupportTypes).filter(k => editStudSupportTypes[k]);
     if (activeTypes.length === 0) {
       showNoti('Zaznacz przynajmniej jeden rodzaj wsparcia/zajęć!', 'info');
       return;
@@ -6575,48 +6627,146 @@ export default function KreatorSzkoly({
                           </select>
                         </div>
 
-                        {/* 5. Tryb realizacji zajęć (Z klasą czy Indywidualnie) */}
-                        <div className="space-y-1 p-2.5 bg-purple-50/60 border border-purple-200 rounded-xl">
+                        {/* 5. Tryb realizacji zajęć (Indywidualnie, W oddziale lub W grupie łączonej) */}
+                        <div className="space-y-1.5 p-2.5 bg-purple-50/60 border border-purple-200 rounded-xl">
                           <label className="text-[10px] text-purple-950 font-extrabold block">
                             5. Tryb realizacji zajęć *
                           </label>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mt-1">
                             <button
                               type="button"
-                              onClick={() => setNewAsgWithClass(false)}
+                              onClick={() => {
+                                setNewAsgWithClass(false);
+                                setNewAsgIsGroup(false);
+                              }}
                               className={`p-2 rounded-lg text-left border transition cursor-pointer ${
-                                !newAsgWithClass
+                                !newAsgWithClass && !newAsgIsGroup
                                   ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                               }`}
                             >
-                              <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                              <div className="flex items-center gap-1.5 font-bold text-[10.5px]">
                                 <span>👤</span>
-                                <span>Zajęcia indywidualne (1 na 1)</span>
+                                <span>1:1 (Indywidualne)</span>
                               </div>
-                              <p className={`text-[9px] mt-0.5 leading-tight ${!newAsgWithClass ? 'text-purple-100' : 'text-slate-400'}`}>
-                                Odrębne lekcje z uczniem (np. Nauczanie Indywidualne, Rewalidacja w gabinecie)
+                              <p className={`text-[8.5px] mt-0.5 leading-tight ${!newAsgWithClass && !newAsgIsGroup ? 'text-purple-100' : 'text-slate-400'}`}>
+                                Odrębne lekcje w gabinecie (np. NI, Rewalidacja 1:1)
                               </p>
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => setNewAsgWithClass(true)}
+                              onClick={() => {
+                                setNewAsgWithClass(true);
+                                setNewAsgIsGroup(false);
+                              }}
                               className={`p-2 rounded-lg text-left border transition cursor-pointer ${
                                 newAsgWithClass
                                   ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                               }`}
                             >
-                              <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                              <div className="flex items-center gap-1.5 font-bold text-[10.5px]">
                                 <span>🤝</span>
-                                <span>Na lekcjach w oddziale</span>
+                                <span>W oddziale</span>
                               </div>
-                              <p className={`text-[9px] mt-0.5 leading-tight ${newAsgWithClass ? 'text-purple-100' : 'text-slate-400'}`}>
-                                Nauczyciel wspomagający w klasie (np. na lekcji edukacji wczesnoszkolnej, informatyki, WF)
+                              <p className={`text-[8.5px] mt-0.5 leading-tight ${newAsgWithClass ? 'text-purple-100' : 'text-slate-400'}`}>
+                                Nauczyciel wspomagający obecny na lekcji z klasą
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewAsgWithClass(false);
+                                setNewAsgIsGroup(true);
+                              }}
+                              className={`p-2 rounded-lg text-left border transition cursor-pointer ${
+                                newAsgIsGroup
+                                  ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 font-bold text-[10.5px]">
+                                <span>👥</span>
+                                <span>Grupa łączona</span>
+                              </div>
+                              <p className={`text-[8.5px] mt-0.5 leading-tight ${newAsgIsGroup ? 'text-teal-100' : 'text-slate-400'}`}>
+                                Logopeda, psycholog, pedagog lub terapia łączona dla 2+ uczniów
                               </p>
                             </button>
                           </div>
+
+                          {/* Konfiguracja grupy łączonej */}
+                          {newAsgIsGroup && (
+                            <div className="mt-2 pt-2 border-t border-purple-200/80 space-y-2 bg-white/90 p-2 rounded-lg border border-teal-200">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-teal-900 flex items-center gap-1">
+                                  <span>👥</span> Konfiguracja grupy łączonej:
+                                </span>
+                                <span className="text-[9px] text-teal-700 font-semibold">
+                                  Zajęcia logopedyczne / psychologiczne / pedagogiczne
+                                </span>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[9.5px] text-slate-600 font-bold block">
+                                  Nazwa grupy (opcjonalnie):
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="np. Grupa logopedyczna A, Zajęcia TUS z psychologiem..."
+                                  value={newAsgGroupName}
+                                  onChange={(e) => setNewAsgGroupName(e.target.value)}
+                                  className="w-full px-2 py-1 text-xs border border-teal-300 rounded bg-teal-50/40 text-slate-800 placeholder-slate-400 outline-none"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[9.5px] text-slate-600 font-bold block">
+                                  Dołącz innych uczniów SPE do tej grupy:
+                                </label>
+                                <div className="max-h-32 overflow-y-auto border border-slate-200 rounded p-1.5 space-y-1 bg-slate-50">
+                                  {(appState.planLekcji.specialStudents || [])
+                                    .filter(s => s.id !== newAsgStudentId)
+                                    .map(otherStud => {
+                                      const isChecked = newAsgLinkedStudents.includes(otherStud.id);
+                                      const otherCls = appState.classes.find(c => c.id === otherStud.classId);
+                                      return (
+                                        <label
+                                          key={otherStud.id}
+                                          className={`flex items-center gap-2 p-1 rounded text-xs cursor-pointer select-none transition ${
+                                            isChecked ? 'bg-teal-100/70 text-teal-950 font-bold' : 'hover:bg-white text-slate-700'
+                                          }`}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setNewAsgLinkedStudents([...newAsgLinkedStudents, otherStud.id]);
+                                              } else {
+                                                setNewAsgLinkedStudents(newAsgLinkedStudents.filter(id => id !== otherStud.id));
+                                              }
+                                            }}
+                                            className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5 cursor-pointer"
+                                          />
+                                          <span className="truncate">
+                                            {otherStud.firstName} {otherStud.lastName}
+                                            {otherCls ? ` (${otherCls.name})` : ''}
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  {(appState.planLekcji.specialStudents || []).filter(s => s.id !== newAsgStudentId).length === 0 && (
+                                    <p className="text-[10px] text-slate-400 italic p-1">
+                                      Brak innych uczniów w bazie SPE. Dodaj uczniów w Kroku 8.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -6918,12 +7068,26 @@ export default function KreatorSzkoly({
                                     </span>
                                   )}
                                   <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-bold border ${
-                                    sa.withClass 
-                                      ? 'bg-blue-50 text-blue-700 border-blue-200' 
-                                      : 'bg-purple-50 text-purple-700 border-purple-200'
+                                    sa.isGroup
+                                      ? 'bg-teal-50 text-teal-800 border-teal-200'
+                                      : sa.withClass 
+                                        ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                                        : 'bg-purple-50 text-purple-700 border-purple-200'
                                   }`}>
-                                    {sa.withClass ? '🤝 W oddziale z klasą' : '👤 Indywidualnie (1 na 1)'}
+                                    {sa.isGroup
+                                      ? `👥 Grupa łączona ${sa.groupName ? `(${sa.groupName})` : ''}`
+                                      : sa.withClass 
+                                        ? '🤝 W oddziale z klasą' 
+                                        : '👤 Indywidualnie (1 na 1)'}
                                   </span>
+                                  {sa.isGroup && sa.linkedStudentIds && sa.linkedStudentIds.length > 0 && (
+                                    <span className="bg-teal-100 text-teal-900 font-bold px-1.5 py-0.2 rounded text-[8.5px] border border-teal-200">
+                                      + {sa.linkedStudentIds.map(id => {
+                                        const ls = (appState.planLekcji.specialStudents || []).find(s => s.id === id);
+                                        return ls ? `${ls.firstName} ${ls.lastName[0]}.` : id;
+                                      }).join(', ')}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                   <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-0.5">

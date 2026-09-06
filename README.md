@@ -1,4 +1,4 @@
-# SalePlan Pro v3.8.4 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.8.5 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -47,19 +47,27 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   **Dyżur w sali lekcyjnej**: opieka wychowawców i nauczycieli edukacji wczesnoszkolnej w salach lekcyjnych klas pierwszych podczas przerw, chroniąca przed równoczesnym wyznaczeniem dyżuru na korytarzu.
     *   **Dyżur odprowadzający**: dedykowany czas (np. 15 minut) na bezpieczne odprowadzenie uczniów do szatni lub świetlicy po zakończeniu zajęć.
 
-### 3. 👥 Równoległe Grupy oraz Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas
+### 3. 👥 Równoległe Grupy, Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) oraz Szybka Edycja Komórek w Planie Klas
+*   **Interaktywny Modal Szybkiej Edycji Komórki (v3.8.5)**:
+    *   Kliknięcie na dowolną komórkę planu lekcji (zarówno pustą, jak i zawierającą już zaplanowane zajęcia) otwiera dedykowany modal szybkiej edycji slotu.
+    *   Użytkownik może w oknie modalu natychmiast wybrać przydział z puli klasy, zastąpić istniejącą lekcję, usunąć ją lub przypisać/zmienić nauczyciela wspomagającego bez konieczności wcześniejszego wybierania pędzla z dolnego paska.
+    *   System zachowuje 100% ergonomii: zaawansowani planiści mogą nadal korzystać z szybkiego trybu "pędzla" i przeciągania (Drag-and-Drop), a kliknięcie bez pędzla natychmiast prowadzi do intuicyjnego okna edycji.
+*   **Zajęcia Specjalne w Grupach Łączonych dla Uczniów ze SPE (v3.8.5)**:
+    *   Pełna obsługa form wsparcia, które mogą odbywać się w grupach łączonych międzyoddziałowych: **Zajęcia logopedyczne (Logopedia)**, **Zajęcia z psychologiem**, **Zajęcia z pedagogiem** oraz **Terapia pedagogiczna (Korekta)**.
+    *   Możliwość łączenia uczniów ze SPE w jedną grupę zajęciową (`group_special`, `isGroup`, `groupName`, lista powiązanych uczniów `linkedStudentIds`).
+    *   Zapisanie slotu grupowej terapii automatycznie replikuje i synchronizuje zajęcia w planie wszystkich powiązanych uczniów ze SPE, zapewniając spójność organizacyjną i eliminując konieczność wielokrotnego wprowadzania tych samych danych.
 *   **Obsługa Wielu Grup na Jednej Godzinie**: Możliwość prowadzenia lekcji w grupach (np. Informatyka gr1 i gr2, WF chłopcy i dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w osobnych salach z oznaczeniami graficznymi grup i brakiem fałszywych kolizji.
 *   **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Lewym Pasku Bocznym (Sidebar)**:
     *   **Jednolita Nawigacja Boczna**: Bezpośrednie przełączanie w lewym panelu między widokiem oddziałów (`🏫 Oddziały klasowe`) a listą uczniów specjalnych (`👤 Uczniowie SPE i NI`), z wbudowaną wyszukiwarką uczniów i szybkim dodawaniem nowego orzeczenia.
     *   **Ergonomiczne Zwijanie Paska (100% Szerokości Ekranu)**: Panel boczny zwija się do smukłego paska z plakietką wybranego ucznia (`PanelLeftClose` / `PanelLeftOpen`), eliminując podwójne paski i uwalniając pełną szerokość ekranu dla głównej siatki zajęć.
     *   **Kompleksowy Plan Tygodniowy Ucznia SPE**:
-        *   Wizualne rozróżnienie zajęć w oddziale (**🤝 Wspomaganie** z nauczycielem prowadzącym) oraz zajęć gabinetowych (**👤 1 na 1 / Indywidualne** – Nauczanie Indywidualne, Rewalidacja, Terapia).
-        *   Dynamiczne podsumowanie wymiaru godzin (godziny z klasą vs godziny gabinetowe) aktualizowane na żywo.
+        *   Wizualne rozróżnienie zajęć w oddziale (**🤝 Wspomaganie** z nauczycielem prowadzącym), zajęć gabinetowych (**👤 1 na 1 / Indywidualne** – Nauczanie Indywidualne, Rewalidacja) oraz zajęć w grupach łączonych (**👥 Grupy łączone** – Logopedia, Psycholog, Pedagog).
+        *   Dynamiczne podsumowanie wymiaru godzin (godziny z klasą vs godziny gabinetowe vs grupy łączone) aktualizowane na żywo.
     *   **Karty Wsparcia Psychologiczno-Pedagogicznego**: Wbudowane edytory zintegrowane bezpośrednio z profilem ucznia:
         *   **Orzeczenie i Profil**: Podstawa orzeczenia, zalecenia poradni PPP, termin ważności.
         *   **WOPFU**: Wielospecjalistyczna Ocena Poziomu Funkcjonowania Ucznia (mocne strony, trudności, bariery środowiskowe).
         *   **IPET**: Indywidualny Program Edukacyjno-Terapeutyczny (cele rozwojowe, zintegrowane działania nauczycieli i specjalistów, formy dostosowania wymagań).
-        *   **Rewalidacja / Pomoc PP**: Zakres zajęć rewalidacyjnych, logopedycznych, korekcyjno-kompensacyjnych i socjoterapeutycznych.
+        *   **Rewalidacja / Pomoc PP**: Zakres zajęć rewalidacyjnych, logopedycznych, psychologicznych, pedagogicznych, korekcyjno-kompensacyjnych i socjoterapeutycznych.
 
 ### 4. 📊 Moduł Wydruków i Publikacji (Wydruki)
 System oferuje zaawansowany generator czystych szablonów PDF/A4 do wydruku tradycyjnego lub zapisu cyfrowego:
@@ -116,7 +124,16 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Płynne Przewijanie i Responsywność Siatki Planu Lekcji (v3.8.4)**:
+1.  **Zajęcia Grup Łączonych SPE oraz Interaktywna Edycja Komórek w Planie Klas (v3.8.5)**:
+    *   **Okno szybkiej edycji komórki w Planie Klas**: Kliknięcie w dowolną pustą lub zajętą komórkę siatki lekcji otwiera bezpośrednio modal zarządzania slotem (wybór i wstawienie przydziału, wymiana lekcji, usunięcie lekcji oraz przydział nauczyciela wspomagającego bez konieczności uprzedniego wybierania pędzla).
+    *   **Zajęcia dla uczniów SPE w grupach łączonych**: Wprowadzono pełną obsługę zajęć specjalistycznych prowadzonych w grupach łączonych międzyoddziałowych:
+        *   **Zajęcia logopedyczne (Logopedia)**
+        *   **Zajęcia z psychologiem**
+        *   **Zajęcia z pedagogiem**
+        *   **Terapia pedagogiczna (Korekta)**
+    *   **Synchronizacja grup SPE**: Narzędzie tworzenia grup łączonych (`group_special`, `isGroup`, `groupName`, `linkedStudentIds`) z automatyczną propagacją zmian do planów wszystkich powiązanych uczniów ze SPE.
+    *   **Obsługa przydziałów kadry wspomagającej**: Precyzyjne rozróżnienie pomiędzy operacyjnym obsadzeniem nauczyciela wspomagającego w siatce godzinowej (widoczność w planie nauczyciela i kontrola kolizji sal/lekcji) a formalnym wymiarem pensum/etatu w orzeczeniu ucznia w Kreatorze Szkoły (Kroki 8 i 9).
+2.  **Płynne Przewijanie i Responsywność Siatki Planu Lekcji (v3.8.4)**:
     *   **Odblokowanie pełnego przewijania pionowego**: Usunięto sztywne ograniczenia wysokości (`h-full` zastąpione elastycznym `min-h-full` z marginesem `pb-12 sm:pb-8`) oraz dodano właściwości `min-h-0` w strukturze kontenerów flexbox, co przywróciło pełne, płynne przewijanie do wszystkich godzin lekcyjnych (5, 6, 7, 8+).
     *   **Przyklejony nagłówek dni tygodnia (`sticky thead`)**: Wprowadzono zamrożony nagłówek tabeli z dniami tygodnia (`Poniedziałek` – `Piątek`), który pozostaje czytelny na samej górze siatki podczas przewijania planu w dół do późniejszych godzin.
     *   **Inteligentna obsługa gestów dotykowych (Touch DND & Scroll)**: Zaktualizowano zachowanie kart zajęć na urządzeniach dotykowych (`touch-pan-y` zamiast `touch-none`) wraz z automatyczną detekcją ruchu w pionie, co pozwala na naturalne, płynne scrollowanie ekranu bez przypadkowego blokowania dotyku przez karty.

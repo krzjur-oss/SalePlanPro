@@ -147,6 +147,9 @@ export const SpecialAssignmentSchema = z.object({
   subjectId: z.string(),
   supportType: z.string().optional(),
   preferredBlockSize: z.number().optional(),
+  isGroup: z.boolean().optional(),
+  groupName: z.string().optional(),
+  linkedStudentIds: z.array(z.string()).optional().default([]),
 }).passthrough();
 
 export const MiejsceDyzuruSchema = z.object({

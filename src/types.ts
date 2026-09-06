@@ -76,20 +76,23 @@ export interface LessonsState {
   [key: string]: Lesson; // "classId|day|hour" lub "classId|day|hour|groupId"
 }
 
-export type StudentSupportType = 'ni' | 'wsp' | 'rewa' | 'korekta';
+export type StudentSupportType = 'ni' | 'wsp' | 'rewa' | 'korekta' | 'logopedia' | 'psycholog' | 'pedagog';
 
 export interface SpecialStudent {
   id: string;
   firstName: string;
   lastName: string;
   classId: string | null;
-  type: 'ni' | 'rewa' | 'wsp' | 'korekta' | string;
-  supportTypes?: ('ni' | 'wsp' | 'rewa' | 'korekta' | string)[];
+  type: 'ni' | 'rewa' | 'wsp' | 'korekta' | 'logopedia' | 'psycholog' | 'pedagog' | string;
+  supportTypes?: ('ni' | 'wsp' | 'rewa' | 'korekta' | 'logopedia' | 'psycholog' | 'pedagog' | string)[];
   supportHours?: {
     ni?: number;
     wsp?: number;
     rewa?: number;
     korekta?: number;
+    logopedia?: number;
+    psycholog?: number;
+    pedagog?: number;
     [key: string]: number | undefined;
   };
   note?: string;
@@ -105,8 +108,11 @@ export interface SpecialAssignment {
   hoursPerWeek: number;
   withClass: boolean;
   subjectId: string;
-  supportType?: 'ni' | 'wsp' | 'rewa' | 'korekta' | string;
+  supportType?: 'ni' | 'wsp' | 'rewa' | 'korekta' | 'logopedia' | 'psycholog' | 'pedagog' | string;
   preferredBlockSize?: number;
+  isGroup?: boolean;
+  groupName?: string;
+  linkedStudentIds?: string[];
 }
 
 export interface SpecialLesson {
@@ -207,16 +213,19 @@ export interface Class {
   baseClass?: string;
 }
 
-export type SPESlotMode = 'class_regular' | 'class_support' | 'individual' | 'exempt';
+export type SPESlotMode = 'class_regular' | 'class_support' | 'individual' | 'group_special' | 'exempt';
 
 export interface SPESlotAssignment {
   id: string; // e.g. "studentId|day|hour"
   studentId: string;
   dayIdx: number;
   hourIdx: number;
-  mode?: SPESlotMode; // 'class_regular' | 'class_support' | 'individual' | 'exempt'
-  type?: 'wsp' | 'rewa' | 'ni' | 'korekta' | string;
-  withClass: boolean; // true = lekcja w oddziale, false = indywidualne 1:1 lub zwolnienie
+  mode?: SPESlotMode; // 'class_regular' | 'class_support' | 'individual' | 'group_special' | 'exempt'
+  type?: 'wsp' | 'rewa' | 'ni' | 'korekta' | 'logopedia' | 'psycholog' | 'pedagog' | string;
+  withClass: boolean; // true = lekcja w oddziale, false = indywidualne 1:1, grupa łączona lub zwolnienie
+  isGroup?: boolean;
+  groupName?: string;
+  linkedStudentIds?: string[];
   specialAssignmentId?: string | null;
   teacherId?: string | null; // Główny prowadzący lub terapeuta
   supportTeacherId?: string | null; // Nauczyciel wspomagający

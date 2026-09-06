@@ -3113,6 +3113,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   <option value="wsp">🤝 Wspomaganie w oddziale</option>
                   <option value="rewa">🧩 Rewalidacja</option>
                   <option value="korekta">💡 Terapia korekcyjno-kompensacyjna</option>
+                  <option value="logopedia">🗣️ Zajęcia logopedyczne (grupowe/1:1)</option>
+                  <option value="psycholog">🧠 Zajęcia z psychologiem (grupowe/1:1)</option>
+                  <option value="pedagog">💡 Zajęcia z pedagogiem (grupowe/1:1)</option>
                 </select>
               </div>
 

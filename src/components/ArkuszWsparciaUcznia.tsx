@@ -34,6 +34,8 @@ export interface StudentScheduleSlot {
   groupShort?: string;
   modeDescription: string;
   withClass?: boolean;
+  isGroup?: boolean;
+  groupName?: string;
 }
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
@@ -61,6 +63,24 @@ export const SUPPORT_TYPE_INFO: Record<string, { label: string; short: string; b
     label: 'Terapia Korekcyjno-Kompensacyjna',
     short: 'Korekta',
     badgeClass: 'bg-sky-100 text-sky-900 border-sky-300',
+    icon: '💡'
+  },
+  logopedia: {
+    label: 'Zajęcia Logopedyczne',
+    short: 'Logopedia',
+    badgeClass: 'bg-teal-100 text-teal-900 border-teal-300',
+    icon: '🗣️'
+  },
+  psycholog: {
+    label: 'Zajęcia z Psychologiem',
+    short: 'Psycholog',
+    badgeClass: 'bg-rose-100 text-rose-900 border-rose-300',
+    icon: '🧠'
+  },
+  pedagog: {
+    label: 'Zajęcia z Pedagogiem',
+    short: 'Pedagog',
+    badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-300',
     icon: '💡'
   }
 };
@@ -130,10 +150,10 @@ export default function ArkuszWsparciaUcznia({
         // 1. Check for Individual Special Lessons (1 na 1 / SPE / Rewalidacja / NI)
         const specialLessonsMatches: Array<{ assignmentId: string }> = [];
 
-        // Check spePlan slotAssignments for individual slots
+        // Check spePlan slotAssignments for individual and group slots
         if (pl.spePlan?.slotAssignments && Array.isArray(pl.spePlan.slotAssignments)) {
           pl.spePlan.slotAssignments.forEach(slotAsg => {
-            if (slotAsg.studentId === student.id && slotAsg.dayIdx === dayIdx && slotAsg.hourIdx === hIdx && !slotAsg.withClass) {
+            if (slotAsg.studentId === student.id && slotAsg.dayIdx === dayIdx && slotAsg.hourIdx === hIdx && (!slotAsg.withClass || slotAsg.mode === 'group_special')) {
               if (slotAsg.specialAssignmentId) {
                 specialLessonsMatches.push({ assignmentId: slotAsg.specialAssignmentId });
               }
@@ -168,8 +188,16 @@ export default function ArkuszWsparciaUcznia({
               if (rawType === 'rewa') subjectName = 'Zajęcia rewalidacyjne';
               else if (rawType === 'ni') subjectName = 'Nauczanie Indywidualne';
               else if (rawType === 'korekta') subjectName = 'Terapia korekcyjno-kompensacyjna';
+              else if (rawType === 'logopedia') subjectName = 'Zajęcia logopedyczne';
+              else if (rawType === 'psycholog') subjectName = 'Zajęcia z psychologiem';
+              else if (rawType === 'pedagog') subjectName = 'Zajęcia z pedagogiem';
               else subjectName = 'Zajęcia wspierające';
             }
+
+            const isGroup = Boolean(spAsg.isGroup);
+            const groupTitle = isGroup
+              ? (spAsg.groupName ? `👥 Grupa: ${spAsg.groupName}` : '👥 Zajęcia w grupie łączonej')
+              : 'Zajęcia indywidualne (1:1) / Gabinet';
 
             const leadTeacherObj = spAsg.teacherId ? (teachersMap.get(spAsg.teacherId) || pl.teachers.find(t => t.id === spAsg.teacherId)) : null;
             const suppTeacherObj = spAsg.supportTeacherId ? (teachersMap.get(spAsg.supportTeacherId) || pl.teachers.find(t => t.id === spAsg.supportTeacherId)) : null;
@@ -208,12 +236,14 @@ export default function ArkuszWsparciaUcznia({
               subjectShort: subjObj?.short,
               leadTeacher: leadTeacherObj ? { name: `${leadTeacherObj.first} ${leadTeacherObj.last}`, abbr: leadTeacherObj.abbr } : undefined,
               supportTeacher: suppTeacherObj ? { name: `${suppTeacherObj.first} ${suppTeacherObj.last}`, abbr: suppTeacherObj.abbr } : undefined,
-              supportTypeLabel: typeMeta.label,
+              supportTypeLabel: isGroup ? `${typeMeta.label} (Grupa łączona)` : typeMeta.label,
               supportTypeCode: rawType,
               roomName,
               className: studentClass ? `kl. ${studentClass.name}` : 'Tok indywidualny',
-              modeDescription: 'Zajęcia indywidualne (1:1) / Gabinet',
-              withClass: false
+              modeDescription: groupTitle,
+              withClass: false,
+              isGroup,
+              groupName: spAsg.groupName
             });
           }
         });
