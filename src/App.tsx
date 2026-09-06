@@ -12,6 +12,7 @@ import {
 import ExportModal, { ExportOptions } from './components/ExportModal';
 import ImportModal from './components/ImportModal';
 import SecurityModal from './components/SecurityModal';
+import TermsModal from './components/TermsModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { sanitizeAppState } from './utils/mergeEngine';
 import { anonymizeBackupPayload } from './utils/anonymization';
@@ -297,13 +298,26 @@ export default function App() {
   };
 
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
-  const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
+  const [oProgramieTab, setOProgramieTab] = useState<'info' | 'instructions' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.8.5';
+  const CURRENT_VERSION = '3.8.6';
   const [showVersionToast, setShowVersionToast] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   useEffect(() => {
-    const checkVersion = async () => {
+    const checkTermsAndVersion = async () => {
+      // 1. Sprawdzenie akceptacji regulaminu i licencji (wymagane przy 1. uruchomieniu)
+      try {
+        const termsData = await getStorageItem<any>(STORAGE_KEYS.TERMS_ACCEPTED) || getStorageItemSync<any>(STORAGE_KEYS.TERMS_ACCEPTED);
+        if (!termsData || !termsData.accepted) {
+          setShowTermsModal(true);
+        }
+      } catch (e) {
+        console.warn('Weryfikacja akceptacji regulaminu:', e);
+        setShowTermsModal(true);
+      }
+
+      // 2. Sprawdzenie wersji dla powiadomienia o nowościach
       const lastSeen = await getStorageItem<string>(STORAGE_KEYS.LAST_SEEN_VERSION) || getStorageItemSync<string>(STORAGE_KEYS.LAST_SEEN_VERSION);
       if (lastSeen !== CURRENT_VERSION) {
         const timer = setTimeout(() => {
@@ -312,8 +326,22 @@ export default function App() {
         return () => clearTimeout(timer);
       }
     };
-    checkVersion();
+    checkTermsAndVersion();
   }, []);
+
+  const handleAcceptTerms = async () => {
+    const payload = {
+      accepted: true,
+      acceptedAt: new Date().toISOString(),
+      version: CURRENT_VERSION
+    };
+    try {
+      await setStorageItem(STORAGE_KEYS.TERMS_ACCEPTED, payload);
+    } catch (e) {
+      console.error('Błąd zapisu akceptacji regulaminu:', e);
+    }
+    setShowTermsModal(false);
+  };
 
   const handleDismissVersionToast = () => {
     setStorageItem(STORAGE_KEYS.LAST_SEEN_VERSION, CURRENT_VERSION);
@@ -1353,7 +1381,7 @@ export default function App() {
                           <HelpCircle size={15} className={`shrink-0 mt-0.5 ${currentTab === 'o_programie' ? 'text-sky-400' : 'text-slate-500'}`} />
                           <div>
                             <span className="text-xs font-black block">ℹ️ O programie & regulamin</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opis, licencja i warunki</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opis, instrukcja i licencja</span>
                           </div>
                         </button>
                       </div>
@@ -1686,6 +1714,11 @@ export default function App() {
         onOpenExportAnonymized={() => setShowExportModal(true)}
       />
 
+      <TermsModal
+        isOpen={showTermsModal}
+        onAccept={handleAcceptTerms}
+      />
+
       {isRestoring && (
         <div 
           className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs select-none flex flex-col items-center justify-center text-white"
@@ -1738,9 +1771,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.5!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.6!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Szybka edycja komórek w siatce Planu Klas oraz zajęcia grup łączonych SPE (logopedia, psycholog, pedagog).
+                  Nowy interaktywny podręcznik obsługi wszystkich modułów oraz zaktualizowany system akceptacji regulaminu i licencji.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

@@ -47,6 +47,7 @@ export const STORAGE_KEYS = {
   HISTORY_LOGS: 'saleplan_v3_history_logs',
   ERROR_LOGS: 'saleplan_v3_error_logs',
   LAST_SEEN_VERSION: 'saleplan_last_seen_version',
+  TERMS_ACCEPTED: 'saleplan_terms_accepted_v1',
   MIGRATION_DONE: 'saleplan_indexeddb_migrated_v1',
   STRUCTURE_TEMPLATES: 'saleplan_v3_structure_templates',
   STORAGE_ENC_META: STORAGE_ENC_META_KEY,
@@ -241,7 +242,8 @@ export async function setStorageItem<T = any>(key: string, value: T): Promise<vo
     isDatabaseEncryptionActive() &&
     key !== STORAGE_KEYS.STORAGE_ENC_META &&
     key !== STORAGE_KEYS.MIGRATION_DONE &&
-    key !== STORAGE_KEYS.LAST_SEEN_VERSION
+    key !== STORAGE_KEYS.LAST_SEEN_VERSION &&
+    key !== STORAGE_KEYS.TERMS_ACCEPTED
   ) {
     const pwd = getSessionPassword();
     if (pwd) {
@@ -472,6 +474,7 @@ export async function migrateFromLocalStorage(): Promise<{ migratedCount: number
       STORAGE_KEYS.HISTORY_LOGS,
       STORAGE_KEYS.ERROR_LOGS,
       STORAGE_KEYS.LAST_SEEN_VERSION,
+      STORAGE_KEYS.TERMS_ACCEPTED,
     ];
 
     for (const key of keysToMigrate) {

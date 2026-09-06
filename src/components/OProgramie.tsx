@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { 
-  Info, User, FileText, Shield, Award, HelpCircle, Heart, HeartHandshake, CheckCircle2, ChevronRight, Mail, ExternalLink, Globe, KeyRound, Github, History
+  Info, User, FileText, Shield, Award, HelpCircle, Heart, HeartHandshake, CheckCircle2, ChevronRight, Mail, ExternalLink, Globe, KeyRound, Github, History, BookOpen, Scale
 } from 'lucide-react';
 import Changelog from './Changelog';
+import Instrukcje from './Instrukcje';
+import TermsModal from './TermsModal';
 
 interface OProgramieProps {
-  initialTab?: 'info' | 'changelog';
+  initialTab?: 'info' | 'instructions' | 'changelog';
 }
 
 export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
-  const [activeTab, setActiveTab] = useState<'info' | 'changelog'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'info' | 'instructions' | 'changelog'>(initialTab);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   React.useEffect(() => {
     setActiveTab(initialTab);
@@ -35,15 +38,15 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
           </div>
           <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md font-bold text-4xl select-none z-10">
             SP
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.8.5</span>
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.8.6</span>
           </div>
         </div>
 
         {/* ZAKŁADKI / TABS SELECTOR */}
-        <div className="flex border-b border-slate-200 gap-1 select-none">
+        <div className="flex border-b border-slate-200 gap-1 select-none overflow-x-auto">
           <button
             onClick={() => setActiveTab('info')}
-            className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+            className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 shrink-0 ${
               activeTab === 'info'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -52,8 +55,18 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
             <Info size={14} /> Informacje i regulaminy
           </button>
           <button
+            onClick={() => setActiveTab('instructions')}
+            className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 shrink-0 ${
+              activeTab === 'instructions'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BookOpen size={14} /> Instrukcja obsługi & Podręcznik
+          </button>
+          <button
             onClick={() => setActiveTab('changelog')}
-            className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 ${
+            className={`px-5 py-3 text-xs font-black uppercase tracking-wider transition-all border-b-2 cursor-pointer flex items-center gap-2 shrink-0 ${
               activeTab === 'changelog'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -247,9 +260,19 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
 
             {/* 2. REGULAMIN KORZYSTANIA */}
             <div className="bg-white border border-slate-200 rounded-2xl shadow-xs p-6 space-y-4">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2 border-b border-slate-100 pb-3">
-                <FileText size={16} className="text-indigo-500" /> ⚖️ Regulamin i Polityka Prywatności
-              </h3>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                  <FileText size={16} className="text-indigo-500" /> ⚖️ Regulamin i Polityka Prywatności
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(true)}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer border border-indigo-200"
+                >
+                  <Scale size={13} />
+                  <span>Otwórz pełny ekran akceptacji licencji</span>
+                </button>
+              </div>
               <div className="text-xs text-slate-600 space-y-4 leading-relaxed bg-slate-50/50 p-4 border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
                 <div className="text-center pb-3 border-b border-slate-200">
                   <h4 className="font-black text-slate-800 text-sm">Regulamin i Polityka Prywatności aplikacji „SalePlan Pro”</h4>
@@ -431,9 +454,18 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
 
           </div>
         </div>
+        ) : activeTab === 'instructions' ? (
+          <Instrukcje />
         ) : (
           <Changelog />
         )}
+
+        <TermsModal
+          isOpen={showTermsModal}
+          isReviewMode={true}
+          onAccept={() => setShowTermsModal(false)}
+          onClose={() => setShowTermsModal(false)}
+        />
 
         {/* STOPKA O PROGRAMIE */}
         <div className="text-center text-[10px] text-slate-400 font-bold border-t border-slate-200 pt-5 flex items-center justify-center gap-3">

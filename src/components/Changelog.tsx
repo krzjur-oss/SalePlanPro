@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.6',
+      date: 'Wrzesień 2026',
+      title: 'Podręcznik i Instrukcje Wszystkich Modułów oraz Akceptacja Regulaminu i Licencji',
+      description: 'Dodano kompleksowy, interaktywny podręcznik użytkownika z podziałem na wszystkie moduły od Kreatora Szkoły po Statystyki, z wyszukiwarką fraz i dobrymi praktykami planistycznymi. Wprowadzono także bezpieczną procedurę pierwszego uruchomienia wymagającą zapoznania się i akceptacji Regulaminu oraz Wolnej Licencji Domowo-Edukacyjnej (WLDE).',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Interaktywny Podręcznik w „O programie”: Nowa dedykowana zakładka zawierająca szczegółowe instrukcje krok po kroku dla wszystkich 8 modułów aplikacji (Kreator Szkoły 1–10, Plan Klas, Plan Sal, Dyżury Nauczycielskie, Uczniowie SPE, Statystyki, Wydruki oraz Bezpieczeństwo i Kopia Zapasowa).', badgeText: 'Instrukcje' },
+        { type: 'feature', text: 'Procedura pierwszego uruchomienia i akceptacja licencji: Nowy pełnoekranowy modal akceptacji Regulaminu, Polityki Prywatności (100% lokalne przetwarzanie RODO w przeglądarce) oraz Wolnej Licencji Domowo-Edukacyjnej (WLDE) chroniącej prawa autorskie twórcy mgr Krzysztofa Jureczka.', badgeText: 'Regulamin & RODO' },
+        { type: 'improvement', text: 'Wyszukiwarka i ergonomia dokumentacji: Możliwość natychmiastowego przeszukiwania procedur podręcznika, rozwijania i zwijania kroków oraz czytania wyróżnionych wskazówek (pro-tips) i ostrzeżeń.', badgeText: 'UX / Dokumentacja' },
+        { type: 'improvement', text: 'Dostęp do dokumentów prawnych w dowolnym momencie: Przycisk w sekcji Regulaminu umożliwiający ponowne otwarcie pełnego okna licencyjnego w trybie podglądu.', badgeText: 'Licencja' }
+      ]
+    },
+    {
       version: 'v3.8.5',
       date: 'Wrzesień 2026',
       title: 'Szybka Edycja Komórek w Planie Klas oraz Grupy Łączone SPE',
       description: 'Nowy interaktywny modal szybkiej edycji komórki w siatce lekcji Planu Klas bez konieczności wcześniejszego wybierania pędzla, kompleksowa obsługa zajęć specjalistycznych w grupach łączonych międzyoddziałowych (logopedia, psycholog, pedagog, korekta) z automatyczną replikacją i synchronizacją slotów do planów powiązanych uczniów ze SPE.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Modal Szybkiej Edycji Komórki: Kliknięcie w dowolną komórkę planu lekcji (pustą lub zajętą) otwiera dedykowany modal umożliwiający bezpośredni wybór i wstawienie przydziału z puli danej klasy, usunięcie istniejącej lekcji lub przypisanie nauczyciela wspomagającego bez konieczności wcześniejszego zaznaczania pędzla na dolnym pasku.', badgeText: 'Szybka Edycja' },
         { type: 'feature', text: 'Zajęcia w Grupach Łączonych dla Uczniów SPE: Wprowadzono pełną obsługę zajęć specjalistycznych prowadzonych w grupach łączonych międzyoddziałowych dla logopedii, psychologa, pedagoga oraz terapii pedagogicznej (korekta) wraz z polami tygodniowego wymiaru godzin w profilu ucznia.', badgeText: 'SPE / Terapia' },
