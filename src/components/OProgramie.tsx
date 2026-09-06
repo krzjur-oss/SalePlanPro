@@ -35,7 +35,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
           </div>
           <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md font-bold text-4xl select-none z-10">
             SP
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.8.4</span>
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.8.5</span>
           </div>
         </div>
 
@@ -223,7 +223,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                 <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-1">
                   <li className="flex items-start gap-1.5">
                     <ChevronRight size={14} className="text-blue-500 shrink-0 mt-0.5" />
-                    <span><strong>Interaktywny Drag & Drop:</strong> Przeciąganie lekcji wprost z puli nieprzydzielonych na plan gabinetów lekcyjnych.</span>
+                    <span><strong>Interaktywny Drag & Drop i Szybka Edycja:</strong> Przeciąganie lekcji wprost z puli na plan oraz modal bezpośredniej edycji/wstawiania lekcji po kliknięciu w dowolną komórkę.</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <ChevronRight size={14} className="text-blue-500 shrink-0 mt-0.5" />
@@ -232,6 +232,10 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                   <li className="flex items-start gap-1.5">
                     <ChevronRight size={14} className="text-blue-500 shrink-0 mt-0.5" />
                     <span><strong>Elastyczny podział:</strong> Wsparcie dla sekcji językowych, grup wuefowych oraz łączenia klas na zajęcia zblokowane.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <ChevronRight size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                    <span><strong>Moduł Nauczania Specjalnego (SPE i NI):</strong> Kompleksowy arkusz wsparcia, rewalidacja, nauczanie indywidualne oraz zajęcia w grupach łączonych (logopedia, psycholog, pedagog, korekta).</span>
                   </li>
                   <li className="flex items-start gap-1.5">
                     <ChevronRight size={14} className="text-blue-500 shrink-0 mt-0.5" />

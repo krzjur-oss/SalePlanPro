@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.5',
+      date: 'Wrzesień 2026',
+      title: 'Szybka Edycja Komórek w Planie Klas oraz Grupy Łączone SPE',
+      description: 'Nowy interaktywny modal szybkiej edycji komórki w siatce lekcji Planu Klas bez konieczności wcześniejszego wybierania pędzla, kompleksowa obsługa zajęć specjalistycznych w grupach łączonych międzyoddziałowych (logopedia, psycholog, pedagog, korekta) z automatyczną replikacją i synchronizacją slotów do planów powiązanych uczniów ze SPE.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Modal Szybkiej Edycji Komórki: Kliknięcie w dowolną komórkę planu lekcji (pustą lub zajętą) otwiera dedykowany modal umożliwiający bezpośredni wybór i wstawienie przydziału z puli danej klasy, usunięcie istniejącej lekcji lub przypisanie nauczyciela wspomagającego bez konieczności wcześniejszego zaznaczania pędzla na dolnym pasku.', badgeText: 'Szybka Edycja' },
+        { type: 'feature', text: 'Zajęcia w Grupach Łączonych dla Uczniów SPE: Wprowadzono pełną obsługę zajęć specjalistycznych prowadzonych w grupach łączonych międzyoddziałowych dla logopedii, psychologa, pedagoga oraz terapii pedagogicznej (korekta) wraz z polami tygodniowego wymiaru godzin w profilu ucznia.', badgeText: 'SPE / Terapia' },
+        { type: 'improvement', text: 'Automatyczna synchronizacja grup łączonych SPE: Zapisanie lub modyfikacja slotu zajęć grupowych automatycznie replikuje i synchronizuje wpis w planie wszystkich powiązanych uczniów SPE należących do danej grupy terapeutycznej.', badgeText: 'Automatyzacja' },
+        { type: 'improvement', text: 'Ergonomia i elastyczność planowania: Pełna koegzystencja trybu szybkiej edycji okienkowej, tradycyjnego trybu „pędzla” z dolnego paska oraz technologii przeciągania kart lekcji (Drag-and-Drop) dostosowanej do preferencji każdego planisty.', badgeText: 'Ergonomia UI' }
+      ]
+    },
+    {
       version: 'v3.8.4',
       date: 'Wrzesień 2026',
       title: 'Optymalizacja Przewijania i Responsywności Siatki Planu Lekcji',
       description: 'Kompleksowe rozwiązanie problemu przewijania w widoku pojedynczej klasy i widoku zbiorczym: odblokowanie przewijania pionowego poprzez usunięcie sztywnych ograniczeń wysokości flexboxa, inteligentna obsługa gestów dotykowych bez blokowania natywnego scrollowania przeglądarki oraz przyklejony nagłówek tabeli z dniami tygodnia.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'fix', text: 'Pełne przewijanie pionowe w widoku klasy: Zastąpiono sztywną klasę h-full elastycznym min-h-full z marginesem dolnym pb-12 oraz dodano reguły min-h-0 w nadrzędnych kontenerach flexbox, co odblokowało scrollowanie do wszystkich godzin popołudniowych (5, 6, 7, 8+).', badgeText: 'Przewijanie UI' },
         { type: 'improvement', text: 'Przyklejony nagłówek dni tygodnia (sticky thead): Nagłówek tabeli z dniami tygodnia (Poniedziałek – Piątek) pozostaje zablokowany u góry podczas przewijania planu w dół, zapewniając stałą orientację w dniach tygodnia.', badgeText: 'Ergonomia' },

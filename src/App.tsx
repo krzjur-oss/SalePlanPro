@@ -299,7 +299,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.8.3';
+  const CURRENT_VERSION = '3.8.5';
   const [showVersionToast, setShowVersionToast] = useState(false);
 
   useEffect(() => {
@@ -1738,9 +1738,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.4!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.5!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Optymalizacja przewijania i responsywności siatki planu lekcji, przyklejony nagłówek dni tygodnia oraz płynna obsługa dotyku.
+                  Szybka edycja komórek w siatce Planu Klas oraz zajęcia grup łączonych SPE (logopedia, psycholog, pedagog).
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button
