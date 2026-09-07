@@ -165,7 +165,8 @@ export function sanitizeAppState(rawInput: any): AppState {
     specialStudents: Array.isArray(rawPlan.specialStudents) ? rawPlan.specialStudents : [],
     specialAssignments: Array.isArray(rawPlan.specialAssignments) ? rawPlan.specialAssignments : [],
     specialLessons: (rawPlan.specialLessons && typeof rawPlan.specialLessons === 'object') ? rawPlan.specialLessons : {},
-    specialAbsences: (rawPlan.specialAbsences && typeof rawPlan.specialAbsences === 'object') ? rawPlan.specialAbsences : {}
+    specialAbsences: (rawPlan.specialAbsences && typeof rawPlan.specialAbsences === 'object') ? rawPlan.specialAbsences : {},
+    spePlan: (rawPlan.spePlan && typeof rawPlan.spePlan === 'object') ? rawPlan.spePlan : undefined
   };
 
   const rawDyzury = raw.dyzury && typeof raw.dyzury === 'object' ? raw.dyzury : {};
@@ -734,6 +735,9 @@ export function applyFileMergeToState(
           nextState.planLekcji.specialAssignments = JSON.parse(JSON.stringify(incomingState.planLekcji.specialAssignments || []));
           nextState.planLekcji.specialLessons = JSON.parse(JSON.stringify(incomingState.planLekcji.specialLessons || {}));
           nextState.planLekcji.specialAbsences = JSON.parse(JSON.stringify(incomingState.planLekcji.specialAbsences || {}));
+          if (incomingState.planLekcji.spePlan) {
+            nextState.planLekcji.spePlan = JSON.parse(JSON.stringify(incomingState.planLekcji.spePlan));
+          }
         }
 
         const scopeLabel = 

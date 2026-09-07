@@ -28,7 +28,7 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/20 font-mono">
-                    SalePlan Pro v3.8.5
+                    SalePlan Pro v3.8.6
                   </span>
                   <span className="text-[10px] uppercase font-bold text-slate-400">
                     {isReviewMode ? 'Podgląd dokumentów prawnych' : 'Wymagana akceptacja warunków'}
@@ -121,7 +121,7 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
                   Regulamin i Polityka Prywatności aplikacji „SalePlan Pro”
                 </h3>
                 <p className="text-[10px] text-slate-500 mt-1 font-bold">
-                  Wersja v3.8.5 · Obowiązuje od 29 lipca 2026 r.
+                  Wersja v3.8.6 · Obowiązuje od 29 lipca 2026 r.
                 </p>
               </div>
 
@@ -188,7 +188,7 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
                   Wolna Licencja Domowo-Edukacyjna (Zastrzeżona) — WLDE
                 </h3>
                 <p className="text-[10px] text-slate-500 mt-1 font-bold">
-                  Projekt: SalePlan Pro (wersje v3.3.0–v3.8.5) · Copyright © 2026 Krzysztof Jureczek
+                  Projekt: SalePlan Pro (wersje v3.3.0–v3.8.6) · Copyright © 2026 Krzysztof Jureczek
                 </p>
               </div>
 

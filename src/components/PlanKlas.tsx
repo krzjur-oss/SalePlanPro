@@ -1075,10 +1075,11 @@ export default function PlanKlas({
         });
         const uniqueOtherDesc = Array.from(new Set(otherDescriptions));
         const currentClassName = allInvolved.map(clsId => pl.classes.find(cls => cls.id === clsId)?.name || 'bieżąca klasa').join(' + ');
+        const lessonNumDisplay = pl.hours[hour]?.num || (hour + 1);
         notify(
           isSport && hasSingleClassLimit
-            ? `⚠️ Limit obiektu sportowego: Obiekt ${roomName} ma ustawiony limit 1 klasy, a w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęty przez: ${uniqueOtherDesc.join(', ')}!`
-            : `⚠️ Konflikt Sali: Próba przypisania sali ${roomName} dla ${currentClassName}, która w tym samym czasie (${DAYS[day]}, lekcja ${hour}) jest zajęta przez: ${uniqueOtherDesc.join(', ')}!`,
+            ? `⚠️ Limit obiektu sportowego: Obiekt ${roomName} ma ustawiony limit 1 klasy, a w tym samym czasie (${DAYS[day]}, lekcja ${lessonNumDisplay}) jest zajęty przez: ${uniqueOtherDesc.join(', ')}!`
+            : `⚠️ Konflikt Sali: Próba przypisania sali ${roomName} dla ${currentClassName}, która w tym samym czasie (${DAYS[day]}, lekcja ${lessonNumDisplay}) jest zajęta przez: ${uniqueOtherDesc.join(', ')}!`,
           'err'
         );
       }
