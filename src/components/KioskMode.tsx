@@ -3,7 +3,7 @@ import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, PlanVariant, S
 import { 
   Tv, Maximize2, Minimize2, Play, Pause, ChevronLeft, ChevronRight, Clock,
   Calendar, MapPin, User, Shield, Sparkles, Layers, Sliders, Bell, X, RefreshCw,
-  Eye, Volume2, Edit3, Check, ArrowRight
+  Eye, Volume2, Edit3, Check, ArrowRight, MessageSquare, RotateCcw
 } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey } from '../utils';
 
@@ -16,6 +16,15 @@ export interface KioskModeProps {
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 const DEFAULT_ANNOUNCEMENT = '📢 Szczęśliwy numerek: 14 · Zebranie Rady Pedagogicznej o godz. 15:30 · Pamiętaj o obuwiu zmiennym! · Wszystkie zapytania w sekretariacie szkoły.';
+
+const ANNOUNCEMENT_PRESETS = [
+  { label: '🍀 Szczęśliwy numerek', text: '🍀 Szczęśliwy numerek na dziś: 14' },
+  { label: '📢 Zebranie z rodzicami', text: '📢 Zebrania z rodzicami dzisiaj o godz. 17:00' },
+  { label: '⏱️ Skrócone lekcje', text: '⏱️ Uwaga: Lekcje skrócone o 15 minut z powodu uroczystości / upałów' },
+  { label: '🏆 Apel szkolny', text: '🏆 Apel szkolny w sali gimnastycznej o godz. 09:50 dla klas 4–8' },
+  { label: '⚠️ Zastępstwa i sale', text: '⚠️ Zastępstwa i zamiany sal wywieszone przy pokoju nauczycielskim' },
+  { label: '👟 Obuwie zmienne', text: '👟 Przypominamy o obowiązku zmiany obuwia w szatni szkolnej' },
+];
 
 export default function KioskMode({
   appState,
@@ -50,6 +59,25 @@ export default function KioskMode({
   });
   const [isEditingAnnouncement, setIsEditingAnnouncement] = useState<boolean>(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState<boolean>(false);
+  const [tempAnnouncement, setTempAnnouncement] = useState<string>('');
+
+  const handleOpenAnnouncementEditor = () => {
+    setTempAnnouncement(announcementText);
+    setShowAnnouncementModal(true);
+  };
+
+  const handleSaveAnnouncement = (newText?: string) => {
+    const textToSave = (newText !== undefined ? newText : tempAnnouncement).trim();
+    const finalVal = textToSave || DEFAULT_ANNOUNCEMENT;
+    setAnnouncementText(finalVal);
+    try {
+      localStorage.setItem('saleplan_kiosk_announcement', finalVal);
+    } catch {
+      // ignore
+    }
+    setShowAnnouncementModal(false);
+  };
 
   // Maps for fast lookups
   const classesMap = useMemo(() => new Map(pl.classes.map(c => [c.id, c])), [pl.classes]);
@@ -672,6 +700,20 @@ export default function KioskMode({
                 </div>
               )}
             </div>
+
+            {/* Announcement Editor from settings */}
+            <div className="flex items-center gap-2 border-l border-slate-700 pl-4">
+              <span className="font-bold text-slate-400 uppercase text-[10px]">Pasek ogłoszeń:</span>
+              <button
+                type="button"
+                onClick={handleOpenAnnouncementEditor}
+                className="px-2.5 py-1 rounded-md bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-950 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                title="Edytuj treść paska komunikatów na dole ekranu"
+              >
+                <Edit3 size={12} />
+                <span>Edytuj komunikat</span>
+              </button>
+            </div>
           </div>
 
           <button
@@ -1097,60 +1139,174 @@ export default function KioskMode({
       </div>
 
       {/* ── BOTTOM LIVE ANNOUNCEMENT TICKER (MARQUEE) ── */}
-      <div className={`px-4 py-2 border-t shrink-0 flex items-center justify-between gap-3 text-xs ${
+      <div className={`px-3 sm:px-4 py-2 border-t shrink-0 flex items-center justify-between gap-2 sm:gap-3 text-xs ${
         isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-lg'
       }`}>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-black text-[10px] uppercase tracking-wider flex items-center gap-1">
-            <Volume2 size={11} />
-            <span>Komunikaty Szkoły:</span>
-          </span>
+        {/* Left Badge: clickable on tablet */}
+        <button
+          type="button"
+          onClick={handleOpenAnnouncementEditor}
+          className="flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black text-[11px] uppercase tracking-wider transition cursor-pointer shadow-xs"
+          title="Dotknij, aby edytować komunikat szkoły"
+        >
+          <Volume2 size={13} className="shrink-0" />
+          <span className="leading-none">Komunikaty Szkoły:</span>
+        </button>
+
+        {/* Center: Marquee ticker text - tapping directly on tablet opens editor */}
+        <div
+          onClick={handleOpenAnnouncementEditor}
+          className="flex-1 overflow-hidden cursor-pointer group py-1 px-2 rounded-lg hover:bg-slate-800/40 transition flex items-center min-w-0"
+          title="Dotknij lub kliknij, aby zmienić treść komunikatu szkoły"
+        >
+          <div className="marquee font-bold text-slate-200 group-hover:text-amber-300 transition truncate">
+            {announcementText}
+          </div>
         </div>
 
-        {isEditingAnnouncement ? (
-          <div className="flex-1 flex items-center gap-2">
-            <input
-              type="text"
-              value={announcementText}
-              onChange={e => setAnnouncementText(e.target.value)}
-              className="flex-1 bg-slate-950 border border-slate-700 text-white text-xs px-3 py-1 rounded-lg outline-none"
-              placeholder="Wpisz treść komunikatu dla uczniów i nauczycieli..."
-            />
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.setItem('saleplan_kiosk_announcement', announcementText);
-                setIsEditingAnnouncement(false);
-              }}
-              className="px-3 py-1 bg-emerald-600 text-white font-bold rounded-lg text-xs cursor-pointer flex items-center gap-1"
-            >
-              <Check size={12} /> Zapisz
-            </button>
-          </div>
-        ) : (
-          <div className="flex-1 overflow-hidden">
-            <div className="marquee font-bold text-slate-200 truncate">
-              {announcementText}
-            </div>
-          </div>
-        )}
+        {/* Right Action: Touch-friendly large Edit Button */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleOpenAnnouncementEditor}
+            className="px-3 py-1.5 min-h-[38px] rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 hover:text-white border border-slate-700 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+            title="Edytuj treść paska ogłoszeń na tablecie lub komputerze"
+          >
+            <Edit3 size={14} className="text-amber-400 shrink-0" />
+            <span className="font-bold">Edytuj</span>
+          </button>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {!isEditingAnnouncement && (
-            <button
-              type="button"
-              onClick={() => setIsEditingAnnouncement(true)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-              title="Edytuj treść paska ogłoszeń"
-            >
-              <Edit3 size={13} />
-            </button>
-          )}
-          <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
+          <span className="text-[10px] text-slate-500 font-medium hidden md:inline">
             Sterowanie: <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-300">Spacja</kbd> (pauza) · <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-300">F</kbd> (ekran) · <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-300">Esc</kbd> (wyjście)
           </span>
         </div>
       </div>
+
+      {/* ── MODAL EDYCJI KOMUNIKATU SZKOŁY DLA TABLETÓW I EKRANÓW DOTYKOWYCH ── */}
+      {showAnnouncementModal && (
+        <div 
+          className="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
+          onClick={() => setShowAnnouncementModal(false)}
+        >
+          <div 
+            className="w-full max-w-2xl bg-slate-900 border border-slate-700 text-slate-100 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
+                  <MessageSquare size={18} />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm sm:text-base text-white flex items-center gap-2">
+                    Edycja Paska Komunikatów Szkoły
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Treść przewijana na żywo na dole ekranu TV i rzutnika w holu
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAnnouncementModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                title="Zamknij bez zapisywania"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content / Textarea */}
+            <div className="p-5 flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>Wpisz treść komunikatu:</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {tempAnnouncement.length} znaków
+                  </span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={tempAnnouncement}
+                  onChange={e => setTempAnnouncement(e.target.value)}
+                  placeholder="np. 📢 Szczęśliwy numerek: 14 · Zebranie z rodzicami o godz. 17:00..."
+                  className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none leading-relaxed transition shadow-inner"
+                  autoFocus
+                />
+              </div>
+
+              {/* Szybkie szablony (One-tap pills) */}
+              <div>
+                <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Sparkles size={12} className="text-amber-400" />
+                  <span>Szybkie szablony (dotknij na tablecie, aby wstawić):</span>
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {ANNOUNCEMENT_PRESETS.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setTempAnnouncement(prev => {
+                          const trimmed = prev.trim();
+                          if (!trimmed || trimmed === DEFAULT_ANNOUNCEMENT) {
+                            return preset.text;
+                          }
+                          return `${trimmed} · ${preset.text}`;
+                        });
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 hover:border-amber-500/50 text-slate-200 hover:text-white text-xs font-medium transition cursor-pointer flex items-center gap-1 shadow-xs"
+                    >
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="px-5 py-3.5 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTempAnnouncement(DEFAULT_ANNOUNCEMENT)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                  title="Przywróć domyślny komunikat powitalny"
+                >
+                  <RotateCcw size={13} />
+                  <span>Domyślny</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTempAnnouncement('')}
+                  className="px-3 py-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-rose-400 text-xs font-semibold transition cursor-pointer"
+                >
+                  Wyczyść
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAnnouncementModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveAnnouncement()}
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs transition cursor-pointer shadow-lg shadow-emerald-950 flex items-center gap-1.5"
+                >
+                  <Check size={15} />
+                  <span>Zapisz i wyświetl na TV</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

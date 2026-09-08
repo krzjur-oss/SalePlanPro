@@ -385,7 +385,7 @@ export default function Instrukcje() {
             'Uruchamiana przyciskiem „Tablica TV (Kiosk)” w module Wydruki, na górnej belce oraz w menu głównym.',
             'Zegar czasu rzeczywistego oraz dynamiczne odliczanie do najbliższego dzwonka (początku lub końca lekcji).',
             'Trzy tryby pracy: Tablica na żywo (aktualna lekcja i sala dla każdej klasy), Karuzela planów klas (automatyczne przewijanie kolejnych oddziałów z regulacją czasu 10–60s) oraz Grafik obłożenia gabinetów.',
-            'Pasek informacyjny (Ticker): Możliwość wpisania bieżących komunikatów dyrekcji (np. zastępstwa, zebrania, apele), które przesuwają się na dole ekranu.',
+            'Pasek informacyjny (Ticker): Możliwość wpisania bieżących komunikatów dyrekcji (np. szczęśliwy numerek, zastępstwa, zebrania, apele), które przesuwają się na dole ekranu. Na tablecie wystarczy dotknąć paska tekstu, żółtej plakietki „Komunikaty Szkoły” lub przycisku „Edytuj”, aby otworzyć wygodne okno dotykowe z gotowymi szablonami.',
             'Tryb pełnoekranowy (F11 / przycisk) z automatycznym ukrywaniem kursora myszy po kilku sekundach bezczynności.',
             'Symulator czasu: Pozwala przetestować zachowanie tablicy dla dowolnego dnia tygodnia i godziny bez czekania na rzeczywisty czas lekcji.'
           ]
