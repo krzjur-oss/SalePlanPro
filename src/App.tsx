@@ -2125,9 +2125,9 @@ export default function App() {
         {showPlachtaModal && (
           <div 
             id="plachta-modal-root"
-            className="fixed inset-0 z-[9999] bg-slate-900/90 backdrop-blur-xs flex flex-col p-1 sm:p-3 overflow-hidden print:p-0 print:m-0 print:static print:bg-white print:z-auto print:overflow-visible print:w-full print:h-auto"
+            className="fixed inset-0 z-[9999] bg-slate-900/90 backdrop-blur-xs flex flex-col p-1 sm:p-3 overflow-hidden print:p-0 print:m-0 print:static print:bg-white print:z-auto print:overflow-visible print:w-full print:h-auto print:block"
           >
-            <div className="w-full h-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-700 print:border-none print:shadow-none print:rounded-none print:overflow-visible print:w-full print:h-auto">
+            <div className="w-full h-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-700 print:border-none print:shadow-none print:rounded-none print:overflow-visible print:w-full print:h-auto print:block">
               <PlachtaDyrektorska
                 appState={appState}
                 schedData={schedData}

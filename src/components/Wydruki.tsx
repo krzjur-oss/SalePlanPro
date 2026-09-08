@@ -3251,7 +3251,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
       {/* --- PRINT AREA --- */}
       {printType === 'plachta' ? (
-        <div className="w-full">
+        <div className="w-full print:w-full print:block print:overflow-visible">
           <PlachtaDyrektorska appState={appState} schedData={schedData} />
         </div>
       ) : (

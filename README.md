@@ -69,15 +69,18 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
         *   **IPET**: Indywidualny Program Edukacyjno-Terapeutyczny (cele rozwojowe, zintegrowane działania nauczycieli i specjalistów, formy dostosowania wymagań).
         *   **Rewalidacja / Pomoc PP**: Zakres zajęć rewalidacyjnych, logopedycznych, psychologicznych, pedagogicznych, korekcyjno-kompensacyjnych i socjoterapeutycznych.
 
-### 4. 📊 Moduł Wydruków, Płachta Dyrektorska i Tablica TV (Wydruki v3.8.7)
+### 4. 📊 Moduł Wydruków, Płachta Dyrektorska i Tablica TV (Wydruki v3.8.8)
 System oferuje zaawansowany generator czystych szablonów PDF/A4, wydruków wielkoformatowych A3/A2 oraz interaktywnych widoków multimedialnych:
-*   **📜 Płachta Dyrektorska (Wielkoformatowy Arkusz Szkoły A3 / A2 / A4)**:
-    *   Całościowy, panoramiczny podgląd pracy całej szkoły w jednym arkuszu – możliwość zestawienia **Wszystkich oddziałów klasowych**, **Wszystkich nauczycieli** lub **Wszystkich sal i gabinetów**.
+*   **📜 Płachta Dyrektorska (Wielkoformatowy Arkusz Szkoły A3 / A2 / A4 – v3.8.8)**:
+    *   Całościowy, panoramiczny podgląd pracy całej szkoły w jednym arkuszu – możliwość zestawienia **Wszystkich oddziałów klasowych** (np. 25–50 klas), **Wszystkich nauczycieli** (np. 40–50 pedagogów) lub **Wszystkich sal i gabinetów** (np. 35–45 gabinetów).
+    *   **Wielostronicowy Podział na Dni (Dedykowany dla dużych szkół • 5 stron A3)**: Wyeliminowano problem ucinania treści i ograniczania do 1 strony. W układzie *Każdy dzień na nowej karcie* każdy dzień tygodnia (Pn–Pt) drukowany jest na pełnej karcie A3 Poziomo z kompletem godzin 1–8/10 i wszystkimi kolumnami, bez ucinania wierszy.
+    *   **Auto-Dopasowanie Kolumn**: Dynamiczne przeliczanie rozmiaru czcionek (w tym tryb *Super-gęsty* `text-[7px]` dla 35–50 kolumn) gwarantujące pełne zmieszczenie wszystkich kolumn na szerokość arkusza A3 landscape bez ucinania prawej krawędzi.
+    *   **Podział Kolumn na Części (Część 1 / Część 2)**: Opcjonalny podział kolumn (np. klasy 1–13 i 14–25 lub nauczyciele 1–21 i 22–42) umożliwiający wydruk w większej czcionce do powieszenia obok siebie w pokoju nauczycielskim.
     *   Wybór planu źródłowego: Etap 1 (Plan Klas), Etap 2 (Plan Sal) lub dynamiczne warianty semestralne (np. Semestr II).
     *   Wydruki wielkoformatowe: Precyzyjnie skonfigurowane reguły CSS `@page` dla formatów **A3 landscape** (420×297 mm), **A2 landscape** (594×420 mm) oraz **A4 landscape** ze skalowaniem czcionek i tabeli.
     *   Czysty i bezpośredni wydruk: Arkusz płachty jest w pełni odizolowany od tła aplikacji na wydruku (`@media print` ukrywa zbędne zakładki robocze, wysyłając do drukarki od razu czysty arkusz A3/A2 bez pierwszej strony kreatora w tle).
-    *   Elastyczna konfiguracja: Regulacja gęstości komórek (*Kompaktowa*, *Standardowa*, *Rozszerzona*), kodowanie kolorami według dziedzin przedmiotowych lub wysoki kontrast czarno-biały, selektywne włączanie skrótów nauczycieli, numerów sal, grup, legendy przedmiotowej oraz metryki podpisu Dyrektora Szkoły.
-    *   Skalowanie ekranowe (Zoom 50%–150%) z podglądem na żywo przed wydrukiem lub zapisem do PDF.
+    *   Elastyczna konfiguracja: Regulacja gęstości komórek (*Super-gęsta*, *Kompaktowa*, *Standardowa*, *Rozszerzona*), kodowanie kolorami według dziedzin przedmiotowych lub wysoki kontrast czarno-biały, selektywne włączanie skrótów nauczycieli, numerów sal, grup, legendy przedmiotowej oraz metryki podpisu Dyrektora Szkoły.
+    *   Skalowanie ekranowe (Zoom 40%–150%) z podglądem na żywo przed wydrukiem lub zapisem do PDF oraz szybkimi zakładkami dni.
 *   **📺 Tablica Informacyjna TV / Tryb Rzutnika (Kiosk Mode)**:
     *   Pełnoekranowy, nowoczesny interfejs zaprojektowany dla telewizorów i monitorów w holu szkoły, pokoju nauczycielskim lub rzutników w salach.
     *   Zegar czasu rzeczywistego oraz inteligentne odliczanie do najbliższego dzwonka (początku lub zakończenia lekcji / przerwy).
@@ -85,8 +88,11 @@ System oferuje zaawansowany generator czystych szablonów PDF/A4, wydruków wiel
         *   *Tablica dynamiczna na żywo*: Bieżące zajęcia dla wszystkich klas i sal w trwającej godzinie lekcyjnej z inteligentnym filtrowaniem okienek i godzin bez zajęć (ukrywanie klas nieobecnych w szkole z opcją przełączania widoku).
         *   *Automatyczna karuzela planów klas*: Płynne przewijanie planów kolejnych oddziałów z konfigurowalnym interwałem (10–60 sekund).
         *   *Grafik obłożenia gabinetów*: Błyskawiczny wgląd w stan każdej sali w szkole.
+    *   **Dwa zoptymalizowane motywy graficzne**:
+        *   *Ciemny (OLED)*: Wysoki kontrast, energooszczędny, idealny na nowoczesne ekrany telewizyjne w korytarzach.
+        *   *Jasny (Rzutnik)*: Przystosowany do projektorów i jasnych pomieszczeń z pełnym kontrastem czerni, granatów i barw semantycznych (wyeliminowany problem znikającego tekstu).
     *   Filtr klas bez zajęć: Tablica w trybie na żywo automatycznie ukrywa klasy mające okienko lub niemające lekcji w danej godzinie, powiększając przestrzeń dla trwających zajęć. Dostępny jest szybki przełącznik „Tylko z lekcjami” / „Pokaż wszystkie”.
-    *   Pasek komunikatów i ogłoszeń (Ticker) przesyłający najważniejsze komunikaty dyrekcji na dole ekranu.
+    *   Pasek komunikatów i ogłoszeń (Ticker) przesyłający najważniejsze komunikaty dyrekcji na dole ekranu z wygodną edycją dotykową dla tabletów.
     *   Symulator czasu lekcyjnego umożliwiający podgląd działania tablicy o dowolnej porze i dniu.
 *   **Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
     *   W każdej komórce lekcji prezentowane są precyzyjne dane w czytelnym układzie pionowym: **Przedmiot** (wyraźny nagłówek), **Klasa / Grupa** (np. `3a (gr1)`) oraz **Rzeczywista Sala Lekcyjna** (np. `s. 104`).

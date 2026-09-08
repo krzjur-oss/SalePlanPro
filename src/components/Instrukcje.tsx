@@ -366,18 +366,21 @@ export default function Instrukcje() {
           ]
         },
         {
-          title: '📜 Płachta Dyrektorska (Wydruk wielkoformatowy A3 / A2 / A4)',
-          description: 'Kompleksowy widok całej szkoły w jednym arkuszu wielkoformatowym:',
+          title: '📜 Płachta Dyrektorska (Wydruk wielkoformatowy A3 / A2 / A4 – v3.8.8)',
+          description: 'Kompleksowy widok całej szkoły w jednym arkuszu wielkoformatowym zoptymalizowany dla dużych placówek (25–50 oddziałów, 35–45 sal, 40–50 nauczycieli):',
           points: [
             'Dostępna z poziomu zakładki Wydruki (przycisk „Płachta A3”) oraz z górnego paska narzędziowego i menu głównego.',
             'Wybór matrycy: Oddziały klasowe, Nauczyciele lub Gabinety/Sale lekcyjne.',
+            'Wielostronicowy układ „Każdy dzień na nowej karcie (5 stron A3)”: Domyślny i zalecany dla dużych szkół. Poniedziałek, Wtorek, Środa, Czwartek i Piątek drukowane są na osobnych kartach A3 w orientacji poziomej. Eliminuje to problem ucinania wierszy i zapewnia pełną wysokość strony dla wszystkich 8–10 godzin lekcyjnych.',
+            'Inteligentne Auto-Dopasowanie Kolumn: System automatycznie skaluje typografię i komórki (w tym tryb „Super-gęsty” text-[7px]), dzięki czemu nawet 42 nauczycieli czy 35 sal mieści się w poziomie arkusza A3 bez obcinania prawej krawędzi.',
+            'Podział Kolumn na Części (Część 1 / Część 2): Opcjonalny przełącznik dzielący oddziały lub kadrę na pół (np. Nauczyciele 1–21 i 22–42) dla uzyskania większej czcionki na tablicę w pokoju nauczycielskim.',
             'Wybór formatu papieru: Dedykowane style @page dla formatu A3 (420×297 mm), A2 (594×420 mm) oraz A4 w orientacji poziomej z precyzyjnym podziałem stron.',
-            'Personalizacja prezentacji: Gęstość siatki (Kompaktowa, Standardowa, Rozszerzona), kodowanie kolorystyczne według dziedzin przedmiotowych lub tryb monochromatyczny (wysoki kontrast do wydruków czarno-białych).',
-            'Włączanie/wyłączanie elementów: skróty nauczycieli, numery sal, grupy lekcyjne, metryka zatwierdzenia przez Dyrekcję oraz legenda przedmiotowa.',
+            'Personalizacja prezentacji: Gęstość siatki (Super-gęsta, Kompaktowa, Standardowa, Rozszerzona), kodowanie kolorystyczne według dziedzin przedmiotowych lub tryb monochromatyczny (wysoki kontrast do wydruków czarno-białych).',
+            'Dedykowana Karta Słowniczka i Pieczęci: Słowniczek kadry, wykaz sal i klucz kolorów drukowane są na estetycznej karcie z miejscem na pieczęć szkoły i podpis dyrektora.',
             'Czysty i bezpośredni wydruk: Arkusz płachty jest w pełni odizolowany od tła aplikacji na wydruku (@media print ukrywa zbędne zakładki robocze, wysyłając do drukarki od razu czysty arkusz A3/A2).',
-            'Skalowanie ekranowe (Zoom 50%–150%) z podglądem 1:1 przed wydrukiem lub eksportem do PDF.'
+            'Skalowanie ekranowe (Zoom 40%–150%) z podglądem 1:1 przed wydrukiem lub eksportem do PDF oraz szybkimi zakładkami dni (Pn, Wt, Śr, Czw, Pt).'
           ],
-          tip: 'W przypadku bardzo dużych szkół (powyżej 25 oddziałów) w oknie dialogowym drukowania przeglądarki wybierz format papieru A3 lub A2 i ustaw marginesy na „Brak” lub „Minimalne”.'
+          tip: 'Dla szkoły z 25 oddziałami, 35 salami i 42 nauczycielami pozostaw włączony tryb „Każdy dzień na nowej karcie (5 stron)” oraz format „A3 Poziomo”. W oknie dialogowym drukarki przeglądarki ustaw format papieru A3 oraz marginesy na „Domyślne” lub „Minimalne”.'
         },
         {
           title: '📺 Tablica Informacyjna TV / Tryb Kiosk (Rzutnik i Hol Szkoły)',
@@ -386,6 +389,7 @@ export default function Instrukcje() {
             'Uruchamiana przyciskiem „Tablica TV (Kiosk)” w module Wydruki, na górnej belce oraz w menu głównym.',
             'Zegar czasu rzeczywistego oraz dynamiczne odliczanie do najbliższego dzwonka (początku lub końca lekcji).',
             'Trzy tryby pracy: Tablica na żywo (aktualna lekcja i sala dla każdej klasy z inteligentnym filtrowaniem okienek i godzin bez zajęć), Karuzela planów klas (automatyczne przewijanie kolejnych oddziałów z regulacją czasu 10–60s) oraz Grafik obłożenia gabinetów.',
+            'Dwa zoptymalizowane motywy graficzne: „Ciemny (OLED)” z głębokim tłem oraz „Jasny (Rzutnik)” z krystalicznym kontrastem dla projektorów i nasłonecznionych sal lekcyjnych (wyeliminowano problem niewidocznych napisów).',
             'Filtr klas bez zajęć w trybie „Na żywo”: Tablica automatycznie ukrywa kafelki oddziałów, które w danej godzinie nie mają lekcji (lub mają okienko), powiększając przestrzeń dla trwających zajęć. W każdej chwili można przełączyć widok przyciskiem „Pokaż wszystkie / Tylko z lekcjami”.',
             'Pasek informacyjny (Ticker): Możliwość wpisania bieżących komunikatów dyrekcji (np. szczęśliwy numerek, zastępstwa, zebrania, apele), które przesuwają się na dole ekranu. Na tablecie wystarczy dotknąć paska tekstu, żółtej plakietki „Komunikaty Szkoły” lub przycisku „Edytuj”, aby otworzyć wygodne okno dotykowe z gotowymi szablonami.',
             'Tryb pełnoekranowy (F11 / przycisk) z automatycznym ukrywaniem kursora myszy po kilku sekundach bezczynności.',
@@ -548,7 +552,7 @@ export default function Instrukcje() {
               Interaktywny Podręcznik i Instrukcja Obsługi
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Kompleksowy poradnik krok po kroku do wszystkich modułów SalePlan Pro v3.8.7
+              Kompleksowy poradnik krok po kroku do wszystkich modułów SalePlan Pro v3.8.8
             </p>
           </div>
         </div>

@@ -24,15 +24,30 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.8',
+      date: 'Wrzesień 2026',
+      title: 'Optymalizacja Wydruku Wielostronicowego Płachty Dyrektorskiej (A3/A2) dla Dużych Szkół',
+      description: 'Kompleksowa naprawa wydruku Płachty Dyrektorskiej dla szkół o dużej skali (25–50 oddziałów, 35–45 sal, 40–50 nauczycieli). Rozwiązano problem obcinania treści i generowania tylko jednej strony – wprowadzono dedykowany tryb podziału na dni (5 osobnych kart A3 dla każdego dnia tygodnia), auto-dopasowanie szerokości kolumn oraz opcjonalny podział kolumn na części (Część 1 / Część 2).',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'fix', text: 'Wielostronicowy Podział na Dni (5 stron A3): Wyeliminowano blokowanie podziału stron przez kontenery flex i rowSpan. Wprowadzono układ „Każdy dzień na nowej karcie (5 stron A3)”, gdzie Poniedziałek, Wtorek, Środa, Czwartek i Piątek mają pełną wysokość strony poziomej ze wszystkimi 8–10 godzinami lekcyjnymi bez żadnego ucinania wierszy.', badgeText: 'Druk A3 Wielostronicowy' },
+        { type: 'feature', text: 'Inteligentne Auto-Dopasowanie Kolumn dla 25–50 Obiektów: Dynamiczne skalowanie typografii i marginesów (w tym tryb „Super-gęsty”) gwarantujące, że nawet 42 nauczycieli czy 35 gabinetów mieści się na szerokość arkusza A3/A2 w orientacji poziomej bez ucinania prawej krawędzi.', badgeText: 'Auto-Fit Kolumn' },
+        { type: 'feature', text: 'Podział Kolumn na Części (Część 1 / Część 2): Opcjonalny przełącznik dzielący oddziały lub kadrę na pół (np. Nauczyciele 1–21 na arkuszu A, Nauczyciele 22–42 na arkuszu B) dla maksymalnej czcionki i czytelności na tablicy w pokoju nauczycielskim.', badgeText: 'Dzielenie Kolumn' },
+        { type: 'improvement', text: 'Dedykowana Karta Słowniczka i Pieczęci: Legenda kadry pedagogicznej, sal i klucza kolorów drukowana jest na estetycznej dedykowanej karcie z miejscem na pieczęć szkoły i podpis dyrektora.', badgeText: 'Legenda i Pieczęć' },
+        { type: 'improvement', text: 'Szybkie Zakładki Podglądu Dni: Możliwość natychmiastowego przełączania podglądu ekranowego między wszystkimi dniami a pojedynczymi dniami (Pn, Wt, Śr, Czw, Pt) wraz z płynnym powiększeniem Zoom (40%–150%).', badgeText: 'Nawigacja Podglądu' }
+      ]
+    },
+    {
       version: 'v3.8.7',
       date: 'Wrzesień 2026',
       title: 'Płachta Dyrektorska (Wielkoformatowy Arkusz A3/A2) oraz Tablica TV / Kiosk Mode',
       description: 'Kompleksowe wdrożenie dwóch kluczowych modułów prezentacji i publikacji planu szkoły: Płachty Dyrektorskiej do wydruków wielkoformatowych na arkuszach A3/A2/A4 z pełną konfiguracją widoku i kolorystyki oraz Tablicy TV / Trybu Kiosk dla rzutników i telewizorów w holu szkoły z zegarem na żywo, odliczaniem do dzwonka i automatyczną karuzelą klas.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Płachta Dyrektorska (Wielkoformatowy Arkusz A3/A2): Całościowy podgląd szkoły w jednym arkuszu – możliwość zestawienia wszystkich oddziałów klasowych, wszystkich nauczycieli lub gabinetów w podziale na dni tygodnia i godziny lekcyjne, ze stylami @page dostosowanymi do ploterów i drukarek A3/A2 w orientacji poziomej.', badgeText: 'Płachta A3/A2' },
         { type: 'feature', text: 'Tablica Informacyjna TV (Kiosk Mode): Interaktywny tryb prezentacyjny dla rzutników i telewizorów w holu szkoły oraz pokoju nauczycielskim z zegarem czasu rzeczywistego, licznikiem czasu do najbliższego dzwonka, dynamicznym panelem „Na żywo”, automatyczną karuzelą planów klas oraz grafikiem obłożenia sal.', badgeText: 'Tablica TV' },
         { type: 'improvement', text: 'Inteligentny Filtr Tablicy TV „Na żywo”: Automatyczne ukrywanie kafelków klas, które w danej godzinie lekcyjnej nie mają zajęć lub mają okienko. Dodano wskaźnik liczby ukrytych oddziałów oraz szybki przełącznik „Tylko z lekcjami” / „Pokaż wszystkie” zapamiętywany w ustawieniach.', badgeText: 'Tryb Na Żywo' },
+        { type: 'fix', text: 'Pełny Kontrast Motywu Jasnego (Rzutnik) w Tablicy TV: Poprawiono czytelność i kontrast wszystkich tekstów, nagłówków klas, kafelków lekcji, siatki tygodniowej, grafików sal oraz paska ogłoszeń po przełączeniu na motyw jasny (dla rzutników) – wyeliminowano problem niewidocznego/zlewającego się tekstu na jasnym tle.', badgeText: 'Motyw Rzutnik' },
         { type: 'fix', text: 'Dedykowany Wydruk Płachty Dyrektorskiej: Wyeliminowano drukowanie pierwszej strony kreatora w tle podczas wydruku otwartej płachty (@media print ukrywa obszar roboczy aplikacji, izolując sam wielkoformatowy arkusz szkoły).', badgeText: 'Druk A3/A2' },
         { type: 'improvement', text: 'Personalizacja Płachty Dyrektorskiej: Wybór gęstości siatki (Kompaktowa, Standardowa, Rozszerzona), trybu kolorowania według dziedzin przedmiotowych lub monochromatycznego o wysokim kontraście, widoczności sal, nauczycieli, grup, legendy przedmiotowej oraz zoomu ekranowego 50%–150%.', badgeText: 'Personalizacja' },
         { type: 'improvement', text: 'Pasek Ogłoszeń i Symulator w Kiosku TV: Możliwość definiowania paska informacyjnego (Ticker) dla uczniów i rodziców oraz symulator dowolnego dnia i godziny do testowania widoków przed rozpoczęciem zajęć.', badgeText: 'Kiosk / Rzutnik' },
