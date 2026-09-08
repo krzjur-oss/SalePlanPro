@@ -432,15 +432,22 @@ export default function PlachtaDyrektorska({
         }
 
         @media print {
-          /* Hide app navigation and headers */
-          header, footer, nav, .no-print, #restoring-pointer-blocker {
+          /* Hide app navigation, headers, toasts, and non-print controls */
+          header, footer, nav, .no-print, #restoring-pointer-blocker, #version-changelog-toast {
             display: none !important;
           }
 
-          /* Force full width and auto height */
-          html, body, #root, [class*="h-screen"], [class*="overflow-hidden"] {
+          ${isStandaloneModal ? `
+          /* When Plachta is rendered as a standalone modal overlay, completely hide the background workspace (e.g. Kreator, Plan Klas) */
+          #app-main-workspace {
+            display: none !important;
+          }
+          ` : ''}
+
+          /* Force full width and natural document flow for Plachta container */
+          html, body, #root, #plachta-modal-root {
             height: auto !important;
-            width: auto !important;
+            width: 100% !important;
             overflow: visible !important;
             position: static !important;
             background: white !important;

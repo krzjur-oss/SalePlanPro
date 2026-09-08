@@ -75,15 +75,17 @@ System oferuje zaawansowany generator czystych szablonów PDF/A4, wydruków wiel
     *   Całościowy, panoramiczny podgląd pracy całej szkoły w jednym arkuszu – możliwość zestawienia **Wszystkich oddziałów klasowych**, **Wszystkich nauczycieli** lub **Wszystkich sal i gabinetów**.
     *   Wybór planu źródłowego: Etap 1 (Plan Klas), Etap 2 (Plan Sal) lub dynamiczne warianty semestralne (np. Semestr II).
     *   Wydruki wielkoformatowe: Precyzyjnie skonfigurowane reguły CSS `@page` dla formatów **A3 landscape** (420×297 mm), **A2 landscape** (594×420 mm) oraz **A4 landscape** ze skalowaniem czcionek i tabeli.
+    *   Czysty i bezpośredni wydruk: Arkusz płachty jest w pełni odizolowany od tła aplikacji na wydruku (`@media print` ukrywa zbędne zakładki robocze, wysyłając do drukarki od razu czysty arkusz A3/A2 bez pierwszej strony kreatora w tle).
     *   Elastyczna konfiguracja: Regulacja gęstości komórek (*Kompaktowa*, *Standardowa*, *Rozszerzona*), kodowanie kolorami według dziedzin przedmiotowych lub wysoki kontrast czarno-biały, selektywne włączanie skrótów nauczycieli, numerów sal, grup, legendy przedmiotowej oraz metryki podpisu Dyrektora Szkoły.
     *   Skalowanie ekranowe (Zoom 50%–150%) z podglądem na żywo przed wydrukiem lub zapisem do PDF.
 *   **📺 Tablica Informacyjna TV / Tryb Rzutnika (Kiosk Mode)**:
     *   Pełnoekranowy, nowoczesny interfejs zaprojektowany dla telewizorów i monitorów w holu szkoły, pokoju nauczycielskim lub rzutników w salach.
     *   Zegar czasu rzeczywistego oraz inteligentne odliczanie do najbliższego dzwonka (początku lub zakończenia lekcji / przerwy).
     *   **3 tryby prezentacji**:
-        *   *Tablica dynamiczna na żywo*: Bieżące zajęcia dla wszystkich klas i sal w trwającej godzinie lekcyjnej.
+        *   *Tablica dynamiczna na żywo*: Bieżące zajęcia dla wszystkich klas i sal w trwającej godzinie lekcyjnej z inteligentnym filtrowaniem okienek i godzin bez zajęć (ukrywanie klas nieobecnych w szkole z opcją przełączania widoku).
         *   *Automatyczna karuzela planów klas*: Płynne przewijanie planów kolejnych oddziałów z konfigurowalnym interwałem (10–60 sekund).
         *   *Grafik obłożenia gabinetów*: Błyskawiczny wgląd w stan każdej sali w szkole.
+    *   Filtr klas bez zajęć: Tablica w trybie na żywo automatycznie ukrywa klasy mające okienko lub niemające lekcji w danej godzinie, powiększając przestrzeń dla trwających zajęć. Dostępny jest szybki przełącznik „Tylko z lekcjami” / „Pokaż wszystkie”.
     *   Pasek komunikatów i ogłoszeń (Ticker) przesyłający najważniejsze komunikaty dyrekcji na dole ekranu.
     *   Symulator czasu lekcyjnego umożliwiający podgląd działania tablicy o dowolnej porze i dniu.
 *   **Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
@@ -140,9 +142,10 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 
 ### ✅ Co zostało zrobione (Zrealizowane)
 1.  **Płachta Dyrektorska (Wielkoformatowy arkusz szkoły A3/A2) oraz Tablica TV / Kiosk Mode (v3.8.7)**:
-    *   **Płachta Dyrektorska (Wielkoformatowa A3 / A2 / A4)**: Całościowy arkusz organizacyjny szkoły – możliwość jednoczesnego zestawienia wszystkich oddziałów klasowych, wszystkich nauczycieli lub gabinetów w podziale na dni tygodnia i godziny lekcyjne, zoptymalizowany pod wydruki na ploterach i kserokopiarkach wielkoformatowych (`@page` landscape).
+    *   **Płachta Dyrektorska (Wielkoformatowa A3 / A2 / A4)**: Całościowy arkusz organizacyjny szkoły – możliwość jednoczesnego zestawienia wszystkich oddziałów klasowych, wszystkich nauczycieli lub gabinetów w podziale na dni tygodnia i godziny lekcyjne, zoptymalizowany pod wydruki na ploterach i kserokopiarkach wielkoformatowych (`@page` landscape) z czystą separacją druku (brak tła aplikacji na pierwszej stronie wydruku).
     *   **Personalizacja widoku arkusza**: Wybór gęstości komórek (*Kompaktowa*, *Standardowa*, *Rozszerzona*), kodowanie kolorystyczne przedmiotów lub tryb czarno-biały wysokiego kontrastu, widoczność sal, skrótów nauczycieli, grup międzyoddziałowych, legendy przedmiotowej oraz metryki zatwierdzenia przez Dyrekcję.
     *   **Tablica Informacyjna TV / Kiosk Mode (Rzutnik & Hol Szkoły)**: Dynamiczny, pełnoekranowy tryb do wyświetlania na telewizorach i rzutnikach z zegarem systemowym na żywo, odliczaniem do dzwonka (początku lub końca lekcji/przerwy), paskiem ogłoszeń (Ticker) oraz trzema trybami: *Na żywo*, *Karuzela klas* (co 10–60s) i *Obłożenie sal*.
+    *   **Filtr okienek i godzin bez zajęć w Tablicy TV**: Automatyczne ukrywanie oddziałów, które w danej chwili nie mają zajęć w szkole (koniec lekcji, późniejszy start, okienko) z szybkim przełącznikiem widoku („Tylko z lekcjami” / „Pokaż wszystkie”) i zapamiętywaniem preferencji.
     *   **Zintegrowana nawigacja**: Przyciski szybkiego dostępu w zakładce *Wydruki* (Płachta A3, Tablica TV), bezpośrednie skróty na górnym pasku narzędzi oraz w rozwijanym menu głównym.
 2.  **Interaktywny Podręcznik Wszystkich Modułów i Akceptacja Licencji WLDE (v3.8.6)**:
     *   **Kompleksowy Podręcznik w sekcji „O programie”**: Interaktywny przewodnik krok po kroku po wszystkich modułach systemu (Kreator Szkoły 1–10, Plan Klas, Plan Sal, Dyżury Nauczycielskie, Uczniowie SPE, Statystyki, Wydruki oraz Bezpieczeństwo i Kopia Zapasowa) z wyszukiwarką haseł i poradami planistycznymi.

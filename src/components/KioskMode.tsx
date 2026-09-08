@@ -3,7 +3,7 @@ import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, PlanVariant, S
 import { 
   Tv, Maximize2, Minimize2, Play, Pause, ChevronLeft, ChevronRight, Clock,
   Calendar, MapPin, User, Shield, Sparkles, Layers, Sliders, Bell, X, RefreshCw,
-  Eye, Volume2, Edit3, Check, ArrowRight, MessageSquare, RotateCcw
+  Eye, EyeOff, Volume2, Edit3, Check, ArrowRight, MessageSquare, RotateCcw
 } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey } from '../utils';
 
@@ -61,6 +61,24 @@ export default function KioskMode({
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(false);
   const [showAnnouncementModal, setShowAnnouncementModal] = useState<boolean>(false);
   const [tempAnnouncement, setTempAnnouncement] = useState<string>('');
+
+  // Live board filter: hide classes without lessons or with a free period (okienko)
+  const [hideEmptyClasses, setHideEmptyClasses] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('saleplan_kiosk_hide_empty');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleHideEmptyClasses = (explicitVal?: boolean) => {
+    const nextVal = explicitVal !== undefined ? explicitVal : !hideEmptyClasses;
+    setHideEmptyClasses(nextVal);
+    try {
+      localStorage.setItem('saleplan_kiosk_hide_empty', String(nextVal));
+    } catch {}
+  };
 
   const handleOpenAnnouncementEditor = () => {
     setTempAnnouncement(announcementText);
@@ -353,20 +371,57 @@ export default function KioskMode({
     return duties;
   }, [appState.dyzury, bellStatus.dayIdx, bellStatus.currentHour]);
 
+  // Reference hour index for the Live Hall Board ("Na żywo")
+  const liveReferenceHourIdx = useMemo(() => {
+    if (isSimulatingTime) {
+      return simulatedHourIdx;
+    }
+    if (bellStatus.isBreak && bellStatus.nextHourIdx !== null) {
+      return bellStatus.nextHourIdx;
+    }
+    if (bellStatus.currentHourIdx !== null) {
+      return bellStatus.currentHourIdx;
+    }
+    return bellStatus.nextHourIdx ?? 0;
+  }, [isSimulatingTime, simulatedHourIdx, bellStatus.isBreak, bellStatus.nextHourIdx, bellStatus.currentHourIdx]);
+
+  // Classes list for Live Board (filtering out classes without lessons or with a free period / okienko)
+  const classesToDisplay = useMemo(() => {
+    const list = pl.classes.map(cls => {
+      const currentLesson = getClassLessonInfo(cls.id, bellStatus.dayIdx, liveReferenceHourIdx);
+      const nextLesson = getClassLessonInfo(
+        cls.id, 
+        bellStatus.dayIdx, 
+        liveReferenceHourIdx !== null ? liveReferenceHourIdx + 1 : null
+      );
+      return {
+        cls,
+        currentLesson,
+        nextLesson,
+        hasLesson: currentLesson !== null
+      };
+    });
+
+    if (hideEmptyClasses) {
+      return list.filter(item => item.hasLesson);
+    }
+    return list;
+  }, [pl.classes, bellStatus.dayIdx, liveReferenceHourIdx, getClassLessonInfo, hideEmptyClasses]);
+
   // Free classrooms in current hour
   const freeRoomsInCurrentHour = useMemo(() => {
-    if (!bellStatus.currentHourIdx) return [];
+    if (liveReferenceHourIdx === null || liveReferenceHourIdx === undefined) return [];
     const occupiedRoomNames = new Set<string>();
 
     pl.classes.forEach(c => {
-      const l = getClassLessonInfo(c.id, bellStatus.dayIdx, bellStatus.currentHourIdx);
+      const l = getClassLessonInfo(c.id, bellStatus.dayIdx, liveReferenceHourIdx);
       if (l && l.room) {
         occupiedRoomNames.add(l.room.toLowerCase().trim());
       }
     });
 
     return pl.rooms.filter(r => !occupiedRoomNames.has(r.name.toLowerCase().trim())).slice(0, 8);
-  }, [bellStatus.currentHourIdx, bellStatus.dayIdx, pl.classes, pl.rooms, getClassLessonInfo]);
+  }, [liveReferenceHourIdx, bellStatus.dayIdx, pl.classes, pl.rooms, getClassLessonInfo]);
 
   // Carousel timer effect (rotates class or floor)
   useEffect(() => {
@@ -714,6 +769,27 @@ export default function KioskMode({
                 <span>Edytuj komunikat</span>
               </button>
             </div>
+
+            {/* Hide empty classes / okienka toggle */}
+            <div className="flex items-center gap-1 border-l border-slate-700 pl-4">
+              <span className="font-bold text-slate-400 uppercase text-[10px]">Okienka i brak zajęć:</span>
+              <button
+                type="button"
+                onClick={() => toggleHideEmptyClasses(true)}
+                className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${hideEmptyClasses ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                title="Nie wyświetla klas, które w danej godzinie nie mają zajęć lub mają okienko"
+              >
+                Ukrywaj (tylko lekcje)
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleHideEmptyClasses(false)}
+                className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${!hideEmptyClasses ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                title="Pokaż wszystkie klasy, w tym okienka i brak lekcji"
+              >
+                Pokaż wszystkie
+              </button>
+            </div>
           </div>
 
           <button
@@ -738,86 +814,135 @@ export default function KioskMode({
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 flex-1 min-h-0">
               {/* Left 3 columns: Classes Tiles */}
               <div className="lg:col-span-3 flex flex-col min-h-0">
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
-                  <h2 className="text-sm font-black uppercase tracking-wider text-indigo-400 flex items-center gap-2">
-                    <Layers size={16} />
-                    <span>Rozkład oddziałów w tej chwili ({pl.classes.length} klas)</span>
-                  </h2>
-                  <div className="text-xs text-slate-400 font-bold">
-                    Dzień: <span className="text-white font-black">{bellStatus.dayName}</span> · Lekcja {bellStatus.currentHour?.num || 1}
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 flex-wrap gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-sm font-black uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                      <Layers size={16} />
+                      <span>
+                        Rozkład oddziałów w tej chwili ({classesToDisplay.length}
+                        {hideEmptyClasses && classesToDisplay.length !== pl.classes.length ? ` z ${pl.classes.length}` : ''} klas)
+                      </span>
+                    </h2>
+                    {hideEmptyClasses && classesToDisplay.length < pl.classes.length && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
+                        Ukryto {pl.classes.length - classesToDisplay.length} bez zajęć / okienka
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-400 font-bold flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => toggleHideEmptyClasses()}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border ${
+                        hideEmptyClasses 
+                          ? 'bg-indigo-600/25 text-indigo-300 border-indigo-500/50 hover:bg-indigo-600/35' 
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                      }`}
+                      title="Przełącz ukrywanie klas, które w danej godzinie nie mają zajęć lub mają okienko"
+                    >
+                      {hideEmptyClasses ? <EyeOff size={13} className="text-indigo-400" /> : <Eye size={13} className="text-slate-400" />}
+                      <span>{hideEmptyClasses ? 'Tylko z lekcjami' : 'Pokaż wszystkie'}</span>
+                    </button>
+
+                    <div>
+                      Dzień: <span className="text-white font-black">{bellStatus.dayName}</span> · Lekcja {hoursList[liveReferenceHourIdx]?.num || bellStatus.currentHour?.num || 1} {bellStatus.isBreak ? '(za chwilę)' : ''}
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 overflow-y-auto pr-1">
-                  {pl.classes.map(cls => {
-                    const currentLesson = getClassLessonInfo(cls.id, bellStatus.dayIdx, bellStatus.currentHourIdx);
-                    const nextLesson = getClassLessonInfo(cls.id, bellStatus.dayIdx, bellStatus.nextHourIdx);
-
-                    return (
-                      <div
-                        key={cls.id}
-                        className={`p-3 rounded-2xl border flex flex-col justify-between transition shadow-md ${
-                          isDark 
-                            ? 'bg-slate-900/80 border-slate-800 hover:border-indigo-500/50' 
-                            : 'bg-white border-slate-200 hover:border-indigo-300'
-                        }`}
+                {classesToDisplay.length === 0 ? (
+                  <div className={`p-8 rounded-2xl border text-center flex flex-col items-center justify-center gap-3 my-auto ${
+                    isDark ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+                  }`}>
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                      <Clock size={24} />
+                    </div>
+                    <div className="font-extrabold text-base text-white">
+                      Brak zaplanowanych lekcji w tej godzinie
+                    </div>
+                    <p className="text-xs text-slate-400 max-w-md">
+                      Żadna z {pl.classes.length} klas nie ma w tej chwili zajęć w planie (koniec lekcji lub okienko).
+                    </p>
+                    {hideEmptyClasses && (
+                      <button
+                        type="button"
+                        onClick={() => toggleHideEmptyClasses(false)}
+                        className="mt-2 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition cursor-pointer"
                       >
-                        {/* Class title header */}
-                        <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800/60">
-                          <span className={`${fontStyles.cardHeader} text-indigo-400 font-mono tracking-tight`}>
-                            {cls.name}
-                          </span>
-                          {currentLesson?.room && (
-                            <span className="px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 border border-indigo-800 text-[11px] font-black font-mono">
-                              s. {currentLesson.room}
+                        Pokaż wszystkie klasy ({pl.classes.length})
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 overflow-y-auto pr-1">
+                    {classesToDisplay.map(({ cls, currentLesson, nextLesson }) => {
+                      return (
+                        <div
+                          key={cls.id}
+                          className={`p-3 rounded-2xl border flex flex-col justify-between transition shadow-md ${
+                            isDark 
+                              ? 'bg-slate-900/80 border-slate-800 hover:border-indigo-500/50' 
+                              : 'bg-white border-slate-200 hover:border-indigo-300'
+                          }`}
+                        >
+                          {/* Class title header */}
+                          <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-800/60">
+                            <span className={`${fontStyles.cardHeader} text-indigo-400 font-mono tracking-tight`}>
+                              {cls.name}
                             </span>
-                          )}
-                        </div>
-
-                        {/* Current lesson */}
-                        <div className="mb-2">
-                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            <span>Teraz:</span>
-                          </div>
-                          {currentLesson ? (
-                            <div className="mt-0.5">
-                              <div className={`${fontStyles.body} text-white truncate`} title={currentLesson.subject}>
-                                {currentLesson.subject}
-                              </div>
-                              <div className="text-xs text-slate-400 font-semibold flex items-center justify-between mt-0.5">
-                                <span>{currentLesson.teacher ? `prof. ${currentLesson.teacher}` : ''}</span>
-                                {currentLesson.isGroup && <span className="text-[9px] uppercase text-indigo-300">[grupa]</span>}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-xs text-slate-500 italic mt-0.5">
-                              Brak zajęć / Okienko
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Next lesson */}
-                        <div className="pt-1.5 border-t border-slate-800/40 text-xs">
-                          <div className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                            <ArrowRight size={10} className="text-slate-400" />
-                            <span>Za chwilę:</span>
-                          </div>
-                          {nextLesson ? (
-                            <div className="text-[11.5px] text-slate-300 truncate mt-0.5 font-bold flex items-center justify-between">
-                              <span className="truncate">{nextLesson.subject}</span>
-                              <span className="font-mono text-slate-400 shrink-0 ml-1">
-                                {nextLesson.room ? `s.${nextLesson.room}` : ''}
+                            {currentLesson?.room && (
+                              <span className="px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 border border-indigo-800 text-[11px] font-black font-mono">
+                                s. {currentLesson.room}
                               </span>
+                            )}
+                          </div>
+
+                          {/* Current lesson */}
+                          <div className="mb-2">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                              <span className={`w-1.5 h-1.5 rounded-full ${bellStatus.isBreak ? 'bg-amber-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`} />
+                              <span>{bellStatus.isBreak ? 'Po dzwonku:' : 'Teraz:'}</span>
                             </div>
-                          ) : (
-                            <div className="text-[10.5px] text-slate-400 italic">Koniec zajęć</div>
-                          )}
+                            {currentLesson ? (
+                              <div className="mt-0.5">
+                                <div className={`${fontStyles.body} text-white truncate`} title={currentLesson.subject}>
+                                  {currentLesson.subject}
+                                </div>
+                                <div className="text-xs text-slate-400 font-semibold flex items-center justify-between mt-0.5">
+                                  <span>{currentLesson.teacher ? `prof. ${currentLesson.teacher}` : ''}</span>
+                                  {currentLesson.isGroup && <span className="text-[9px] uppercase text-indigo-300">[grupa]</span>}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-slate-500 italic mt-0.5">
+                                Brak zajęć / Okienko
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Next lesson */}
+                          <div className="pt-1.5 border-t border-slate-800/40 text-xs">
+                            <div className="text-[9px] font-bold text-slate-400 uppercase flex items-center gap-1">
+                              <ArrowRight size={10} className="text-slate-400" />
+                              <span>{bellStatus.isBreak ? 'Kolejna lekcja:' : 'Za chwilę:'}</span>
+                            </div>
+                            {nextLesson ? (
+                              <div className="text-[11.5px] text-slate-300 truncate mt-0.5 font-bold flex items-center justify-between">
+                                <span className="truncate">{nextLesson.subject}</span>
+                                <span className="font-mono text-slate-400 shrink-0 ml-1">
+                                  {nextLesson.room ? `s.${nextLesson.room}` : ''}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="text-[10.5px] text-slate-400 italic">Koniec zajęć</div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Right column: Duties & Free Rooms */}

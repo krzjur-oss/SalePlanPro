@@ -374,6 +374,7 @@ export default function Instrukcje() {
             'Wybór formatu papieru: Dedykowane style @page dla formatu A3 (420×297 mm), A2 (594×420 mm) oraz A4 w orientacji poziomej z precyzyjnym podziałem stron.',
             'Personalizacja prezentacji: Gęstość siatki (Kompaktowa, Standardowa, Rozszerzona), kodowanie kolorystyczne według dziedzin przedmiotowych lub tryb monochromatyczny (wysoki kontrast do wydruków czarno-białych).',
             'Włączanie/wyłączanie elementów: skróty nauczycieli, numery sal, grupy lekcyjne, metryka zatwierdzenia przez Dyrekcję oraz legenda przedmiotowa.',
+            'Czysty i bezpośredni wydruk: Arkusz płachty jest w pełni odizolowany od tła aplikacji na wydruku (@media print ukrywa zbędne zakładki robocze, wysyłając do drukarki od razu czysty arkusz A3/A2).',
             'Skalowanie ekranowe (Zoom 50%–150%) z podglądem 1:1 przed wydrukiem lub eksportem do PDF.'
           ],
           tip: 'W przypadku bardzo dużych szkół (powyżej 25 oddziałów) w oknie dialogowym drukowania przeglądarki wybierz format papieru A3 lub A2 i ustaw marginesy na „Brak” lub „Minimalne”.'
@@ -384,7 +385,8 @@ export default function Instrukcje() {
           points: [
             'Uruchamiana przyciskiem „Tablica TV (Kiosk)” w module Wydruki, na górnej belce oraz w menu głównym.',
             'Zegar czasu rzeczywistego oraz dynamiczne odliczanie do najbliższego dzwonka (początku lub końca lekcji).',
-            'Trzy tryby pracy: Tablica na żywo (aktualna lekcja i sala dla każdej klasy), Karuzela planów klas (automatyczne przewijanie kolejnych oddziałów z regulacją czasu 10–60s) oraz Grafik obłożenia gabinetów.',
+            'Trzy tryby pracy: Tablica na żywo (aktualna lekcja i sala dla każdej klasy z inteligentnym filtrowaniem okienek i godzin bez zajęć), Karuzela planów klas (automatyczne przewijanie kolejnych oddziałów z regulacją czasu 10–60s) oraz Grafik obłożenia gabinetów.',
+            'Filtr klas bez zajęć w trybie „Na żywo”: Tablica automatycznie ukrywa kafelki oddziałów, które w danej godzinie nie mają lekcji (lub mają okienko), powiększając przestrzeń dla trwających zajęć. W każdej chwili można przełączyć widok przyciskiem „Pokaż wszystkie / Tylko z lekcjami”.',
             'Pasek informacyjny (Ticker): Możliwość wpisania bieżących komunikatów dyrekcji (np. szczęśliwy numerek, zastępstwa, zebrania, apele), które przesuwają się na dole ekranu. Na tablecie wystarczy dotknąć paska tekstu, żółtej plakietki „Komunikaty Szkoły” lub przycisku „Edytuj”, aby otworzyć wygodne okno dotykowe z gotowymi szablonami.',
             'Tryb pełnoekranowy (F11 / przycisk) z automatycznym ukrywaniem kursora myszy po kilku sekundach bezczynności.',
             'Symulator czasu: Pozwala przetestować zachowanie tablicy dla dowolnego dnia tygodnia i godziny bez czekania na rzeczywisty czas lekcji.'
