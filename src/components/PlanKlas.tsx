@@ -1,13 +1,15 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { 
-  AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment, StudentSupportType 
+  AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment, StudentSupportType, PlanVariant 
 } from '../types';
 import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
   User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award, Zap, RotateCcw, Ban,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, GripVertical, Search
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, GripVertical, Search, Lock, Unlock, ArrowLeftRight
 } from 'lucide-react';
 import PlanGenerator from './PlanGenerator';
+import SwapAssistantModal, { SwapSlotItem } from './SwapAssistantModal';
+import LockManagerModal from './LockManagerModal';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -47,6 +49,8 @@ interface PlanKlasProps {
   presentationMode?: boolean;
   initialTab?: 'plan' | 'assign' | 'special' | 'teachers';
   initialStudentId?: string | null;
+  activeVariant?: PlanVariant | null;
+  onOpenVariantsModal?: () => void;
 }
 
 export default function PlanKlas({ 
@@ -55,14 +59,16 @@ export default function PlanKlas({
   onTransfer, 
   presentationMode = false,
   initialTab = 'plan',
-  initialStudentId = null
+  initialStudentId = null,
+  activeVariant = null,
+  onOpenVariantsModal
 }: PlanKlasProps) {
   const pl = appState.planLekcji;
 
-  const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
+  const notify = (msg: string, type: 'ok' | 'err' | 'info' = 'ok') => {
     const toast = document.createElement('div');
     toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg transition-transform z-[9999] ${
-      type === 'ok' ? 'border-emerald-500' : 'border-red-500'
+      type === 'ok' ? 'border-emerald-500' : type === 'info' ? 'border-indigo-500' : 'border-red-500'
     }`;
     toast.textContent = msg;
     document.body.appendChild(toast);
@@ -246,6 +252,285 @@ export default function PlanKlas({
     if (!activeClassId) return [];
     return pl.assignments.filter(a => a.classId === activeClassId || (a.linkedClassIds && a.linkedClassIds.includes(activeClassId)));
   }, [activeClassId, pl.assignments]);
+
+  // ── LOCK MANAGER (KŁÓDKI) STATES & HANDLERS ──
+  const [showLockManagerModal, setShowLockManagerModal] = useState(false);
+
+  const totalLockedCount = useMemo(() => {
+    const regLocked = Object.values(pl.lessons).filter(l => l.locked).length;
+    const speLocked = Object.values(pl.specialLessons || {}).filter(sl => sl.locked).length;
+    return regLocked + speLocked;
+  }, [pl.lessons, pl.specialLessons]);
+
+  const handleToggleLockLesson = (key: string) => {
+    const current = pl.lessons[key];
+    if (!current) return;
+    const isLocked = !current.locked;
+    const updatedLessons = {
+      ...pl.lessons,
+      [key]: {
+        ...current,
+        locked: isLocked
+      }
+    };
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons
+      }
+    });
+    notify(isLocked ? '🔒 Zablokowano lekcję przed generatorem.' : '🔓 Odblokowano lekcję.', 'ok');
+  };
+
+  const handleBulkLockClass = (classId: string, lock: boolean) => {
+    const updatedLessons = { ...pl.lessons };
+    let count = 0;
+    Object.keys(updatedLessons).forEach(k => {
+      if (k.startsWith(`${classId}|`)) {
+        updatedLessons[k] = {
+          ...updatedLessons[k],
+          locked: lock
+        };
+        count++;
+      }
+    });
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons
+      }
+    });
+    const clsName = classesMap.get(classId)?.name || classId;
+    notify(lock ? `🔒 Zablokowano ${count} godz. klasy ${clsName}.` : `🔓 Odblokowano lekcje klasy ${clsName}.`, 'ok');
+  };
+
+  const handleBulkLockTeacher = (teacherId: string, lock: boolean) => {
+    const teacherAsgIds = new Set(pl.assignments.filter(a => a.teacherId === teacherId).map(a => a.id));
+    const updatedLessons = { ...pl.lessons };
+    let count = 0;
+    Object.keys(updatedLessons).forEach(k => {
+      const l = updatedLessons[k];
+      if (teacherAsgIds.has(l.assignmentId)) {
+        updatedLessons[k] = {
+          ...l,
+          locked: lock
+        };
+        count++;
+      }
+    });
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons
+      }
+    });
+    const teacher = teachersMap.get(teacherId);
+    const teacherName = teacher ? `${teacher.first} ${teacher.last}` : teacherId;
+    notify(lock ? `🔒 Zablokowano ${count} godz. nauczyciela ${teacherName}.` : `🔓 Odblokowano lekcje nauczyciela ${teacherName}.`, 'ok');
+  };
+
+  const handleBulkLockSPEStudent = (studentId: string, lock: boolean) => {
+    const updatedSpecial = { ...(pl.specialLessons || {}) };
+    let count = 0;
+    Object.keys(updatedSpecial).forEach(k => {
+      if (k.startsWith(`${studentId}|`)) {
+        updatedSpecial[k] = {
+          ...updatedSpecial[k],
+          locked: lock
+        };
+        count++;
+      }
+    });
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        specialLessons: updatedSpecial
+      }
+    });
+    const stud = (pl.specialStudents || []).find(s => s.id === studentId);
+    const studName = stud ? `${stud.lastName} ${stud.firstName}` : studentId;
+    notify(lock ? `🔒 Zablokowano ${count} zajęć ucznia SPE ${studName}.` : `🔓 Odblokowano zajęcia ucznia SPE ${studName}.`, 'ok');
+  };
+
+  const handleBulkLockAllClasses = (lock: boolean) => {
+    const updatedLessons = { ...pl.lessons };
+    let count = 0;
+    Object.keys(updatedLessons).forEach(k => {
+      updatedLessons[k] = {
+        ...updatedLessons[k],
+        locked: lock
+      };
+      count++;
+    });
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: updatedLessons
+      }
+    });
+    notify(lock ? `🔒 Zablokowano wszystkie lekcje w szkole (${count} godz.).` : `🔓 Odblokowano wszystkie lekcje w szkole.`, 'ok');
+  };
+
+  // ── SWAP ASSISTANT (SZYBKA ZAMIANA LEKCJI) STATES & HANDLERS ──
+  const [swapSource, setSwapSource] = useState<SwapSlotItem | null>(null);
+  const [swapTarget, setSwapTarget] = useState<SwapSlotItem | null>(null);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [swapIncludeRooms, setSwapIncludeRooms] = useState(true);
+
+  const handleStartSwap = (item: SwapSlotItem) => {
+    setSwapSource(item);
+    notify(`Wybrano lekcję do zamiany: ${item.subject?.name || 'Lekcja'}. Kliknij teraz inny slot w planie.`, 'info');
+  };
+
+  const checkSwapConflicts = (source: SwapSlotItem, target: SwapSlotItem) => {
+    const conflictsAtoB: string[] = [];
+    const conflictsBtoA: string[] = [];
+
+    // Check source teacher in target time slot
+    if (source.teacher) {
+      Object.entries(pl.lessons).forEach(([k, l]) => {
+        if (k === source.key || k === target.key) return;
+        const [cId, d, h] = k.split('|');
+        if (parseInt(d, 10) === target.day && parseInt(h, 10) === target.hour) {
+          const asg = pl.assignments.find(a => a.id === l.assignmentId);
+          if (asg && asg.teacherId === source.teacher?.id) {
+            const otherCls = classesMap.get(cId)?.name || cId;
+            conflictsAtoB.push(`Nauczyciel ${source.teacher.first} ${source.teacher.last} uczy już w tym czasie klasę ${otherCls}`);
+          }
+        }
+      });
+
+      if (source.teacher.availability && source.teacher.availability.length > 0) {
+        const slotCode = `${target.day}-${target.hour}`;
+        if (!source.teacher.availability.includes(slotCode)) {
+          conflictsAtoB.push(`Nauczyciel ${source.teacher.first} ${source.teacher.last} ma niedostępność w tym terminie`);
+        }
+      }
+    }
+
+    // Check source room in target time slot
+    if (source.room) {
+      Object.entries(pl.lessons).forEach(([k, l]) => {
+        if (k === source.key || k === target.key) return;
+        const [cId, d, h] = k.split('|');
+        if (parseInt(d, 10) === target.day && parseInt(h, 10) === target.hour) {
+          const asg = pl.assignments.find(a => a.id === l.assignmentId);
+          if (asg && asg.roomId === source.room?.id) {
+            const otherCls = classesMap.get(cId)?.name || cId;
+            conflictsAtoB.push(`Sala ${source.room.name} jest w tym czasie zajęta przez klasę ${otherCls}`);
+          }
+        }
+      });
+    }
+
+    // Check target teacher in source time slot (if target occupied)
+    if (target.teacher) {
+      Object.entries(pl.lessons).forEach(([k, l]) => {
+        if (k === source.key || k === target.key) return;
+        const [cId, d, h] = k.split('|');
+        if (parseInt(d, 10) === source.day && parseInt(h, 10) === source.hour) {
+          const asg = pl.assignments.find(a => a.id === l.assignmentId);
+          if (asg && asg.teacherId === target.teacher?.id) {
+            const otherCls = classesMap.get(cId)?.name || cId;
+            conflictsBtoA.push(`Nauczyciel ${target.teacher.first} ${target.teacher.last} uczy już w tym czasie klasę ${otherCls}`);
+          }
+        }
+      });
+
+      if (target.teacher.availability && target.teacher.availability.length > 0) {
+        const slotCode = `${source.day}-${source.hour}`;
+        if (!target.teacher.availability.includes(slotCode)) {
+          conflictsBtoA.push(`Nauczyciel ${target.teacher.first} ${target.teacher.last} ma niedostępność w tym terminie`);
+        }
+      }
+    }
+
+    // Check target room in source time slot
+    if (target.room) {
+      Object.entries(pl.lessons).forEach(([k, l]) => {
+        if (k === source.key || k === target.key) return;
+        const [cId, d, h] = k.split('|');
+        if (parseInt(d, 10) === source.day && parseInt(h, 10) === source.hour) {
+          const asg = pl.assignments.find(a => a.id === l.assignmentId);
+          if (asg && asg.roomId === target.room?.id) {
+            const otherCls = classesMap.get(cId)?.name || cId;
+            conflictsBtoA.push(`Sala ${target.room.name} jest w tym czasie zajęta przez klasę ${otherCls}`);
+          }
+        }
+      });
+    }
+
+    return { conflictsAtoB, conflictsBtoA };
+  };
+
+  const handleSelectSwapTarget = (targetItem: SwapSlotItem) => {
+    if (!swapSource) return;
+    if (swapSource.classId === targetItem.classId && swapSource.day === targetItem.day && swapSource.hour === targetItem.hour) {
+      notify('Wybrano ten sam termin. Zamiana anulowana.', 'info');
+      setSwapSource(null);
+      return;
+    }
+    setSwapTarget(targetItem);
+    setShowSwapModal(true);
+  };
+
+  const handleExecuteSwap = () => {
+    if (!swapSource || !swapTarget) return;
+
+    const nextLessons = { ...pl.lessons };
+
+    // Remove source key
+    if (swapSource.key) {
+      delete nextLessons[swapSource.key];
+    }
+    // Remove target key
+    if (swapTarget.key) {
+      delete nextLessons[swapTarget.key];
+    }
+
+    // Move source into target
+    if (swapSource.lesson && swapSource.assignment) {
+      const targetKey = swapSource.assignment.groupId
+        ? `${swapTarget.classId}|${swapTarget.day}|${swapTarget.hour}|${swapSource.assignment.groupId}`
+        : `${swapTarget.classId}|${swapTarget.day}|${swapTarget.hour}`;
+      nextLessons[targetKey] = {
+        ...swapSource.lesson,
+        locked: swapSource.lesson.locked
+      };
+    }
+
+    // Move target into source (if target had lesson)
+    if (swapTarget.lesson && swapTarget.assignment) {
+      const sourceKey = swapTarget.assignment.groupId
+        ? `${swapSource.classId}|${swapSource.day}|${swapSource.hour}|${swapTarget.assignment.groupId}`
+        : `${swapSource.classId}|${swapSource.day}|${swapSource.hour}`;
+      nextLessons[sourceKey] = {
+        ...swapTarget.lesson,
+        locked: swapTarget.lesson.locked
+      };
+    }
+
+    onChangeAppState({
+      ...appState,
+      planLekcji: {
+        ...pl,
+        lessons: nextLessons
+      }
+    });
+
+    const sSubj = swapSource.subject?.name || 'Lekcja A';
+    const tSubj = swapTarget.subject?.name || 'Lekcja B (wolny slot)';
+    notify(`🔄 Pomyślnie zamieniono: ${sSubj} ⇄ ${tSubj}!`, 'ok');
+
+    setShowSwapModal(false);
+    setSwapSource(null);
+    setSwapTarget(null);
+  };
 
   // ── FILTER STATES FOR CLASSES ──
   const [selectedGradeFilters, setSelectedGradeFilters] = useState<string[]>([]);
@@ -2560,6 +2845,54 @@ export default function PlanKlas({
                 )}
                 {!presentationMode && (
                   <>
+                    {onOpenVariantsModal && (
+                      <button 
+                        type="button"
+                        onClick={onOpenVariantsModal}
+                        className="px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                        title="Zarządzaj wariantami planu (Semestr I/II, Scenariusze, Diff)"
+                      >
+                        <Layers size={14} className="text-indigo-600 shrink-0" />
+                        <span className="hidden md:inline text-slate-500 font-semibold">Wariant:</span>
+                        <span className="text-indigo-700 font-extrabold max-w-[130px] truncate">
+                          {activeVariant?.name || 'Główny'}
+                        </span>
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setShowLockManagerModal(true)}
+                      className={`px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold rounded-lg border shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+                        totalLockedCount > 0 
+                          ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300' 
+                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                      title="Menedżer Kłódek: Zablokuj godziny klasy, nauczyciela lub ucznia SPE przed zmianami generatora"
+                    >
+                      <Lock size={14} className={totalLockedCount > 0 ? 'text-amber-600' : 'text-slate-400'} />
+                      <span className="hidden md:inline">Kłódki</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black bg-amber-200/80 text-amber-900 leading-none">
+                        {totalLockedCount}
+                      </span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (swapSource) {
+                          setSwapSource(null);
+                          notify('Anulowano tryb zamiany lekcji.', 'info');
+                        } else {
+                          notify('Wybierz lekcję w planie za pomocą ikony [ ⇄ ], a następnie kliknij drugi kafelek, aby otworzyć asystenta zamiany.', 'info');
+                        }
+                      }}
+                      className={`px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold rounded-lg border shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+                        swapSource 
+                          ? 'bg-indigo-600 text-white border-indigo-600 animate-pulse' 
+                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                      title="Szybka zamiana lekcji (Swap Assistant): zamieniaj lekcje między dniami i godzinami z kontrolą kolizji"
+                    >
+                      <ArrowLeftRight size={14} className={swapSource ? 'text-white' : 'text-indigo-600'} />
+                      <span className="hidden lg:inline">Szybka zamiana (Swap)</span>
+                    </button>
                     <button 
                       onClick={() => setShowGenerator(true)}
                       className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
@@ -2602,6 +2935,37 @@ export default function PlanKlas({
                 📅 Wszystkie klasy (dzień po dniu)
               </button>
             </div>
+
+            {/* BANER AKTYWNEGO TRYBU SWAP ASSISTANT */}
+            {swapSource && (
+              <div className="mb-4 bg-indigo-900 text-white px-4 py-3 rounded-2xl shadow-xl flex flex-wrap items-center justify-between gap-3 border border-indigo-700 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-700 flex items-center justify-center text-white shrink-0 shadow-xs">
+                    <ArrowLeftRight size={18} className="animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black tracking-wide flex items-center gap-2">
+                      <span>TRYB SZYBKIEJ ZAMIANY (SWAP ASSISTANT)</span>
+                      <span className="px-2 py-0.5 rounded-full bg-indigo-500/40 text-indigo-200 text-[10px] font-bold">
+                        Krok 2: Kliknij drugi slot
+                      </span>
+                    </div>
+                    <p className="text-[11.5px] text-indigo-200 mt-0.5 leading-snug">
+                      Wybrano źródło: <strong className="text-white font-bold">{swapSource.subject?.name || 'Lekcja'}</strong> ({DAYS[swapSource.day]}, lekcja {swapSource.hour + 1}
+                      {swapSource.teacher ? `, ${swapSource.teacher.first} ${swapSource.teacher.last}` : ''}). 
+                      Kliknij dowolną inną lekcję lub puste pole w planie, aby zweryfikować kolizje i zatwierdzić zamianę!
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSwapSource(null)}
+                  className="px-3.5 py-1.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0"
+                >
+                  ✕ Anuluj zamianę
+                </button>
+              </div>
+            )}
 
             {/* Selektor Dnia dla widoku wszystkich klas */}
             {viewMode === 'all' && (
@@ -2700,6 +3064,21 @@ export default function PlanKlas({
                                       <div 
                                         key={key}
                                         onClick={() => {
+                                          if (swapSource) {
+                                            handleSelectSwapTarget({
+                                              key,
+                                              classId: cls.id,
+                                              day: dayIndex,
+                                              hour: hourIndex,
+                                              lesson,
+                                              assignment: asg,
+                                              subject: subj,
+                                              teacher,
+                                              room,
+                                              groupName: group?.name
+                                            });
+                                            return;
+                                          }
                                           if (selectedAssignmentId) {
                                             placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex, cls.id);
                                           } else {
@@ -2750,21 +3129,91 @@ export default function PlanKlas({
                                                 {subj?.name}
                                               </span>
                                             </div>
-                                            <button 
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleRemoveLesson(key);
-                                              }}
-                                              onTouchStart={(e) => e.stopPropagation()}
-                                              onTouchEnd={(e) => {
-                                                e.stopPropagation();
-                                                handleRemoveLesson(key);
-                                              }}
-                                              className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer shrink-0"
-                                              title="Usuń tę lekcję z siatki"
-                                            >
-                                              ✕
-                                            </button>
+                                            <div className="flex items-center gap-0.5 shrink-0 z-10">
+                                              <button 
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleToggleLockLesson(key);
+                                                }}
+                                                onTouchEnd={(e) => {
+                                                  e.stopPropagation();
+                                                  handleToggleLockLesson(key);
+                                                }}
+                                                className={`p-1 rounded text-xs transition-all w-5 h-5 flex items-center justify-center cursor-pointer ${
+                                                  lesson.locked 
+                                                    ? 'bg-amber-100 text-amber-700 border border-amber-300 opacity-100' 
+                                                    : 'bg-slate-100/50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 opacity-0 group-hover:opacity-100 border border-slate-200/60'
+                                                }`}
+                                                title={lesson.locked ? 'Zablokowano przed generatorem (kliknij, aby odblokować)' : 'Zablokuj przed generatorem (kłódka)'}
+                                              >
+                                                {lesson.locked ? <Lock size={11} /> : <Unlock size={11} />}
+                                              </button>
+                                              <button 
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (swapSource?.key === key) {
+                                                    setSwapSource(null);
+                                                  } else {
+                                                    handleStartSwap({
+                                                      key,
+                                                      classId: cls.id,
+                                                      day: dayIndex,
+                                                      hour: hourIndex,
+                                                      lesson,
+                                                      assignment: asg,
+                                                      subject: subj,
+                                                      teacher,
+                                                      room,
+                                                      groupName: group?.name
+                                                    });
+                                                  }
+                                                }}
+                                                onTouchEnd={(e) => {
+                                                  e.stopPropagation();
+                                                  if (swapSource?.key === key) {
+                                                    setSwapSource(null);
+                                                  } else {
+                                                    handleStartSwap({
+                                                      key,
+                                                      classId: cls.id,
+                                                      day: dayIndex,
+                                                      hour: hourIndex,
+                                                      lesson,
+                                                      assignment: asg,
+                                                      subject: subj,
+                                                      teacher,
+                                                      room,
+                                                      groupName: group?.name
+                                                    });
+                                                  }
+                                                }}
+                                                className={`p-1 rounded text-xs transition-all w-5 h-5 flex items-center justify-center cursor-pointer ${
+                                                  swapSource?.key === key
+                                                    ? 'bg-indigo-600 text-white shadow-xs opacity-100'
+                                                    : 'bg-slate-100/50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 border border-slate-200/60'
+                                                }`}
+                                                title="Szybka zamiana lekcji (Swap Assistant)"
+                                              >
+                                                <ArrowLeftRight size={11} />
+                                              </button>
+                                              <button 
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveLesson(key);
+                                                }}
+                                                onTouchStart={(e) => e.stopPropagation()}
+                                                onTouchEnd={(e) => {
+                                                  e.stopPropagation();
+                                                  handleRemoveLesson(key);
+                                                }}
+                                                className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-5 h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 cursor-pointer"
+                                                title="Usuń tę lekcję z siatki"
+                                              >
+                                                ✕
+                                              </button>
+                                            </div>
                                           </div>
                                           <div className={`text-[10px] mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
                                             👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
@@ -2875,6 +3324,14 @@ export default function PlanKlas({
                               ) : (
                                 <div 
                                   onClick={() => {
+                                    if (swapSource) {
+                                      handleSelectSwapTarget({
+                                        classId: cls.id,
+                                        day: dayIndex,
+                                        hour: hourIndex
+                                      });
+                                      return;
+                                    }
                                     if (selectedAssignmentId) {
                                       placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex, cls.id);
                                     } else {
@@ -2961,6 +3418,21 @@ export default function PlanKlas({
                                         <div 
                                           key={key}
                                           onClick={() => {
+                                            if (swapSource) {
+                                              handleSelectSwapTarget({
+                                                key,
+                                                classId: activeClassId!,
+                                                day: dayIndex,
+                                                hour: hourIndex,
+                                                lesson,
+                                                assignment: asg,
+                                                subject: subj,
+                                                teacher,
+                                                room,
+                                                groupName: group?.name
+                                              });
+                                              return;
+                                            }
                                             if (selectedAssignmentId) {
                                               placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
                                             } else {
@@ -3011,21 +3483,91 @@ export default function PlanKlas({
                                                   {subj?.name}
                                                 </span>
                                               </div>
-                                              <button 
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleRemoveLesson(key);
-                                                }}
-                                                onTouchStart={(e) => e.stopPropagation()}
-                                                onTouchEnd={(e) => {
-                                                  e.stopPropagation();
-                                                  handleRemoveLesson(key);
-                                                }}
-                                                className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-0.5 sm:p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 z-10 cursor-pointer shrink-0"
-                                                title="Usuń tę lekcję z siatki"
-                                              >
-                                                ✕
-                                              </button>
+                                              <div className="flex items-center gap-0.5 shrink-0 z-10">
+                                                <button 
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleToggleLockLesson(key);
+                                                  }}
+                                                  onTouchEnd={(e) => {
+                                                    e.stopPropagation();
+                                                    handleToggleLockLesson(key);
+                                                  }}
+                                                  className={`p-0.5 sm:p-1 rounded text-xs transition-all w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center cursor-pointer ${
+                                                    lesson.locked 
+                                                      ? 'bg-amber-100 text-amber-700 border border-amber-300 opacity-100' 
+                                                      : 'bg-slate-100/50 hover:bg-amber-50 text-slate-400 hover:text-amber-600 opacity-0 group-hover:opacity-100 border border-slate-200/60'
+                                                  }`}
+                                                  title={lesson.locked ? 'Zablokowano przed generatorem (kliknij, aby odblokować)' : 'Zablokuj przed generatorem (kłódka)'}
+                                                >
+                                                  {lesson.locked ? <Lock size={10} /> : <Unlock size={10} />}
+                                                </button>
+                                                <button 
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (swapSource?.key === key) {
+                                                      setSwapSource(null);
+                                                    } else {
+                                                      handleStartSwap({
+                                                        key,
+                                                        classId: activeClassId!,
+                                                        day: dayIndex,
+                                                        hour: hourIndex,
+                                                        lesson,
+                                                        assignment: asg,
+                                                        subject: subj,
+                                                        teacher,
+                                                        room,
+                                                        groupName: group?.name
+                                                      });
+                                                    }
+                                                  }}
+                                                  onTouchEnd={(e) => {
+                                                    e.stopPropagation();
+                                                    if (swapSource?.key === key) {
+                                                      setSwapSource(null);
+                                                    } else {
+                                                      handleStartSwap({
+                                                        key,
+                                                        classId: activeClassId!,
+                                                        day: dayIndex,
+                                                        hour: hourIndex,
+                                                        lesson,
+                                                        assignment: asg,
+                                                        subject: subj,
+                                                        teacher,
+                                                        room,
+                                                        groupName: group?.name
+                                                      });
+                                                    }
+                                                  }}
+                                                  className={`p-0.5 sm:p-1 rounded text-xs transition-all w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center cursor-pointer ${
+                                                    swapSource?.key === key
+                                                      ? 'bg-indigo-600 text-white shadow-xs opacity-100'
+                                                      : 'bg-slate-100/50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 opacity-0 group-hover:opacity-100 border border-slate-200/60'
+                                                  }`}
+                                                  title="Szybka zamiana lekcji (Swap Assistant)"
+                                                >
+                                                  <ArrowLeftRight size={10} />
+                                                </button>
+                                                <button 
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveLesson(key);
+                                                  }}
+                                                  onTouchStart={(e) => e.stopPropagation()}
+                                                  onTouchEnd={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveLesson(key);
+                                                  }}
+                                                  className="text-slate-400 hover:text-red-500 hover:scale-110 active:scale-90 transition-all p-0.5 sm:p-1 bg-slate-100/50 hover:bg-red-50 rounded text-xs font-bold w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100 border border-slate-200/60 cursor-pointer"
+                                                  title="Usuń tę lekcję z siatki"
+                                                >
+                                                  ✕
+                                                </button>
+                                              </div>
                                             </div>
                                             <div className={`text-[9.5px] sm:text-[10px] mt-0.5 sm:mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
                                               👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
@@ -3136,6 +3678,14 @@ export default function PlanKlas({
                                 ) : (
                                   <div 
                                     onClick={() => {
+                                      if (swapSource) {
+                                        handleSelectSwapTarget({
+                                          classId: activeClassId!,
+                                          day: dayIndex,
+                                          hour: hourIndex
+                                        });
+                                        return;
+                                      }
                                       if (selectedAssignmentId) {
                                         placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
                                       } else {
@@ -6105,6 +6655,37 @@ export default function PlanKlas({
           appState={appState} 
           onChangeAppState={onChangeAppState} 
           onClose={() => setShowGenerator(false)} 
+        />
+      )}
+
+      {showSwapModal && swapSource && swapTarget && (
+        <SwapAssistantModal
+          isOpen={showSwapModal}
+          source={swapSource}
+          target={swapTarget}
+          classesMap={classesMap}
+          conflictsAtoB={checkSwapConflicts(swapSource, swapTarget).conflictsAtoB}
+          conflictsBtoA={checkSwapConflicts(swapSource, swapTarget).conflictsBtoA}
+          swapIncludeRooms={swapIncludeRooms}
+          onToggleIncludeRooms={setSwapIncludeRooms}
+          onConfirmSwap={handleExecuteSwap}
+          onClose={() => {
+            setShowSwapModal(false);
+            setSwapSource(null);
+            setSwapTarget(null);
+          }}
+        />
+      )}
+
+      {showLockManagerModal && (
+        <LockManagerModal
+          isOpen={showLockManagerModal}
+          appState={appState}
+          onBulkLockClass={handleBulkLockClass}
+          onBulkLockTeacher={handleBulkLockTeacher}
+          onBulkLockSPEStudent={handleBulkLockSPEStudent}
+          onBulkLockAllClasses={handleBulkLockAllClasses}
+          onClose={() => setShowLockManagerModal(false)}
         />
       )}
     </div>

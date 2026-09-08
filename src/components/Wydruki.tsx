@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, SpecialStudent } from '../types';
-import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink, HeartHandshake, Sparkles, BookOpen, Clock, Award } from 'lucide-react';
+import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink, HeartHandshake, Sparkles, BookOpen, Clock, Award, FileSpreadsheet, Tv } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
 import { calculateAdaptationDuties } from '../utils/adaptationDuty';
 import ArkuszWsparciaUcznia from './ArkuszWsparciaUcznia';
+import PlachtaDyrektorska from './PlachtaDyrektorska';
+import KioskMode from './KioskMode';
 
 interface WydrukiProps {
   appState: AppState;
@@ -107,7 +109,8 @@ function getSegmentGroups(categoryCols: any[]) {
 }
 
 export default function Wydruki({ appState, schedData }: WydrukiProps) {
-  const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties' | 'special_support'>('classes');
+  const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties' | 'special_support' | 'plachta'>('classes');
+  const [isKioskOpen, setIsKioskOpen] = useState<boolean>(false);
   const [scheduleVersion, setScheduleVersion] = useState<'etap1' | 'etap2'>(() => {
     const yk = appState.yearKey || 'default';
     const yearObj = schedData[yk];
@@ -2914,6 +2917,15 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 <Printer size={15} className="animate-pulse" /> Podgląd płachty sal
               </button>
             )}
+            <button 
+              type="button"
+              onClick={() => setIsKioskOpen(true)}
+              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-amber-400 text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer border border-slate-700"
+              title="Uruchom interaktywny widok rzutnika / Tablicy informacyjnej TV (Kiosk Mode)"
+            >
+              <Tv size={15} className="animate-pulse" />
+              <span>Tablica TV (Kiosk)</span>
+            </button>
             {printType === 'duties' && (
               <button 
                 onClick={() => setIsDutiesModalOpen(true)}
@@ -2945,36 +2957,43 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           {/* Main Select template */}
           <div className="space-y-1 sm:col-span-2 lg:col-span-2">
             <label className="text-[10px] text-slate-400 font-bold uppercase">Typ wydruku</label>
-            <div className="grid grid-cols-5 gap-1 bg-slate-100 p-1 rounded-lg">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-slate-100 p-1 rounded-lg">
               <button
                 onClick={() => setPrintType('classes')}
-                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'classes' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10px] font-black rounded-md transition ${printType === 'classes' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Plan Klas
               </button>
               <button
                 onClick={() => setPrintType('teachers')}
-                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'teachers' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10px] font-black rounded-md transition ${printType === 'teachers' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Nauczyciele
               </button>
               <button
                 onClick={() => setPrintType('rooms')}
-                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'rooms' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10px] font-black rounded-md transition ${printType === 'rooms' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Gabinety
               </button>
               <button
                 onClick={() => setPrintType('duties')}
-                className={`py-1.5 text-[10.5px] font-black rounded-md transition ${printType === 'duties' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
+                className={`py-1.5 text-[10px] font-black rounded-md transition ${printType === 'duties' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500 hover:text-slate-900'}`}
               >
                 Dyżury
               </button>
               <button
                 onClick={() => setPrintType('special_support')}
-                className={`py-1.5 text-[10.5px] font-black rounded-md transition flex items-center justify-center gap-1 ${printType === 'special_support' ? 'bg-indigo-600 shadow-xs text-white' : 'text-indigo-700 hover:text-indigo-950 font-black'}`}
+                className={`py-1.5 text-[10px] font-black rounded-md transition flex items-center justify-center gap-1 ${printType === 'special_support' ? 'bg-indigo-600 shadow-xs text-white' : 'text-indigo-700 hover:text-indigo-950 font-black'}`}
               >
-                <HeartHandshake size={12} /> Arkusz SPE
+                <HeartHandshake size={11} /> SPE
+              </button>
+              <button
+                onClick={() => setPrintType('plachta')}
+                className={`py-1.5 text-[10px] font-black rounded-md transition flex items-center justify-center gap-1 ${printType === 'plachta' ? 'bg-emerald-600 shadow-xs text-white font-black' : 'text-emerald-700 hover:text-emerald-950 font-black'}`}
+                title="Płachta Dyrektorska – wydruk wielkoformatowy A3/A2"
+              >
+                <FileSpreadsheet size={11} /> Płachta A3
               </button>
             </div>
           </div>
@@ -3231,7 +3250,12 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       </div>
 
       {/* --- PRINT AREA --- */}
-      <div className="print-container max-w-7xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0">
+      {printType === 'plachta' ? (
+        <div className="w-full">
+          <PlachtaDyrektorska appState={appState} schedData={schedData} />
+        </div>
+      ) : (
+        <div className="print-container max-w-7xl mx-auto space-y-8 bg-white p-8 border border-slate-200 shadow-sm rounded-2xl print:shadow-none print:border-none print:p-0">
         
         {/* ======================= CLASSES RENDERING ======================= */}
         {printType === 'classes' && classesToPrint.map((cls, idx) => {
@@ -3805,6 +3829,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           </div>
         )}
       </div>
+      )}
 
       {/* Dynamic Duties Print Preview and Verification Modal */}
       {isDutiesModalOpen && (
@@ -4111,6 +4136,15 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Kiosk Mode (TV / Projector Display) */}
+      {isKioskOpen && (
+        <KioskMode
+          appState={appState}
+          schedData={schedData}
+          onClose={() => setIsKioskOpen(false)}
+        />
       )}
     </div>
   );

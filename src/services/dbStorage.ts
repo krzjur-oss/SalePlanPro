@@ -50,6 +50,8 @@ export const STORAGE_KEYS = {
   TERMS_ACCEPTED: 'saleplan_terms_accepted_v1',
   MIGRATION_DONE: 'saleplan_indexeddb_migrated_v1',
   STRUCTURE_TEMPLATES: 'saleplan_v3_structure_templates',
+  PLAN_VARIANTS: 'saleplan_v3_plan_variants',
+  ACTIVE_VARIANT_ID: 'saleplan_v3_active_variant_id',
   STORAGE_ENC_META: STORAGE_ENC_META_KEY,
 } as const;
 
@@ -303,6 +305,8 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
     STORAGE_KEYS.AUTOSAVE_VERSIONS,
     STORAGE_KEYS.HISTORY_LOGS,
     STORAGE_KEYS.STRUCTURE_TEMPLATES,
+    STORAGE_KEYS.PLAN_VARIANTS,
+    STORAGE_KEYS.ACTIVE_VARIANT_ID,
   ];
 
   const currentData: Record<string, any> = {};
@@ -339,6 +343,8 @@ export async function disableDatabaseEncryption(password: string): Promise<boole
     STORAGE_KEYS.AUTOSAVE_VERSIONS,
     STORAGE_KEYS.HISTORY_LOGS,
     STORAGE_KEYS.STRUCTURE_TEMPLATES,
+    STORAGE_KEYS.PLAN_VARIANTS,
+    STORAGE_KEYS.ACTIVE_VARIANT_ID,
   ];
 
   const currentData: Record<string, any> = {};
@@ -377,6 +383,8 @@ export async function changeDatabaseEncryptionPassword(oldPass: string, newPass:
     STORAGE_KEYS.AUTOSAVE_VERSIONS,
     STORAGE_KEYS.HISTORY_LOGS,
     STORAGE_KEYS.STRUCTURE_TEMPLATES,
+    STORAGE_KEYS.PLAN_VARIANTS,
+    STORAGE_KEYS.ACTIVE_VARIANT_ID,
   ];
 
   const currentData: Record<string, any> = {};

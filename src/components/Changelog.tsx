@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.7',
+      date: 'Wrzesień 2026',
+      title: 'Płachta Dyrektorska (Wielkoformatowy Arkusz A3/A2) oraz Tablica TV / Kiosk Mode',
+      description: 'Kompleksowe wdrożenie dwóch kluczowych modułów prezentacji i publikacji planu szkoły: Płachty Dyrektorskiej do wydruków wielkoformatowych na arkuszach A3/A2/A4 z pełną konfiguracją widoku i kolorystyki oraz Tablicy TV / Trybu Kiosk dla rzutników i telewizorów w holu szkoły z zegarem na żywo, odliczaniem do dzwonka i automatyczną karuzelą klas.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Płachta Dyrektorska (Wielkoformatowy Arkusz A3/A2): Całościowy podgląd szkoły w jednym arkuszu – możliwość zestawienia wszystkich oddziałów klasowych, wszystkich nauczycieli lub gabinetów w podziale na dni tygodnia i godziny lekcyjne, ze stylami @page dostosowanymi do ploterów i drukarek A3/A2 w orientacji poziomej.', badgeText: 'Płachta A3/A2' },
+        { type: 'feature', text: 'Tablica Informacyjna TV (Kiosk Mode): Interaktywny tryb prezentacyjny dla rzutników i telewizorów w holu szkoły oraz pokoju nauczycielskim z zegarem czasu rzeczywistego, licznikiem czasu do najbliższego dzwonka, dynamicznym panelem „Na żywo”, automatyczną karuzelą planów klas oraz grafikiem obłożenia sal.', badgeText: 'Tablica TV' },
+        { type: 'improvement', text: 'Personalizacja Płachty Dyrektorskiej: Wybór gęstości siatki (Kompaktowa, Standardowa, Rozszerzona), trybu kolorowania według dziedzin przedmiotowych lub monochromatycznego o wysokim kontraście, widoczności sal, nauczycieli, grup, legendy przedmiotowej oraz zoomu ekranowego 50%–150%.', badgeText: 'Personalizacja' },
+        { type: 'improvement', text: 'Pasek Ogłoszeń i Symulator w Kiosku TV: Możliwość definiowania paska informacyjnego (Ticker) dla uczniów i rodziców oraz symulator dowolnego dnia i godziny do testowania widoków przed rozpoczęciem zajęć.', badgeText: 'Kiosk / Rzutnik' },
+        { type: 'improvement', text: 'Szybki Dostęp w UI: Dedykowane przyciski w module Wydruki (Płachta A3, Tablica TV), bezpośrednie skróty na górnym pasku narzędziowym oraz w menu głównym (hamburger).', badgeText: 'Nawigacja UI' }
+      ]
+    },
+    {
       version: 'v3.8.6',
       date: 'Wrzesień 2026',
       title: 'Podręcznik i Instrukcje Wszystkich Modułów oraz Akceptacja Regulaminu i Licencji',
       description: 'Dodano kompleksowy, interaktywny podręcznik użytkownika z podziałem na wszystkie moduły od Kreatora Szkoły po Statystyki, z wyszukiwarką fraz i dobrymi praktykami planistycznymi. Wprowadzono także bezpieczną procedurę pierwszego uruchomienia wymagającą zapoznania się i akceptacji Regulaminu oraz Wolnej Licencji Domowo-Edukacyjnej (WLDE).',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Interaktywny Podręcznik w „O programie”: Nowa dedykowana zakładka zawierająca szczegółowe instrukcje krok po kroku dla wszystkich 8 modułów aplikacji (Kreator Szkoły 1–10, Plan Klas, Plan Sal, Dyżury Nauczycielskie, Uczniowie SPE, Statystyki, Wydruki oraz Bezpieczeństwo i Kopia Zapasowa).', badgeText: 'Instrukcje' },
         { type: 'feature', text: 'Procedura pierwszego uruchomienia i akceptacja licencji: Nowy pełnoekranowy modal akceptacji Regulaminu, Polityki Prywatności (100% lokalne przetwarzanie RODO w przeglądarce) oraz Wolnej Licencji Domowo-Edukacyjnej (WLDE) chroniącej prawa autorskie twórcy mgr Krzysztofa Jureczka.', badgeText: 'Regulamin & RODO' },

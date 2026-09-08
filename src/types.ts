@@ -117,6 +117,7 @@ export interface SpecialAssignment {
 
 export interface SpecialLesson {
   assignmentId: string;
+  locked?: boolean;
 }
 
 export interface SpecialLessonsState {
@@ -453,6 +454,65 @@ export interface SchoolStructureTemplate {
     dutyBreaks?: Przerwa[];
     dutySettings?: any;
     generatorSettings?: GeneratorSettings;
+  };
+}
+
+// -------------------------------------------------------------
+// PLAN VARIANTS (WARIANTY PLANU LEKCJI / SEMESTRY / SCENARIUSZE)
+// -------------------------------------------------------------
+export type PlanVariantTag = 'semestr_1' | 'semestr_2' | 'roboczy' | 'awaryjny' | 'praktyki' | 'inna';
+
+export interface PlanVariantData {
+  lessons: LessonsState;
+  schedData: SchedData;
+  assignments?: Assignment[];
+  specialLessons?: SpecialLessonsState;
+  specialAbsences?: SpecialAbsencesState;
+  spePlan?: SPEPlanState;
+  dyzury?: DyzuryState;
+}
+
+export interface PlanVariantStats {
+  totalLessons: number;
+  classesCount: number;
+  teachersCount: number;
+  roomsUsedCount: number;
+  windowsCount?: number;
+}
+
+export interface PlanVariant {
+  id: string;
+  name: string;
+  tag: PlanVariantTag;
+  description?: string;
+  validFrom?: string; // YYYY-MM-DD
+  validTo?: string;   // YYYY-MM-DD
+  isActiveNow?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  color: string;
+  isDefault?: boolean;
+  data: PlanVariantData;
+  stats?: PlanVariantStats;
+}
+
+export interface PlanDiffItem {
+  id: string;
+  classId: string;
+  className: string;
+  day: number;
+  hour: number;
+  hourLabel: string;
+  status: 'added' | 'removed' | 'changed' | 'room_changed' | 'teacher_changed';
+  variantALesson?: Lesson | null;
+  variantBLesson?: Lesson | null;
+  details: {
+    subjectA?: string;
+    subjectB?: string;
+    teacherA?: string;
+    teacherB?: string;
+    roomA?: string;
+    roomB?: string;
   };
 }
 

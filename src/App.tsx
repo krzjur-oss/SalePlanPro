@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import { 
-  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion, Lesson
+  AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion, Lesson, PlanVariant
 } from './types';
 import { 
   getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
@@ -26,11 +26,15 @@ const SnapshotManager = lazy(() => import('./components/SnapshotManager'));
 const Dyzury = lazy(() => import('./components/Dyzury'));
 const OProgramie = lazy(() => import('./components/OProgramie'));
 const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
+const PlanVariantsModal = lazy(() => import('./components/PlanVariantsModal'));
+const PlachtaDyrektorska = lazy(() => import('./components/PlachtaDyrektorska'));
+const KioskMode = lazy(() => import('./components/KioskMode'));
 import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database,
+  FileSpreadsheet, Tv
 } from 'lucide-react';
 
 function sortAppState(rawInput: any): AppState {
@@ -163,6 +167,21 @@ export default function App() {
     ];
   });
 
+  const [planVariants, setPlanVariants] = useState<PlanVariant[]>(() => {
+    const saved = getStorageItemSync<PlanVariant[]>(STORAGE_KEYS.PLAN_VARIANTS);
+    if (saved && Array.isArray(saved) && saved.length > 0) {
+      return saved;
+    }
+    return [];
+  });
+
+  const [activeVariantId, setActiveVariantId] = useState<string>(() => {
+    const saved = getStorageItemSync<string>(STORAGE_KEYS.ACTIVE_VARIANT_ID);
+    return saved || 'default_semestr_1';
+  });
+
+  const [showVariantsModal, setShowVariantsModal] = useState<boolean>(false);
+
   const [storageStats, setStorageStats] = useState<StorageStatistics>({
     usedBytes: getStorageSize(),
     quotaBytes: 1024 * 1024 * 1024,
@@ -210,6 +229,14 @@ export default function App() {
         const idbLogs = await getStorageItem<AppEventLog[]>(STORAGE_KEYS.HISTORY_LOGS);
         if (idbLogs && isMounted && Array.isArray(idbLogs) && idbLogs.length > 0) {
           setHistoryLogs(idbLogs);
+        }
+        const idbVariants = await getStorageItem<PlanVariant[]>(STORAGE_KEYS.PLAN_VARIANTS);
+        if (idbVariants && isMounted && Array.isArray(idbVariants) && idbVariants.length > 0) {
+          setPlanVariants(idbVariants);
+        }
+        const idbActiveVarId = await getStorageItem<string>(STORAGE_KEYS.ACTIVE_VARIANT_ID);
+        if (idbActiveVarId && isMounted) {
+          setActiveVariantId(idbActiveVarId);
         }
 
         const stats = await getDetailedStorageStats();
@@ -297,12 +324,328 @@ export default function App() {
     }
   };
 
+  // Active variant memoized
+  const activeVariant = useMemo(() => {
+    return planVariants.find(v => v.id === activeVariantId) || planVariants[0] || null;
+  }, [planVariants, activeVariantId]);
+
+  // Ensure default variant exists if storage was empty
+  useEffect(() => {
+    if (planVariants.length === 0 && appState.planLekcji) {
+      const defaultVar: PlanVariant = {
+        id: 'default_semestr_1',
+        name: 'Wariant Główny (Semestr I)',
+        tag: 'semestr_1',
+        color: '#3b82f6',
+        description: 'Podstawowy rozkład zajęć roku szkolnego (I semestr).',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        data: {
+          lessons: JSON.parse(JSON.stringify(appState.planLekcji.lessons || {})),
+          schedData: JSON.parse(JSON.stringify(schedData || {})),
+          assignments: JSON.parse(JSON.stringify(appState.planLekcji.assignments || [])),
+          specialLessons: JSON.parse(JSON.stringify(appState.planLekcji.specialLessons || {})),
+          specialAbsences: JSON.parse(JSON.stringify(appState.planLekcji.specialAbsences || {})),
+          spePlan: JSON.parse(JSON.stringify(appState.planLekcji.spePlan || { slotAssignments: [] })),
+          dyzury: JSON.parse(JSON.stringify(appState.dyzury?.harmonogram || {}))
+        },
+        stats: {
+          totalLessons: Object.keys(appState.planLekcji.lessons || {}).length,
+          classesCount: appState.planLekcji.classes?.length || 0,
+          teachersCount: appState.planLekcji.teachers?.length || 0,
+          roomsUsedCount: appState.planLekcji.rooms?.length || 0
+        }
+      };
+      setPlanVariants([defaultVar]);
+      setActiveVariantId(defaultVar.id);
+      setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, [defaultVar]);
+      setStorageItem(STORAGE_KEYS.ACTIVE_VARIANT_ID, defaultVar.id);
+    }
+  }, [appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
+
+  // Debounced auto-save of current working changes into the active variant
+  useEffect(() => {
+    if (!activeVariantId || planVariants.length === 0) return;
+
+    const timer = setTimeout(() => {
+      setPlanVariants(prev => {
+        const idx = prev.findIndex(v => v.id === activeVariantId);
+        if (idx === -1) return prev;
+        const cur = prev[idx];
+        const updatedVariant: PlanVariant = {
+          ...cur,
+          updatedAt: new Date().toISOString(),
+          data: {
+            ...cur.data,
+            lessons: appState.planLekcji.lessons || {},
+            schedData: schedData || {},
+            assignments: appState.planLekcji.assignments || [],
+            specialLessons: appState.planLekcji.specialLessons || {},
+            specialAbsences: appState.planLekcji.specialAbsences || {},
+            spePlan: appState.planLekcji.spePlan || { slotAssignments: [] },
+            dyzury: appState.dyzury?.harmonogram || {}
+          },
+          stats: {
+            totalLessons: Object.keys(appState.planLekcji.lessons || {}).length,
+            classesCount: appState.planLekcji.classes.length,
+            teachersCount: appState.planLekcji.teachers.length,
+            roomsUsedCount: appState.planLekcji.rooms.length
+          }
+        };
+        const copy = [...prev];
+        copy[idx] = updatedVariant;
+        setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, copy);
+        return copy;
+      });
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [appState.planLekcji.lessons, appState.planLekcji.assignments, appState.dyzury?.harmonogram, schedData, activeVariantId]);
+
+  const handleSwitchVariant = (targetVariantId: string) => {
+    const target = planVariants.find(v => v.id === targetVariantId);
+    if (!target) return;
+    if (targetVariantId === activeVariantId) {
+      notify(`Wariant „${target.name}” jest już aktualnie aktywny.`, 'info');
+      return;
+    }
+
+    // 1. Snapshot active variant state before switching
+    const updatedVariants = planVariants.map(v => {
+      if (v.id === activeVariantId) {
+        return {
+          ...v,
+          updatedAt: new Date().toISOString(),
+          data: {
+            lessons: JSON.parse(JSON.stringify(appState.planLekcji.lessons || {})),
+            schedData: JSON.parse(JSON.stringify(schedData || {})),
+            assignments: JSON.parse(JSON.stringify(appState.planLekcji.assignments || [])),
+            specialLessons: JSON.parse(JSON.stringify(appState.planLekcji.specialLessons || {})),
+            specialAbsences: JSON.parse(JSON.stringify(appState.planLekcji.specialAbsences || {})),
+            spePlan: JSON.parse(JSON.stringify(appState.planLekcji.spePlan || { slotAssignments: [] })),
+            dyzury: JSON.parse(JSON.stringify(appState.dyzury?.harmonogram || {}))
+          }
+        };
+      }
+      return v;
+    });
+
+    const refreshedTarget = updatedVariants.find(v => v.id === targetVariantId) || target;
+
+    // 2. Commit target variant into current working state
+    setAppState(prev => ({
+      ...prev,
+      planLekcji: {
+        ...prev.planLekcji,
+        lessons: refreshedTarget.data.lessons || {},
+        assignments: refreshedTarget.data.assignments && refreshedTarget.data.assignments.length > 0
+          ? refreshedTarget.data.assignments
+          : prev.planLekcji.assignments,
+        specialLessons: refreshedTarget.data.specialLessons || {},
+        specialAbsences: refreshedTarget.data.specialAbsences || {},
+        spePlan: refreshedTarget.data.spePlan || { slotAssignments: [] }
+      },
+      dyzury: {
+        ...prev.dyzury,
+        harmonogram: refreshedTarget.data.dyzury || {}
+      }
+    }));
+
+    setSchedData(refreshedTarget.data.schedData || {});
+    setActiveVariantId(refreshedTarget.id);
+    setPlanVariants(updatedVariants);
+
+    setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, updatedVariants);
+    setStorageItem(STORAGE_KEYS.ACTIVE_VARIANT_ID, refreshedTarget.id);
+
+    setUndoStack([]);
+    setRedoStack([]);
+
+    addEventLog('other', `Przełączono na wariant: "${refreshedTarget.name}"`, `Kategoria: ${refreshedTarget.tag}`);
+    notify(`Przełączono aktywny plan na wariant: „${refreshedTarget.name}”.`, 'ok');
+  };
+
+  const handleSaveVariants = (updated: PlanVariant[]) => {
+    setPlanVariants(updated);
+    setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, updated);
+  };
+
+  const handleUpdateActiveVariant = (updatedVar: PlanVariant) => {
+    setPlanVariants(prev => {
+      const next = prev.map(v => v.id === updatedVar.id ? updatedVar : v);
+      setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, next);
+      return next;
+    });
+  };
+
+  const handleApplySelectiveClassSync = (sourceVarId: string, targetVarId: string, classId: string) => {
+    const sourceVar = planVariants.find(v => v.id === sourceVarId);
+    const targetVar = planVariants.find(v => v.id === targetVarId);
+    const targetClass = appState.planLekcji.classes.find(c => c.id === classId);
+
+    if (!sourceVar || !targetVar || !targetClass) return;
+
+    // 1. Synchronizacja siatki lekcji klasy
+    const lessonsFrom = sourceVar.data.lessons || {};
+    const newLessonsTo = { ...targetVar.data.lessons };
+
+    // Usunięcie bieżących lekcji danej klasy z wariantu docelowego
+    Object.keys(newLessonsTo).forEach(k => {
+      if (k.startsWith(`${classId}|`)) {
+        delete newLessonsTo[k];
+      }
+    });
+
+    // Skopiowanie lekcji z wariantu źródłowego
+    Object.entries(lessonsFrom).forEach(([k, l]) => {
+      if (k.startsWith(`${classId}|`)) {
+        newLessonsTo[k] = JSON.parse(JSON.stringify(l));
+      }
+    });
+
+    // 2. Synchronizacja planu sal (schedData) dla danej klasy
+    const sourceSched = sourceVar.data.schedData || {};
+    const targetSched: SchedData = JSON.parse(JSON.stringify(targetVar.data.schedData || {}));
+
+    // Czyszczenie starej alokacji sal dla tej klasy
+    Object.keys(targetSched).forEach(yK => {
+      const daysObj = targetSched[yK];
+      if (daysObj && typeof daysObj === 'object') {
+        Object.keys(daysObj).forEach(dK => {
+          const hoursObj = daysObj[dK];
+          if (hoursObj && typeof hoursObj === 'object') {
+            Object.keys(hoursObj).forEach(hK => {
+              const roomsObj = hoursObj[hK];
+              if (roomsObj && typeof roomsObj === 'object') {
+                Object.keys(roomsObj).forEach(rK => {
+                  const cell = roomsObj[rK];
+                  if (cell && (cell.k === targetClass.name || cell.k === targetClass.id)) {
+                    delete roomsObj[rK];
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+
+    // Kopiowanie alokacji sal z wariantu źródłowego
+    Object.keys(sourceSched).forEach(yK => {
+      const daysObj = sourceSched[yK];
+      if (daysObj && typeof daysObj === 'object') {
+        if (!targetSched[yK]) targetSched[yK] = {};
+        Object.keys(daysObj).forEach(dK => {
+          const hoursObj = daysObj[dK];
+          if (hoursObj && typeof hoursObj === 'object') {
+            if (!targetSched[yK][dK]) targetSched[yK][dK] = {};
+            Object.keys(hoursObj).forEach(hK => {
+              const roomsObj = hoursObj[hK];
+              if (roomsObj && typeof roomsObj === 'object') {
+                if (!targetSched[yK][dK][hK]) targetSched[yK][dK][hK] = {};
+                Object.keys(roomsObj).forEach(rK => {
+                  const cell = roomsObj[rK];
+                  if (cell && (cell.k === targetClass.name || cell.k === targetClass.id)) {
+                    targetSched[yK][dK][hK][rK] = JSON.parse(JSON.stringify(cell));
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+    });
+
+    const updatedTargetVar: PlanVariant = {
+      ...targetVar,
+      data: {
+        ...targetVar.data,
+        lessons: newLessonsTo,
+        schedData: targetSched
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    const updatedVariants = planVariants.map(v => v.id === targetVar.id ? updatedTargetVar : v);
+    setPlanVariants(updatedVariants);
+    setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, updatedVariants);
+
+    if (targetVar.id === activeVariantId) {
+      setAppState(prev => ({
+        ...prev,
+        planLekcji: {
+          ...prev.planLekcji,
+          lessons: newLessonsTo
+        }
+      }));
+      setSchedData(targetSched);
+    }
+
+    addEventLog('other', `Synchronizacja planu klasy i sal: ${targetClass.name}`, `Przeniesiono lekcje oraz przydziały sal z "${sourceVar.name}" do "${targetVar.name}".`);
+    notify(`Przeniesiono plan lekcji i sal klasy ${targetClass.name} z „${sourceVar.name}” do „${targetVar.name}”.`, 'ok');
+  };
+
+  const handleApplyTeacherDutySync = (sourceVarId: string, targetVarId: string, teacherAbbr: string) => {
+    const sourceVar = planVariants.find(v => v.id === sourceVarId);
+    const targetVar = planVariants.find(v => v.id === targetVarId);
+    const teacher = appState.planLekcji.teachers.find(t => t.abbr === teacherAbbr || t.id === teacherAbbr);
+
+    if (!sourceVar || !targetVar || !teacher) return;
+
+    const sourceDuties = sourceVar.data.dyzury || {};
+    const targetDuties = { ...(targetVar.data.dyzury || {}) };
+
+    // Usunięcie dotychczasowych dyżurów tego nauczyciela z wariantu docelowego
+    Object.keys(targetDuties).forEach(k => {
+      if (targetDuties[k]?.teacherAbbr === teacher.abbr) {
+        delete targetDuties[k];
+      }
+    });
+
+    // Skopiowanie dyżurów z wariantu źródłowego
+    let copiedCount = 0;
+    Object.entries(sourceDuties).forEach(([key, entry]) => {
+      if (entry && entry.teacherAbbr === teacher.abbr) {
+        targetDuties[key] = JSON.parse(JSON.stringify(entry));
+        copiedCount++;
+      }
+    });
+
+    const updatedTargetVar: PlanVariant = {
+      ...targetVar,
+      data: {
+        ...targetVar.data,
+        dyzury: targetDuties
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    const updatedVariants = planVariants.map(v => v.id === targetVar.id ? updatedTargetVar : v);
+    setPlanVariants(updatedVariants);
+    setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, updatedVariants);
+
+    if (targetVar.id === activeVariantId) {
+      setAppState(prev => ({
+        ...prev,
+        dyzury: {
+          ...prev.dyzury,
+          harmonogram: targetDuties
+        }
+      }));
+    }
+
+    addEventLog('other', `Synchronizacja dyżurów: ${teacher.first} ${teacher.last}`, `Skopiowano ${copiedCount} dyżurów z "${sourceVar.name}" do "${targetVar.name}".`);
+    notify(`Skopiowano ${copiedCount} dyżurów nauczyciela ${teacher.first} ${teacher.last} (${teacher.abbr}) do wariantu „${targetVar.name}”.`, 'ok');
+  };
+
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'instructions' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.8.6';
+  const CURRENT_VERSION = '3.8.7';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPlachtaModal, setShowPlachtaModal] = useState(false);
+  const [showKioskModal, setShowKioskModal] = useState(false);
 
   useEffect(() => {
     const checkTermsAndVersion = async () => {
@@ -998,6 +1341,8 @@ export default function App() {
 
     if (options.includeAppState) {
       backupObj.appState = appState;
+      backupObj.planVariants = planVariants;
+      backupObj.activeVariantId = activeVariantId;
     }
     if (options.includeSchedData) {
       backupObj.schedData = schedData;
@@ -1337,6 +1682,28 @@ export default function App() {
                         </button>
 
                         <button
+                          onClick={() => { setShowPlachtaModal(true); setHamburgerOpen(false); }}
+                          className="w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 text-slate-300 hover:text-white"
+                        >
+                          <FileSpreadsheet size={15} className="shrink-0 mt-0.5 text-emerald-400" />
+                          <div>
+                            <span className="text-xs font-black block text-slate-200">📜 Płachta Dyrektorska (A3/A2)</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase font-mono">Wielkoformatowy arkusz szkoły</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setShowKioskModal(true); setHamburgerOpen(false); }}
+                          className="w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 text-amber-300 hover:text-white"
+                        >
+                          <Tv size={15} className="shrink-0 mt-0.5 text-amber-400" />
+                          <div>
+                            <span className="text-xs font-black block text-amber-300">📺 Tablica TV / Kiosk (Rzutnik)</span>
+                            <span className="text-[9px] text-amber-400/80 block leading-tight mt-0.5 font-bold uppercase font-mono">Autoprzewijanie na hol & pokój naucz.</span>
+                          </div>
+                        </button>
+
+                        <button
                           onClick={() => { setCurrentTab('statystyki'); setHamburgerOpen(false); }}
                           className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'statystyki'
@@ -1365,6 +1732,17 @@ export default function App() {
                           <div>
                             <span className="text-xs font-black block">⚙️ Ustawienia generatorów</span>
                             <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Kryteria i wagi algorytmów</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setShowVariantsModal(true); setHamburgerOpen(false); }}
+                          className="w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 text-slate-400 hover:text-white"
+                        >
+                          <Layers size={15} className="shrink-0 mt-0.5 text-indigo-400" />
+                          <div>
+                            <span className="text-xs font-black block text-slate-200">🌿 Warianty i Semestry Planu</span>
+                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Semestr I/II, Diff i scenariusze</span>
                           </div>
                         </button>
 
@@ -1458,6 +1836,44 @@ export default function App() {
                   </span>
                 )}
               </button>
+
+              <button 
+                id="toolbar-plan-variants-btn"
+                onClick={() => setShowVariantsModal(true)}
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-indigo-500/60 cursor-pointer shadow-xs"
+                title="Wariantowanie planu (Semestr I/II, warianty robocze, diff porównawczy)"
+              >
+                <Layers size={14} className="text-indigo-400 shrink-0" />
+                <span className="leading-none text-slate-400 hidden sm:inline">Wariant:</span>
+                <span className="text-indigo-300 font-bold max-w-[130px] truncate leading-none">
+                  {activeVariant?.name || 'Domyślny'}
+                </span>
+                {planVariants.length > 1 && (
+                  <span className="bg-indigo-600 font-black text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center">
+                    {planVariants.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setShowPlachtaModal(true)}
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 cursor-pointer shadow-xs"
+                title="Płachta Dyrektorska (Wielkoformatowy arkusz szkoły A3/A2)"
+              >
+                <FileSpreadsheet size={14} className="text-emerald-400 shrink-0" />
+                <span className="leading-none hidden xl:inline">Płachta Dyrektorska</span>
+                <span className="leading-none xl:hidden">Płachta</span>
+              </button>
+
+              <button
+                onClick={() => setShowKioskModal(true)}
+                className="px-2.5 py-1.5 text-amber-300 hover:text-white hover:bg-amber-950/40 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-amber-800/60 hover:border-amber-500/80 cursor-pointer shadow-xs"
+                title="Tablica TV / Kiosk dla rzutnika i telewizora w holu szkoły"
+              >
+                <Tv size={14} className="text-amber-400 shrink-0 animate-pulse" />
+                <span className="leading-none hidden xl:inline">Tablica TV (Kiosk)</span>
+                <span className="leading-none xl:hidden">Kiosk TV</span>
+              </button>
             </div>
 
             {/* Prawa grupa: Eksport, Import ze scalaniem i Reset danych */}
@@ -1538,6 +1954,8 @@ export default function App() {
                     }}
                     presentationMode={isPresentationMode}
                     initialTab="plan"
+                    activeVariant={activeVariant}
+                    onOpenVariantsModal={() => setShowVariantsModal(true)}
                   />
                 )}
                 {currentTab === 'plan_sal' && (
@@ -1679,6 +2097,51 @@ export default function App() {
           onRestoringChange={setIsRestoring}
           autosaveVersions={autosaveVersions}
         />
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {showVariantsModal && (
+          <PlanVariantsModal
+            isOpen={showVariantsModal}
+            onClose={() => setShowVariantsModal(false)}
+            appState={appState}
+            schedData={schedData}
+            planVariants={planVariants}
+            activeVariantId={activeVariantId}
+            onSwitchVariant={handleSwitchVariant}
+            onSaveVariants={handleSaveVariants}
+            onUpdateActiveVariant={handleUpdateActiveVariant}
+            onApplySelectiveClassSync={handleApplySelectiveClassSync}
+            onApplyTeacherDutySync={handleApplyTeacherDutySync}
+            onShowNotification={(text, type) => notify(text, type === 'success' ? 'ok' : type === 'err' ? 'err' : 'info')}
+          />
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {showPlachtaModal && (
+          <div className="fixed inset-0 z-[9999] bg-slate-900/90 backdrop-blur-xs flex flex-col p-1 sm:p-3 overflow-hidden print:p-0 print:m-0 print:static print:bg-white print:z-auto print:overflow-visible">
+            <div className="w-full h-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-700 print:border-none print:shadow-none print:rounded-none print:overflow-visible">
+              <PlachtaDyrektorska
+                appState={appState}
+                schedData={schedData}
+                activeVariant={activeVariant}
+                onClose={() => setShowPlachtaModal(false)}
+                isStandaloneModal={true}
+              />
+            </div>
+          </div>
+        )}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {showKioskModal && (
+          <KioskMode
+            appState={appState}
+            schedData={schedData}
+            onClose={() => setShowKioskModal(false)}
+          />
+        )}
       </Suspense>
 
       <ExportModal

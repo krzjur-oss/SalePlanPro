@@ -366,12 +366,80 @@ export default function Instrukcje() {
           ]
         },
         {
+          title: '📜 Płachta Dyrektorska (Wydruk wielkoformatowy A3 / A2 / A4)',
+          description: 'Kompleksowy widok całej szkoły w jednym arkuszu wielkoformatowym:',
+          points: [
+            'Dostępna z poziomu zakładki Wydruki (przycisk „Płachta A3”) oraz z górnego paska narzędziowego i menu głównego.',
+            'Wybór matrycy: Oddziały klasowe, Nauczyciele lub Gabinety/Sale lekcyjne.',
+            'Wybór formatu papieru: Dedykowane style @page dla formatu A3 (420×297 mm), A2 (594×420 mm) oraz A4 w orientacji poziomej z precyzyjnym podziałem stron.',
+            'Personalizacja prezentacji: Gęstość siatki (Kompaktowa, Standardowa, Rozszerzona), kodowanie kolorystyczne według dziedzin przedmiotowych lub tryb monochromatyczny (wysoki kontrast do wydruków czarno-białych).',
+            'Włączanie/wyłączanie elementów: skróty nauczycieli, numery sal, grupy lekcyjne, metryka zatwierdzenia przez Dyrekcję oraz legenda przedmiotowa.',
+            'Skalowanie ekranowe (Zoom 50%–150%) z podglądem 1:1 przed wydrukiem lub eksportem do PDF.'
+          ],
+          tip: 'W przypadku bardzo dużych szkół (powyżej 25 oddziałów) w oknie dialogowym drukowania przeglądarki wybierz format papieru A3 lub A2 i ustaw marginesy na „Brak” lub „Minimalne”.'
+        },
+        {
+          title: '📺 Tablica Informacyjna TV / Tryb Kiosk (Rzutnik i Hol Szkoły)',
+          description: 'Interaktywny, automatyczny widok prezentacyjny dla rzutników i telewizorów:',
+          points: [
+            'Uruchamiana przyciskiem „Tablica TV (Kiosk)” w module Wydruki, na górnej belce oraz w menu głównym.',
+            'Zegar czasu rzeczywistego oraz dynamiczne odliczanie do najbliższego dzwonka (początku lub końca lekcji).',
+            'Trzy tryby pracy: Tablica na żywo (aktualna lekcja i sala dla każdej klasy), Karuzela planów klas (automatyczne przewijanie kolejnych oddziałów z regulacją czasu 10–60s) oraz Grafik obłożenia gabinetów.',
+            'Pasek informacyjny (Ticker): Możliwość wpisania bieżących komunikatów dyrekcji (np. zastępstwa, zebrania, apele), które przesuwają się na dole ekranu.',
+            'Tryb pełnoekranowy (F11 / przycisk) z automatycznym ukrywaniem kursora myszy po kilku sekundach bezczynności.',
+            'Symulator czasu: Pozwala przetestować zachowanie tablicy dla dowolnego dnia tygodnia i godziny bez czekania na rzeczywisty czas lekcji.'
+          ]
+        },
+        {
           title: 'Opcje optymalizacji druku',
           description: 'Dostosowanie parametrów graficznych wydruku:',
           points: [
             'Tryb oszczędzania tonera (czarno-biały) o wysokim kontraście do wydruku na kserokopiarce szkolnej.',
             'Formaty A4 w orientacji pionowej lub poziomej z automatycznym skalowaniem tabeli.',
             'Drukowanie bezpośrednie z poziomu przeglądarki (Ctrl+P) lub zapis do pliku PDF.'
+          ]
+        }
+      ]
+    },
+    {
+      id: 'wariantowanie',
+      title: '🌿 Wariantowanie Planu (Semestry I/II, Scenariusze & Diff)',
+      shortTitle: 'Warianty i Semestry',
+      icon: <Layers size={18} />,
+      badge: 'Organizacja',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      description: 'Zarządzaj równoległymi wersjami planu na Semestr I i II, twórz scenariusze robocze oraz porównuj różnice (Diff) przed publikacją.',
+      steps: [
+        {
+          title: 'Tworzenie nowego wariantu planu (np. Semestr II)',
+          description: 'Przygotowanie planu na kolejny semestr bez niszczenia obowiązującego rozkładu:',
+          points: [
+            'Otwórz menu „Warianty” z górnego paska narzędziowego programu.',
+            'Przejdź do zakładki „Nowy Wariant / Semestr”.',
+            'Wpisz nazwę (np. „Semestr II – od 16 lutego”), wskaż kategorię (Semestr II, Praktyki, Awaryjny itp.) oraz kolor wyróżniający.',
+            'Wybierz stan początkowy: zazwyczaj „Sklonuj aktualnie edytowany plan”, aby zachować dotychczasowy układ jako bazę do poprawek semestralnych.',
+            'Kliknij „Utwórz i przełącz teraz”. Wszystkie kolejne modyfikacje w siatce godzin będą nanoszone w wybranym wariancie.'
+          ],
+          tip: 'Wspólna baza szkoły (nauczyciele, sale, klasy, przydziały pensum) jest współdzielona pomiędzy wszystkimi wariantami – nie musisz wprowadzać danych szkoły od nowa!'
+        },
+        {
+          title: 'Przełączanie i bezpieczna praca na wariantach',
+          description: 'Błyskawiczna zmiana aktywnego semestru:',
+          points: [
+            'W oknie wariantów kliknij „Przełącz na ten” przy żądanym scenariuszu.',
+            'System automatycznie zabezpieczy bieżący stan aktywnego planu i wczyta rozkład wybranego wariantu.',
+            'Aktywny wariant jest widoczny na górnym pasku operacyjnym, zapobiegając pomyłkom.'
+          ]
+        },
+        {
+          title: 'Wizualna porównywarka planów (Narzędzie Diff)',
+          description: 'Precyzyjna kontrola zmian pomiędzy Semestrem I i Semestrem II:',
+          points: [
+            'Wybierz zakładkę „Porównywarka Planów (Diff)”.',
+            'Wskaż Wariant A (jako bazę/wzorzec) oraz Wariant B (plan docelowy).',
+            'Przeglądaj plan według oddziałów, nauczycieli lub w postaci zbiorczego wykazu odchyleń.',
+            'Kolorowe znaczniki wskazują: nowo dodane lekcje (zielony), usunięte (czerwony) oraz zmiany przedmiotu, nauczyciela lub gabinetu (żółty/fioletowy).',
+            'Funkcja „Przenieś rozkład z B do A” umożliwia selektywną synchronizację pojedynczego oddziału (np. klasy technikum odbywającej praktyki).'
           ]
         }
       ]
@@ -478,7 +546,7 @@ export default function Instrukcje() {
               Interaktywny Podręcznik i Instrukcja Obsługi
             </h3>
             <p className="text-xs text-slate-500 font-medium">
-              Kompleksowy poradnik krok po kroku do wszystkich modułów SalePlan Pro v3.8.5
+              Kompleksowy poradnik krok po kroku do wszystkich modułów SalePlan Pro v3.8.7
             </p>
           </div>
         </div>

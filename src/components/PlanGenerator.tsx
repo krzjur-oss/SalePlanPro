@@ -3,7 +3,7 @@ import {
   AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment, SpecialLesson 
 } from '../types';
 import { 
-  Sparkles, X, Settings, HelpCircle, AlertCircle, Play, CheckCircle, RefreshCw, Undo2, Users, Calendar, Award 
+  Sparkles, X, Settings, HelpCircle, AlertCircle, Play, CheckCircle, RefreshCw, Undo2, Users, Calendar, Award, Lock 
 } from 'lucide-react';
 
 interface PlanGeneratorProps {
@@ -107,6 +107,12 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
   const teachersMap = useMemo(() => new Map(pl.teachers.map(t => [t.id, t])), [pl.teachers]);
   const subjectsMap = useMemo(() => new Map(pl.subjects.map(s => [s.id, s])), [pl.subjects]);
   const classesMap = useMemo(() => new Map(pl.classes.map(c => [c.id, c])), [pl.classes]);
+
+  const lockedLessonsCount = useMemo(() => {
+    const regLocked = Object.values(pl.lessons).filter(l => l.locked).length;
+    const speLocked = Object.values(pl.specialLessons || {}).filter(sl => sl.locked).length;
+    return regLocked + speLocked;
+  }, [pl.lessons, pl.specialLessons]);
 
   // ── CORE SCHEDULING ALGORITHM ──
   const runAutoGeneration = () => {
@@ -877,6 +883,26 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
             // WYBÓR KRYTERIÓW GENEROWANIA
             <div className="space-y-6">
               
+              {/* Ochrona zablokowanych godzin (Kłódki) */}
+              {lockedLessonsCount > 0 && (
+                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 flex items-start gap-3 shadow-xs select-none">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Lock size={16} />
+                  </div>
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-2">
+                      <span>Wykryto {lockedLessonsCount} zablokowanych godzin (Kłódki)</span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900 text-[10px] font-black">
+                        Ochrona aktywna
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                      Wszystkie godziny oznaczone kłódką (lekcje klas, nauczycieli oraz zajęcia specjalne SPE) pozostaną <strong>nienaruszone</strong> na swoich miejscach. Generator zapełni wyłącznie puste i odblokowane terminy.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Sekcja 1: Główne reguły optymalizacji */}
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3.5 select-none">⚙️ Ogólne reguły optymalizacji</span>
