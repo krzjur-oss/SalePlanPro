@@ -415,12 +415,12 @@ export default function PlachtaDyrektorska({
     if (isAllInOne) {
       return {
         headerText: isVeryWide ? 'text-[7px] leading-tight' : 'text-[8px] leading-tight',
-        cellText: isVeryWide ? 'text-[6px] leading-none' : isMediumWide ? 'text-[6.5px] leading-none' : 'text-[7.5px] leading-none',
-        subText: isVeryWide ? 'text-[4.5px] leading-none' : isMediumWide ? 'text-[5px] leading-none' : 'text-[6px] leading-none',
-        padding: 'p-0.5 print:p-[1px]',
-        minWidth: isVeryWide ? 'min-w-[26px]' : 'min-w-[32px]',
-        height: 'min-h-[18px] print:min-h-[14px]',
-        badgeText: 'text-[5px]'
+        cellText: isVeryWide ? 'text-[5.5px] leading-none' : isMediumWide ? 'text-[6px] leading-none' : 'text-[6.5px] leading-none',
+        subText: isVeryWide ? 'text-[4.5px] leading-none' : isMediumWide ? 'text-[5px] leading-none' : 'text-[5.5px] leading-none',
+        padding: 'p-0.5 print:p-[0.5px]',
+        minWidth: isVeryWide ? 'min-w-[24px]' : 'min-w-[30px]',
+        height: 'min-h-[16px] print:min-h-0',
+        badgeText: 'text-[4.5px]'
       };
     }
 
@@ -499,7 +499,7 @@ export default function PlachtaDyrektorska({
       <style>{`
         @page {
           size: ${paperFormat === 'A2' ? 'A2 landscape' : paperFormat === 'A3' ? 'A3 landscape' : 'A4 landscape'};
-          margin: ${paperFormat === 'A2' ? '6mm' : paperFormat === 'A3' ? '5mm' : '5mm'};
+          margin: ${paperFormat === 'A2' ? '4mm' : paperFormat === 'A3' ? '3.5mm' : '3.5mm'};
         }
 
         @media print {
@@ -580,15 +580,19 @@ export default function PlachtaDyrektorska({
             max-width: 100% !important;
             height: auto !important;
             min-height: 0 !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-            margin: 0 0 10px 0 !important;
+            margin: 0 0 8px 0 !important;
             padding: 0 !important;
             background: white !important;
             border: none !important;
             box-shadow: none !important;
             float: none !important;
             clear: both !important;
+          }
+
+          /* Specifically for all-in-one page: fits completely on Page 1 */
+          .plachta-page-all-in-one {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
 
           /* 5. Force Page Break after each day */
@@ -604,8 +608,6 @@ export default function PlachtaDyrektorska({
             width: 100% !important;
             border-collapse: collapse !important;
             table-layout: fixed !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
             margin: 0 !important;
             padding: 0 !important;
           }
@@ -647,6 +649,88 @@ export default function PlachtaDyrektorska({
             box-sizing: border-box !important;
           }
 
+          /* 6b. ALL-IN-ONE MASTER TABLE: GUARANTEED 1 PAGE FIT FOR ALL 5 DAYS */
+          .plachta-table-all-in-one {
+            width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+          }
+
+          .plachta-table-all-in-one thead tr {
+            height: 16px !important;
+            max-height: 16px !important;
+          }
+
+          .plachta-table-all-in-one thead th {
+            padding: 1px 0.5px !important;
+            font-size: 7.5px !important;
+            line-height: 1 !important;
+            height: 16px !important;
+            border: 1px solid #0f172a !important;
+          }
+
+          .plachta-table-all-in-one tbody tr {
+            height: ${Math.min(21, Math.max(15, Math.floor(860 / (5 * Math.max(hoursList.length, 7)))))}px !important;
+            max-height: ${Math.min(23, Math.max(16, Math.floor(860 / (5 * Math.max(hoursList.length, 7))) + 2))}px !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          .plachta-table-all-in-one td {
+            padding: 0.5px 1px !important;
+            vertical-align: middle !important;
+            line-height: 1 !important;
+            border: 1px solid #475569 !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+          }
+
+          .plachta-table-all-in-one td .plachta-entry-box {
+            padding: 0.5px 1px !important;
+            margin: 0 !important;
+            line-height: 1 !important;
+            border-radius: 1.5px !important;
+            border-width: 0.5px !important;
+          }
+
+          .plachta-table-all-in-one td .plachta-entry-title {
+            font-size: 6.5px !important;
+            line-height: 1 !important;
+            font-weight: 900 !important;
+          }
+
+          .plachta-table-all-in-one td .plachta-entry-sub {
+            font-size: 5.5px !important;
+            line-height: 1 !important;
+            margin-top: 0.5px !important;
+            font-weight: 700 !important;
+          }
+
+          .plachta-table-all-in-one .plachta-day-col {
+            width: 32px !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
+            padding: 0 !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+          }
+
+          .plachta-table-all-in-one .plachta-day-col span {
+            font-size: 8px !important;
+            letter-spacing: 2px !important;
+          }
+
+          .plachta-table-all-in-one .plachta-hour-col {
+            width: 34px !important;
+            min-width: 34px !important;
+            max-width: 34px !important;
+            padding: 0.5px !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+          }
+
           /* Ensure cell badges keep exact background colors in print */
           .plachta-table td div[style*="background-color"] {
             -webkit-print-color-adjust: exact !important;
@@ -658,8 +742,8 @@ export default function PlachtaDyrektorska({
             display: block !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            page-break-before: always !important;
-            break-before: page !important;
+            page-break-before: auto !important;
+            break-before: auto !important;
             page-break-after: auto !important;
             break-after: auto !important;
             margin: 0 !important;
@@ -1097,52 +1181,51 @@ export default function PlachtaDyrektorska({
           {/* ── UNIFIED FULL-WEEK SHEET: ALL 5 DAYS ON ONE A3 SHEET (KARTA 1 Z 2) ── */}
           {printLayoutMode === 'all_in_one' && (previewDayTab === 'all' || typeof previewDayTab === 'number') && (
             <div 
-              className={`plachta-page bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-4 sm:p-5 print:p-0 ${
+              className={`plachta-page plachta-page-all-in-one bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-3 sm:p-4 print:p-0 ${
                 showLegend ? 'plachta-page-break' : ''
               }`}
             >
               {/* ── SHEET HEADER FOR FULL WEEK ── */}
-              <div className="border-b-2 border-slate-900 pb-1.5 mb-1.5 flex items-end justify-between gap-4">
+              <div className="border-b-2 border-slate-900 pb-1 mb-1 print:pb-0.5 print:mb-0.5 flex items-end justify-between gap-2">
                 <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white font-black text-[10px] uppercase tracking-wider">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-900 text-white font-black text-[9px] print:text-[8px] uppercase tracking-wider">
                       PŁACHTA DYREKTORSKA · {matrixType === 'classes' ? 'ODDZIAŁY' : matrixType === 'teachers' ? 'KADRA PEDAGOGICZNA' : 'GABINETY I SALE'}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-700 text-white font-black text-[10.5px] uppercase tracking-wide">
+                    <span className="px-2 py-0.5 rounded bg-emerald-700 text-white font-black text-[9.5px] print:text-[8.5px] uppercase tracking-wide">
                       TYGODNIOWY ROZKŁAD ZAJĘĆ (PONIEDZIAŁEK – PIĄTEK)
                     </span>
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-700 font-black text-[9.5px] uppercase font-mono">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 text-slate-700 font-black text-[8.5px] print:text-[8px] uppercase font-mono">
                       Karta 1 z {showLegend ? '2' : '1'}
                     </span>
                     {activeVariant && (
-                      <span className="px-2 py-0.5 rounded-md border text-[9.5px] font-bold" style={{ borderColor: activeVariant.color, color: activeVariant.color }}>
+                      <span className="px-1.5 py-0.5 rounded border text-[8.5px] print:text-[7.5px] font-bold" style={{ borderColor: activeVariant.color, color: activeVariant.color }}>
                         Wariant: {activeVariant.name}
                       </span>
                     )}
                     {columnSplitMode !== 'all' && (
-                      <span className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-black text-[9.5px] uppercase">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-black text-[8.5px] uppercase print:hidden">
                         {columnSplitMode === 'part1' ? 'Część 1' : 'Część 2'}
                       </span>
                     )}
                   </div>
                   
-                  <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mt-0.5 leading-tight">
-                    {appState.school.name || 'Szkoła'}
-                  </h1>
-                  <p className="text-[9px] font-semibold text-slate-600 leading-normal">
-                    Zbiorczy rozkład lekcji · Wszystkie dni tygodnia (Pn–Pt) · Rok szkolny {appState.yearLabel} · {scheduleVersion === 'etap1' ? 'Wersja bazowa (Plan Klas)' : 'Wersja gabinetowa (Plan Sal)'}
-                  </p>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <h1 className="text-sm print:text-[11px] font-black text-slate-900 tracking-tight leading-tight">
+                      {appState.school.name || 'Szkoła'}
+                    </h1>
+                    <span className="text-[8.5px] print:text-[7.5px] font-semibold text-slate-600 leading-none">
+                      · Rok szkolny {appState.yearLabel} · {scheduleVersion === 'etap1' ? 'Wersja bazowa (Plan Klas)' : 'Wersja gabinetowa (Plan Sal)'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <div className="text-[9px] font-mono text-slate-500 uppercase font-bold">
-                    Arkusz: {paperFormat} Poziomo · Kolumn: {activeEntities.length} {columnSplitMode !== 'all' ? `(z ${baseEntities.length})` : ''}
-                  </div>
-                  <div className="text-[10px] font-bold text-slate-700 mt-0.5">
-                    Stan na: <span className="font-extrabold text-slate-900">{activeVariant?.validFrom || new Date().toLocaleDateString('pl-PL')}</span>
+                  <div className="text-[8.5px] print:text-[7.5px] font-mono text-slate-500 uppercase font-bold leading-none">
+                    Arkusz: {paperFormat} Poziomo · Kolumn: {activeEntities.length} · Stan: <span className="font-extrabold text-slate-900">{activeVariant?.validFrom || new Date().toLocaleDateString('pl-PL')}</span>
                   </div>
                   {showSignatures && (
-                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5 border border-dashed border-slate-400 px-2 py-0.5 rounded">
+                    <div className="text-[8px] print:text-[7px] font-bold text-slate-600 uppercase mt-0.5 border border-dashed border-slate-400 px-1.5 py-0.5 rounded inline-block leading-none">
                       Zatwierdzam: ....................................... (Dyrektor Szkoły)
                     </div>
                   )}
@@ -1151,18 +1234,18 @@ export default function PlachtaDyrektorska({
 
               {/* ── MASTER MATRIX TABLE FOR ALL 5 DAYS ── */}
               <div className="overflow-x-auto print:overflow-visible border border-slate-800 rounded-lg print:rounded-none">
-                <table className="plachta-table w-full border-collapse text-left border border-slate-800 table-fixed">
+                <table className="plachta-table plachta-table-all-in-one w-full border-collapse text-left border border-slate-800 table-fixed">
                   <thead>
                     <tr className="bg-slate-900 text-white uppercase font-black text-center print:bg-slate-900 print:text-white">
                       <th 
-                        className="border border-slate-700 p-0.5 text-[9px] print:border-slate-800" 
-                        style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                        className="plachta-day-col border border-slate-700 p-0.5 text-[8.5px] print:border-slate-800" 
+                        style={{ width: '36px', minWidth: '36px', maxWidth: '36px' }}
                       >
                         Dzień
                       </th>
                       <th 
-                        className="border border-slate-700 p-0.5 text-[9px] print:border-slate-800" 
-                        style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                        className="plachta-hour-col border border-slate-700 p-0.5 text-[8.5px] print:border-slate-800" 
+                        style={{ width: '38px', minWidth: '38px', maxWidth: '38px' }}
                       >
                         Godz
                       </th>
@@ -1215,15 +1298,15 @@ export default function PlachtaDyrektorska({
                             {isFirstHourOfDay && (
                               <td 
                                 rowSpan={hoursList.length} 
-                                className="border-r-2 border-b-2 border-slate-900 bg-slate-100 text-center align-middle font-black p-0.5 select-none print:bg-slate-100"
-                                style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                                className="plachta-day-col border-r-2 border-b-2 border-slate-900 bg-slate-100 text-center align-middle font-black p-0.5 select-none print:bg-slate-100"
+                                style={{ width: '36px', minWidth: '36px', maxWidth: '36px' }}
                               >
-                                <div className="flex flex-col items-center justify-center h-full py-1">
+                                <div className="flex flex-col items-center justify-center h-full py-0.5">
                                   <span className="text-[7px] font-bold text-slate-500 uppercase font-mono block mb-0.5 leading-none">
                                     {DAYS_SHORT[dayIdx] || `DZ. ${dayIdx + 1}`}
                                   </span>
                                   <span 
-                                    className="font-black text-[8.5px] text-slate-900 uppercase tracking-widest block leading-none"
+                                    className="font-black text-[8px] text-slate-900 uppercase tracking-widest block leading-none"
                                     style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                                   >
                                     {dayName}
@@ -1234,11 +1317,11 @@ export default function PlachtaDyrektorska({
 
                             {/* Col 2: Hour Number and Time Range */}
                             <td 
-                              className="border-r border-slate-300 p-0.5 bg-slate-50/90 text-center font-mono leading-tight print:bg-slate-50 print:border-slate-400"
-                              style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                              className="plachta-hour-col border-r border-slate-300 p-0.5 bg-slate-50/90 text-center font-mono leading-tight print:bg-slate-50 print:border-slate-400"
+                              style={{ width: '38px', minWidth: '38px', maxWidth: '38px' }}
                             >
-                              <span className="font-extrabold text-slate-900 text-[8.5px] block leading-none">{hour.num}</span>
-                              <span className="text-[6px] text-slate-500 block leading-none font-bold mt-0.5">
+                              <span className="font-extrabold text-slate-900 text-[8px] block leading-none">{hour.num}</span>
+                              <span className="text-[5.5px] text-slate-500 block leading-none font-bold mt-0.5">
                                 {hour.start}
                               </span>
                             </td>
@@ -1254,7 +1337,7 @@ export default function PlachtaDyrektorska({
                                     style={{ width: colWidthPercent }}
                                     className={`border border-slate-300 p-0 text-center ${densityConfig.height} bg-white/60 print:bg-white print:border-slate-300`}
                                   >
-                                    <span className="text-[6.5px] text-slate-200 font-light select-none">·</span>
+                                    <span className="text-[6px] text-slate-200 font-light select-none">·</span>
                                   </td>
                                 );
                               }
@@ -1276,7 +1359,7 @@ export default function PlachtaDyrektorska({
                                       return (
                                         <div 
                                           key={eIdx}
-                                          className="rounded px-0.5 py-0.5 border leading-tight transition-all"
+                                          className="plachta-entry-box rounded px-0.5 py-0.5 border leading-tight transition-all"
                                           style={{ 
                                             backgroundColor: colors.bg,
                                             borderColor: colors.border,
@@ -1285,20 +1368,20 @@ export default function PlachtaDyrektorska({
                                         >
                                           {/* Main title: Subject or Class */}
                                           <div className="flex items-center justify-between gap-0.5">
-                                            <span className={`font-black uppercase truncate ${densityConfig.cellText}`}>
+                                            <span className={`plachta-entry-title font-black uppercase truncate ${densityConfig.cellText}`}>
                                               {matrixType === 'teachers' || matrixType === 'rooms' 
                                                 ? (entry.fullClsName || entry.subjectShort) 
                                                 : entry.subjectShort}
                                             </span>
                                             {entry.groupLabel && showGroups && (
-                                              <span className="text-[5px] font-bold uppercase opacity-80 shrink-0">
+                                              <span className="text-[4.5px] font-bold uppercase opacity-80 shrink-0">
                                                 [{entry.groupLabel}]
                                               </span>
                                             )}
                                           </div>
 
                                           {/* Subline: Teacher / Room / Subject in teacher mode */}
-                                          <div className={`flex items-center justify-between gap-0.5 mt-0.5 opacity-90 ${densityConfig.subText} font-bold`}>
+                                          <div className={`plachta-entry-sub flex items-center justify-between gap-0.5 mt-0.5 opacity-90 ${densityConfig.subText} font-bold`}>
                                             {matrixType === 'classes' && (
                                               <>
                                                 {showTeacherAbbr && (
@@ -1346,13 +1429,13 @@ export default function PlachtaDyrektorska({
               </div>
 
               {/* ── FULL WEEK SHEET BOTTOM FOOTER ── */}
-              <div className="mt-2 pt-1 border-t border-slate-300 flex justify-between items-center text-[8.5px] text-slate-500 font-medium">
-                <div className="flex items-center gap-2">
+              <div className="mt-1 pt-0.5 print:mt-0.5 print:pt-0.5 border-t border-slate-300 flex justify-between items-center text-[8px] print:text-[7px] text-slate-500 font-medium">
+                <div className="flex items-center gap-1.5">
                   <span className="font-extrabold text-slate-800 uppercase tracking-wide">
                     Pełna Płachta Tygodniowa (Poniedziałek – Piątek)
                   </span>
                   <span>·</span>
-                  <span>Format arkusza: <strong>{paperFormat} Poziomo</strong></span>
+                  <span>Format: <strong>{paperFormat} Poziomo</strong></span>
                   <span>·</span>
                   <span className="text-slate-600">Słownik skrótów kadry, sal i pieczęć na Karcie 2</span>
                 </div>
