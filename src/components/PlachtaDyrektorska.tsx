@@ -86,8 +86,8 @@ export default function PlachtaDyrektorska({
   const [cellDensity, setCellDensity] = useState<'ultra_compact' | 'compact' | 'normal' | 'large'>('compact');
   const [colorMode, setColorMode] = useState<'color' | 'mono'>('color');
 
-  // Multi-page layout strategy: Day-by-Day (recommended for large schools) vs Continuous vs Single Day
-  const [printLayoutMode, setPrintLayoutMode] = useState<'day_by_day' | 'continuous' | 'single_day'>('day_by_day');
+  // Layout strategy: All-in-One 2-pages (Karta 1: Cały tydzień, Karta 2: Słownik) vs Day-by-Day (6 pages) vs Single Day
+  const [printLayoutMode, setPrintLayoutMode] = useState<'all_in_one' | 'day_by_day' | 'single_day'>('all_in_one');
   const [singleDaySelection, setSingleDaySelection] = useState<number>(0);
 
   // Column split mode for very large schools (e.g. 25-50 columns)
@@ -404,11 +404,25 @@ export default function PlachtaDyrektorska({
     return results;
   };
 
-  // Adaptive font and sizing styles based on paperFormat, activeEntities count, and cellDensity
+  // Adaptive font and sizing styles based on paperFormat, activeEntities count, cellDensity, and printLayoutMode
   const densityConfig = useMemo(() => {
     const count = activeEntities.length;
     const isVeryWide = count > 32; // e.g. 35 rooms or 42 teachers
     const isMediumWide = count > 20; // e.g. 25 classes
+    const isAllInOne = printLayoutMode === 'all_in_one';
+
+    // In all_in_one mode, all 40-45 rows fit onto 1 single A3/A2 sheet
+    if (isAllInOne) {
+      return {
+        headerText: isVeryWide ? 'text-[7px] leading-tight' : 'text-[8px] leading-tight',
+        cellText: isVeryWide ? 'text-[6px] leading-none' : isMediumWide ? 'text-[6.5px] leading-none' : 'text-[7.5px] leading-none',
+        subText: isVeryWide ? 'text-[4.5px] leading-none' : isMediumWide ? 'text-[5px] leading-none' : 'text-[6px] leading-none',
+        padding: 'p-0.5 print:p-[1px]',
+        minWidth: isVeryWide ? 'min-w-[26px]' : 'min-w-[32px]',
+        height: 'min-h-[18px] print:min-h-[14px]',
+        badgeText: 'text-[5px]'
+      };
+    }
 
     if (cellDensity === 'ultra_compact' || (cellDensity === 'compact' && isVeryWide)) {
       return {
@@ -456,13 +470,14 @@ export default function PlachtaDyrektorska({
       height: 'min-h-[32px]',
       badgeText: 'text-[7px]'
     };
-  }, [cellDensity, activeEntities.length]);
+  }, [cellDensity, activeEntities.length, printLayoutMode]);
 
-  // Calculate precise percentage for entity columns (giving 44px to Godz and remainder equally to all columns)
+  // Calculate precise percentage for entity columns (giving 84px for Dzień+Godz in all_in_one mode, or 44px for Godz in day_by_day mode)
   const colWidthPercent = useMemo(() => {
     if (!activeEntities.length) return '100%';
-    return `calc((100% - 44px) / ${activeEntities.length})`;
-  }, [activeEntities.length]);
+    const fixedWidth = printLayoutMode === 'all_in_one' ? 84 : 44;
+    return `calc((100% - ${fixedWidth}px) / ${activeEntities.length})`;
+  }, [activeEntities.length, printLayoutMode]);
 
   // Execute system print (ensures all 5 days + legend are in DOM when printing full Plachta)
   const handlePrint = (mode: 'all' | 'current' | React.SyntheticEvent = 'all') => {
@@ -730,30 +745,32 @@ export default function PlachtaDyrektorska({
           </div>
         </div>
 
-        {/* Center: Print Strategy (Day-by-Day vs Continuous) & Columns */}
+        {/* Center: Print Strategy (All-in-One 2 pages vs Day-by-Day 6 pages vs Single Day) & Columns */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Layout Strategy */}
           <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-xl border border-slate-800 text-xs">
             <span className="text-[10px] text-slate-400 font-bold px-1.5 uppercase">Układ:</span>
             <button
               type="button"
-              onClick={() => setPrintLayoutMode('day_by_day')}
-              className={`px-2 py-0.5 font-bold rounded-lg transition cursor-pointer ${
-                printLayoutMode === 'day_by_day' ? 'bg-emerald-700 text-white font-black' : 'text-slate-400 hover:text-white'
+              onClick={() => setPrintLayoutMode('all_in_one')}
+              className={`px-2 py-0.5 font-bold rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                printLayoutMode === 'all_in_one' ? 'bg-emerald-600 text-white font-black shadow-xs' : 'text-slate-400 hover:text-white'
               }`}
-              title="Zalecany: Każdy dzień tygodnia drukowany na osobnej karcie A3 (5 stron). Nic nie jest ucięte pionowo!"
+              title="Złóż 5 dni w jedną kartę A3 + skróty na 2 karcie (2 strony łącznie)"
             >
-              Każdy dzień na nowej karcie (5 stron)
+              <span>1 Karta Tygodniowa (2 str. {paperFormat})</span>
+              <span className="text-[9px] bg-emerald-700/80 text-emerald-100 px-1 rounded font-mono font-black">2 str.</span>
             </button>
             <button
               type="button"
-              onClick={() => setPrintLayoutMode('continuous')}
-              className={`px-2 py-0.5 font-bold rounded-lg transition cursor-pointer ${
-                printLayoutMode === 'continuous' ? 'bg-slate-800 text-white font-black' : 'text-slate-400 hover:text-white'
+              onClick={() => setPrintLayoutMode('day_by_day')}
+              className={`px-2 py-0.5 font-bold rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                printLayoutMode === 'day_by_day' ? 'bg-slate-800 text-white font-black' : 'text-slate-400 hover:text-white'
               }`}
-              title="Wszystkie dni w jednym arkuszu ciągłym"
+              title="Każdy dzień na osobnej karcie (5 kart dni + 1 karta skrótów = 6 stron)"
             >
-              Ciągły
+              <span>Karty dzienne (6 str.)</span>
+              <span className="text-[9px] bg-slate-700 text-slate-300 px-1 rounded font-mono">6 str.</span>
             </button>
             <button
               type="button"
@@ -844,10 +861,16 @@ export default function PlachtaDyrektorska({
             type="button"
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl transition shadow-md cursor-pointer border border-emerald-400"
-            title="Drukuj płachtę lub zapisz do pliku PDF"
+            title={printLayoutMode === 'all_in_one' ? 'Drukuj 2 strony A3: Plan całotygodniowy + Słownik' : 'Drukuj płachtę lub zapisz do pliku PDF'}
           >
             <Printer size={15} className="animate-pulse" />
-            <span>Drukuj Płachtę ({paperFormat})</span>
+            <span>
+              {printLayoutMode === 'all_in_one'
+                ? `Drukuj Płachtę (2 str. ${paperFormat})`
+                : printLayoutMode === 'single_day'
+                  ? `Drukuj Dzień (${paperFormat})`
+                  : `Drukuj Płachtę (6 str. ${paperFormat})`}
+            </span>
           </button>
         </div>
       </div>
@@ -999,9 +1022,9 @@ export default function PlachtaDyrektorska({
               className={`px-1.5 py-0.5 rounded font-bold transition ${
                 previewDayTab === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
-              title="Wszystkie 5 dni (Pn–Pt) oraz Słownik skrótów"
+              title={printLayoutMode === 'all_in_one' ? 'Karta 1: Tydzień (Pn–Pt)' : 'Wszystkie dni'}
             >
-              Wszystkie ({daysToRender.length})
+              {printLayoutMode === 'all_in_one' ? 'Tydzień (Pn–Pt)' : `Wszystkie (${daysToRender.length})`}
             </button>
             {daysToRender.map(d => (
               <button
@@ -1041,7 +1064,13 @@ export default function PlachtaDyrektorska({
             <div>
               <strong className="font-bold text-emerald-300">Wielkoformatowy wydruk Płachty Dyrektorskiej ({paperFormat} Poziomo) dla {baseEntities.length} kolumn:</strong>
               <span className="ml-1 text-emerald-200">
-                Wydruk obejmuje <strong>6 pełnych stron {paperFormat}</strong>: 5 kart dziennych (Poniedziałek – Piątek) + 1 dedykowaną kartę ze Słownikiem skrótów kadry, sal, przedmiotów i pieczęcią urzędową szkoły. Żadna kolumna ani dzień nie zostaną obcięte!
+                {printLayoutMode === 'all_in_one' ? (
+                  <>Wydruk złożony do <strong>2 stron {paperFormat}</strong>: Karta 1 to pełna płachta tygodniowa (Poniedziałek – Piątek z kolumną Dni tygodnia, Godzin oraz oddziałami) + Karta 2 to Słownik skrótów kadry, sal, przedmiotów i pieczęć urzędowa szkoły.</>
+                ) : printLayoutMode === 'single_day' ? (
+                  <>Wydruk wybranego 1 dnia ({DAYS_NAMES[singleDaySelection]}) na dedykowanej karcie {paperFormat}.</>
+                ) : (
+                  <>Wydruk obejmuje <strong>6 pełnych stron {paperFormat}</strong>: 5 kart dziennych (Poniedziałek – Piątek) + 1 dedykowaną kartę ze Słownikiem skrótów kadry, sal, przedmiotów i pieczęcią urzędową szkoły.</>
+                )}
               </span>
             </div>
           </div>
@@ -1049,10 +1078,10 @@ export default function PlachtaDyrektorska({
             type="button"
             onClick={() => handlePrint('all')}
             className="shrink-0 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-            title="Drukuj wszystkie 5 dni + Słownik skrótów na dedykowanych kartach A3"
+            title={printLayoutMode === 'all_in_one' ? 'Drukuj 2 strony A3: Plan całotygodniowy + Słownik' : 'Drukuj całą Płachtę'}
           >
             <Printer size={13} />
-            Drukuj całą Płachtę (6 stron {paperFormat})
+            {printLayoutMode === 'all_in_one' ? `Drukuj całą Płachtę (2 strony ${paperFormat})` : printLayoutMode === 'single_day' ? `Drukuj dzień (${paperFormat})` : `Drukuj całą Płachtę (6 stron ${paperFormat})`}
           </button>
         </div>
 
@@ -1065,7 +1094,277 @@ export default function PlachtaDyrektorska({
             maxWidth: '100%'
           }}
         >
-          {daysOnScreen.map((dayIdx, dIdx) => {
+          {/* ── UNIFIED FULL-WEEK SHEET: ALL 5 DAYS ON ONE A3 SHEET (KARTA 1 Z 2) ── */}
+          {printLayoutMode === 'all_in_one' && (previewDayTab === 'all' || typeof previewDayTab === 'number') && (
+            <div 
+              className={`plachta-page bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-4 sm:p-5 print:p-0 ${
+                showLegend ? 'plachta-page-break' : ''
+              }`}
+            >
+              {/* ── SHEET HEADER FOR FULL WEEK ── */}
+              <div className="border-b-2 border-slate-900 pb-1.5 mb-1.5 flex items-end justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-900 text-white font-black text-[10px] uppercase tracking-wider">
+                      PŁACHTA DYREKTORSKA · {matrixType === 'classes' ? 'ODDZIAŁY' : matrixType === 'teachers' ? 'KADRA PEDAGOGICZNA' : 'GABINETY I SALE'}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-700 text-white font-black text-[10.5px] uppercase tracking-wide">
+                      TYGODNIOWY ROZKŁAD ZAJĘĆ (PONIEDZIAŁEK – PIĄTEK)
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-700 font-black text-[9.5px] uppercase font-mono">
+                      Karta 1 z {showLegend ? '2' : '1'}
+                    </span>
+                    {activeVariant && (
+                      <span className="px-2 py-0.5 rounded-md border text-[9.5px] font-bold" style={{ borderColor: activeVariant.color, color: activeVariant.color }}>
+                        Wariant: {activeVariant.name}
+                      </span>
+                    )}
+                    {columnSplitMode !== 'all' && (
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-black text-[9.5px] uppercase">
+                        {columnSplitMode === 'part1' ? 'Część 1' : 'Część 2'}
+                      </span>
+                    )}
+                  </div>
+                  
+                  <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight mt-0.5 leading-tight">
+                    {appState.school.name || 'Szkoła'}
+                  </h1>
+                  <p className="text-[9px] font-semibold text-slate-600 leading-normal">
+                    Zbiorczy rozkład lekcji · Wszystkie dni tygodnia (Pn–Pt) · Rok szkolny {appState.yearLabel} · {scheduleVersion === 'etap1' ? 'Wersja bazowa (Plan Klas)' : 'Wersja gabinetowa (Plan Sal)'}
+                  </p>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <div className="text-[9px] font-mono text-slate-500 uppercase font-bold">
+                    Arkusz: {paperFormat} Poziomo · Kolumn: {activeEntities.length} {columnSplitMode !== 'all' ? `(z ${baseEntities.length})` : ''}
+                  </div>
+                  <div className="text-[10px] font-bold text-slate-700 mt-0.5">
+                    Stan na: <span className="font-extrabold text-slate-900">{activeVariant?.validFrom || new Date().toLocaleDateString('pl-PL')}</span>
+                  </div>
+                  {showSignatures && (
+                    <div className="text-[9px] font-bold text-slate-500 uppercase mt-0.5 border border-dashed border-slate-400 px-2 py-0.5 rounded">
+                      Zatwierdzam: ....................................... (Dyrektor Szkoły)
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── MASTER MATRIX TABLE FOR ALL 5 DAYS ── */}
+              <div className="overflow-x-auto print:overflow-visible border border-slate-800 rounded-lg print:rounded-none">
+                <table className="plachta-table w-full border-collapse text-left border border-slate-800 table-fixed">
+                  <thead>
+                    <tr className="bg-slate-900 text-white uppercase font-black text-center print:bg-slate-900 print:text-white">
+                      <th 
+                        className="border border-slate-700 p-0.5 text-[9px] print:border-slate-800" 
+                        style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                      >
+                        Dzień
+                      </th>
+                      <th 
+                        className="border border-slate-700 p-0.5 text-[9px] print:border-slate-800" 
+                        style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                      >
+                        Godz
+                      </th>
+                      {activeEntities.map(ent => {
+                        const label = matrixType === 'classes' 
+                          ? (ent as Class).name 
+                          : matrixType === 'teachers' 
+                            ? `${(ent as Teacher).abbr}` 
+                            : (ent as ClassRoom).name;
+                        const subLabel = matrixType === 'teachers'
+                          ? `${(ent as Teacher).last}`
+                          : matrixType === 'rooms'
+                            ? (ent as ClassRoom).desc?.substring(0, 10)
+                            : undefined;
+
+                        return (
+                          <th 
+                            key={ent.id} 
+                            style={{ width: colWidthPercent }}
+                            className={`border border-slate-700 p-0.5 text-center font-black ${densityConfig.headerText} print:border-slate-800 overflow-hidden`}
+                            title={ent.name}
+                          >
+                            <span className="block leading-none truncate">{label}</span>
+                            {subLabel && (
+                              <span className="block text-[6px] font-semibold text-slate-400 leading-none truncate max-w-[65px] mx-auto mt-0.5">
+                                {subLabel}
+                              </span>
+                            )}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {(typeof previewDayTab === 'number' ? [previewDayTab] : daysToRender).map((dayIdx) => {
+                      const dayName = DAYS_NAMES[dayIdx];
+                      return hoursList.map((hour, hIdx) => {
+                        const isFirstHourOfDay = hIdx === 0;
+                        const isLastHourOfDay = hIdx === hoursList.length - 1;
+
+                        return (
+                          <tr 
+                            key={`${dayIdx}_${hour.num}`} 
+                            className={`hover:bg-slate-50/80 transition-colors ${
+                              isLastHourOfDay ? 'border-b-2 border-slate-900 print-border-thick' : 'border-b border-slate-200'
+                            }`}
+                          >
+                            {/* Left Col 1: Day Name spanning all hours of this day */}
+                            {isFirstHourOfDay && (
+                              <td 
+                                rowSpan={hoursList.length} 
+                                className="border-r-2 border-b-2 border-slate-900 bg-slate-100 text-center align-middle font-black p-0.5 select-none print:bg-slate-100"
+                                style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                              >
+                                <div className="flex flex-col items-center justify-center h-full py-1">
+                                  <span className="text-[7px] font-bold text-slate-500 uppercase font-mono block mb-0.5 leading-none">
+                                    {DAYS_SHORT[dayIdx] || `DZ. ${dayIdx + 1}`}
+                                  </span>
+                                  <span 
+                                    className="font-black text-[8.5px] text-slate-900 uppercase tracking-widest block leading-none"
+                                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                                  >
+                                    {dayName}
+                                  </span>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Col 2: Hour Number and Time Range */}
+                            <td 
+                              className="border-r border-slate-300 p-0.5 bg-slate-50/90 text-center font-mono leading-tight print:bg-slate-50 print:border-slate-400"
+                              style={{ width: '42px', minWidth: '42px', maxWidth: '42px' }}
+                            >
+                              <span className="font-extrabold text-slate-900 text-[8.5px] block leading-none">{hour.num}</span>
+                              <span className="text-[6px] text-slate-500 block leading-none font-bold mt-0.5">
+                                {hour.start}
+                              </span>
+                            </td>
+
+                            {/* Col 3..N: Classes (or Teachers / Rooms) */}
+                            {activeEntities.map(ent => {
+                              const entries = getCellEntries(ent.id, dayIdx, hour.num, hIdx);
+
+                              if (entries.length === 0) {
+                                return (
+                                  <td 
+                                    key={ent.id} 
+                                    style={{ width: colWidthPercent }}
+                                    className={`border border-slate-300 p-0 text-center ${densityConfig.height} bg-white/60 print:bg-white print:border-slate-300`}
+                                  >
+                                    <span className="text-[6.5px] text-slate-200 font-light select-none">·</span>
+                                  </td>
+                                );
+                              }
+
+                              return (
+                                <td 
+                                  key={ent.id} 
+                                  style={{ width: colWidthPercent }}
+                                  className={`border border-slate-300 ${densityConfig.padding} ${densityConfig.height} align-top print:border-slate-400 overflow-hidden`}
+                                >
+                                  <div className="flex flex-col gap-0.5">
+                                    {entries.map((entry, eIdx) => {
+                                      const colors = getSubjectCategoryColor(
+                                        entry.subjectName, 
+                                        entry.subjectShort, 
+                                        colorMode === 'mono'
+                                      );
+
+                                      return (
+                                        <div 
+                                          key={eIdx}
+                                          className="rounded px-0.5 py-0.5 border leading-tight transition-all"
+                                          style={{ 
+                                            backgroundColor: colors.bg,
+                                            borderColor: colors.border,
+                                            color: colors.text
+                                          }}
+                                        >
+                                          {/* Main title: Subject or Class */}
+                                          <div className="flex items-center justify-between gap-0.5">
+                                            <span className={`font-black uppercase truncate ${densityConfig.cellText}`}>
+                                              {matrixType === 'teachers' || matrixType === 'rooms' 
+                                                ? (entry.fullClsName || entry.subjectShort) 
+                                                : entry.subjectShort}
+                                            </span>
+                                            {entry.groupLabel && showGroups && (
+                                              <span className="text-[5px] font-bold uppercase opacity-80 shrink-0">
+                                                [{entry.groupLabel}]
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          {/* Subline: Teacher / Room / Subject in teacher mode */}
+                                          <div className={`flex items-center justify-between gap-0.5 mt-0.5 opacity-90 ${densityConfig.subText} font-bold`}>
+                                            {matrixType === 'classes' && (
+                                              <>
+                                                {showTeacherAbbr && (
+                                                  <span className="truncate">{entry.teacherAbbr}</span>
+                                                )}
+                                                {showRoomNum && entry.roomName && (
+                                                  <span className="truncate text-right font-mono">
+                                                    s.{entry.roomName}
+                                                  </span>
+                                                )}
+                                              </>
+                                            )}
+
+                                            {matrixType === 'teachers' && (
+                                              <>
+                                                <span className="truncate">{entry.subjectShort}</span>
+                                                {showRoomNum && entry.roomName && (
+                                                  <span className="truncate font-mono">s.{entry.roomName}</span>
+                                                )}
+                                              </>
+                                            )}
+
+                                            {matrixType === 'rooms' && (
+                                              <>
+                                                <span className="truncate">{entry.fullClsName}</span>
+                                                {showTeacherAbbr && (
+                                                  <span className="truncate font-mono">{entry.teacherAbbr}</span>
+                                                )}
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      });
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ── FULL WEEK SHEET BOTTOM FOOTER ── */}
+              <div className="mt-2 pt-1 border-t border-slate-300 flex justify-between items-center text-[8.5px] text-slate-500 font-medium">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-slate-800 uppercase tracking-wide">
+                    Pełna Płachta Tygodniowa (Poniedziałek – Piątek)
+                  </span>
+                  <span>·</span>
+                  <span>Format arkusza: <strong>{paperFormat} Poziomo</strong></span>
+                  <span>·</span>
+                  <span className="text-slate-600">Słownik skrótów kadry, sal i pieczęć na Karcie 2</span>
+                </div>
+                <div className="font-mono font-bold text-slate-700">
+                  Karta 1 z {showLegend ? '2' : '1'} (Pełny tydzień lekcyjny)
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── DAY-BY-DAY SHEETS (EACH DAY ON A SEPARATE CARD) ── */}
+          {printLayoutMode !== 'all_in_one' && daysOnScreen.map((dayIdx, dIdx) => {
             const dayName = DAYS_NAMES[dayIdx];
             const isLastRenderedDay = dIdx === daysOnScreen.length - 1;
 
@@ -1298,13 +1597,13 @@ export default function PlachtaDyrektorska({
         })}
 
         {/* ── SEPARATE FINAL SHEET: CADRE LEGEND & OFFICIAL SCHOOL VALIDATION ── */}
-        {showLegend && (
+        {showLegend && (previewDayTab === 'all' || previewDayTab === 'legend') && (
           <div className="plachta-page plachta-legend-page bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-5 sm:p-6 print:p-0 print-avoid-break">
             <div className="border-b-2 border-slate-900 pb-2 mb-3 flex items-end justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-black uppercase font-mono tracking-wider">
-                    Karta 6 z 6
+                    {printLayoutMode === 'all_in_one' ? 'Karta 2 z 2' : printLayoutMode === 'single_day' ? 'Karta 2 z 2' : 'Karta 6 z 6'}
                   </span>
                   <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
                     <User size={15} className="text-indigo-600" />
@@ -1403,7 +1702,7 @@ export default function PlachtaDyrektorska({
             {/* Official Seal and Signature Section */}
             <div className="pt-3 border-t-2 border-slate-900 flex justify-between items-end text-[9px] text-slate-600">
               <div>
-                <strong>SalePlan Pro</strong> • Wygenerowano dla: {appState.school.name} ({appState.yearLabel}) • {new Date().toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                <strong>SalePlan Pro</strong> • Wygenerowano dla: {appState.school.name} ({appState.yearLabel}) • Karta {printLayoutMode === 'all_in_one' ? '2 z 2' : printLayoutMode === 'single_day' ? '2 z 2' : '6 z 6'} (Słownik skrótów i metryka zatwierdzenia) • {new Date().toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </div>
               <div className="flex items-end gap-8 text-right">
                 <div className="border-t border-dotted border-slate-600 pt-1 px-6 inline-block text-center font-bold text-slate-800 uppercase text-[8.5px]">
