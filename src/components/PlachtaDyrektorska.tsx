@@ -458,6 +458,12 @@ export default function PlachtaDyrektorska({
     };
   }, [cellDensity, activeEntities.length]);
 
+  // Calculate precise percentage for entity columns (giving 44px to Godz and remainder equally to all columns)
+  const colWidthPercent = useMemo(() => {
+    if (!activeEntities.length) return '100%';
+    return `calc((100% - 44px) / ${activeEntities.length})`;
+  }, [activeEntities.length]);
+
   // Execute system print (ensures all 5 days + legend are in DOM when printing full Plachta)
   const handlePrint = (mode: 'all' | 'current' | React.SyntheticEvent = 'all') => {
     const targetMode = mode === 'current' ? 'current' : 'all';
@@ -465,7 +471,7 @@ export default function PlachtaDyrektorska({
       setPreviewDayTab('all');
       setTimeout(() => {
         window.print();
-      }, 150);
+      }, 250);
       return;
     }
     window.print();
@@ -482,33 +488,62 @@ export default function PlachtaDyrektorska({
         }
 
         @media print {
-          /* 1. Global un-clip of all overflow elements */
-          *, *::before, *::after {
+          /* 1. Reset root HTML & Body for natural multi-page pagination */
+          html, body {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
             overflow: visible !important;
-            box-sizing: border-box !important;
+            background: white !important;
+            color: #0f172a !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
-          /* 2. Hide app navigation, headers, toasts, and non-print controls */
-          header, footer, nav, .no-print, #restoring-pointer-blocker, #version-changelog-toast {
+          /* 2. Hide all navigation, headers, footers, toasts, and floating elements */
+          header, footer, nav, aside, .no-print, #restoring-pointer-blocker, #version-changelog-toast {
             display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
           }
 
           ${isStandaloneModal ? `
-          /* When Plachta is rendered as a standalone modal overlay, completely hide the background workspace */
-          #app-main-workspace {
+          /* When Plachta is rendered as a standalone modal overlay, completely suppress the background workspace */
+          #app-main-workspace,
+          #app-main-workspace * {
             display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
+            position: absolute !important;
+            pointer-events: none !important;
           }
           ` : ''}
 
-          /* 3. Force block document flow for natural multi-page pagination across all ancestors */
-          html, body, #root, #root > div, #app-main-workspace, #app-main-workspace > div,
+          /* 3. Force block flow on root containers */
+          #root, #root > div {
+            display: block !important;
+            position: static !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            width: 100% !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+
           #plachta-modal-root, #plachta-modal-root > div,
-          .plachta-root, .plachta-scroll-wrapper, .plachta-container,
-          [class*="h-screen"], [class*="overflow-"], [class*="flex-1"] {
+          .plachta-root, .plachta-scroll-wrapper, .plachta-container {
             display: block !important;
             position: static !important;
             width: 100% !important;
-            max-width: none !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
@@ -532,7 +567,7 @@ export default function PlachtaDyrektorska({
             min-height: 0 !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            margin: 0 0 15px 0 !important;
+            margin: 0 0 10px 0 !important;
             padding: 0 !important;
             background: white !important;
             border: none !important;
@@ -548,41 +583,57 @@ export default function PlachtaDyrektorska({
             clear: both !important;
           }
 
-          /* Standalone divider element between sheets */
-          .plachta-page-divider {
-            display: block !important;
-            height: 0 !important;
-            min-height: 0 !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            background: transparent !important;
-            page-break-after: always !important;
-            break-after: page !important;
-            clear: both !important;
-          }
-
-          /* 6. Plachta Matrix Table and Cells */
+          /* 6. Plachta Matrix Table and Cells - STRICT TABLE DISPLAY RULES */
           .plachta-table {
+            display: table !important;
             width: 100% !important;
             border-collapse: collapse !important;
             table-layout: fixed !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
           .plachta-table thead {
             display: table-header-group !important;
           }
 
+          .plachta-table tbody {
+            display: table-row-group !important;
+          }
+
           .plachta-table tr {
+            display: table-row !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
 
-          .plachta-table th, .plachta-table td {
-            border: 1px solid #1e293b !important;
+          .plachta-table th {
+            display: table-cell !important;
+            text-align: center !important;
+            vertical-align: middle !important;
+            overflow: hidden !important;
+            border: 1px solid #0f172a !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            padding: 2px 1px !important;
+            box-sizing: border-box !important;
+          }
+
+          .plachta-table td {
+            display: table-cell !important;
+            vertical-align: top !important;
+            overflow: hidden !important;
+            border: 1px solid #475569 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            padding: 1px !important;
+            box-sizing: border-box !important;
+          }
+
+          /* Ensure cell badges keep exact background colors in print */
+          .plachta-table td div[style*="background-color"] {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -594,6 +645,8 @@ export default function PlachtaDyrektorska({
             break-inside: avoid !important;
             page-break-before: always !important;
             break-before: page !important;
+            page-break-after: auto !important;
+            break-after: auto !important;
             margin: 0 !important;
             padding: 0 !important;
             clear: both !important;
@@ -1076,7 +1129,7 @@ export default function PlachtaDyrektorska({
                   <table className="plachta-table w-full border-collapse text-left border border-slate-800 table-fixed">
                     <thead>
                       <tr className="bg-slate-900 text-white uppercase font-black text-center print:bg-slate-900 print:text-white">
-                        <th className="border border-slate-700 p-1 w-12 text-[9.5px] print:border-slate-800">
+                        <th className="border border-slate-700 p-1 text-[9.5px] print:border-slate-800" style={{ width: '44px', minWidth: '44px', maxWidth: '44px' }}>
                           Godz
                         </th>
                         {activeEntities.map(ent => {
@@ -1094,6 +1147,7 @@ export default function PlachtaDyrektorska({
                           return (
                             <th
                               key={ent.id}
+                              style={{ width: colWidthPercent }}
                               className={`border border-slate-700 p-0.5 text-center font-black ${densityConfig.headerText} print:border-slate-800 overflow-hidden`}
                               title={ent.name}
                             >
@@ -1119,7 +1173,7 @@ export default function PlachtaDyrektorska({
                             className={`hover:bg-slate-50/80 transition-colors ${isLastHour ? 'border-b-2 border-slate-900 print-border-thick' : 'border-b border-slate-200'}`}
                           >
                             {/* Hour number and timing column */}
-                            <td className="border-r border-slate-300 p-0.5 bg-slate-50/80 text-center font-mono leading-tight print:bg-slate-50 print:border-slate-400">
+                            <td className="border-r border-slate-300 p-0.5 bg-slate-50/80 text-center font-mono leading-tight print:bg-slate-50 print:border-slate-400" style={{ width: '44px', minWidth: '44px', maxWidth: '44px' }}>
                               <span className="font-extrabold text-slate-900 text-[10px] block leading-none">{hour.num}</span>
                               <span className="text-[6.5px] text-slate-500 block leading-none font-bold mt-0.5">
                                 {hour.start}
@@ -1134,6 +1188,7 @@ export default function PlachtaDyrektorska({
                                 return (
                                   <td 
                                     key={ent.id}
+                                    style={{ width: colWidthPercent }}
                                     className={`border border-slate-300 p-0 text-center ${densityConfig.height} bg-white/60 print:bg-white print:border-slate-300`}
                                   >
                                     <span className="text-[8px] text-slate-200 font-light select-none">·</span>
@@ -1144,6 +1199,7 @@ export default function PlachtaDyrektorska({
                               return (
                                 <td 
                                   key={ent.id}
+                                  style={{ width: colWidthPercent }}
                                   className={`border border-slate-300 ${densityConfig.padding} ${densityConfig.height} align-top print:border-slate-400 overflow-hidden`}
                                 >
                                   <div className="flex flex-col gap-0.5">
@@ -1237,11 +1293,6 @@ export default function PlachtaDyrektorska({
                   </div>
                 </div>
               </div>
-
-              {/* Standalone Page Break Divider for Printers */}
-              {(!isLastRenderedDay || showLegend) && (
-                <div className="plachta-page-divider print:block hidden" />
-              )}
             </React.Fragment>
           );
         })}

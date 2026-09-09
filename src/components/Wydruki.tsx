@@ -2821,8 +2821,18 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           }
 
           /* Resetujemy wysokości i paski przewijania kontenerów nadrzędnych */
-          html, body, #root, #root > div, #app-main-workspace, #app-main-workspace > div,
-          [class*="h-screen"], [class*="overflow-"] {
+          html, body, #root, #root > div {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            width: 100% !important;
+            overflow: visible !important;
+            position: static !important;
+            display: block !important;
+          }
+
+          /* Pozwalamy na naturalny przepływ przestrzeni roboczej tylko gdy nie jest ukryta przez modal */
+          #app-main-workspace:not(.print\:\!hidden):not(.print\:hidden) {
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;

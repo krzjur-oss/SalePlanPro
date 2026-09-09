@@ -1917,7 +1917,7 @@ export default function App() {
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
       <div 
         id="app-main-workspace"
-        className={`flex-1 flex overflow-hidden px-0 mx-0 min-h-0 print:h-auto print:w-full print:overflow-visible print:block print:static ${showPlachtaModal || showKioskModal ? 'print:hidden' : ''}`}
+        className={`flex-1 flex overflow-hidden px-0 mx-0 min-h-0 print:h-auto print:w-full print:overflow-visible print:block print:static ${showPlachtaModal || showKioskModal ? 'print:!hidden' : ''}`}
       >
         <AnimatePresence mode="wait">
           <motion.div

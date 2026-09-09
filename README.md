@@ -1,4 +1,4 @@
-# SalePlan Pro v3.8.8 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.8.9 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 

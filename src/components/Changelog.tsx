@@ -24,11 +24,23 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.8.9',
+      date: 'Wrzesień 2026',
+      title: 'Pełna Izolacja Wydruku i Stabilizacja Matrycy Płachty Dyrektorskiej',
+      description: 'Precyzyjne rozwiązanie problemu przenikania elementów tła aplikacji do wydruku Płachty Dyrektorskiej oraz likwidacja przesunięć i rozbicia komórek matrycy w oknie drukowania systemowego.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'fix', text: 'Całkowite Odcięcie Tła Aplikacji przy Druku Modalu: Wdrożono rygorystyczne ukrywanie głównego kontenera aplikacji (#app-main-workspace) podczas drukowania z otwartej Płachty Dyrektorskiej, uniemożliwiając przenikanie jakichkolwiek widoków, formularzy czy pasków nawigacji do podglądu i wydruku arkuszy.', badgeText: 'Czysty Wydruk' },
+        { type: 'fix', text: 'Stabilizacja Geometrii Tabeli i Kolumn: Wymuszono natywne reguły table/table-cell z matematycznym wyliczaniem szerokości kolumn dla wszystkich 25–45 obiektów. Zapobiega to łamaniu wierszy i przestawianiu treści lekcji na wydruku.', badgeText: 'Brak Przesunięć' },
+        { type: 'improvement', text: 'Eliminacja Zbędnych Pustych Stron: Wyczyszczono powielone separatory stron, zapewniając precyzyjny podział 5 dni na 5 czystych kart A3/A2 plus dedykowana karta legendy i pieczęci.', badgeText: 'Paginacja 5+1' }
+      ]
+    },
+    {
       version: 'v3.8.8',
       date: 'Wrzesień 2026',
       title: 'Optymalizacja Wydruku Wielostronicowego Płachty Dyrektorskiej (A3/A2) dla Dużych Szkół',
       description: 'Kompleksowa naprawa wydruku Płachty Dyrektorskiej dla szkół o dużej skali (25–50 oddziałów, 35–45 sal, 40–50 nauczycieli). Rozwiązano problem obcinania treści i generowania tylko jednej strony – wprowadzono dedykowany tryb podziału na dni (5 osobnych kart A3 dla każdego dnia tygodnia), auto-dopasowanie szerokości kolumn oraz opcjonalny podział kolumn na części (Część 1 / Część 2).',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'fix', text: 'Wielostronicowy Podział na Dni (5 stron A3): Wyeliminowano blokowanie podziału stron przez kontenery flex i rowSpan. Wprowadzono układ „Każdy dzień na nowej karcie (5 stron A3)”, gdzie Poniedziałek, Wtorek, Środa, Czwartek i Piątek mają pełną wysokość strony poziomej ze wszystkimi 8–10 godzinami lekcyjnymi bez żadnego ucinania wierszy.', badgeText: 'Druk A3 Wielostronicowy' },
         { type: 'feature', text: 'Inteligentne Auto-Dopasowanie Kolumn dla 25–50 Obiektów: Dynamiczne skalowanie typografii i marginesów (w tym tryb „Super-gęsty”) gwarantujące, że nawet 42 nauczycieli czy 35 gabinetów mieści się na szerokość arkusza A3/A2 w orientacji poziomej bez ucinania prawej krawędzi.', badgeText: 'Auto-Fit Kolumn' },
