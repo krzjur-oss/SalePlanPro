@@ -1,4 +1,4 @@
-# SalePlan Pro v3.8.7 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.8.8 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -147,16 +147,23 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Płachta Dyrektorska (Wielkoformatowy arkusz szkoły A3/A2) oraz Tablica TV / Kiosk Mode (v3.8.7)**:
+1.  **Wielostronicowy Wydruk Płachty Dyrektorskiej (5 stron A3) oraz Pełny Kontrast Tablicy TV (v3.8.8)**:
+    *   **Wielostronicowy Podział na Dni (Dedykowany dla dużych szkół • 5 stron A3)**: Wyeliminowano problem ucinania treści do jednej strony dla dużych szkół (np. 25 oddziałów, 35 sal, 42 nauczycieli). W układzie *Każdy dzień na nowej karcie* każdy dzień tygodnia (Pn–Pt) drukowany jest na pełnej karcie A3 Poziomo z kompletem godzin 1–8/10 i wszystkimi kolumnami, bez ucinania wierszy ani czwartku i piątku.
+    *   **Inteligentne Auto-Dopasowanie Kolumn**: Dynamiczne skalowanie czcionek (w tym tryb *Super-gęsty* `text-[7px]` dla 35–50 kolumn) gwarantujące pełne zmieszczenie wszystkich kolumn na szerokość arkusza A3 landscape bez ucinania prawej krawędzi.
+    *   **Podział Kolumn na Części (Część 1 / Część 2)**: Opcjonalny podział kolumn (np. klasy 1–13 i 14–25 lub nauczyciele 1–21 i 22–42) umożliwiający wydruk w większej, doskonale czytelnej czcionce do powieszenia obok siebie w pokoju nauczycielskim.
+    *   **Dedykowana Karta Słowniczka i Pieczęci (Strona 6)**: Słownik skrótów nauczycieli, spis gabinetów i sal oraz legenda przedmiotowa z miejscem na pieczęć szkoły i podpis dyrektora generowane są na osobnej, estetycznej stronie arkusza A3/A4.
+    *   **Szybkie Zakładki Podglądu Dni**: Możliwość natychmiastowego przełączania podglądu ekranowego między wszystkimi dniami a pojedynczymi dniami (Pn, Wt, Śr, Czw, Pt) wraz ze skalowaniem Zoom (40%–150%).
+    *   **Pełny Kontrast Motywu Jasnego (Rzutnik) w Tablicy TV / Kiosku**: Kompleksowo zoptymalizowano czytelność w trybie rzutnika – usunięto znikające/zlewające się teksty, zastosowano głęboką czerń (`text-slate-950`), nasycone granaty i wyraziste obramowania kart lekcji, dyżurów, wolnych sal oraz paska ogłoszeń.
+2.  **Płachta Dyrektorska (Wielkoformatowy arkusz szkoły A3/A2) oraz Tablica TV / Kiosk Mode (v3.8.7)**:
     *   **Płachta Dyrektorska (Wielkoformatowa A3 / A2 / A4)**: Całościowy arkusz organizacyjny szkoły – możliwość jednoczesnego zestawienia wszystkich oddziałów klasowych, wszystkich nauczycieli lub gabinetów w podziale na dni tygodnia i godziny lekcyjne, zoptymalizowany pod wydruki na ploterach i kserokopiarkach wielkoformatowych (`@page` landscape) z czystą separacją druku (brak tła aplikacji na pierwszej stronie wydruku).
     *   **Personalizacja widoku arkusza**: Wybór gęstości komórek (*Kompaktowa*, *Standardowa*, *Rozszerzona*), kodowanie kolorystyczne przedmiotów lub tryb czarno-biały wysokiego kontrastu, widoczność sal, skrótów nauczycieli, grup międzyoddziałowych, legendy przedmiotowej oraz metryki zatwierdzenia przez Dyrekcję.
     *   **Tablica Informacyjna TV / Kiosk Mode (Rzutnik & Hol Szkoły)**: Dynamiczny, pełnoekranowy tryb do wyświetlania na telewizorach i rzutnikach z zegarem systemowym na żywo, odliczaniem do dzwonka (początku lub końca lekcji/przerwy), paskiem ogłoszeń (Ticker) oraz trzema trybami: *Na żywo*, *Karuzela klas* (co 10–60s) i *Obłożenie sal*.
     *   **Filtr okienek i godzin bez zajęć w Tablicy TV**: Automatyczne ukrywanie oddziałów, które w danej chwili nie mają zajęć w szkole (koniec lekcji, późniejszy start, okienko) z szybkim przełącznikiem widoku („Tylko z lekcjami” / „Pokaż wszystkie”) i zapamiętywaniem preferencji.
     *   **Zintegrowana nawigacja**: Przyciski szybkiego dostępu w zakładce *Wydruki* (Płachta A3, Tablica TV), bezpośrednie skróty na górnym pasku narzędzi oraz w rozwijanym menu głównym.
-2.  **Interaktywny Podręcznik Wszystkich Modułów i Akceptacja Licencji WLDE (v3.8.6)**:
+3.  **Interaktywny Podręcznik Wszystkich Modułów i Akceptacja Licencji WLDE (v3.8.6)**:
     *   **Kompleksowy Podręcznik w sekcji „O programie”**: Interaktywny przewodnik krok po kroku po wszystkich modułach systemu (Kreator Szkoły 1–10, Plan Klas, Plan Sal, Dyżury Nauczycielskie, Uczniowie SPE, Statystyki, Wydruki oraz Bezpieczeństwo i Kopia Zapasowa) z wyszukiwarką haseł i poradami planistycznymi.
     *   **Procedura pierwszego uruchomienia i akceptacja licencji**: Pełnoekranowy modal akceptacji Regulaminu, Polityki Prywatności (100% lokalne przetwarzanie RODO w przeglądarce) oraz Wolnej Licencji Domowo-Edukacyjnej (WLDE) mgr Krzysztofa Jureczka.
-3.  **Zajęcia Grup Łączonych SPE oraz Interaktywna Edycja Komórek w Planie Klas (v3.8.5)**:
+4.  **Zajęcia Grup Łączonych SPE oraz Interaktywna Edycja Komórek w Planie Klas (v3.8.5)**:
     *   **Okno szybkiej edycji komórki w Planie Klas**: Kliknięcie w dowolną pustą lub zajętą komórkę siatki lekcji otwiera bezpośrednio modal zarządzania slotem (wybór i wstawienie przydziału, wymiana lekcji, usunięcie lekcji oraz przydział nauczyciela wspomagającego bez konieczności uprzedniego wybierania pędzla).
     *   **Zajęcia dla uczniów SPE w grupach łączonych**: Wprowadzono pełną obsługę zajęć specjalistycznych prowadzonych w grupach łączonych międzyoddziałowych:
         *   **Zajęcia logopedyczne (Logopedia)**
@@ -165,53 +172,53 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
         *   **Terapia pedagogiczna (Korekta)**
     *   **Synchronizacja grup SPE**: Narzędzie tworzenia grup łączonych (`group_special`, `isGroup`, `groupName`, `linkedStudentIds`) z automatyczną propagacją zmian do planów wszystkich powiązanych uczniów ze SPE.
     *   **Obsługa przydziałów kadry wspomagającej**: Precyzyjne rozróżnienie pomiędzy operacyjnym obsadzeniem nauczyciela wspomagającego w siatce godzinowej (widoczność w planie nauczyciela i kontrola kolizji sal/lekcji) a formalnym wymiarem pensum/etatu w orzeczeniu ucznia w Kreatorze Szkoły (Kroki 8 i 9).
-4.  **Płynne Przewijanie i Responsywność Siatki Planu Lekcji (v3.8.4)**:
+5.  **Płynne Przewijanie i Responsywność Siatki Planu Lekcji (v3.8.4)**:
     *   **Odblokowanie pełnego przewijania pionowego**: Usunięto sztywne ograniczenia wysokości (`h-full` zastąpione elastycznym `min-h-full` z marginesem `pb-12 sm:pb-8`) oraz dodano właściwości `min-h-0` w strukturze kontenerów flexbox, co przywróciło pełne, płynne przewijanie do wszystkich godzin lekcyjnych (5, 6, 7, 8+).
     *   **Przyklejony nagłówek dni tygodnia (`sticky thead`)**: Wprowadzono zamrożony nagłówek tabeli z dniami tygodnia (`Poniedziałek` – `Piątek`), który pozostaje czytelny na samej górze siatki podczas przewijania planu w dół do późniejszych godzin.
     *   **Inteligentna obsługa gestów dotykowych (Touch DND & Scroll)**: Zaktualizowano zachowanie kart zajęć na urządzeniach dotykowych (`touch-pan-y` zamiast `touch-none`) wraz z automatyczną detekcją ruchu w pionie, co pozwala na naturalne, płynne scrollowanie ekranu bez przypadkowego blokowania dotyku przez karty.
     *   **Responsywność horyzontalna**: Wprowadzono bezpieczną minimalną szerokość siatki (`min-w-[550px]`) z horyzontalnym przewijaniem na mniejszych ekranach laptopów i tabletów.
-5.  **Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Statystykach (v3.8.3)**:
+6.  **Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Statystykach (v3.8.3)**:
     *   Wdrożono automatyczne wykrywanie nauczycieli mających ponad 2 godziny okienek przestojowych w tygodniowym rozkładzie lekcji.
     *   Wprowadzono wyraziste wyróżnienie kolorystyczne wierszy kadry (bursztynowe tło, obramowanie, plakietka `⚠️ Xh okienek w planie`) w zakładce "Praca & Dyżury Kadry".
     *   Dodano filtry szybkiego przełączania widoku ("Wszyscy" vs "⚠️ >2h okienek") w zestawieniu pensum oraz w module analizy okienek.
     *   Utworzono panel wykonawczy z kafelkami szybkiego wglądu w brakujące lekcje oraz bezpośrednie przekierowania diagnostyczne.
     *   Zintegrowano diagnostykę z kartami Automatycznego Audytu i walidacji higieny planu lekcji.
     *   Uproszczono menu główne programu – usunięto zbędny, zduplikowany przycisk "Plan SPE & NI" z głównego paska nawigacji (obsługa uczniów SPE oraz nauczania indywidualnego odbywa się bezpośrednio i intuicyjnie w Etapie 1: Plan Klas za pomocą przełącznika "Klasy / Uczniowie SPE").
-6.  **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni) oraz Dyżury Adaptacyjne Klas 1 (v3.8.2)**:
+7.  **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni) oraz Dyżury Adaptacyjne Klas 1 (v3.8.2)**:
     *   Wdrożono inteligentne rozróżnianie charakteru prowadzonych zajęć – zwolnienie z dyżurów korytarzowych przy lekcjach WF i nakierowanie uwagi na nadzór szatni sportowych.
     *   Obsługa nauczycieli łączących WF z innymi przedmiotami (np. biologia, edukacja zdrowotna) – pełna dyspozycyjność do dyżurów korytarzowych w blokach przedmiotów ogólnych.
     *   Konfiguracja przerw z nadzorem szatni (przed i po, tylko po, tylko przed) oraz opcja wliczania minut opieki do pensum dyżurów (FTE).
     *   Interaktywny selektor przedmiotów sportowych z dynamicznym wykrywaniem i możliwością ręcznego wykluczania/dodawania.
     *   Dedykowany podgląd harmonogramu dziennego nadzoru szatni i sal sportowych oraz integracja z bilansem tygodniowym.
     *   Wsparcie dla dyżurów adaptacyjnych i odprowadzających w klasach 1.
-7.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
+8.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
     *   Wdrożono jednolitą nawigację w lewym panelu bocznym z przełącznikiem między oddziałami klasowymi a uczniami SPE i NI.
     *   Zaimplementowano ergonomiczne zwijanie/rozwijanie paska bocznego do wąskiej kolumny (`PanelLeftClose` / `PanelLeftOpen`), uwalniając 100% szerokości ekranu na właściwą siatkę zajęć.
     *   Wyeliminowano zduplikowany lewy panel boczny wewnątrz modułu SPE, tworząc przejrzysty, harmonijny i spójny interfejs.
     *   Siatka tygodniowa ucznia ze SPE z podziałem na wspomaganie w oddziale (🤝) oraz zajęcia gabinetowe (👤) wraz z edytorami kart wsparcia: Profil, WOPFU, IPET oraz Rewalidacja.
-8.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
+9.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
     *   Dedykowany krok ewidencji uczniów SPE w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie (NI, Wspomaganie w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
     *   Zintegrowany formularz przydziałów w trybie nauczycielskim oraz dedykowany tryb `👤 USPE` z pulami orzeczeniowymi i dynamicznym licznikiem godzin zadeklarowanych, przydzielonych i pozostałych.
     *   Wdrożono niezależność kroków w formularzu (brak resetowania wartości przy wyborze kolejnych pól).
     *   Uwzględniono godziny zajęć specjalnych i indywidualnych w kalkulacji pensum, obciążenia i nadgodzin kadry pedagogicznej.
     *   Rozszerzono zestawienie przydziałów o czytelny widok zajęć SPE dla klas, nauczycieli oraz toku indywidualnego.
-9.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
+10. **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
     *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal).
     *   Poprawiono resolver sal z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
     *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich.
     *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
-10. **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
+11. **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
     *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
     *   Wprowadzono algorytm deduplikacji wpisów oraz reguły ochrony przed dzieleniem stron (`break-inside: avoid`).
-11. **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
+12. **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
     *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF) w tym samym slocie godzinowym bez fałszywych kolizji.
-12. **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
+13. **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
     *   Zapisywanie struktury szkoły jako wielorazowy szablon z automatyczną promocją roczników.
-13. **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
+14. **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
     *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku.
-14. **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
+15. **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
     *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
-15. **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
+16. **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
     *   Dynamiczny dobór roku szkolnego oraz profile przedmiotów dla SP, LO, Technikum i Szkoły Branżowej.
 
 ---

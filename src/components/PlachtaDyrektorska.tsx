@@ -93,8 +93,8 @@ export default function PlachtaDyrektorska({
   // Column split mode for very large schools (e.g. 25-50 columns)
   const [columnSplitMode, setColumnSplitMode] = useState<'all' | 'part1' | 'part2'>('all');
 
-  // Screen preview tab / view filter
-  const [previewDayTab, setPreviewDayTab] = useState<number | 'all'>('all');
+  // Screen preview tab / view filter (all days, single day, or legend sheet)
+  const [previewDayTab, setPreviewDayTab] = useState<number | 'all' | 'legend'>('all');
 
   // Element visibility toggles
   const [showTeacherAbbr, setShowTeacherAbbr] = useState(true);
@@ -185,6 +185,7 @@ export default function PlachtaDyrektorska({
   // Days visible on screen (respects previewDayTab)
   const daysOnScreen = useMemo(() => {
     if (previewDayTab === 'all') return daysToRender;
+    if (previewDayTab === 'legend') return [];
     return [previewDayTab];
   }, [previewDayTab, daysToRender]);
 
@@ -457,8 +458,16 @@ export default function PlachtaDyrektorska({
     };
   }, [cellDensity, activeEntities.length]);
 
-  // Execute system print
-  const handlePrint = () => {
+  // Execute system print (ensures all 5 days + legend are in DOM when printing full Plachta)
+  const handlePrint = (mode: 'all' | 'current' | React.SyntheticEvent = 'all') => {
+    const targetMode = mode === 'current' ? 'current' : 'all';
+    if (targetMode === 'all' && previewDayTab !== 'all') {
+      setPreviewDayTab('all');
+      setTimeout(() => {
+        window.print();
+      }, 150);
+      return;
+    }
     window.print();
   };
 
@@ -469,25 +478,33 @@ export default function PlachtaDyrektorska({
       <style>{`
         @page {
           size: ${paperFormat === 'A2' ? 'A2 landscape' : paperFormat === 'A3' ? 'A3 landscape' : 'A4 landscape'};
-          margin: ${paperFormat === 'A2' ? '5mm' : paperFormat === 'A3' ? '4mm' : '4mm'};
+          margin: ${paperFormat === 'A2' ? '6mm' : paperFormat === 'A3' ? '5mm' : '5mm'};
         }
 
         @media print {
-          /* Hide app navigation, headers, toasts, and non-print controls */
+          /* 1. Global un-clip of all overflow elements */
+          *, *::before, *::after {
+            overflow: visible !important;
+            box-sizing: border-box !important;
+          }
+
+          /* 2. Hide app navigation, headers, toasts, and non-print controls */
           header, footer, nav, .no-print, #restoring-pointer-blocker, #version-changelog-toast {
             display: none !important;
           }
 
           ${isStandaloneModal ? `
-          /* When Plachta is rendered as a standalone modal overlay, completely hide the background workspace (e.g. Kreator, Plan Klas) */
+          /* When Plachta is rendered as a standalone modal overlay, completely hide the background workspace */
           #app-main-workspace {
             display: none !important;
           }
           ` : ''}
 
-          /* Force block document flow for natural multi-page pagination */
-          html, body, #root, #plachta-modal-root, #plachta-modal-root > div,
-          .plachta-root, .plachta-container {
+          /* 3. Force block document flow for natural multi-page pagination across all ancestors */
+          html, body, #root, #root > div, #app-main-workspace, #app-main-workspace > div,
+          #plachta-modal-root, #plachta-modal-root > div,
+          .plachta-root, .plachta-scroll-wrapper, .plachta-container,
+          [class*="h-screen"], [class*="overflow-"], [class*="flex-1"] {
             display: block !important;
             position: static !important;
             width: 100% !important;
@@ -505,55 +522,81 @@ export default function PlachtaDyrektorska({
             float: none !important;
           }
 
-          .plachta-scroll-wrapper {
-            display: block !important;
-            overflow: visible !important;
-            height: auto !important;
-            width: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            background: white !important;
-          }
-
+          /* 4. Individual Sheet / Day Card */
           .plachta-page {
+            display: block !important;
+            position: relative !important;
             width: 100% !important;
-            max-width: none !important;
+            max-width: 100% !important;
             height: auto !important;
             min-height: 0 !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
-            margin: 0 !important;
+            margin: 0 0 15px 0 !important;
             padding: 0 !important;
             background: white !important;
             border: none !important;
             box-shadow: none !important;
+            float: none !important;
+            clear: both !important;
           }
 
+          /* 5. Force Page Break after each day */
           .plachta-page-break {
             page-break-after: always !important;
             break-after: page !important;
+            clear: both !important;
           }
 
-          table {
+          /* Standalone divider element between sheets */
+          .plachta-page-divider {
+            display: block !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            clear: both !important;
+          }
+
+          /* 6. Plachta Matrix Table and Cells */
+          .plachta-table {
             width: 100% !important;
             border-collapse: collapse !important;
             table-layout: fixed !important;
-            page-break-inside: auto;
-          }
-
-          thead {
-            display: table-header-group !important;
-          }
-
-          tr {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
 
-          th, td {
+          .plachta-table thead {
+            display: table-header-group !important;
+          }
+
+          .plachta-table tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          .plachta-table th, .plachta-table td {
             border: 1px solid #1e293b !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+
+          /* 7. Legend page specific */
+          .plachta-legend-page {
+            display: block !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-before: always !important;
+            break-before: page !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            clear: both !important;
           }
 
           .print-avoid-break {
@@ -903,6 +946,7 @@ export default function PlachtaDyrektorska({
               className={`px-1.5 py-0.5 rounded font-bold transition ${
                 previewDayTab === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
+              title="Wszystkie 5 dni (Pn–Pt) oraz Słownik skrótów"
             >
               Wszystkie ({daysToRender.length})
             </button>
@@ -918,6 +962,16 @@ export default function PlachtaDyrektorska({
                 {DAYS_SHORT[d]}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setPreviewDayTab('legend')}
+              className={`px-1.5 py-0.5 rounded font-bold transition ${
+                previewDayTab === 'legend' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
+              title="Zobacz Słownik skrótów kadry, sal i pieczęć urzędową"
+            >
+              📖 Słownik skrótów
+            </button>
           </div>
         </div>
       </div>
@@ -926,27 +980,26 @@ export default function PlachtaDyrektorska({
       <div className="plachta-scroll-wrapper flex-1 overflow-auto p-3 sm:p-6 print:p-0 bg-slate-200/70 print:bg-white flex flex-col items-center">
         
         {/* Helper screen banner explaining multi-page A3 landscape output */}
-        <div className="no-print w-full max-w-7xl mb-4 bg-emerald-950/80 border border-emerald-700/60 rounded-xl p-3 text-emerald-100 flex items-center justify-between gap-3 text-xs shadow-sm">
+        <div className="no-print w-full max-w-7xl mb-4 bg-emerald-950/80 border border-emerald-700/60 rounded-xl p-3 text-emerald-100 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
           <div className="flex items-center gap-2">
             <span className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg shrink-0">
               <Sparkles size={16} />
             </span>
             <div>
-              <strong className="font-bold text-emerald-300">Wielkoformatowy wydruk dyrektorski A3/A2 zoptymalizowany dla {baseEntities.length} kolumn:</strong>
+              <strong className="font-bold text-emerald-300">Wielkoformatowy wydruk Płachty Dyrektorskiej ({paperFormat} Poziomo) dla {baseEntities.length} kolumn:</strong>
               <span className="ml-1 text-emerald-200">
-                {printLayoutMode === 'day_by_day' 
-                  ? `Każdy dzień tygodnia (Pn–Pt) drukowany jest na dedykowanej karcie formatu ${paperFormat} Poziomo (razem 5 stron). Żadna kolumna ani wiersz nie zostaną ucięte!` 
-                  : `Układ ${printLayoutMode === 'single_day' ? 'pojedynczego dnia' : 'ciągły wielostronicowy'} formatu ${paperFormat} Poziomo.`}
+                Wydruk obejmuje <strong>6 pełnych stron {paperFormat}</strong>: 5 kart dziennych (Poniedziałek – Piątek) + 1 dedykowaną kartę ze Słownikiem skrótów kadry, sal, przedmiotów i pieczęcią urzędową szkoły. Żadna kolumna ani dzień nie zostaną obcięte!
               </span>
             </div>
           </div>
           <button
             type="button"
-            onClick={handlePrint}
-            className="shrink-0 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+            onClick={() => handlePrint('all')}
+            className="shrink-0 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+            title="Drukuj wszystkie 5 dni + Słownik skrótów na dedykowanych kartach A3"
           >
             <Printer size={13} />
-            Drukuj teraz
+            Drukuj całą Płachtę (6 stron {paperFormat})
           </button>
         </div>
 
@@ -964,12 +1017,12 @@ export default function PlachtaDyrektorska({
             const isLastRenderedDay = dIdx === daysOnScreen.length - 1;
 
             return (
-              <div 
-                key={dayIdx}
-                className={`plachta-page bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-5 sm:p-6 print:p-0 ${
-                  (!isLastRenderedDay || (showLegend && printLayoutMode === 'day_by_day')) ? 'plachta-page-break' : ''
-                }`}
-              >
+              <React.Fragment key={dayIdx}>
+                <div 
+                  className={`plachta-page bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-5 sm:p-6 print:p-0 ${
+                    (!isLastRenderedDay || showLegend) ? 'plachta-page-break' : ''
+                  }`}
+                >
                 {/* ── SHEET HEADER FOR THIS DAY ── */}
                 <div className="border-b-2 border-slate-900 pb-2 mb-2 flex items-end justify-between gap-4">
                   <div>
@@ -979,6 +1032,9 @@ export default function PlachtaDyrektorska({
                       </span>
                       <span className="px-2.5 py-0.5 rounded-md bg-indigo-600 text-white font-black text-[11px] uppercase tracking-wide">
                         {dayName}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-300 text-slate-700 font-black text-[9.5px] uppercase font-mono">
+                        Karta {dayIdx + 1} z 6
                       </span>
                       {activeVariant && (
                         <span className="px-2 py-0.5 rounded-md border text-[9.5px] font-bold" style={{ borderColor: activeVariant.color, color: activeVariant.color }}>
@@ -1017,7 +1073,7 @@ export default function PlachtaDyrektorska({
 
                 {/* ── MASTER MATRIX TABLE FOR THIS DAY ── */}
                 <div className="overflow-x-auto print:overflow-visible border border-slate-800 rounded-lg print:rounded-none">
-                  <table className="w-full border-collapse text-left border border-slate-800 table-fixed">
+                  <table className="plachta-table w-full border-collapse text-left border border-slate-800 table-fixed">
                     <thead>
                       <tr className="bg-slate-900 text-white uppercase font-black text-center print:bg-slate-900 print:text-white">
                         <th className="border border-slate-700 p-1 w-12 text-[9.5px] print:border-slate-800">
@@ -1166,114 +1222,149 @@ export default function PlachtaDyrektorska({
                 </div>
 
                 {/* Day Sheet Bottom Info */}
-                <div className="mt-2 flex justify-between items-center text-[8.5px] text-slate-400 font-medium">
-                  <span>
-                    Arkusz dzienny: <strong className="text-slate-700 uppercase">{dayName}</strong> · SalePlan Pro
-                  </span>
-                  <span>
-                    Strona {dIdx + 1} z {daysOnScreen.length} {showLegend ? '+ Legenda' : ''}
-                  </span>
+                <div className="mt-2.5 pt-1.5 border-t border-slate-300 flex justify-between items-center text-[9px] text-slate-500 font-medium">
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-slate-800 uppercase tracking-wide">
+                      Arkusz dzienny: {dayName}
+                    </span>
+                    <span>·</span>
+                    <span>Format arkusza: <strong>{paperFormat} Poziomo</strong></span>
+                    <span>·</span>
+                    <span className="text-slate-600">Słownik skrótów kadry, sal i pieczęć na Karcie 6</span>
+                  </div>
+                  <div className="font-mono font-bold text-slate-700">
+                    Karta {dayIdx + 1} z 6 (Dzień {dayIdx + 1}: {dayName})
+                  </div>
                 </div>
               </div>
-            );
-          })}
 
-          {/* ── SEPARATE FINAL SHEET: CADRE LEGEND & OFFICIAL SCHOOL VALIDATION ── */}
-          {showLegend && (
-            <div className="plachta-page bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-5 sm:p-6 print:p-0 print-avoid-break">
-              <div className="border-b-2 border-slate-900 pb-2 mb-3 flex items-end justify-between">
-                <div>
+              {/* Standalone Page Break Divider for Printers */}
+              {(!isLastRenderedDay || showLegend) && (
+                <div className="plachta-page-divider print:block hidden" />
+              )}
+            </React.Fragment>
+          );
+        })}
+
+        {/* ── SEPARATE FINAL SHEET: CADRE LEGEND & OFFICIAL SCHOOL VALIDATION ── */}
+        {showLegend && (
+          <div className="plachta-page plachta-legend-page bg-white shadow-xl print:shadow-none rounded-xl print:rounded-none border border-slate-300 print:border-none p-5 sm:p-6 print:p-0 print-avoid-break">
+            <div className="border-b-2 border-slate-900 pb-2 mb-3 flex items-end justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-black uppercase font-mono tracking-wider">
+                    Karta 6 z 6
+                  </span>
                   <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
                     <User size={15} className="text-indigo-600" />
-                    <span>Słowniczek Kadry Pedagogicznej, Sal i Przedmiotów</span>
+                    <span>Słownik Kadry Pedagogicznej, Sal i Przedmiotów</span>
                   </h3>
-                  <p className="text-[10px] text-slate-500 font-medium">
-                    Pełne zestawienie skrótów wykorzystywanych w arkuszach Płachty Dyrektorskiej
-                  </p>
                 </div>
-                <div className="text-[10px] font-bold text-slate-700 text-right">
-                  Łącznie: <span className="font-extrabold text-slate-900">{pl.classes.length}</span> oddziałów · 
-                  <span className="font-extrabold text-slate-900 ml-1">{pl.teachers.length}</span> nauczycieli · 
-                  <span className="font-extrabold text-slate-900 ml-1">{pl.rooms.length}</span> gabinetów
-                </div>
+                <p className="text-[10px] text-slate-500 font-medium">
+                  Oficjalne zestawienie skrótów i metryka zatwierdzenia planu lekcji dla Płachty Dyrektorskiej
+                </p>
               </div>
+              <div className="text-[10px] font-bold text-slate-700 text-right">
+                Łącznie: <span className="font-extrabold text-slate-900">{pl.classes.length}</span> oddziałów · 
+                <span className="font-extrabold text-slate-900 ml-1">{pl.teachers.length}</span> nauczycieli · 
+                <span className="font-extrabold text-slate-900 ml-1">{pl.rooms.length}</span> gabinetów
+              </div>
+            </div>
 
-              {/* Teachers grid */}
-              <div className="space-y-1 mb-4">
-                <span className="text-[9.5px] font-black uppercase text-slate-600 block tracking-wider">
-                  Nauczyciele ({filteredTeachers.length}):
+            {/* Teachers grid */}
+            <div className="space-y-1 mb-3">
+              <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider">
+                Nauczyciele ({filteredTeachers.length}):
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-1 text-[9px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                {filteredTeachers.map(t => (
+                  <div key={t.id} className="flex items-baseline gap-1 truncate" title={`${t.first} ${t.last}`}>
+                    <span className="font-black text-indigo-900 shrink-0 font-mono">[{t.abbr}]</span>
+                    <span className="truncate">{t.last} {t.first?.substring(0, 1)}.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Subjects abbreviation grid */}
+            <div className="space-y-1 mb-3">
+              <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider">
+                Przedmioty i Skróty ({pl.subjects.length}):
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-1 text-[8.5px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                {pl.subjects.map(s => (
+                  <div key={s.id} className="flex items-baseline gap-1 truncate" title={s.name}>
+                    <span className="font-black text-slate-900 shrink-0 font-mono">[{s.short}]</span>
+                    <span className="truncate">{s.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Rooms & Color categories Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider mb-1">
+                  Gabinety i Sale ({filteredRooms.length}):
                 </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-1 text-[9px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  {filteredTeachers.map(t => (
-                    <div key={t.id} className="flex items-baseline gap-1 truncate" title={`${t.first} ${t.last}`}>
-                      <span className="font-black text-indigo-900 shrink-0 font-mono">[{t.abbr}]</span>
-                      <span className="truncate">{t.last} {t.first?.substring(0, 1)}.</span>
-                    </div>
+                <div className="flex flex-wrap gap-1 text-[8.5px] text-slate-700">
+                  {filteredRooms.map(r => (
+                    <span key={r.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono">
+                      <strong>s.{r.name}</strong> {r.desc ? `(${r.desc.substring(0, 14)})` : ''}
+                    </span>
                   ))}
                 </div>
               </div>
 
-              {/* Rooms & Subjects Summary */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-                <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  <span className="text-[9.5px] font-black uppercase text-slate-600 block tracking-wider mb-1">
-                    Gabinety i Sale ({filteredRooms.length}):
-                  </span>
-                  <div className="flex flex-wrap gap-1 text-[8.5px] text-slate-700">
-                    {filteredRooms.map(r => (
-                      <span key={r.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono">
-                        <strong>s.{r.name}</strong> {r.desc ? `(${r.desc.substring(0, 12)})` : ''}
-                      </span>
-                    ))}
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider mb-1">
+                  Klucz Kolorów Przedmiotów:
+                </span>
+                <div className="grid grid-cols-2 gap-1 text-[8.5px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-rose-100 border border-rose-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Humanistyczne (Pol, Hist, WOS)</span>
                   </div>
-                </div>
-
-                <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  <span className="text-[9.5px] font-black uppercase text-slate-600 block tracking-wider mb-1">
-                    Klucz Kolorów Przedmiotów:
-                  </span>
-                  <div className="grid grid-cols-2 gap-1 text-[8.5px]">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-rose-100 border border-rose-300 shrink-0" />
-                      <span className="text-slate-700 font-bold">Humanistyczne (Pol, Hist, WOS)</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-blue-100 border border-blue-300 shrink-0" />
-                      <span className="text-slate-700 font-bold">Ścisłe (Mat, Fiz, Chem, Bio)</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-green-100 border border-green-300 shrink-0" />
-                      <span className="text-slate-700 font-bold">Języki obce (Ang, Niem, Hiszp)</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-purple-100 border border-purple-300 shrink-0" />
-                      <span className="text-slate-700 font-bold">Wychowanie Fizyczne (WF)</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-cyan-100 border border-cyan-300 shrink-0" />
-                      <span className="text-slate-700 font-bold">Informatyka & Technologie</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-3 h-3 rounded bg-pink-100 border border-pink-300 shrink-0" />
-                      <span className="text-slate-700 font-bold">Wsparcie & SPE (Rewal, Terap)</span>
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-blue-100 border border-blue-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Ścisłe (Mat, Fiz, Chem, Bio)</span>
                   </div>
-                </div>
-              </div>
-
-              {/* Official Seal and Signature Section */}
-              <div className="pt-2 border-t border-slate-300 flex justify-between items-end text-[9px] text-slate-500">
-                <div>
-                  Wygenerowano w systemie SalePlan Pro • {new Date().toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div className="text-right">
-                  <div className="border-t border-dotted border-slate-600 pt-1 px-8 inline-block text-center font-bold text-slate-800 uppercase">
-                    Pieczęć Szkoły i Podpis Dyrektora
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-green-100 border border-green-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Języki obce (Ang, Niem, Hiszp)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-purple-100 border border-purple-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Wychowanie Fizyczne (WF)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-cyan-100 border border-cyan-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Informatyka & Technologie</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-pink-100 border border-pink-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Wsparcie & SPE (Rewal, Terap)</span>
                   </div>
                 </div>
               </div>
             </div>
-          )}
+
+            {/* Official Seal and Signature Section */}
+            <div className="pt-3 border-t-2 border-slate-900 flex justify-between items-end text-[9px] text-slate-600">
+              <div>
+                <strong>SalePlan Pro</strong> • Wygenerowano dla: {appState.school.name} ({appState.yearLabel}) • {new Date().toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="flex items-end gap-8 text-right">
+                <div className="border-t border-dotted border-slate-600 pt-1 px-6 inline-block text-center font-bold text-slate-800 uppercase text-[8.5px]">
+                  Pieczęć Szkoły
+                </div>
+                <div className="border-t border-dotted border-slate-600 pt-1 px-8 inline-block text-center font-bold text-slate-800 uppercase text-[8.5px]">
+                  Podpis Dyrektora Szkoły
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </div>

@@ -2806,7 +2806,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 relative print:p-0 print:bg-white print:overflow-visible">
+    <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 relative print:p-0 print:bg-white print:overflow-visible print:h-auto print:w-full print:block">
       {/* CSS rules specifically injected for elegant printing */}
       <style>{`
         @media print {
@@ -2815,12 +2815,21 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             display: none !important;
           }
 
+          /* Globalny reset overflow na czas wydruku - odblokowuje stronicowanie Chromium/Firefox */
+          *, *::before, *::after {
+            overflow: visible !important;
+          }
+
           /* Resetujemy wysokości i paski przewijania kontenerów nadrzędnych */
-          html, body, #root, [class*="h-screen"], [class*="overflow-hidden"] {
+          html, body, #root, #root > div, #app-main-workspace, #app-main-workspace > div,
+          [class*="h-screen"], [class*="overflow-"] {
             height: auto !important;
-            width: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            width: 100% !important;
             overflow: visible !important;
             position: static !important;
+            display: block !important;
           }
 
           .no-print {
@@ -2837,10 +2846,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             margin: 0 !important;
             box-shadow: none !important;
             border: none !important;
+            display: block !important;
           }
           .page-break {
-            page-break-after: always;
-            break-after: page;
+            page-break-after: always !important;
+            break-after: page !important;
           }
           .print-card {
             border: 1px solid #000 !important;
@@ -2849,18 +2859,20 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
             color: #000 !important;
             padding: 10px !important;
             margin-bottom: 25px !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
-          table {
+          .print-container table {
             border-collapse: collapse !important;
             width: 100% !important;
           }
-          th, td {
+          .print-container th, .print-container td {
             border: 1px solid #000 !important;
             padding: 4px 6px !important;
             font-size: 10px !important;
             color: #000 !important;
           }
-          th {
+          .print-container th {
             background-color: #f1f5f9 !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;

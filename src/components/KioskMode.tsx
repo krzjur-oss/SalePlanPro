@@ -565,16 +565,16 @@ export default function KioskMode({
             <div className="flex items-center gap-2 mt-1">
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide ${
                 bellStatus.isLessonActive 
-                  ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse' : 'bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse')
+                  ? (isDark ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse' : 'bg-emerald-100 text-emerald-950 border border-emerald-400 animate-pulse')
                   : bellStatus.isBreak
-                    ? (isDark ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-amber-100 text-amber-800 border border-amber-300')
-                    : (isDark ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-200 text-slate-700')
+                    ? (isDark ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-amber-100 text-amber-950 border border-amber-400')
+                    : (isDark ? 'bg-slate-700/50 text-slate-300' : 'bg-slate-200 text-slate-900')
               }`}>
-                <span className={`w-2 h-2 rounded-full ${bellStatus.isLessonActive ? (isDark ? 'bg-emerald-400' : 'bg-emerald-600') : bellStatus.isBreak ? (isDark ? 'bg-amber-400' : 'bg-amber-600') : (isDark ? 'bg-slate-400' : 'bg-slate-500')}`} />
+                <span className={`w-2 h-2 rounded-full ${bellStatus.isLessonActive ? (isDark ? 'bg-emerald-400' : 'bg-emerald-600') : bellStatus.isBreak ? (isDark ? 'bg-amber-400' : 'bg-amber-600') : (isDark ? 'bg-slate-400' : 'bg-slate-600')}`} />
                 <span>{bellStatus.statusText}</span>
               </span>
 
-              <span className={`hidden sm:inline-block text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+              <span className={`hidden sm:inline-block text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-800'}`}>
                 {bellStatus.countdownText}
               </span>
             </div>
@@ -586,7 +586,7 @@ export default function KioskMode({
           <div className={`${fontStyles.clock} font-mono tracking-wider font-extrabold leading-none ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>
             {currentTime.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
           </div>
-          <div className={`text-[11px] sm:text-xs font-bold mt-1 uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+          <div className={`text-[11px] sm:text-xs font-extrabold mt-1 uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
             {bellStatus.dayName}, {currentTime.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>
@@ -601,7 +601,7 @@ export default function KioskMode({
               className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                 displayMode === 'live' 
                   ? 'bg-indigo-600 text-white shadow-xs' 
-                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-700 hover:text-slate-950 hover:bg-slate-300/60'
+                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80 font-bold'
               }`}
               title="Widok na żywo: co teraz i za chwilę"
             >
@@ -614,7 +614,7 @@ export default function KioskMode({
               className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                 displayMode === 'carousel' 
                   ? 'bg-indigo-600 text-white shadow-xs' 
-                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-700 hover:text-slate-950 hover:bg-slate-300/60'
+                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80 font-bold'
               }`}
               title="Karuzela planów klas"
             >
@@ -627,7 +627,7 @@ export default function KioskMode({
               className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                 displayMode === 'rooms' 
                   ? 'bg-indigo-600 text-white shadow-xs' 
-                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-700 hover:text-slate-950 hover:bg-slate-300/60'
+                  : isDark ? 'text-slate-400 hover:text-white' : 'text-slate-800 hover:text-slate-950 hover:bg-slate-300/80 font-bold'
               }`}
               title="Obłożenie gabinetów"
             >
@@ -643,7 +643,7 @@ export default function KioskMode({
             className={`p-2 rounded-xl border transition cursor-pointer ${
               showSettingsDrawer 
                 ? 'bg-indigo-600 text-white border-indigo-500' 
-                : isDark ? 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:text-slate-900 shadow-xs'
+                : isDark ? 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white' : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-100 hover:text-slate-950 shadow-xs font-bold'
             }`}
             title="Ustawienia tablicy (motyw, czcionka, prędkość, symulacja)"
           >
@@ -655,7 +655,7 @@ export default function KioskMode({
             type="button"
             onClick={toggleFullscreen}
             className={`p-2 rounded-xl border transition cursor-pointer ${
-              isDark ? 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:text-slate-900 shadow-xs'
+              isDark ? 'bg-slate-900 text-slate-300 border-slate-800 hover:bg-slate-800 hover:text-white' : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-100 hover:text-slate-950 shadow-xs font-bold'
             }`}
             title={isFullscreen ? 'Wyjdź z pełnego ekranu' : 'Pełny ekran (F11)'}
           >
@@ -669,7 +669,7 @@ export default function KioskMode({
             className={`p-2 rounded-xl border transition cursor-pointer ${
               isDark 
                 ? 'bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white border-rose-500/30' 
-                : 'bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white border-rose-200 shadow-xs'
+                : 'bg-rose-50 text-rose-800 hover:bg-rose-600 hover:text-white border-rose-300 shadow-xs font-bold'
             }`}
             title="Zamknij Kiosk i wróć do programu (Esc)"
           >
@@ -681,19 +681,19 @@ export default function KioskMode({
       {/* ── SETTINGS DRAWER OVERLAY ── */}
       {showSettingsDrawer && (
         <div className={`p-4 border-b shrink-0 flex flex-wrap items-center justify-between gap-4 z-40 ${
-          isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+          isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-900 shadow-sm'
         }`}>
           <div className="flex items-center gap-4 flex-wrap text-xs">
             {/* Theme */}
             <div className="flex items-center gap-1">
-              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Motyw TV:</span>
+              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>Motyw TV:</span>
               <button
                 type="button"
                 onClick={() => setTheme('dark')}
                 className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${
                   theme === 'dark' 
                     ? 'bg-indigo-600 text-white shadow-xs' 
-                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 font-bold'
                 }`}
               >
                 Ciemny (OLED)
@@ -704,7 +704,7 @@ export default function KioskMode({
                 className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${
                   theme === 'light' 
                     ? 'bg-indigo-600 text-white shadow-xs' 
-                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 font-bold'
                 }`}
               >
                 Jasny (Rzutnik)
@@ -713,7 +713,7 @@ export default function KioskMode({
 
             {/* Font Size */}
             <div className="flex items-center gap-1">
-              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Rozmiar czcionki:</span>
+              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>Rozmiar czcionki:</span>
               {(['normal', 'large', 'xlarge'] as const).map(fs => (
                 <button
                   key={fs}
@@ -722,7 +722,7 @@ export default function KioskMode({
                   className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${
                     fontSize === fs 
                       ? 'bg-indigo-600 text-white shadow-xs' 
-                      : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 font-bold'
                   }`}
                 >
                   {fs === 'normal' ? 'Normalna' : fs === 'large' ? 'Duża' : 'B. Duża'}
@@ -732,7 +732,7 @@ export default function KioskMode({
 
             {/* Rotation Speed */}
             <div className="flex items-center gap-1">
-              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Rotacja:</span>
+              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>Rotacja:</span>
               {[5, 8, 10, 15, 20].map(sec => (
                 <button
                   key={sec}
@@ -741,7 +741,7 @@ export default function KioskMode({
                   className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${
                     rotationIntervalSec === sec 
                       ? 'bg-indigo-600 text-white shadow-xs' 
-                      : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                      : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 font-bold'
                   }`}
                 >
                   {sec}s
@@ -751,7 +751,7 @@ export default function KioskMode({
 
             {/* Simulation mode */}
             <div className={`flex items-center gap-2 border-l pl-4 ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
-              <label className={`flex items-center gap-1 font-bold cursor-pointer ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>
+              <label className={`flex items-center gap-1 font-bold cursor-pointer ${isDark ? 'text-amber-400' : 'text-amber-800'}`}>
                 <input
                   type="checkbox"
                   checked={isSimulatingTime}
@@ -792,14 +792,14 @@ export default function KioskMode({
 
             {/* Announcement Editor from settings */}
             <div className={`flex items-center gap-2 border-l pl-4 ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
-              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Pasek ogłoszeń:</span>
+              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>Pasek ogłoszeń:</span>
               <button
                 type="button"
                 onClick={handleOpenAnnouncementEditor}
                 className={`px-2.5 py-1 rounded-md font-bold text-xs flex items-center gap-1.5 transition cursor-pointer border ${
                   isDark 
                     ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-950 border-amber-500/30' 
-                    : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                    : 'bg-amber-100 text-amber-950 border-amber-300 hover:bg-amber-200 font-bold'
                 }`}
                 title="Edytuj treść paska komunikatów na dole ekranu"
               >
@@ -810,14 +810,14 @@ export default function KioskMode({
 
             {/* Hide empty classes / okienka toggle */}
             <div className={`flex items-center gap-1 border-l pl-4 ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
-              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>Okienka i brak zajęć:</span>
+              <span className={`font-bold uppercase text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>Okienka i brak zajęć:</span>
               <button
                 type="button"
                 onClick={() => toggleHideEmptyClasses(true)}
                 className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${
                   hideEmptyClasses 
                     ? 'bg-indigo-600 text-white shadow-xs' 
-                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 font-bold'
                 }`}
                 title="Nie wyświetla klas, które w danej godzinie nie mają zajęć lub mają okienko"
               >
@@ -829,7 +829,7 @@ export default function KioskMode({
                 className={`px-2 py-1 rounded-md font-bold cursor-pointer transition ${
                   !hideEmptyClasses 
                     ? 'bg-indigo-600 text-white shadow-xs' 
-                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                    : isDark ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 font-bold'
                 }`}
                 title="Pokaż wszystkie klasy, w tym okienka i brak lekcji"
               >
@@ -841,7 +841,7 @@ export default function KioskMode({
           <button
             type="button"
             onClick={() => setShowSettingsDrawer(false)}
-            className={`text-xs font-bold cursor-pointer ${isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'}`}
+            className={`text-xs font-bold cursor-pointer ${isDark ? 'text-slate-400 hover:text-white' : 'text-slate-700 hover:text-slate-950 font-bold'}`}
           >
             Zamknij pasek
           </button>
@@ -878,38 +878,38 @@ export default function KioskMode({
                     )}
                   </div>
 
-                  <div className={`flex items-center gap-2 sm:gap-3 text-xs font-bold flex-wrap ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <div className={`flex items-center gap-2 sm:gap-3 text-xs font-bold flex-wrap ${isDark ? 'text-slate-400' : 'text-slate-800'}`}>
                     <button
                       type="button"
                       onClick={() => toggleHideEmptyClasses()}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border shadow-xs ${
                         hideEmptyClasses 
-                          ? (isDark ? 'bg-indigo-600/25 text-indigo-300 border-indigo-500/50 hover:bg-indigo-600/35' : 'bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200')
-                          : (isDark ? 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100 hover:text-slate-900')
+                          ? (isDark ? 'bg-indigo-600/25 text-indigo-300 border-indigo-500/50 hover:bg-indigo-600/35' : 'bg-indigo-100 text-indigo-950 border-indigo-300 hover:bg-indigo-200 font-black')
+                          : (isDark ? 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white' : 'bg-white text-slate-800 border-slate-300 hover:bg-slate-100 hover:text-slate-950 font-bold')
                       }`}
                       title="Przełącz ukrywanie klas, które w danej godzinie nie mają zajęć lub mają okienko"
                     >
-                      {hideEmptyClasses ? <EyeOff size={13} className={isDark ? 'text-indigo-400' : 'text-indigo-600'} /> : <Eye size={13} className={isDark ? 'text-slate-400' : 'text-slate-600'} />}
+                      {hideEmptyClasses ? <EyeOff size={13} className={isDark ? 'text-indigo-400' : 'text-indigo-700'} /> : <Eye size={13} className={isDark ? 'text-slate-400' : 'text-slate-700'} />}
                       <span>{hideEmptyClasses ? 'Tylko z lekcjami' : 'Pokaż wszystkie'}</span>
                     </button>
 
                     <div>
-                      Dzień: <span className={`font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>{bellStatus.dayName}</span> · Lekcja {hoursList[liveReferenceHourIdx]?.num || bellStatus.currentHour?.num || 1} {bellStatus.isBreak ? '(za chwilę)' : ''}
+                      Dzień: <span className={`font-black ${isDark ? 'text-white' : 'text-slate-950'}`}>{bellStatus.dayName}</span> · Lekcja {hoursList[liveReferenceHourIdx]?.num || bellStatus.currentHour?.num || 1} {bellStatus.isBreak ? '(za chwilę)' : ''}
                     </div>
                   </div>
                 </div>
 
                 {classesToDisplay.length === 0 ? (
                   <div className={`p-8 rounded-2xl border text-center flex flex-col items-center justify-center gap-3 my-auto ${
-                    isDark ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+                    isDark ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-white border-slate-300 text-slate-900 shadow-sm'
                   }`}>
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
                       <Clock size={24} />
                     </div>
-                    <div className={`font-extrabold text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    <div className={`font-extrabold text-base ${isDark ? 'text-white' : 'text-slate-950'}`}>
                       Brak zaplanowanych lekcji w tej godzinie
                     </div>
-                    <p className={`text-xs max-w-md ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                    <p className={`text-xs max-w-md ${isDark ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>
                       Żadna z {pl.classes.length} klas nie ma w tej chwili zajęć w planie (koniec lekcji lub okienko).
                     </p>
                     {hideEmptyClasses && (
@@ -933,17 +933,17 @@ export default function KioskMode({
                           className={`p-3 rounded-2xl border flex flex-col justify-between transition shadow-md ${
                             isDark 
                               ? 'bg-slate-900/80 border-slate-800 hover:border-indigo-500/50' 
-                              : 'bg-white border-slate-200 hover:border-indigo-300 shadow-xs'
+                              : 'bg-white border-slate-300 hover:border-indigo-400 shadow-sm'
                           }`}
                         >
                           {/* Class title header */}
                           <div className={`flex items-center justify-between pb-1.5 mb-1.5 border-b ${isDark ? 'border-slate-800/60' : 'border-slate-200'}`}>
-                            <span className={`${fontStyles.cardHeader} font-mono tracking-tight ${isDark ? 'text-indigo-400' : 'text-indigo-700 font-black'}`}>
+                            <span className={`${fontStyles.cardHeader} font-mono tracking-tight ${isDark ? 'text-indigo-400' : 'text-indigo-900 font-black'}`}>
                               {cls.name}
                             </span>
                             {currentLesson?.room && (
                               <span className={`px-2 py-0.5 rounded-md text-[11px] font-black font-mono border ${
-                                isDark ? 'bg-indigo-950 text-indigo-300 border-indigo-800' : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                isDark ? 'bg-indigo-950 text-indigo-300 border-indigo-800' : 'bg-indigo-100 text-indigo-950 border-indigo-300'
                               }`}>
                                 s. {currentLesson.room}
                               </span>
@@ -952,22 +952,22 @@ export default function KioskMode({
 
                           {/* Current lesson */}
                           <div className="mb-2">
-                            <div className={`text-[10px] font-black uppercase tracking-wide flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                            <div className={`text-[10px] font-black uppercase tracking-wide flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${bellStatus.isBreak ? 'bg-amber-400 animate-ping' : 'bg-emerald-500 animate-pulse'}`} />
                               <span>{bellStatus.isBreak ? 'Po dzwonku:' : 'Teraz:'}</span>
                             </div>
                             {currentLesson ? (
                               <div className="mt-0.5">
-                                <div className={`${fontStyles.body} truncate ${isDark ? 'text-white' : 'text-slate-900'}`} title={currentLesson.subject}>
+                                <div className={`${fontStyles.body} truncate ${isDark ? 'text-white' : 'text-slate-950 font-black'}`} title={currentLesson.subject}>
                                   {currentLesson.subject}
                                 </div>
-                                <div className={`text-xs font-semibold flex items-center justify-between mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                                <div className={`text-xs font-bold flex items-center justify-between mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-800'}`}>
                                   <span>{currentLesson.teacher ? `prof. ${currentLesson.teacher}` : ''}</span>
-                                  {currentLesson.isGroup && <span className={`text-[9px] uppercase font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>[grupa]</span>}
+                                  {currentLesson.isGroup && <span className={`text-[9px] uppercase font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-900 bg-indigo-50 px-1 rounded'}`}>[grupa]</span>}
                                 </div>
                               </div>
                             ) : (
-                              <div className={`text-xs italic mt-0.5 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                              <div className={`text-xs font-bold mt-1 inline-block px-2 py-0.5 rounded border ${isDark ? 'text-slate-400 bg-slate-800/40 border-slate-700/50 italic' : 'text-slate-800 bg-slate-100 border-slate-300'}`}>
                                 Brak zajęć / Okienko
                               </div>
                             )}
@@ -975,19 +975,21 @@ export default function KioskMode({
 
                           {/* Next lesson */}
                           <div className={`pt-1.5 border-t text-xs ${isDark ? 'border-slate-800/40' : 'border-slate-200'}`}>
-                            <div className={`text-[9px] font-bold uppercase flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                              <ArrowRight size={10} className={isDark ? 'text-slate-400' : 'text-slate-500'} />
+                            <div className={`text-[9px] font-black uppercase flex items-center gap-1 ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
+                              <ArrowRight size={10} className={isDark ? 'text-slate-400' : 'text-slate-700'} />
                               <span>{bellStatus.isBreak ? 'Kolejna lekcja:' : 'Za chwilę:'}</span>
                             </div>
                             {nextLesson ? (
-                              <div className={`text-[11.5px] truncate mt-0.5 font-bold flex items-center justify-between ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>
+                              <div className={`text-[11.5px] truncate mt-0.5 font-bold flex items-center justify-between ${isDark ? 'text-slate-300' : 'text-slate-950'}`}>
                                 <span className="truncate">{nextLesson.subject}</span>
-                                <span className={`font-mono shrink-0 ml-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                                <span className={`font-mono shrink-0 ml-1 font-bold ${isDark ? 'text-slate-400' : 'text-indigo-950 bg-indigo-50 px-1 rounded border border-indigo-200'}`}>
                                   {nextLesson.room ? `s.${nextLesson.room}` : ''}
                                 </span>
                               </div>
                             ) : (
-                              <div className={`text-[10.5px] italic ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Koniec zajęć</div>
+                              <div className={`text-[10.5px] font-bold mt-0.5 inline-block px-1.5 py-0.5 rounded border ${isDark ? 'text-slate-400 bg-slate-800/40 border-slate-700/50 italic' : 'text-slate-800 bg-slate-100 border-slate-300'}`}>
+                                Koniec zajęć
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1001,11 +1003,11 @@ export default function KioskMode({
               <div className="flex flex-col gap-4 overflow-y-auto">
                 {/* Active Duties on Break */}
                 <div className={`p-4 rounded-2xl border ${
-                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                 }`}>
                   <div className={`flex items-center gap-2 pb-2 mb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-                    <Shield size={16} className={isDark ? 'text-amber-400' : 'text-amber-600'} />
-                    <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                    <Shield size={16} className={isDark ? 'text-amber-400' : 'text-amber-700'} />
+                    <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? 'text-amber-400' : 'text-amber-800'}`}>
                       Dyżury Nauczycielskie
                     </h3>
                   </div>
@@ -1014,11 +1016,11 @@ export default function KioskMode({
                     <div className="space-y-1.5">
                       {activeDuties.map((d, i) => (
                         <div key={i} className={`flex items-center justify-between text-xs p-2 rounded-xl border ${
-                          isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-amber-50/70 border-amber-200/80 shadow-xs'
+                          isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-amber-50 border-amber-300 shadow-xs'
                         }`}>
-                          <div className={`font-bold truncate pr-2 ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{d.placeName}</div>
+                          <div className={`font-bold truncate pr-2 ${isDark ? 'text-slate-200' : 'text-slate-950'}`}>{d.placeName}</div>
                           <span className={`font-mono font-black px-2 py-0.5 rounded shrink-0 border ${
-                            isDark ? 'text-amber-300 bg-amber-950/60 border-amber-800' : 'text-amber-900 bg-amber-100 border-amber-300'
+                            isDark ? 'text-amber-300 bg-amber-950/60 border-amber-800' : 'text-amber-950 bg-amber-200 border-amber-400 font-black'
                           }`}>
                             {d.teacherAbbr}
                           </span>
@@ -1026,7 +1028,7 @@ export default function KioskMode({
                       ))}
                     </div>
                   ) : (
-                    <div className={`text-xs italic p-3 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    <div className={`text-xs p-3 text-center ${isDark ? 'text-slate-400 italic' : 'text-slate-700 font-medium'}`}>
                       Brak zaplanowanych dyżurów w tym czasie.
                     </div>
                   )}
@@ -1034,11 +1036,11 @@ export default function KioskMode({
 
                 {/* Free Classrooms */}
                 <div className={`p-4 rounded-2xl border flex-1 ${
-                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'
+                  isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-300 shadow-sm'
                 }`}>
                   <div className={`flex items-center gap-2 pb-2 mb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-                    <MapPin size={16} className={isDark ? 'text-emerald-400' : 'text-emerald-600'} />
-                    <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                    <MapPin size={16} className={isDark ? 'text-emerald-400' : 'text-emerald-700'} />
+                    <h3 className={`text-xs font-black uppercase tracking-wider ${isDark ? 'text-emerald-400' : 'text-emerald-800'}`}>
                       Wolne sale w tej godzinie
                     </h3>
                   </div>
@@ -1047,15 +1049,15 @@ export default function KioskMode({
                     <div className="grid grid-cols-2 gap-1.5">
                       {freeRoomsInCurrentHour.map(r => (
                         <div key={r.id} className={`p-2 rounded-xl text-center border ${
-                          isDark ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-emerald-50/70 border-emerald-200 shadow-xs'
+                          isDark ? 'bg-emerald-950/20 border-emerald-800/40' : 'bg-emerald-50 border-emerald-300 shadow-xs'
                         }`}>
-                          <div className={`font-mono font-black text-sm ${isDark ? 'text-emerald-300' : 'text-emerald-800'}`}>{r.name}</div>
-                          <div className={`text-[9px] truncate ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{r.desc || 'Ogólna'}</div>
+                          <div className={`font-mono font-black text-sm ${isDark ? 'text-emerald-300' : 'text-emerald-950'}`}>{r.name}</div>
+                          <div className={`text-[9.5px] font-bold truncate ${isDark ? 'text-slate-400' : 'text-slate-800'}`}>{r.desc || 'Ogólna'}</div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className={`text-xs italic p-3 text-center ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    <div className={`text-xs p-3 text-center ${isDark ? 'text-slate-400 italic' : 'text-slate-700 font-medium'}`}>
                       Wszystkie sale są aktualnie zajęte.
                     </div>
                   )}
@@ -1078,10 +1080,10 @@ export default function KioskMode({
                   {currentCarouselClass.name}
                 </div>
                 <div>
-                  <h2 className={`text-lg font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  <h2 className={`text-lg font-black ${isDark ? 'text-white' : 'text-slate-950'}`}>
                     Tygodniowy Plan Zajęć Klasy {currentCarouselClass.name}
                   </h2>
-                  <p className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                     Oddział {carouselClassIdx + 1} z {pl.classes.length} · Automatyczna rotacja co {rotationIntervalSec}s
                   </p>
                 </div>
@@ -1096,7 +1098,7 @@ export default function KioskMode({
                     setProgressPercent(0);
                   }}
                   className={`p-2 rounded-xl border transition cursor-pointer ${
-                    isDark ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800' : 'bg-white border-slate-300 text-slate-700 hover:text-slate-950 hover:bg-slate-100 shadow-xs'
+                    isDark ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800' : 'bg-white border-slate-300 text-slate-800 hover:text-slate-950 hover:bg-slate-100 shadow-xs font-bold'
                   }`}
                   title="Poprzednia klasa (Strzałka w lewo)"
                 >
@@ -1109,7 +1111,7 @@ export default function KioskMode({
                   className={`px-3 py-2 rounded-xl border text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                     isPaused 
                       ? 'bg-amber-600 text-white border-amber-500 shadow-md' 
-                      : isDark ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100 shadow-xs'
+                      : isDark ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white' : 'bg-white border-slate-300 text-slate-800 hover:bg-slate-100 shadow-xs font-bold'
                   }`}
                   title={isPaused ? 'Wznów rotację (Spacja)' : 'Wstrzymaj rotację (Spacja)'}
                 >
@@ -1124,7 +1126,7 @@ export default function KioskMode({
                     setProgressPercent(0);
                   }}
                   className={`p-2 rounded-xl border transition cursor-pointer ${
-                    isDark ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800' : 'bg-white border-slate-300 text-slate-700 hover:text-slate-950 hover:bg-slate-100 shadow-xs'
+                    isDark ? 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800' : 'bg-white border-slate-300 text-slate-800 hover:text-slate-950 hover:bg-slate-100 shadow-xs font-bold'
                   }`}
                   title="Następna klasa (Strzałka w prawo)"
                 >
@@ -1140,19 +1142,19 @@ export default function KioskMode({
               <table className="w-full h-full border-collapse text-left">
                 <thead>
                   <tr className={`uppercase font-black text-center text-xs ${
-                    isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-800 border-b border-slate-300'
+                    isDark ? 'bg-slate-950 text-white' : 'bg-slate-200 text-slate-950 border-b border-slate-400'
                   }`}>
                     <th className={`p-3 border-b border-r w-24 ${isDark ? 'border-slate-800' : 'border-slate-300'}`}>Godz</th>
                     {DAYS_NAMES.map((d, dIdx) => (
                       <th 
                         key={d} 
                         className={`p-3 border-b border-r text-center ${isDark ? 'border-slate-800' : 'border-slate-300'} ${
-                          dIdx === bellStatus.dayIdx ? (isDark ? 'bg-indigo-950/80 text-indigo-300' : 'bg-indigo-100 text-indigo-900') : ''
+                          dIdx === bellStatus.dayIdx ? (isDark ? 'bg-indigo-950/80 text-indigo-300' : 'bg-indigo-100 text-indigo-950 font-black') : ''
                         }`}
                       >
                         <span>{d}</span>
                         {dIdx === bellStatus.dayIdx && (
-                          <span className={`block text-[9px] font-mono font-black mt-0.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>Dzisiaj</span>
+                          <span className={`block text-[9px] font-mono font-black mt-0.5 ${isDark ? 'text-emerald-400' : 'text-emerald-800'}`}>Dzisiaj</span>
                         )}
                       </th>
                     ))}
@@ -1174,10 +1176,10 @@ export default function KioskMode({
                       >
                         {/* Hour details */}
                         <td className={`p-2 border-r text-center font-mono ${
-                          isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-300 bg-slate-50'
+                          isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-300 bg-slate-100'
                         }`}>
-                          <span className={`text-sm font-black block ${isDark ? 'text-white' : 'text-slate-900'}`}>{hour.num}</span>
-                          <span className={`text-[9px] block font-bold mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{hour.start}–{hour.end}</span>
+                          <span className={`text-sm font-black block ${isDark ? 'text-white' : 'text-slate-950'}`}>{hour.num}</span>
+                          <span className={`text-[9px] block font-bold mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>{hour.start}–{hour.end}</span>
                         </td>
 
                         {/* Day cells 0..4 */}
@@ -1188,7 +1190,7 @@ export default function KioskMode({
                           if (!lesson) {
                             return (
                               <td key={dayIdx} className={`p-2 border-r text-center ${isDark ? 'border-slate-800/40' : 'border-slate-200'}`}>
-                                <span className={`font-light select-none ${isDark ? 'text-slate-700' : 'text-slate-300'}`}>·</span>
+                                <span className={`font-bold select-none ${isDark ? 'text-slate-700' : 'text-slate-400'}`}>—</span>
                               </td>
                             );
                           }
@@ -1202,7 +1204,7 @@ export default function KioskMode({
                             >
                               <div className="flex flex-col justify-between h-full">
                                 <div className="flex items-center justify-between gap-1">
-                                  <span className={`font-black text-xs sm:text-sm truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                                  <span className={`font-black text-xs sm:text-sm truncate ${isDark ? 'text-white' : 'text-slate-950'}`}>
                                     {lesson.subject}
                                   </span>
                                   {isNowSlot && (
@@ -1212,11 +1214,11 @@ export default function KioskMode({
                                   )}
                                 </div>
 
-                                <div className={`flex items-center justify-between text-xs font-bold mt-1 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                                <div className={`flex items-center justify-between text-xs font-bold mt-1 ${isDark ? 'text-slate-400' : 'text-slate-800'}`}>
                                   <span>{lesson.teacher ? `prof. ${lesson.teacher}` : ''}</span>
                                   {lesson.room && (
-                                    <span className={`font-mono px-1.5 py-0.5 rounded text-[10.5px] border ${
-                                      isDark ? 'text-indigo-300 bg-indigo-950 border-indigo-800' : 'text-indigo-800 bg-indigo-50 border-indigo-200'
+                                    <span className={`font-mono px-1.5 py-0.5 rounded text-[10.5px] border font-black ${
+                                      isDark ? 'text-indigo-300 bg-indigo-950 border-indigo-800' : 'text-indigo-950 bg-indigo-100 border-indigo-300'
                                     }`}>
                                       s.{lesson.room}
                                     </span>
@@ -1256,10 +1258,10 @@ export default function KioskMode({
                   <MapPin size={20} />
                 </div>
                 <div>
-                  <h2 className={`text-lg font-black ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                  <h2 className={`text-lg font-black ${isDark ? 'text-white' : 'text-slate-950'}`}>
                     Obłożenie Gabinetów i Sal Lekcyjnych
                   </h2>
-                  <p className={`text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <p className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                     Dzień: {bellStatus.dayName} · {pl.rooms.length} sal
                   </p>
                 </div>
@@ -1290,17 +1292,17 @@ export default function KioskMode({
                       className={`p-3.5 rounded-2xl border transition flex flex-col justify-between ${
                         isOccupied 
                           ? (isDark ? 'bg-slate-900 border-indigo-500/60 shadow-md' : 'bg-white border-indigo-300 shadow-sm')
-                          : (isDark ? 'bg-slate-950/60 border-slate-800 opacity-75' : 'bg-slate-50 border-slate-200 opacity-85')
+                          : (isDark ? 'bg-slate-950/60 border-slate-800 opacity-75' : 'bg-white border-slate-300 shadow-xs')
                       }`}
                     >
                       <div className={`flex items-center justify-between pb-2 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-                        <span className={`font-mono font-black text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                        <span className={`font-mono font-black text-base ${isDark ? 'text-white' : 'text-slate-950'}`}>
                           {room.name}
                         </span>
                         <span className={`px-2 py-0.5 rounded-md text-[9.5px] font-black uppercase tracking-wider ${
                           isOccupied 
                             ? 'bg-indigo-600 text-white' 
-                            : (isDark ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-800 border border-emerald-300')
+                            : (isDark ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-emerald-100 text-emerald-950 border border-emerald-400')
                         }`}>
                           {isOccupied ? 'Zajęta' : 'Wolna'}
                         </span>
@@ -1309,25 +1311,25 @@ export default function KioskMode({
                       <div className="py-2">
                         {isOccupied ? (
                           <>
-                            <div className={`text-sm font-black ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>
+                            <div className={`text-sm font-black ${isDark ? 'text-indigo-300' : 'text-indigo-950'}`}>
                               Klasa {activeClassInRoom}
                             </div>
-                            <div className={`text-xs truncate mt-0.5 font-bold ${isDark ? 'text-slate-300' : 'text-slate-800'}`}>
+                            <div className={`text-xs truncate mt-0.5 font-bold ${isDark ? 'text-slate-300' : 'text-slate-950'}`}>
                               {activeSubjInRoom}
                             </div>
-                            <div className={`text-[11px] mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                            <div className={`text-[11px] mt-0.5 font-semibold ${isDark ? 'text-slate-400' : 'text-slate-700'}`}>
                               prof. {activeTeacherInRoom}
                             </div>
                           </>
                         ) : (
-                          <div className={`text-xs italic py-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                          <div className={`text-xs font-bold py-2 inline-block px-2 rounded border ${isDark ? 'text-slate-500 italic' : 'text-slate-800 bg-slate-100 border-slate-300'}`}>
                             Brak zaplanowanych zajęć
                           </div>
                         )}
                       </div>
 
-                      <div className={`pt-2 border-t text-[10px] font-semibold truncate ${
-                        isDark ? 'border-slate-800/60 text-slate-400' : 'border-slate-200 text-slate-600'
+                      <div className={`pt-2 border-t text-[10px] font-bold truncate ${
+                        isDark ? 'border-slate-800/60 text-slate-400' : 'border-slate-200 text-slate-700'
                       }`}>
                         {room.desc || 'Sala ogólna'}
                       </div>
@@ -1343,7 +1345,7 @@ export default function KioskMode({
 
       {/* ── BOTTOM LIVE ANNOUNCEMENT TICKER (MARQUEE) ── */}
       <div className={`px-3 sm:px-4 py-2 border-t shrink-0 flex items-center justify-between gap-2 sm:gap-3 text-xs ${
-        isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-lg'
+        isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-white border-slate-300 text-slate-900 shadow-lg'
       }`}>
         {/* Left Badge: clickable on tablet */}
         <button
@@ -1365,7 +1367,7 @@ export default function KioskMode({
           title="Dotknij lub kliknij, aby zmienić treść komunikatu szkoły"
         >
           <div className={`marquee font-bold transition truncate ${
-            isDark ? 'text-slate-200 group-hover:text-amber-300' : 'text-slate-900 group-hover:text-amber-700'
+            isDark ? 'text-slate-200 group-hover:text-amber-300' : 'text-slate-950 font-extrabold group-hover:text-amber-700'
           }`}>
             {announcementText}
           </div>
@@ -1379,7 +1381,7 @@ export default function KioskMode({
             className={`px-3 py-1.5 min-h-[38px] rounded-lg active:scale-95 border font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
               isDark 
                 ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white border-slate-700' 
-                : 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-300'
+                : 'bg-amber-100 hover:bg-amber-200 text-amber-950 border-amber-400 font-black'
             }`}
             title="Edytuj treść paska ogłoszeń na tablecie lub komputerze"
           >
@@ -1387,8 +1389,8 @@ export default function KioskMode({
             <span className="font-bold">Edytuj</span>
           </button>
 
-          <span className={`text-[10px] font-medium hidden md:inline ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>
-            Sterowanie: <kbd className={`px-1 py-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'}`}>Spacja</kbd> (pauza) · <kbd className={`px-1 py-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'}`}>F</kbd> (ekran) · <kbd className={`px-1 py-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-300 text-slate-800'}`}>Esc</kbd> (wyjście)
+          <span className={`text-[10px] font-medium hidden md:inline ${isDark ? 'text-slate-500' : 'text-slate-700 font-bold'}`}>
+            Sterowanie: <kbd className={`px-1 py-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-400 text-slate-950 font-bold'}`}>Spacja</kbd> (pauza) · <kbd className={`px-1 py-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-400 text-slate-950 font-bold'}`}>F</kbd> (ekran) · <kbd className={`px-1 py-0.5 rounded border ${isDark ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-400 text-slate-950 font-bold'}`}>Esc</kbd> (wyjście)
           </span>
         </div>
       </div>

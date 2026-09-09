@@ -1536,7 +1536,7 @@ export default function App() {
   };
 
   return (
-    <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
+    <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden print:h-auto print:w-full print:overflow-visible print:block print:static ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
       
       {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY (ORGANIZACJA DWUPOZIOMOWA DLA TABLETÓW I DESKTOPU) ── */}
       {!isPresentationMode && (
@@ -1917,7 +1917,7 @@ export default function App() {
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
       <div 
         id="app-main-workspace"
-        className={`flex-1 flex overflow-hidden px-0 mx-0 min-h-0 ${showPlachtaModal || showKioskModal ? 'print:hidden' : ''}`}
+        className={`flex-1 flex overflow-hidden px-0 mx-0 min-h-0 print:h-auto print:w-full print:overflow-visible print:block print:static ${showPlachtaModal || showKioskModal ? 'print:hidden' : ''}`}
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -1926,7 +1926,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.18, ease: 'easeInOut' }}
-            className="flex-1 flex overflow-hidden min-h-0"
+            className="flex-1 flex overflow-hidden min-h-0 print:h-auto print:w-full print:overflow-visible print:block print:static"
           >
             <Suspense fallback={
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-400 gap-2">
