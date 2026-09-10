@@ -24,11 +24,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.0',
+      date: 'Wrzesień 2026',
+      title: 'Responsywna Rekonstrukcja Nagłówka Planu Klas, Porządki Nawigacji i Izolacja Warstw UI',
+      description: 'Kompleksowa naprawa wyświetlania nagłówka i przycisków akcji w Planie Klas na ekranach o ograniczonej szerokości (tablety, laptopy z otwartymi panelami bocznymi). Uporządkowanie głównej nawigacji programu oraz eliminacja konfliktów przesłaniania (z-index) między paskami narzędzi a rozwijanym menu.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'fix', text: 'Elastyczny, Dwupoziomowy Nagłówek w Planie Klas: Wyeliminowano pionowe ściskanie tytułu oddziału i opisu do wąskiej kolumny słów. Tytuł klasy wraz ze znacznikiem oddziału i opisem otrzymał pełną szerokość roboczą (flex-1 min-w-0), co zapobiega łamaniu wyrazów i zachowuje wzorową czytelność.', badgeText: 'Responsywny Nagłówek' },
+        { type: 'improvement', text: 'Wydzielony Pasek Narzędziowy i Ochrona Przycisków: Przyciski akcji przeniesiono do niezależnego dolnego wiersza z logicznym podziałem na grupę pomocniczą (Wariant, Kłódki, Szybka zamiana) oraz akcje główne (Autogenerator planu, Przeniesienie do Etapu 2). Wdrożono reguły whitespace-nowrap i elastyczny przepływ, eliminując ucinanie przycisków na krawędzi karty.', badgeText: 'Pasek Akcji' },
+        { type: 'improvement', text: 'Uporządkowanie Paska Nawigacji i Paska Operacyjnego: Usunięto zduplikowane przyciski Płachta Dyrektorska, Tablica TV / Kiosk oraz Warianty i Semestry Planu z głównego paska nawigacji i paska narzędziowego, zachowując je w logicznych modułach Wydruki i Publikacje oraz na pasku operacyjnym obok punktów przywracania.', badgeText: 'Czyste Menu' },
+        { type: 'fix', text: 'Prawidłowa Hierarchia Warstw i Z-Index: Rozwiązano problem przesłaniania rozwijanego menu nawigacji przez pasek narzędziowy Płachty Dyrektorskiej. Wymuszono wyższy priorytet stosowy nagłówka (z-50) nad obszarem roboczym (z-0) i obniżono z-index paska płachty do z-10.', badgeText: 'Z-Index Fix' }
+      ]
+    },
+    {
       version: 'v3.8.9',
       date: 'Wrzesień 2026',
       title: 'Pełna Izolacja Wydruku i Stabilizacja Matrycy Płachty Dyrektorskiej',
       description: 'Precyzyjne rozwiązanie problemu przenikania elementów tła aplikacji do wydruku Płachty Dyrektorskiej oraz likwidacja przesunięć i rozbicia komórek matrycy w oknie drukowania systemowego.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'fix', text: 'Całkowite Odcięcie Tła Aplikacji przy Druku Modalu: Wdrożono rygorystyczne ukrywanie głównego kontenera aplikacji (#app-main-workspace) podczas drukowania z otwartej Płachty Dyrektorskiej, uniemożliwiając przenikanie jakichkolwiek widoków, formularzy czy pasków nawigacji do podglądu i wydruku arkuszy.', badgeText: 'Czysty Wydruk' },
         { type: 'fix', text: 'Stabilizacja Geometrii Tabeli i Kolumn: Wymuszono natywne reguły table/table-cell z matematycznym wyliczaniem szerokości kolumn dla wszystkich 25–45 obiektów. Zapobiega to łamaniu wierszy i przestawianiu treści lekcji na wydruku.', badgeText: 'Brak Przesunięć' },

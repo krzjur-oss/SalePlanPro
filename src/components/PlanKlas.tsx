@@ -2807,61 +2807,80 @@ export default function PlanKlas({
         {activeTab === 'plan' && (
           <div className="flex flex-col min-h-full animate-fade-in pb-12 sm:pb-8">
             {/* Header i Przyciski Akcji */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm mb-3 sm:mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <h1 className="text-base sm:text-lg font-bold text-slate-900 select-none">
-                  {viewMode === 'all' 
-                    ? `Plan lekcji dla wszystkich klas (Dzień po dniu)`
-                    : currentClass ? `Plan lekcji dla klasy ${currentClass.name}` : 'Plan lekcji klasowy'}
-                </h1>
-                <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 select-none">
-                  {viewMode === 'all'
-                    ? `Przeglądaj i układaj plan lekcji dla wszystkich klas jednocześnie. Wybierz dzień tygodnia poniżej.`
-                    : currentClass ? `Zdefiniowano zajęcia klasy: ${currentClass.group || 'cała klasa'}. Przeciągaj lekcje ze skrytki po prawej stronie na siatkę.` : 'Wybierz klasę z lewego panelu, aby rozpocząć układanie planu.'}
-                </p>
+            <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-sm mb-3 sm:mb-4 flex flex-col gap-3">
+              {/* Wiersz 1: Tytuł, opis i ewentualne przyciski przywracania paneli */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-base sm:text-lg font-extrabold text-slate-900 select-none tracking-tight">
+                      {viewMode === 'all' 
+                        ? `Plan lekcji dla wszystkich klas (Dzień po dniu)`
+                        : currentClass ? `Plan lekcji dla klasy ${currentClass.name}` : 'Plan lekcji klasowy'}
+                    </h1>
+                    {viewMode === 'single' && currentClass && (
+                      <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        Oddział {currentClass.name}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] sm:text-xs text-slate-500 mt-1 select-none leading-normal">
+                    {viewMode === 'all'
+                      ? `Przeglądaj i układaj plan lekcji dla wszystkich klas jednocześnie. Wybierz dzień tygodnia poniżej.`
+                      : currentClass ? `Zdefiniowano zajęcia klasy: ${currentClass.group || 'cała klasa'}. Przeciągaj lekcje ze skrytki po prawej stronie na siatkę.` : 'Wybierz klasę z lewego panelu, aby rozpocząć układanie planu.'}
+                  </p>
+                </div>
+
+                {(isLeftSidebarCollapsed || isRightSidebarCollapsed) && (
+                  <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
+                    {isLeftSidebarCollapsed && (
+                      <button 
+                        type="button"
+                        onClick={() => setIsLeftSidebarCollapsed(false)}
+                        className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-slate-200"
+                        title="Rozwiń listę klas"
+                      >
+                        <PanelLeftOpen size={14} className="text-blue-600" />
+                        <span>Klasy ({currentClass ? currentClass.name : 'wybierz'})</span>
+                      </button>
+                    )}
+                    {isRightSidebarCollapsed && (
+                      <button 
+                        type="button"
+                        onClick={() => setIsRightSidebarCollapsed(false)}
+                        className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-slate-200"
+                        title="Rozwiń skrytkę lekcji do umieszczenia"
+                      >
+                        <PanelRightOpen size={14} className="text-indigo-600" />
+                        <span>Skrytka lekcji</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2 flex-wrap shrink-0">
-                {isLeftSidebarCollapsed && (
-                  <button 
-                    type="button"
-                    onClick={() => setIsLeftSidebarCollapsed(false)}
-                    className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-slate-200"
-                    title="Rozwiń listę klas"
-                  >
-                    <PanelLeftOpen size={14} className="text-blue-600" />
-                    <span>Klasy ({currentClass ? currentClass.name : 'wybierz'})</span>
-                  </button>
-                )}
-                {isRightSidebarCollapsed && (
-                  <button 
-                    type="button"
-                    onClick={() => setIsRightSidebarCollapsed(false)}
-                    className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-slate-200"
-                    title="Rozwiń skrytkę lekcji do umieszczenia"
-                  >
-                    <PanelRightOpen size={14} className="text-indigo-600" />
-                    <span>Skrytka lekcji</span>
-                  </button>
-                )}
-                {!presentationMode && (
-                  <>
+
+              {/* Wiersz 2: Pasek narzędzi i przycisków operacyjnych */}
+              {!presentationMode && (
+                <div className="flex items-center justify-between gap-2.5 pt-2.5 border-t border-slate-100 flex-wrap">
+                  {/* Lewa grupa: wariant, kłódki, asystent zamiany */}
+                  <div className="flex items-center gap-2 flex-wrap">
                     {onOpenVariantsModal && (
                       <button 
                         type="button"
                         onClick={onOpenVariantsModal}
-                        className="px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                        className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                         title="Zarządzaj wariantami planu (Semestr I/II, Scenariusze, Diff)"
                       >
                         <Layers size={14} className="text-indigo-600 shrink-0" />
-                        <span className="hidden md:inline text-slate-500 font-semibold">Wariant:</span>
-                        <span className="text-indigo-700 font-extrabold max-w-[130px] truncate">
+                        <span className="text-slate-500 font-semibold hidden sm:inline">Wariant:</span>
+                        <span className="text-indigo-700 font-extrabold max-w-[140px] truncate">
                           {activeVariant?.name || 'Główny'}
                         </span>
                       </button>
                     )}
+
                     <button 
                       onClick={() => setShowLockManagerModal(true)}
-                      className={`px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold rounded-lg border shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+                      className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                         totalLockedCount > 0 
                           ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300' 
                           : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
@@ -2869,11 +2888,12 @@ export default function PlanKlas({
                       title="Menedżer Kłódek: Zablokuj godziny klasy, nauczyciela lub ucznia SPE przed zmianami generatora"
                     >
                       <Lock size={14} className={totalLockedCount > 0 ? 'text-amber-600' : 'text-slate-400'} />
-                      <span className="hidden md:inline">Kłódki</span>
+                      <span>Kłódki</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-black bg-amber-200/80 text-amber-900 leading-none">
                         {totalLockedCount}
                       </span>
                     </button>
+
                     <button 
                       onClick={() => {
                         if (swapSource) {
@@ -2883,7 +2903,7 @@ export default function PlanKlas({
                           notify('Wybierz lekcję w planie za pomocą ikony [ ⇄ ], a następnie kliknij drugi kafelek, aby otworzyć asystenta zamiany.', 'info');
                         }
                       }}
-                      className={`px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold rounded-lg border shadow-xs transition flex items-center gap-1.5 cursor-pointer ${
+                      className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                         swapSource 
                           ? 'bg-indigo-600 text-white border-indigo-600 animate-pulse' 
                           : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
@@ -2891,23 +2911,32 @@ export default function PlanKlas({
                       title="Szybka zamiana lekcji (Swap Assistant): zamieniaj lekcje między dniami i godzinami z kontrolą kolizji"
                     >
                       <ArrowLeftRight size={14} className={swapSource ? 'text-white' : 'text-indigo-600'} />
-                      <span className="hidden lg:inline">Szybka zamiana (Swap)</span>
+                      <span>Szybka zamiana (Swap)</span>
                     </button>
+                  </div>
+
+                  {/* Prawa grupa: główne akcje (Autogenerator i Przenieś do planu sal) */}
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button 
                       onClick={() => setShowGenerator(true)}
-                      className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      title="Uruchom generator algorytmiczny planu lekcji"
                     >
-                      <Sparkles size={14} /> <span className="hidden sm:inline">Autogenerator planu lekcji</span><span className="sm:hidden">Generator</span>
+                      <Sparkles size={14} /> 
+                      <span>Autogenerator planu lekcji</span>
                     </button>
+
                     <button 
                       onClick={onTransfer}
-                      className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                      className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                      title="Przenieś plan do Etapu 2 (Plan Sal)"
                     >
-                      <RefreshCw size={14} /> <span className="hidden sm:inline">Przenieś do planu sal (Etap 2)</span><span className="sm:hidden">Plan sal</span>
+                      <RefreshCw size={14} /> 
+                      <span>Przenieś do planu sal (Etap 2)</span>
                     </button>
-                  </>
-                )}
-              </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Przełącznik Widoku */}

@@ -27,14 +27,11 @@ const Dyzury = lazy(() => import('./components/Dyzury'));
 const OProgramie = lazy(() => import('./components/OProgramie'));
 const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
 const PlanVariantsModal = lazy(() => import('./components/PlanVariantsModal'));
-const PlachtaDyrektorska = lazy(() => import('./components/PlachtaDyrektorska'));
-const KioskMode = lazy(() => import('./components/KioskMode'));
 import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database,
-  FileSpreadsheet, Tv
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database
 } from 'lucide-react';
 
 function sortAppState(rawInput: any): AppState {
@@ -641,11 +638,9 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'instructions' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.8.7';
+  const CURRENT_VERSION = '3.9.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
-  const [showPlachtaModal, setShowPlachtaModal] = useState(false);
-  const [showKioskModal, setShowKioskModal] = useState(false);
 
   useEffect(() => {
     const checkTermsAndVersion = async () => {
@@ -1540,7 +1535,7 @@ export default function App() {
       
       {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY (ORGANIZACJA DWUPOZIOMOWA DLA TABLETÓW I DESKTOPU) ── */}
       {!isPresentationMode && (
-        <header className="bg-slate-900 text-white shadow-md select-none shrink-0 border-b border-slate-950 z-30">
+        <header className="relative z-50 bg-slate-900 text-white shadow-md select-none shrink-0 border-b border-slate-950">
           {/* Poziom 1: Tożsamość szkoły, moduł nawigacji oraz narzędzia widoku */}
           <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-800/70">
             {/* Lewa strona: Logo + Nazwa programu + Nazwa szkoły */}
@@ -1569,7 +1564,7 @@ export default function App() {
             {/* Prawa strona: Nawigacja po modułach oraz Kontrola widoku i historii */}
             <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
               {/* Dynamic Navigation Tabs configured as dropdown menu */}
-              <div className="relative z-40">
+              <div className="relative z-50">
                 <button
                   onClick={() => setHamburgerOpen(!hamburgerOpen)}
                   className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl hover:bg-slate-850 text-xs text-white font-extrabold shadow-xs transition select-none cursor-pointer"
@@ -1594,7 +1589,7 @@ export default function App() {
                 {hamburgerOpen && (
                   <>
                     <div 
-                      className="fixed inset-0 bg-transparent z-40" 
+                      className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-40" 
                       onClick={() => setHamburgerOpen(false)} 
                     />
                     
@@ -1682,28 +1677,6 @@ export default function App() {
                         </button>
 
                         <button
-                          onClick={() => { setShowPlachtaModal(true); setHamburgerOpen(false); }}
-                          className="w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 text-slate-300 hover:text-white"
-                        >
-                          <FileSpreadsheet size={15} className="shrink-0 mt-0.5 text-emerald-400" />
-                          <div>
-                            <span className="text-xs font-black block text-slate-200">📜 Płachta Dyrektorska (A3/A2)</span>
-                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase font-mono">Wielkoformatowy arkusz szkoły</span>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => { setShowKioskModal(true); setHamburgerOpen(false); }}
-                          className="w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 text-amber-300 hover:text-white"
-                        >
-                          <Tv size={15} className="shrink-0 mt-0.5 text-amber-400" />
-                          <div>
-                            <span className="text-xs font-black block text-amber-300">📺 Tablica TV / Kiosk (Rzutnik)</span>
-                            <span className="text-[9px] text-amber-400/80 block leading-tight mt-0.5 font-bold uppercase font-mono">Autoprzewijanie na hol & pokój naucz.</span>
-                          </div>
-                        </button>
-
-                        <button
                           onClick={() => { setCurrentTab('statystyki'); setHamburgerOpen(false); }}
                           className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'statystyki'
@@ -1732,17 +1705,6 @@ export default function App() {
                           <div>
                             <span className="text-xs font-black block">⚙️ Ustawienia generatorów</span>
                             <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Kryteria i wagi algorytmów</span>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={() => { setShowVariantsModal(true); setHamburgerOpen(false); }}
-                          className="w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 text-slate-400 hover:text-white"
-                        >
-                          <Layers size={15} className="shrink-0 mt-0.5 text-indigo-400" />
-                          <div>
-                            <span className="text-xs font-black block text-slate-200">🌿 Warianty i Semestry Planu</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Semestr I/II, Diff i scenariusze</span>
                           </div>
                         </button>
 
@@ -1854,26 +1816,6 @@ export default function App() {
                   </span>
                 )}
               </button>
-
-              <button
-                onClick={() => setShowPlachtaModal(true)}
-                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-emerald-500/60 cursor-pointer shadow-xs"
-                title="Płachta Dyrektorska (Wielkoformatowy arkusz szkoły A3/A2)"
-              >
-                <FileSpreadsheet size={14} className="text-emerald-400 shrink-0" />
-                <span className="leading-none hidden xl:inline">Płachta Dyrektorska</span>
-                <span className="leading-none xl:hidden">Płachta</span>
-              </button>
-
-              <button
-                onClick={() => setShowKioskModal(true)}
-                className="px-2.5 py-1.5 text-amber-300 hover:text-white hover:bg-amber-950/40 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-amber-800/60 hover:border-amber-500/80 cursor-pointer shadow-xs"
-                title="Tablica TV / Kiosk dla rzutnika i telewizora w holu szkoły"
-              >
-                <Tv size={14} className="text-amber-400 shrink-0 animate-pulse" />
-                <span className="leading-none hidden xl:inline">Tablica TV (Kiosk)</span>
-                <span className="leading-none xl:hidden">Kiosk TV</span>
-              </button>
             </div>
 
             {/* Prawa grupa: Eksport, Import ze scalaniem i Reset danych */}
@@ -1917,7 +1859,7 @@ export default function App() {
       {/* ── GŁÓWNA STREFA ZAKŁADEK (RENDER) ── */}
       <div 
         id="app-main-workspace"
-        className={`flex-1 flex overflow-hidden px-0 mx-0 min-h-0 print:h-auto print:w-full print:overflow-visible print:block print:static ${showPlachtaModal || showKioskModal ? 'print:!hidden' : ''}`}
+        className="relative z-0 flex-1 flex overflow-hidden px-0 mx-0 min-h-0 print:h-auto print:w-full print:overflow-visible print:block print:static"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -2121,35 +2063,6 @@ export default function App() {
         )}
       </Suspense>
 
-      <Suspense fallback={null}>
-        {showPlachtaModal && (
-          <div 
-            id="plachta-modal-root"
-            className="fixed inset-0 z-[9999] bg-slate-900/90 backdrop-blur-xs flex flex-col p-1 sm:p-3 overflow-hidden print:p-0 print:m-0 print:static print:bg-white print:z-auto print:overflow-visible print:w-full print:h-auto print:block"
-          >
-            <div className="w-full h-full bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-700 print:border-none print:shadow-none print:rounded-none print:overflow-visible print:w-full print:h-auto print:block">
-              <PlachtaDyrektorska
-                appState={appState}
-                schedData={schedData}
-                activeVariant={activeVariant}
-                onClose={() => setShowPlachtaModal(false)}
-                isStandaloneModal={true}
-              />
-            </div>
-          </div>
-        )}
-      </Suspense>
-
-      <Suspense fallback={null}>
-        {showKioskModal && (
-          <KioskMode
-            appState={appState}
-            schedData={schedData}
-            onClose={() => setShowKioskModal(false)}
-          />
-        )}
-      </Suspense>
-
       <ExportModal
         isOpen={showExportModal}
         onClose={() => setShowExportModal(false)}
@@ -2240,9 +2153,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.8.6!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Nowy interaktywny podręcznik obsługi wszystkich modułów oraz zaktualizowany system akceptacji regulaminu i licencji.
+                  Responsywny nagłówek Planu Klas, uporządkowany pasek nawigacji i zoptymalizowany podgląd wydruku.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button
