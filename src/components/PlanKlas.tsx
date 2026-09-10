@@ -10,6 +10,7 @@ import {
 import PlanGenerator from './PlanGenerator';
 import SwapAssistantModal, { SwapSlotItem } from './SwapAssistantModal';
 import LockManagerModal from './LockManagerModal';
+import { dualScreenService, DualScreenMessage } from '../services/dualScreenService';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -261,6 +262,53 @@ export default function PlanKlas({
     const speLocked = Object.values(pl.specialLessons || {}).filter(sl => sl.locked).length;
     return regLocked + speLocked;
   }, [pl.lessons, pl.specialLessons]);
+
+  // Dual-screen sync: Listen for room assignments clicked in Companion Window (Ekran 2)
+  React.useEffect(() => {
+    const unsub = dualScreenService.subscribe((msg: DualScreenMessage) => {
+      if (msg.type === 'ASSIGN_ROOM_CLICK') {
+        const { dayIdx, hourIdx, classId, roomId, roomName } = msg.payload || {};
+        const targetClassId = classId || activeClassId;
+        if (dayIdx !== undefined && hourIdx !== undefined && targetClassId && roomId) {
+          const slotItems = getSlotLessons(targetClassId, dayIdx, hourIdx);
+          if (slotItems.length > 0) {
+            const targetAsgId = slotItems[0].asg.id;
+            const updatedAssignments = pl.assignments.map(a => 
+              a.id === targetAsgId ? { ...a, roomId } : a
+            );
+            onChangeAppState({
+              ...appState,
+              planLekcji: {
+                ...pl,
+                assignments: updatedAssignments
+              }
+            });
+            notify(`Przypisano salę ${roomName || roomId} do lekcji w dniu ${DAYS[dayIdx]}, godz. ${hourIdx + 1}!`, 'ok');
+          } else if (selectedAssignmentId) {
+            const updatedAssignments = pl.assignments.map(a => 
+              a.id === selectedAssignmentId ? { ...a, roomId } : a
+            );
+            const updatedLessons = { ...pl.lessons };
+            const newKey = `${targetClassId}|${dayIdx}|${hourIdx}`;
+            updatedLessons[newKey] = {
+              assignmentId: selectedAssignmentId,
+              locked: false
+            };
+            onChangeAppState({
+              ...appState,
+              planLekcji: {
+                ...pl,
+                assignments: updatedAssignments,
+                lessons: updatedLessons
+              }
+            });
+            notify(`Wstawiono lekcję z salą ${roomName || roomId}!`, 'ok');
+          }
+        }
+      }
+    });
+    return () => unsub();
+  }, [activeClassId, pl, appState, selectedAssignmentId]);
 
   const handleToggleLockLesson = (key: string) => {
     const current = pl.lessons[key];
@@ -3434,6 +3482,22 @@ export default function PlanKlas({
                                 data-class-id={activeClassId}
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={() => handleDropOnCell(dayIndex, hourIndex)}
+                                onMouseEnter={() => {
+                                  if (dualScreenService.isCompanionWindowActive()) {
+                                    dualScreenService.sendMessage({
+                                      type: 'PLAN_KLAS_HIGHLIGHT',
+                                      payload: {
+                                        dayIdx: dayIndex,
+                                        hourIdx: hourIndex,
+                                        classId: activeClassId,
+                                        className: currentClass?.name,
+                                        subjectShort: slotItems[0]?.subj?.short || slotItems[0]?.subj?.name?.substring(0, 3).toUpperCase(),
+                                        teacherAbbr: slotItems[0]?.teacher?.abbr
+                                      },
+                                      timestamp: Date.now()
+                                    });
+                                  }
+                                }}
                               >
                                 {slotItems.length > 0 ? (
                                   <div className="flex flex-col gap-1.5 h-full">

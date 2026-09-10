@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.5',
+      date: 'Wrzesień 2026',
+      title: 'Inteligentny Tryb Dwóch Ekranów (Dual-Screen Workspace) z Dynamicznym Oknem Towarzyszącym',
+      description: 'Automatyczne wykrywanie konfiguracji wielomonitorowej i podział środowiska planowania na dwa niezależne okna. Na Ekranie 1 znajduje się główny pulpit (Plan Klas, Kreator, Plan Sal, Dyżury), a na Ekranie 2 dedykowane Okno Towarzyszące z interaktywną Matrycą Sal w czasie rzeczywistym, Płachtą Dyrektorską, rzutem kondygnacji i bilansem szkoły.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Sprzętowe i Heurystyczne Wykrywanie Dwóch Ekranów: Program analizuje Screen Details API (screen.isExtended) oraz geometrię pulpitu. Przycisk „Tryb pracy: 1 Ekran / 2 Ekrany” pojawia się w nagłówku wyłącznie przy wykryciu więcej niż jednego monitora (z opcją symulacji w menu dla celów testowych).', badgeText: 'Auto-Detekcja Ekranów' },
+        { type: 'feature', text: 'Podział na Dwa Okna (Ekran 1 + Ekran 2): Kliknięcie przycisku otwiera drugie, niezależne okno przeglądarki bezpośrednio na sąsiednim monitorze z natychmiastowym nawiązaniem szybkiej magistrali BroadcastChannel.', badgeText: 'Drugie Okno' },
+        { type: 'feature', text: 'Interaktywna Matryca Sal i Podświetlanie Slotów: Podczas najeżdżania kursorem lub przeciągania kafelków na Ekranie 1, Okno Towarzyszące na Ekranie 2 natychmiast rozświetla dany dzień i godzinę w tabeli sal, filtrując sale ogólne, sportowe i SPE oraz umożliwiając przypisanie sali jednym kliknięciem.', badgeText: 'Matryca Sal na Żywo' },
+        { type: 'feature', text: 'Równoległa Płachta Dyrektorska i Zintegrowane Widoki: Na drugim monitorze planista ma stały wgląd w Płachtę Dyrektorską ze słownikiem skrótów, rzuty kondygnacji pięter, strefy dyżurów i bilans obciążenia bez konieczności opuszczania Planu Klas.', badgeText: 'Równoległy Podgląd' },
+        { type: 'improvement', text: 'Dwukierunkowa Synchronizacja w Czasie Rzeczywistym: Wszelkie zmiany w planie, wariantach czy bazie IndexedDB są natychmiast rozgłaszane pomiędzy oknami bez opóźnień i bez odświeżania strony.', badgeText: 'BroadcastChannel Sync' }
+      ]
+    },
+    {
       version: 'v3.9.0',
       date: 'Wrzesień 2026',
       title: 'Skróty Przedmiotów z Kreatora na Płachcie Dyrektorskiej, Słownik Skrótów, Rekonstrukcja Planu Klas i Czyste Menu',
       description: 'Wprowadzenie oficjalnych skrótów przedmiotów z Kreatora Szkoły na Płachcie Dyrektorskiej oraz dołączenie kompletnego Słownika Skrótów Przedmiotów, Kadry i Sal na dedykowanej Karcie końcowej. Kompleksowa naprawa wyświetlania nagłówka i przycisków akcji w Planie Klas na ekranach o ograniczonej szerokości, uporządkowanie menu głównego oraz likwidacja konfliktów z-index.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Oficjalne Skróty Przedmiotów z Kreatora Szkoły na Płachcie Dyrektorskiej: Zamiast obcinanych pełnych nazw w wąskich komórkach tabeli zastosowano jednoznaczne skróty zdefiniowane w Kreatorze Szkoły (np. [JP], [MAT], [ANG], [INF], [WF]). W pasku narzędzi dodano selektor trybu: „Skróty oficjalne (Kreator)” oraz „Pełne nazwy”.', badgeText: 'Skróty Przedmiotów' },
         { type: 'feature', text: 'Kompletny Słownik Skrótów Przedmiotów, Kadry i Sal (Karta Końcowa): Na dedykowanej karcie dołączono urzędowy Słownik Skrótów Przedmiotów z kolorami kategorii i liczbą godzin, słownik inicjałów kadry pedagogicznej, wykaz sal lekcyjnych oraz oficjalną metrykę zatwierdzenia planu z pieczęcią i podpisem Dyrektora.', badgeText: 'Słownik Skrótów' },

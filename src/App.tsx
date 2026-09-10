@@ -27,11 +27,13 @@ const Dyzury = lazy(() => import('./components/Dyzury'));
 const OProgramie = lazy(() => import('./components/OProgramie'));
 const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
 const PlanVariantsModal = lazy(() => import('./components/PlanVariantsModal'));
+import CompanionWindowView from './components/CompanionWindowView';
+import { dualScreenService, DualScreenMessage } from './services/dualScreenService';
 import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database, Monitor
 } from 'lucide-react';
 
 function sortAppState(rawInput: any): AppState {
@@ -325,6 +327,9 @@ export default function App() {
   const activeVariant = useMemo(() => {
     return planVariants.find(v => v.id === activeVariantId) || planVariants[0] || null;
   }, [planVariants, activeVariantId]);
+
+  // Check if current browser window is opened as Companion Screen (mode=companion)
+  const isCompanionMode = useMemo(() => dualScreenService.isCompanionInstance(), []);
 
   // Ensure default variant exists if storage was empty
   useEffect(() => {
@@ -638,7 +643,108 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'instructions' | 'changelog'>('info');
 
-  const CURRENT_VERSION = '3.9.0';
+  // ── DUAL SCREEN (DWA EKRANY) STATE & SYNC ──
+  const [isMultiScreenAvailable, setIsMultiScreenAvailable] = useState<boolean>(() => dualScreenService.getIsMultiScreenAvailable());
+  const [isCompanionActive, setIsCompanionActive] = useState<boolean>(() => dualScreenService.isCompanionWindowActive());
+  const [isForcedDualScreen, setIsForcedDualScreen] = useState<boolean>(() => dualScreenService.isForcedMode());
+
+  useEffect(() => {
+    const updateScreens = () => {
+      setIsMultiScreenAvailable(dualScreenService.updateMultiScreenStatus());
+      setIsCompanionActive(dualScreenService.isCompanionWindowActive());
+      setIsForcedDualScreen(dualScreenService.isForcedMode());
+    };
+    updateScreens();
+    const interval = setInterval(updateScreens, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Broadcast state to companion window on changes
+  useEffect(() => {
+    if (dualScreenService.isCompanionWindowActive()) {
+      dualScreenService.sendMessage({
+        type: 'STATE_SYNC',
+        payload: { appState, schedData, activeVariant },
+        timestamp: Date.now()
+      });
+    }
+  }, [appState, schedData, activeVariant]);
+
+  useEffect(() => {
+    if (dualScreenService.isCompanionWindowActive()) {
+      dualScreenService.sendMessage({
+        type: 'TAB_CHANGE',
+        payload: { tab: currentTab },
+        timestamp: Date.now()
+      });
+    }
+  }, [currentTab]);
+
+  // Dual Screen BroadcastChannel subscription for messages from companion
+  useEffect(() => {
+    const unsub = dualScreenService.subscribe((msg: DualScreenMessage) => {
+      if (msg.type === 'HANDSHAKE' || msg.type === 'PING') {
+        setIsCompanionActive(true);
+        dualScreenService.sendMessage({
+          type: 'HANDSHAKE_ACK',
+          payload: { appState, schedData, activeVariant, currentTab },
+          timestamp: Date.now()
+        });
+      } else if (msg.type === 'COMPANION_CLOSED') {
+        setIsCompanionActive(false);
+      } else if (msg.type === 'ASSIGN_ROOM_CLICK') {
+        const { dayIdx, hourIdx, classId, roomId, roomName } = msg.payload || {};
+        if (dayIdx !== undefined && hourIdx !== undefined && roomId) {
+          const targetClassId = classId || appState.planLekcji.classes[0]?.id;
+          if (targetClassId) {
+            setAppState(prev => {
+              const pl = prev.planLekcji;
+              // Find matching lesson key
+              const matchEntry = Object.entries(pl.lessons).find(([k]) => {
+                const parts = k.split('|');
+                return parts[0] === targetClassId && parseInt(parts[1], 10) === dayIdx && parseInt(parts[2], 10) === hourIdx;
+              });
+
+              if (matchEntry) {
+                const asgId = matchEntry[1].assignmentId;
+                const updatedAssignments = pl.assignments.map(a => a.id === asgId ? { ...a, roomId } : a);
+                const nextState = {
+                  ...prev,
+                  planLekcji: {
+                    ...pl,
+                    assignments: updatedAssignments
+                  }
+                };
+                setStorageItem(STORAGE_KEYS.APP_STATE, nextState);
+                notify(`Przypisano salę ${roomName || roomId} do lekcji (Klasa: ${targetClassId}, Godz: ${hourIdx + 1})`, 'ok');
+                return nextState;
+              }
+              return prev;
+            });
+          }
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [appState, schedData, activeVariant, currentTab]);
+
+  const handleToggleDualScreen = async () => {
+    if (isCompanionActive) {
+      dualScreenService.openCompanionWindow(currentTab);
+      notify('Przeniesiono fokus na Drugi Ekran (Okno Towarzyszące).', 'info');
+    } else {
+      const win = await dualScreenService.openCompanionWindow(currentTab);
+      if (win) {
+        setIsCompanionActive(true);
+        notify('Włączono tryb 2 ekranów! Drugie okno z Matrycą Sal i Płachtą zostało otwarte na drugim monitorze.', 'ok');
+      } else {
+        notify('Przeglądarka zablokowała otwarcie drugiego okna. Zezwól na pop-upy w pasku adresu.', 'err');
+      }
+    }
+  };
+
+  const CURRENT_VERSION = '3.9.5';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -1530,6 +1636,17 @@ export default function App() {
     }, 3000);
   };
 
+  // If running in companion window mode (?mode=companion), render CompanionWindowView directly
+  if (isCompanionMode) {
+    return (
+      <CompanionWindowView
+        initialAppState={appState}
+        initialSchedData={schedData}
+        initialActiveVariant={activeVariant}
+      />
+    );
+  }
+
   return (
     <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden print:h-auto print:w-full print:overflow-visible print:block print:static ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
       
@@ -1724,11 +1841,71 @@ export default function App() {
                             <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opis, instrukcja i licencja</span>
                           </div>
                         </button>
+
+                        <div className="border-t border-slate-800/60 my-1 pb-1" />
+
+                        {/* Opcja trybu 2 ekranów w menu (z możliwością symulacji) */}
+                        <div className="px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-800/80">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Monitor size={15} className="text-indigo-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="text-xs font-black block text-slate-200 truncate">🖥️ Dwa ekrany (Dual-Screen)</span>
+                                <span className="text-[9px] text-slate-400 block leading-tight mt-0.5">
+                                  {isMultiScreenAvailable ? 'Wykryto drugi monitor (aktywny)' : 'Tryb 2 okien (wymuszenie / test)'}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const nextForced = !isForcedDualScreen;
+                                dualScreenService.setForcedMode(nextForced);
+                                setIsForcedDualScreen(nextForced);
+                                setIsMultiScreenAvailable(dualScreenService.updateMultiScreenStatus());
+                                notify(nextForced ? 'Wymuszono tryb 2 ekranów — przycisk pojawił się w nagłówku.' : 'Przywrócono automatyczne wykrywanie ekranów.', 'info');
+                              }}
+                              className={`px-2 py-1 rounded text-[10px] font-extrabold transition cursor-pointer shrink-0 ${
+                                isForcedDualScreen || isMultiScreenAvailable
+                                  ? 'bg-indigo-600 text-white shadow-xs'
+                                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {isForcedDualScreen ? 'Wymuszone' : isMultiScreenAvailable ? 'Dostępne' : 'Włącz test'}
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </>
                 )}
               </div>
+
+              {/* Przełącznik trybu pracy: Standardowo 1 ekran, 2 ekrany w trybie podziału na dwa okna (widoczny tylko po wykryciu >1 ekranu) */}
+              {isMultiScreenAvailable && (
+                <button
+                  id="dual-screen-header-toggle-btn"
+                  onClick={handleToggleDualScreen}
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition select-none cursor-pointer border shadow-xs ${
+                    isCompanionActive
+                      ? 'bg-indigo-600 text-white border-indigo-400 shadow-indigo-900/40 ring-2 ring-indigo-400/60'
+                      : 'bg-slate-950 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-850 hover:border-slate-700'
+                  }`}
+                  title={
+                    isCompanionActive
+                      ? "Tryb dwóch ekranów jest aktywny! Kliknij, aby przywołać Okno Towarzyszące (Ekran 2) na wierzch."
+                      : "Wykryto 2 ekrany! Kliknij, aby podzielić program na dwa okna (Ekran 1: Plan Klas, Ekran 2: Matryca Sal i Płachta)."
+                  }
+                >
+                  <Monitor size={14} className={isCompanionActive ? 'text-amber-300 animate-pulse' : 'text-indigo-400'} />
+                  <span className="hidden xl:inline text-slate-400 font-medium">Tryb pracy:</span>
+                  <span className="font-extrabold tracking-tight">
+                    {isCompanionActive ? '2 Ekrany' : '1 Ekran'}
+                  </span>
+                  {isCompanionActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  )}
+                </button>
+              )}
 
               {/* Segmented Controls: Wstecz / Ponów / Pełen ekran / Tryb czytania */}
               <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5 shadow-xs">

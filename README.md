@@ -1,4 +1,4 @@
-# SalePlan Pro v3.9.0 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.9.5 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -106,11 +106,30 @@ System oferuje zaawansowany generator czystych szablonów PDF/A4, wydruków wiel
 *   **Dynamiczny Podgląd Dyżurów (Duties Print Preview & Verification Modal)**:
     *   Osobny, interaktywny modal umożliwiający podgląd całego harmonogramu dyżurów ze skalowaniem w locie (Zoom 70-110%) oraz filtrowaniem dni.
 
-### 5. 🤝 Centrum Wieloosobowego Scalania i Baza IndexedDB
+### 5. 🖥️🖥️ Inteligentny Tryb Dwóch Ekranów (Dual-Screen Workspace • v3.9.5)
+Przełomowe rozszerzenie ergonomii pracy planisty przy podpiętych dwóch monitorach:
+*   **Sprzętowe i Heurystyczne Wykrywanie Dwóch Ekranów**:
+    *   System automatycznie sprawdza dostępność zewnętrznych wyświetlaczy (Screen Details API: `screen.isExtended`, geometria wirtualnego pulpitu `screen.availLeft`/`availTop`, zdarzenia `change`).
+    *   Przycisk `Tryb pracy: 1 Ekran / 2 Ekrany` pojawia się w głównym nagłówku programu **wyłącznie wtedy, gdy podpięty jest co najmniej drugi ekran**.
+    *   Dla celów testowych na jednym monitorze w rozwijanym menu głównym dostępny jest przełącznik symulacji `Dwa ekrany (Wymuszenie/test)`.
+*   **Automatyczny Podział na Dwa Okna (Ekran 1 + Ekran 2)**:
+    *   **Ekran 1 (Okno Główne)**: Skupione w 100% na bieżącej edycji — np. w Planie Klas planista ma do dyspozycji pełną przestrzeń na siatkę godzin oddziału oraz wszystkie kafelki przedmiotów/przydziałów z dolnego zasobnika.
+    *   **Ekran 2 (Okno Towarzyszące • Companion Window)**: Dedykowane, niezależne okno otwierane automatycznie na drugim monitorze (`?mode=companion`), zawierające równoległe widoki zarządcze:
+        *   **Matryca Sal na żywo**: Tabela wszystkich godzin lekcyjnych i dni tygodnia z podziałem na sale, filtrami typów sal (ogólne, sportowe, nauczania indywidualnego/SPE, pracownie) oraz statystyką obłożenia.
+        *   **Płachta Dyrektorska**: Zbiorczy podgląd całej szkoły ze słownikiem skrótów.
+        *   **Rzut Kondygnacji**: Przestrzenne rozmieszczenie gabinetów na piętrach.
+        *   **Bilans Szkoły**: Tygodniowe pensum i limity kadry.
+*   **Interaktywna Dwukierunkowa Komunikacja (BroadcastChannel)**:
+    *   Podczas najechania kursorem na lekcję w oknie Planu Klas, Okno Towarzyszące natychmiast rozświetla dany dzień i godzinę w Matrycy Sal.
+    *   Jedno kliknięcie na wolną salę w Oknie Towarzyszącym natychmiast przypisuje tę salę do podświetlonej lekcji w Oknie Głównym i zapisuje stan w bazie danych.
+*   **Spójność z Pozostałymi Etapami**:
+    *   Okno Towarzyszące dynamicznie dostosowuje swój widok pomocniczy w zależności od aktywnego etapu (Kreator -> Rzut budynku i audyt sal, Plan Klas -> Matryca sal, Plan Sal -> Płachta i konflikty, Plan Dyżurów -> Matryca nadzoru przerw i stref, Wydruki -> Podgląd arkusza wielkoformatowego).
+
+### 6. 🤝 Centrum Wieloosobowego Scalania i Baza IndexedDB
 *   **Scalanie Wieloplikowe**: Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.
 *   **Baza IndexedDB**: Bezpieczne, nielimitowane przechowywanie danych szkolnych z automatycznym autozapisem i punktami przywracania stanu.
 
-### 6. 📈 Moduł Statystyk, Diagnostyki i Higieny Pracy Kadry (Statystyki v3.8.3)
+### 7. 📈 Moduł Statystyk, Diagnostyki i Higieny Pracy Kadry (Statystyki v3.8.3)
 *   **Wizualne Wyróżnienie Nauczycieli z Ponad 2h Okienek**:
     *   W widoku *Praca & Dyżury Kadry* wiersze nauczycieli z ponad 2 godzinami przestojów w planie zajęć są dynamicznie podświetlane na kolor bursztynowo-pomarańczowy wraz z plakietką ostrzegawczą `⚠️ Xh okienek w planie`.
     *   Prezentacja szczegółowego rozkładu okienek: wyszczególnienie dni tygodnia oraz numerów lekcji, w których pedagog ma przerwę w zajęciach.
