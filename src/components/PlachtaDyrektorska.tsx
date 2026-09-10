@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, PlanVariant } from '../types';
 import { 
   Printer, ZoomIn, ZoomOut, Check, Sliders, Filter,
   FileSpreadsheet, ArrowLeft, Calendar, User, MapPin, Layers, Award, Sparkles, X, Eye, FileText,
-  Split, LayoutGrid, ChevronRight
+  Split, LayoutGrid, ChevronRight, BookOpen
 } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
 
@@ -24,8 +24,8 @@ const getSubjectCategoryColor = (subjectName: string = '', shortName: string = '
   
   const s = (subjectName + ' ' + shortName).toLowerCase();
   
-  // Humanities: polski, historia, wos, filozofia, etyka, religia
-  if (s.includes('pol') || s.includes('hist') || s.includes('wos') || s.includes('filoz') || s.includes('etyk') || s.includes('relig')) {
+  // Humanities: polski, jp, historia, wos, filozofia, etyka, religia
+  if (s.includes('pol') || s.includes('jp') || s.includes('hist') || s.includes('wos') || s.includes('filoz') || s.includes('etyk') || s.includes('relig')) {
     return { bg: '#fff1f2', text: '#9f1239', border: '#fecdd3' }; // Rose
   }
   // Math & Sciences: mat, fiz, chem, bio, geo, przyr
@@ -35,6 +35,10 @@ const getSubjectCategoryColor = (subjectName: string = '', shortName: string = '
   // Foreign Languages: ang, niem, hiszp, fran, ros, wł
   if (s.includes('ang') || s.includes('niem') || s.includes('hiszp') || s.includes('fran') || s.includes('ros') || s.includes('język') || s.includes('jezyk')) {
     return { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0' }; // Green
+  }
+  // Early Education (Edukacja Wczesnoszkolna): ew, wczesnoszkolna
+  if (s.includes('ew') || s.includes('wczesnoszkolna')) {
+    return { bg: '#f0f9ff', text: '#0369a1', border: '#bae6fd' }; // Sky
   }
   // PE & Sports: wf, basen, gimn, sport
   if (s.includes('wf') || s.includes('wych. fiz') || s.includes('basen') || s.includes('gimn') || s.includes('sport')) {
@@ -49,7 +53,7 @@ const getSubjectCategoryColor = (subjectName: string = '', shortName: string = '
     return { bg: '#fffbeb', text: '#92400e', border: '#fde68a' }; // Amber
   }
   // Special / Support / Reval: rewa, terap, wsp, logop, psych, pedag
-  if (s.includes('rewa') || s.includes('terap') || s.includes('wsp') || s.includes('logop') || s.includes('psych') || s.includes('pedag')) {
+  if (s.includes('rewa') || s.includes('terap') || s.includes('wsp') || s.includes('logop') || s.includes('psych') || s.includes('pedag') || s.includes('dor.zaw') || s.includes('wdż')) {
     return { bg: '#fdf2f8', text: '#9d174d', border: '#fbcfe8' }; // Pink
   }
   // General fallback
@@ -97,6 +101,7 @@ export default function PlachtaDyrektorska({
   const [previewDayTab, setPreviewDayTab] = useState<number | 'all' | 'legend'>('all');
 
   // Element visibility toggles
+  const [subjectDisplayMode, setSubjectDisplayMode] = useState<'short' | 'full'>('short'); // 'short' = official abbreviations from Creator (JP, MAT, WF); 'full' = full names
   const [showTeacherAbbr, setShowTeacherAbbr] = useState(true);
   const [showRoomNum, setShowRoomNum] = useState(true);
   const [showGroups, setShowGroups] = useState(true);
@@ -111,8 +116,123 @@ export default function PlachtaDyrektorska({
   const classesMap = useMemo(() => new Map(pl.classes.map(c => [c.id, c])), [pl.classes]);
   const teachersMap = useMemo(() => new Map(pl.teachers.map(t => [t.id, t])), [pl.teachers]);
   const subjectsMap = useMemo(() => new Map(pl.subjects.map(s => [s.id, s])), [pl.subjects]);
+  const subjectsByName = useMemo(() => {
+    const map = new Map<string, Subject>();
+    pl.subjects.forEach(s => {
+      if (s.name) map.set(s.name.trim().toLowerCase(), s);
+      if (s.short) map.set(s.short.trim().toLowerCase(), s);
+    });
+    return map;
+  }, [pl.subjects]);
   const roomsMap = useMemo(() => new Map(pl.rooms.map(r => [r.id, r])), [pl.rooms]);
   const groupsMap = useMemo(() => new Map((pl.schoolGroups || []).map(g => [g.id, g])), [pl.schoolGroups]);
+
+  // Robust subject resolver prioritizing official Creator abbreviations (e.g. JP, MAT, ANG, WF)
+  const resolveSubjectInfo = useCallback((subjectId?: string | null, rawSubjectName?: string | null) => {
+    // 1. By ID in pl.subjects
+    if (subjectId && subjectsMap.has(subjectId)) {
+      const s = subjectsMap.get(subjectId)!;
+      return {
+        id: s.id,
+        name: s.name,
+        short: (s.short && s.short.trim()) ? s.short.trim() : (s.name.length > 5 ? s.name.substring(0, 4).toUpperCase() : s.name.toUpperCase()),
+        color: s.color || '#475569'
+      };
+    }
+
+    // 2. By raw name matching pl.subjects
+    if (rawSubjectName && rawSubjectName.trim()) {
+      const clean = rawSubjectName.trim();
+      const lower = clean.toLowerCase();
+
+      if (subjectsByName.has(lower)) {
+        const s = subjectsByName.get(lower)!;
+        return {
+          id: s.id,
+          name: s.name,
+          short: (s.short && s.short.trim()) ? s.short.trim() : s.name,
+          color: s.color || '#475569'
+        };
+      }
+
+      // Prefix or substring match in pl.subjects
+      const found = pl.subjects.find(s => {
+        const sName = s.name.trim().toLowerCase();
+        const sShort = s.short ? s.short.trim().toLowerCase() : '';
+        return lower === sName || lower === sShort || lower.startsWith(sName) || sName.startsWith(lower);
+      });
+
+      if (found) {
+        return {
+          id: found.id,
+          name: found.name,
+          short: (found.short && found.short.trim()) ? found.short.trim() : found.name,
+          color: found.color || '#475569'
+        };
+      }
+
+      // Standard Polish educational abbreviations if not explicitly defined in pl.subjects
+      const standardPolishAbbrs: Record<string, string> = {
+        'język polski': 'JP',
+        'matematyka': 'MAT',
+        'język angielski': 'ANG',
+        'język niemiecki': 'NIEM',
+        'język hiszpański': 'HISZP',
+        'język francuski': 'FRANC',
+        'język rosyjski': 'ROS',
+        'biologia': 'BIOL',
+        'chemia': 'CHEM',
+        'fizyka': 'FIZ',
+        'geografia': 'GEOG',
+        'historia': 'HIST',
+        'wiedza o społeczeństwie': 'WOS',
+        'wos': 'WOS',
+        'informatyka': 'INF',
+        'plastyka': 'PLAS',
+        'muzyka': 'MUZ',
+        'technika': 'TECH',
+        'wychowanie fizyczne': 'WF',
+        'w-f': 'WF',
+        'wf': 'WF',
+        'religia': 'REL',
+        'etyka': 'ETY',
+        'przyroda': 'PRZY',
+        'edukacja dla bezpieczeństwa': 'EDB',
+        'edb': 'EDB',
+        'godzina z wychowawcą': 'GW',
+        'godzina wychowawcza': 'GW',
+        'edukacja wczesnoszkolna': 'EW',
+        'zajęcia rewalidacyjne': 'REWAL',
+        'rewalidacja': 'REWAL',
+        'zajęcia logopedyczne': 'LOGO',
+        'logopedia': 'LOGO',
+        'terapia pedagogiczna': 'TERAP',
+        'zajęcia z psychologiem': 'PSYCH',
+        'zajęcia z pedagogiem': 'PEDAG',
+        'doradztwo zawodowe': 'DOR.ZAW',
+        'wychowanie do życia w rodzinie': 'WDŻ',
+        'wdż': 'WDŻ',
+        'filozofia': 'FILOZ',
+        'historia i teraźniejszość': 'HiT',
+        'biznes i zarządzanie': 'BiZ'
+      };
+
+      for (const [subjKey, abbr] of Object.entries(standardPolishAbbrs)) {
+        if (lower === subjKey || lower.startsWith(subjKey) || subjKey.startsWith(lower)) {
+          return { id: `auto-${abbr}`, name: clean, short: abbr, color: '#475569' };
+        }
+      }
+
+      return {
+        id: `custom-${clean}`,
+        name: clean,
+        short: clean.length > 5 ? clean.substring(0, 4).toUpperCase() : clean.toUpperCase(),
+        color: '#475569'
+      };
+    }
+
+    return { id: 'unknown', name: 'Przedmiot', short: 'PRZ', color: '#475569' };
+  }, [subjectsMap, subjectsByName, pl.subjects]);
 
   // Hours list resolved from pl.hours or appState defaults
   const hoursList = useMemo(() => {
@@ -268,6 +388,78 @@ export default function PlachtaDyrektorska({
     return { classes: classMap, teachers: teacherMap, rooms: roomMap };
   }, [schedData, appState.yearKey, pl.classes, pl.teachers, pl.rooms, resolveRoomFromColKey]);
 
+  // Compile unique subjects list combining Creator subjects + all schedule subjects
+  const comprehensiveSubjectsList = useMemo(() => {
+    const listMap = new Map<string, { id: string; name: string; short: string; color: string; count: number }>();
+
+    // 1. Seed with all subjects from the Creator
+    pl.subjects.forEach(s => {
+      const shortName = (s.short && s.short.trim()) ? s.short.trim() : (s.name.length > 5 ? s.name.substring(0, 4).toUpperCase() : s.name.toUpperCase());
+      listMap.set(s.id, {
+        id: s.id,
+        name: s.name,
+        short: shortName,
+        color: s.color || '#475569',
+        count: 0
+      });
+    });
+
+    // 2. Scan assignments/lessons to count hours and discover any missing subjects
+    if (scheduleVersion === 'etap1') {
+      Object.values(pl.lessons || {}).forEach(lesson => {
+        const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+        if (!asg) return;
+        const subjInfo = resolveSubjectInfo(asg.subjectId);
+        if (listMap.has(subjInfo.id)) {
+          listMap.get(subjInfo.id)!.count += 1;
+        } else {
+          listMap.set(subjInfo.id, {
+            id: subjInfo.id,
+            name: subjInfo.name,
+            short: subjInfo.short,
+            color: subjInfo.color,
+            count: 1
+          });
+        }
+      });
+    } else {
+      // Scan etap2 cells
+      const yearKey = appState.yearKey || 'default';
+      const yearData = schedData[yearKey] || {};
+      Object.values(yearData).forEach(hoursData => {
+        Object.values(hoursData || {}).forEach(cells => {
+          Object.values(cells || {}).forEach(cellVal => {
+            const cellList = Array.isArray(cellVal) ? cellVal : [cellVal];
+            cellList.forEach(cell => {
+              if (!cell || !cell.subject) return;
+              const subjInfo = resolveSubjectInfo(cell._bridgeMeta?.subjectId, cell.subject);
+              if (listMap.has(subjInfo.id)) {
+                listMap.get(subjInfo.id)!.count += 1;
+              } else {
+                const byNameKey = Array.from(listMap.values()).find(
+                  item => item.name.toLowerCase() === subjInfo.name.toLowerCase()
+                );
+                if (byNameKey) {
+                  byNameKey.count += 1;
+                } else {
+                  listMap.set(subjInfo.id, {
+                    id: subjInfo.id,
+                    name: subjInfo.name,
+                    short: subjInfo.short,
+                    color: subjInfo.color,
+                    count: 1
+                  });
+                }
+              }
+            });
+          });
+        });
+      });
+    }
+
+    return Array.from(listMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+  }, [pl.subjects, pl.assignments, pl.lessons, schedData, appState.yearKey, scheduleVersion, resolveSubjectInfo]);
+
   // Helper to extract lesson cell contents for a given entity, day, hour
   const getCellEntries = (
     entityId: string,
@@ -301,13 +493,13 @@ export default function PlachtaDyrektorska({
           if (parts[0] === cls.id && parseInt(parts[1], 10) === dayIdx && parseInt(parts[2], 10) === hIdx) {
             const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
             if (asg) {
-              const subj = subjectsMap.get(asg.subjectId);
+              const subj = resolveSubjectInfo(asg.subjectId);
               const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
               const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
               const grp = asg.groupId ? groupsMap.get(asg.groupId) : null;
               results.push({
-                subjectName: subj?.name || 'Przedmiot',
-                subjectShort: subj?.short || subj?.name?.substring(0, 3)?.toUpperCase() || 'PRZ',
+                subjectName: subj.name,
+                subjectShort: subj.short,
                 teacherAbbr: teacher?.abbr || '',
                 roomName: room?.name || '',
                 groupLabel: grp ? grp.name : undefined
@@ -318,9 +510,10 @@ export default function PlachtaDyrektorska({
       } else {
         const cells = etap2Schedule.classes[cls.id]?.[dayIdx]?.[String(hourNum)] || [];
         cells.forEach(c => {
+          const subj = resolveSubjectInfo(c._bridgeMeta?.subjectId, c.subject);
           results.push({
-            subjectName: c.subject,
-            subjectShort: c.subject.length > 5 ? c.subject.substring(0, 4) : c.subject,
+            subjectName: subj.name,
+            subjectShort: subj.short,
             teacherAbbr: c.teacherAbbr || '',
             roomName: c.note || '',
             groupLabel: c.note?.includes('gr') ? c.note : undefined
@@ -338,12 +531,12 @@ export default function PlachtaDyrektorska({
             const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
             if (asg && asg.teacherId === teacher.id) {
               const cls = classesMap.get(asg.classId);
-              const subj = subjectsMap.get(asg.subjectId);
+              const subj = resolveSubjectInfo(asg.subjectId);
               const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
               const grp = asg.groupId ? groupsMap.get(asg.groupId) : null;
               results.push({
-                subjectName: subj?.name || 'Przedmiot',
-                subjectShort: subj?.short || subj?.name?.substring(0, 3)?.toUpperCase() || 'PRZ',
+                subjectName: subj.name,
+                subjectShort: subj.short,
                 teacherAbbr: teacher.abbr,
                 roomName: room?.name || '',
                 groupLabel: grp ? grp.name : undefined,
@@ -355,9 +548,10 @@ export default function PlachtaDyrektorska({
       } else {
         const cells = etap2Schedule.teachers[teacher.id]?.[dayIdx]?.[String(hourNum)] || [];
         cells.forEach(c => {
+          const subj = resolveSubjectInfo(c._bridgeMeta?.subjectId, c.subject);
           results.push({
-            subjectName: c.subject,
-            subjectShort: c.subject.length > 5 ? c.subject.substring(0, 4) : c.subject,
+            subjectName: subj.name,
+            subjectShort: subj.short,
             teacherAbbr: teacher.abbr,
             roomName: c.note || '',
             fullClsName: c.className || c.classes?.join('+') || ''
@@ -376,10 +570,10 @@ export default function PlachtaDyrektorska({
             if (asg && asg.roomId === room.id) {
               const cls = classesMap.get(asg.classId);
               const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-              const subj = subjectsMap.get(asg.subjectId);
+              const subj = resolveSubjectInfo(asg.subjectId);
               results.push({
-                subjectName: subj?.name || 'Przedmiot',
-                subjectShort: subj?.short || subj?.name?.substring(0, 3)?.toUpperCase() || 'PRZ',
+                subjectName: subj.name,
+                subjectShort: subj.short,
                 teacherAbbr: teacher?.abbr || '',
                 roomName: room.name,
                 fullClsName: cls?.name || asg.classId
@@ -390,9 +584,10 @@ export default function PlachtaDyrektorska({
       } else {
         const cells = etap2Schedule.rooms[room.id]?.[dayIdx]?.[String(hourNum)] || [];
         cells.forEach(c => {
+          const subj = resolveSubjectInfo(c._bridgeMeta?.subjectId, c.subject);
           results.push({
-            subjectName: c.subject,
-            subjectShort: c.subject.length > 5 ? c.subject.substring(0, 4) : c.subject,
+            subjectName: subj.name,
+            subjectShort: subj.short,
             teacherAbbr: c.teacherAbbr || '',
             roomName: room.name,
             fullClsName: c.className || c.classes?.join('+') || ''
@@ -1063,8 +1258,22 @@ export default function PlachtaDyrektorska({
           )}
         </div>
 
-        {/* Right: Cell detail toggles & Screen day tab selector */}
+        {/* Right: Cell detail toggles, subject mode & Screen day tab selector */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Subject Display Mode Selector */}
+          <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-0.5">
+            <span className="text-[10px] text-slate-400 font-bold">Przedmioty:</span>
+            <select
+              value={subjectDisplayMode}
+              onChange={e => setSubjectDisplayMode(e.target.value as 'short' | 'full')}
+              className="bg-transparent text-slate-200 text-[11px] font-bold outline-none cursor-pointer"
+              title="Wybierz sposób wyświetlania przedmiotów: oficjalne skróty z Kreatora Szkoły (np. JP, MAT, WF) lub pełne nazwy"
+            >
+              <option value="short" className="bg-slate-900 text-white">Skróty z Kreatora (np. JP, MAT, WF)</option>
+              <option value="full" className="bg-slate-900 text-white">Pełne nazwy przedmiotów</option>
+            </select>
+          </div>
+
           <label className="flex items-center gap-1 text-[11px] cursor-pointer hover:text-white">
             <input
               type="checkbox"
@@ -1085,14 +1294,14 @@ export default function PlachtaDyrektorska({
             <span>Sala</span>
           </label>
 
-          <label className="flex items-center gap-1 text-[11px] cursor-pointer hover:text-white">
+          <label className="flex items-center gap-1 text-[11px] cursor-pointer hover:text-white" title="Włącz lub wyłącz stronę ze słownikiem skrótów przedmiotów, kadr i metryką zatwierdzenia">
             <input
               type="checkbox"
               checked={showLegend}
               onChange={e => setShowLegend(e.target.checked)}
               className="rounded text-indigo-600 w-3 h-3 cursor-pointer"
             />
-            <span>Słowniczek kadr</span>
+            <span>Słownik skrótów (Przedmioty & Kadra)</span>
           </label>
 
           <div className="h-4 w-px bg-slate-700 mx-1 hidden sm:block" />
@@ -1128,7 +1337,7 @@ export default function PlachtaDyrektorska({
               className={`px-1.5 py-0.5 rounded font-bold transition ${
                 previewDayTab === 'legend' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
-              title="Zobacz Słownik skrótów kadry, sal i pieczęć urzędową"
+              title="Zobacz Słownik skrótów przedmiotów z Kreatora, kadry pedagogicznej, sal i pieczęć urzędową"
             >
               📖 Słownik skrótów
             </button>
@@ -1368,10 +1577,13 @@ export default function PlachtaDyrektorska({
                                         >
                                           {/* Main title: Subject or Class */}
                                           <div className="flex items-center justify-between gap-0.5">
-                                            <span className={`plachta-entry-title font-black uppercase truncate ${densityConfig.cellText}`}>
+                                            <span 
+                                              className={`plachta-entry-title font-black uppercase truncate ${densityConfig.cellText}`}
+                                              title={`${entry.subjectName} (${entry.subjectShort})`}
+                                            >
                                               {matrixType === 'teachers' || matrixType === 'rooms' 
-                                                ? (entry.fullClsName || entry.subjectShort) 
-                                                : entry.subjectShort}
+                                                ? (entry.fullClsName || (subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort)) 
+                                                : (subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort)}
                                             </span>
                                             {entry.groupLabel && showGroups && (
                                               <span className="text-[4.5px] font-bold uppercase opacity-80 shrink-0">
@@ -1397,7 +1609,7 @@ export default function PlachtaDyrektorska({
 
                                             {matrixType === 'teachers' && (
                                               <>
-                                                <span className="truncate">{entry.subjectShort}</span>
+                                                <span className="truncate">{subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort}</span>
                                                 {showRoomNum && entry.roomName && (
                                                   <span className="truncate font-mono">s.{entry.roomName}</span>
                                                 )}
@@ -1406,7 +1618,7 @@ export default function PlachtaDyrektorska({
 
                                             {matrixType === 'rooms' && (
                                               <>
-                                                <span className="truncate">{entry.fullClsName}</span>
+                                                <span className="truncate">{subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort}</span>
                                                 {showTeacherAbbr && (
                                                   <span className="truncate font-mono">{entry.teacherAbbr}</span>
                                                 )}
@@ -1426,6 +1638,27 @@ export default function PlachtaDyrektorska({
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* ── COMPACT SUBJECT ABBREVIATIONS BAR ON SHEET 1 ── */}
+              <div className="mt-1 mb-0.5 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded print:border-slate-300 flex items-center gap-1.5 flex-wrap text-[7.5px] print:text-[6.5px] leading-tight text-slate-700">
+                <span className="font-black text-slate-900 uppercase shrink-0 font-mono flex items-center gap-1">
+                  <BookOpen size={9} className="text-indigo-600 inline" />
+                  <span>Skróty przedmiotów:</span>
+                </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {comprehensiveSubjectsList.slice(0, 18).map(s => (
+                    <span key={s.id} className="inline-flex items-baseline gap-0.5" title={s.name}>
+                      <strong className="font-black text-slate-950 font-mono">[{s.short}]</strong>
+                      <span className="text-slate-600">{s.name}</span>
+                    </span>
+                  ))}
+                  {comprehensiveSubjectsList.length > 18 && (
+                    <span className="text-indigo-600 font-bold">
+                      +{comprehensiveSubjectsList.length - 18} więcej na Karcie 2 (Słownik skrótów)
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* ── FULL WEEK SHEET BOTTOM FOOTER ── */}
@@ -1604,10 +1837,13 @@ export default function PlachtaDyrektorska({
                                         >
                                           {/* Main title: Class or Subject */}
                                           <div className="flex items-center justify-between gap-0.5">
-                                            <span className={`font-black uppercase truncate ${densityConfig.cellText}`}>
+                                            <span 
+                                              className={`font-black uppercase truncate ${densityConfig.cellText}`}
+                                              title={`${entry.subjectName} (${entry.subjectShort})`}
+                                            >
                                               {matrixType === 'teachers' || matrixType === 'rooms'
-                                                ? entry.fullClsName || entry.subjectShort
-                                                : entry.subjectShort}
+                                                ? (entry.fullClsName || (subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort))
+                                                : (subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort)}
                                             </span>
                                             {entry.groupLabel && showGroups && (
                                               <span className="text-[6px] font-bold uppercase opacity-80 shrink-0">
@@ -1631,7 +1867,7 @@ export default function PlachtaDyrektorska({
 
                                             {matrixType === 'teachers' && (
                                               <>
-                                                <span className="truncate">{entry.subjectShort}</span>
+                                                <span className="truncate">{subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort}</span>
                                                 {showRoomNum && entry.roomName && (
                                                   <span className="truncate font-mono">s.{entry.roomName}</span>
                                                 )}
@@ -1640,7 +1876,7 @@ export default function PlachtaDyrektorska({
 
                                             {matrixType === 'rooms' && (
                                               <>
-                                                <span className="truncate">{entry.fullClsName}</span>
+                                                <span className="truncate">{subjectDisplayMode === 'full' ? entry.subjectName : entry.subjectShort}</span>
                                                 {showTeacherAbbr && <span className="truncate font-mono">{entry.teacherAbbr}</span>}
                                               </>
                                             )}
@@ -1659,8 +1895,29 @@ export default function PlachtaDyrektorska({
                   </table>
                 </div>
 
+                {/* Compact Subject Abbreviations Bar on Day Sheet */}
+                <div className="mt-1 mb-0.5 px-1.5 py-0.5 bg-slate-50 border border-slate-200 rounded print:border-slate-300 flex items-center gap-1.5 flex-wrap text-[7.5px] print:text-[6.5px] leading-tight text-slate-700">
+                  <span className="font-black text-slate-900 uppercase shrink-0 font-mono flex items-center gap-1">
+                    <BookOpen size={9} className="text-indigo-600 inline" />
+                    <span>Skróty przedmiotów:</span>
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {comprehensiveSubjectsList.slice(0, 18).map(s => (
+                      <span key={s.id} className="inline-flex items-baseline gap-0.5" title={s.name}>
+                        <strong className="font-black text-slate-950 font-mono">[{s.short}]</strong>
+                        <span className="text-slate-600">{s.name}</span>
+                      </span>
+                    ))}
+                    {comprehensiveSubjectsList.length > 18 && (
+                      <span className="text-indigo-600 font-bold">
+                        +{comprehensiveSubjectsList.length - 18} więcej na Karcie ze Słownikiem
+                      </span>
+                    )}
+                  </div>
+                </div>
+
                 {/* Day Sheet Bottom Info */}
-                <div className="mt-2.5 pt-1.5 border-t border-slate-300 flex justify-between items-center text-[9px] text-slate-500 font-medium">
+                <div className="mt-1.5 pt-1 border-t border-slate-300 flex justify-between items-center text-[9px] text-slate-500 font-medium">
                   <div className="flex items-center gap-2">
                     <span className="font-extrabold text-slate-800 uppercase tracking-wide">
                       Arkusz dzienny: {dayName}
@@ -1668,10 +1925,10 @@ export default function PlachtaDyrektorska({
                     <span>·</span>
                     <span>Format arkusza: <strong>{paperFormat} Poziomo</strong></span>
                     <span>·</span>
-                    <span className="text-slate-600">Słownik skrótów kadry, sal i pieczęć na Karcie 6</span>
+                    <span className="text-slate-600">Słownik skrótów kadry, sal i pieczęć na Karcie końcowej</span>
                   </div>
                   <div className="font-mono font-bold text-slate-700">
-                    Karta {dayIdx + 1} z 6 (Dzień {dayIdx + 1}: {dayName})
+                    Karta {dayIdx + 1} z {daysToRender.length + (showLegend ? 1 : 0)} (Dzień {dayIdx + 1}: {dayName})
                   </div>
                 </div>
               </div>
@@ -1686,59 +1943,85 @@ export default function PlachtaDyrektorska({
               <div>
                 <div className="flex items-center gap-2 mb-0.5">
                   <span className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[9px] font-black uppercase font-mono tracking-wider">
-                    {printLayoutMode === 'all_in_one' ? 'Karta 2 z 2' : printLayoutMode === 'single_day' ? 'Karta 2 z 2' : 'Karta 6 z 6'}
+                    {printLayoutMode === 'all_in_one' ? 'Karta 2 z 2' : printLayoutMode === 'single_day' ? 'Karta 2 z 2' : `Karta ${daysToRender.length + 1} z ${daysToRender.length + 1}`}
                   </span>
                   <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-1.5">
-                    <User size={15} className="text-indigo-600" />
-                    <span>Słownik Kadry Pedagogicznej, Sal i Przedmiotów</span>
+                    <BookOpen size={16} className="text-indigo-600" />
+                    <span>Słownik Skrótów Przedmiotów, Kadry Pedagogicznej, Sal i Zatwierdzenie Planu</span>
                   </h3>
                 </div>
                 <p className="text-[10px] text-slate-500 font-medium">
-                  Oficjalne zestawienie skrótów i metryka zatwierdzenia planu lekcji dla Płachty Dyrektorskiej
+                  Oficjalny słownik skrótów z Kreatora Szkoły, legenda oznaczeń oraz urzędowa metryka zatwierdzenia planu lekcji
                 </p>
               </div>
               <div className="text-[10px] font-bold text-slate-700 text-right">
-                Łącznie: <span className="font-extrabold text-slate-900">{pl.classes.length}</span> oddziałów · 
-                <span className="font-extrabold text-slate-900 ml-1">{pl.teachers.length}</span> nauczycieli · 
-                <span className="font-extrabold text-slate-900 ml-1">{pl.rooms.length}</span> gabinetów
+                <span className="font-extrabold text-indigo-700">{comprehensiveSubjectsList.length}</span> przedmiotów · 
+                <span className="font-extrabold text-slate-900 ml-1">{filteredTeachers.length}</span> nauczycieli · 
+                <span className="font-extrabold text-slate-900 ml-1">{filteredRooms.length}</span> gabinetów · 
+                <span className="font-extrabold text-slate-900 ml-1">{pl.classes.length}</span> oddziałów
               </div>
             </div>
 
-            {/* Teachers grid */}
+            {/* 1. Subjects abbreviation dictionary from Kreator Szkoły */}
+            <div className="space-y-1 mb-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
+                  <BookOpen size={13} className="text-indigo-600" />
+                  <span>Słownik Skrótów Przedmiotów z Kreatora Szkoły ({comprehensiveSubjectsList.length}):</span>
+                </span>
+                <span className="text-[8.5px] text-slate-500 font-medium">
+                  Oficjalne skróty stosowane na Płachcie Dyrektorskiej
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 text-[8.5px] bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                {comprehensiveSubjectsList.map(s => {
+                  const colors = getSubjectCategoryColor(s.name, s.short, colorMode === 'mono');
+                  return (
+                    <div 
+                      key={s.id} 
+                      className="flex items-center gap-1.5 p-1 rounded bg-white border border-slate-200 shadow-xs"
+                      title={s.name}
+                    >
+                      <span 
+                        className="font-black text-[9px] px-1.5 py-0.5 rounded shrink-0 font-mono"
+                        style={{ backgroundColor: colors.bg, borderColor: colors.border, color: colors.text, borderWidth: '1px' }}
+                      >
+                        [{s.short}]
+                      </span>
+                      <span className="truncate font-semibold text-slate-800" title={s.name}>
+                        {s.name}
+                      </span>
+                      {s.count > 0 && (
+                        <span className="text-[7.5px] text-slate-400 font-mono shrink-0 ml-auto">
+                          {s.count}h
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. Teachers grid */}
             <div className="space-y-1 mb-3">
-              <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider">
-                Nauczyciele ({filteredTeachers.length}):
+              <span className="text-[10px] font-black uppercase text-slate-800 block tracking-wider">
+                Słownik Skrótów Kadry Pedagogicznej ({filteredTeachers.length}):
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-1 text-[9px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
                 {filteredTeachers.map(t => (
-                  <div key={t.id} className="flex items-baseline gap-1 truncate" title={`${t.first} ${t.last}`}>
+                  <div key={t.id} className="flex items-baseline gap-1 truncate bg-white p-0.5 px-1 rounded border border-slate-200" title={`${t.first} ${t.last}`}>
                     <span className="font-black text-indigo-900 shrink-0 font-mono">[{t.abbr}]</span>
-                    <span className="truncate">{t.last} {t.first?.substring(0, 1)}.</span>
+                    <span className="truncate font-medium">{t.last} {t.first?.substring(0, 1)}.</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Subjects abbreviation grid */}
-            <div className="space-y-1 mb-3">
-              <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider">
-                Przedmioty i Skróty ({pl.subjects.length}):
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-1 text-[8.5px] text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                {pl.subjects.map(s => (
-                  <div key={s.id} className="flex items-baseline gap-1 truncate" title={s.name}>
-                    <span className="font-black text-slate-900 shrink-0 font-mono">[{s.short}]</span>
-                    <span className="truncate">{s.name}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Rooms & Color categories Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider mb-1">
-                  Gabinety i Sale ({filteredRooms.length}):
+            {/* 3. Rooms & Color categories Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3.5">
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span className="text-[9.5px] font-black uppercase text-slate-800 block tracking-wider mb-1">
+                  Wykaz Gabinetów i Sal Lekcyjnych ({filteredRooms.length}):
                 </span>
                 <div className="flex flex-wrap gap-1 text-[8.5px] text-slate-700">
                   {filteredRooms.map(r => (
@@ -1749,30 +2032,38 @@ export default function PlachtaDyrektorska({
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
-                <span className="text-[9.5px] font-black uppercase text-slate-700 block tracking-wider mb-1">
-                  Klucz Kolorów Przedmiotów:
+              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <span className="text-[9.5px] font-black uppercase text-slate-800 block tracking-wider mb-1">
+                  Klucz Kolorów Kategorii Przedmiotów:
                 </span>
                 <div className="grid grid-cols-2 gap-1 text-[8.5px]">
                   <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded bg-rose-100 border border-rose-300 shrink-0" />
-                    <span className="text-slate-700 font-bold">Humanistyczne (Pol, Hist, WOS)</span>
+                    <span className="text-slate-700 font-bold">Humanistyczne (Pol, JP, Hist, WOS)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded bg-blue-100 border border-blue-300 shrink-0" />
-                    <span className="text-slate-700 font-bold">Ścisłe (Mat, Fiz, Chem, Bio)</span>
+                    <span className="text-slate-700 font-bold">Ścisłe (Mat, Fiz, Chem, Bio, Geo)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded bg-green-100 border border-green-300 shrink-0" />
                     <span className="text-slate-700 font-bold">Języki obce (Ang, Niem, Hiszp)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-sky-100 border border-sky-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Edukacja Wczesnoszkolna (EW)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded bg-purple-100 border border-purple-300 shrink-0" />
-                    <span className="text-slate-700 font-bold">Wychowanie Fizyczne (WF)</span>
+                    <span className="text-slate-700 font-bold">Wychowanie Fizyczne (WF, Sport)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded bg-cyan-100 border border-cyan-300 shrink-0" />
-                    <span className="text-slate-700 font-bold">Informatyka & Technologie</span>
+                    <span className="text-slate-700 font-bold">Informatyka & Technologie (INF)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded bg-amber-100 border border-amber-300 shrink-0" />
+                    <span className="text-slate-700 font-bold">Sztuka i Muzyka (Plast, Muz)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-3 h-3 rounded bg-pink-100 border border-pink-300 shrink-0" />
@@ -1782,10 +2073,10 @@ export default function PlachtaDyrektorska({
               </div>
             </div>
 
-            {/* Official Seal and Signature Section */}
-            <div className="pt-3 border-t-2 border-slate-900 flex justify-between items-end text-[9px] text-slate-600">
+            {/* 4. Official Seal and Signature Section */}
+            <div className="pt-2.5 border-t-2 border-slate-900 flex justify-between items-end text-[9px] text-slate-600">
               <div>
-                <strong>SalePlan Pro</strong> • Wygenerowano dla: {appState.school.name} ({appState.yearLabel}) • Karta {printLayoutMode === 'all_in_one' ? '2 z 2' : printLayoutMode === 'single_day' ? '2 z 2' : '6 z 6'} (Słownik skrótów i metryka zatwierdzenia) • {new Date().toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                <strong>SalePlan Pro</strong> • Wygenerowano dla: {appState.school.name} ({appState.yearLabel}) • {printLayoutMode === 'all_in_one' ? 'Karta 2 z 2' : printLayoutMode === 'single_day' ? 'Karta 2 z 2' : `Karta ${daysToRender.length + 1} z ${daysToRender.length + 1}`} (Słownik skrótów i metryka zatwierdzenia) • {new Date().toLocaleDateString('pl-PL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </div>
               <div className="flex items-end gap-8 text-right">
                 <div className="border-t border-dotted border-slate-600 pt-1 px-6 inline-block text-center font-bold text-slate-800 uppercase text-[8.5px]">
