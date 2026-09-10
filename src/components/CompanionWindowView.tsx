@@ -211,18 +211,29 @@ export default function CompanionWindowView({
     return { general, sport, ni };
   }, [allRooms]);
 
-  // Filtered rooms based on active toggles and search query
+  // Filtered rooms based on active toggles and search query:
+  // 1. Sale ogólne, 2. Sale nauczania indywidualnego / wsparcia, 3. Sale sportowe
   const filteredRooms = useMemo(() => {
     let list: (ClassRoom & { categoryType: 'general' | 'sport' | 'ni' })[] = [];
 
+    const genSorted = [...categorizedRooms.general].sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+    const niSorted = [...categorizedRooms.ni].sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+    const sportSorted = [...categorizedRooms.sport].sort((a, b) => 
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+    );
+
     if (filterGeneralRooms) {
-      list.push(...categorizedRooms.general.map(r => ({ ...r, categoryType: 'general' as const })));
-    }
-    if (filterSportsRooms) {
-      list.push(...categorizedRooms.sport.map(r => ({ ...r, categoryType: 'sport' as const })));
+      list.push(...genSorted.map(r => ({ ...r, categoryType: 'general' as const })));
     }
     if (filterNIRooms) {
-      list.push(...categorizedRooms.ni.map(r => ({ ...r, categoryType: 'ni' as const })));
+      list.push(...niSorted.map(r => ({ ...r, categoryType: 'ni' as const })));
+    }
+    if (filterSportsRooms) {
+      list.push(...sportSorted.map(r => ({ ...r, categoryType: 'sport' as const })));
     }
 
     if (roomSearchQuery.trim()) {
@@ -233,8 +244,7 @@ export default function CompanionWindowView({
       );
     }
 
-    // Sort logically
-    return list.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+    return list;
   }, [categorizedRooms, filterGeneralRooms, filterSportsRooms, filterNIRooms, roomSearchQuery]);
 
   // Map of room occupation for every [dayIndex][hourIndex][roomId]
@@ -651,8 +661,11 @@ export default function CompanionWindowView({
                     {/* NAGŁÓWKI SAL */}
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
-                        <th className="p-2.5 sm:p-3 text-xs font-black text-slate-700 uppercase tracking-wider bg-slate-50 border-r border-slate-200 sticky left-0 z-30 min-w-[130px]">
-                          Dzień & Godzina
+                        <th className="p-2.5 sm:p-3 text-center text-xs font-black text-slate-800 uppercase tracking-wider bg-slate-100 border-r border-slate-200 sticky left-0 z-30 min-w-[130px] w-[130px]">
+                          Dzień
+                        </th>
+                        <th className="p-2.5 sm:p-3 text-center text-xs font-black text-slate-800 uppercase tracking-wider bg-slate-100 border-r border-slate-200 sticky left-[130px] z-30 min-w-[125px] w-[125px]">
+                          Nr lekcji & Godziny
                         </th>
                         {filteredRooms.map(room => (
                           <th 
@@ -697,6 +710,8 @@ export default function CompanionWindowView({
                       {DAYS_NAMES.map((dayName, dayIdx) => {
                         if (selectedDayFilter !== 'all' && selectedDayFilter !== dayIdx) return null;
 
+                        const totalHoursInDay = hoursList.length;
+
                         return hoursList.map((hour, hIdx) => {
                           const isCurrentActiveSlot = 
                             highlightedSlot && 
@@ -712,14 +727,42 @@ export default function CompanionWindowView({
                                   : hIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
                               } hover:bg-slate-100/70`}
                             >
-                              {/* Kolumna nagłówka wiersza: Dzień + Godzina */}
-                              <td className={`p-2.5 text-xs font-bold border-r border-slate-200 sticky left-0 z-10 select-none ${
-                                isCurrentActiveSlot ? 'bg-indigo-100 text-indigo-950 font-black' : 'bg-slate-50 text-slate-700'
+                              {/* Kolumna 1: Dzień tygodnia (rowSpan na wszystkie godziny w danym dniu) */}
+                              {hIdx === 0 && (
+                                <td 
+                                  rowSpan={totalHoursInDay}
+                                  className="p-3 text-center border-r-2 border-r-slate-300 sticky left-0 z-15 bg-slate-50 align-middle select-none border-b-2 border-b-slate-300 shadow-2xs"
+                                >
+                                  <div className="flex flex-col items-center justify-center gap-1.5 py-3">
+                                    <span className="text-xs font-black uppercase tracking-wider text-slate-900 bg-white border border-slate-300 px-3 py-2 rounded-xl shadow-xs">
+                                      {dayName}
+                                    </span>
+                                    <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold font-mono">
+                                      {totalHoursInDay} lekcji
+                                    </span>
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* Kolumna 2: Nr lekcji oraz godziny zajęć */}
+                              <td className={`p-2 text-center text-xs font-bold border-r-2 border-r-slate-300 sticky left-[130px] z-10 select-none shadow-2xs ${
+                                isCurrentActiveSlot 
+                                  ? 'bg-indigo-100 text-indigo-950 font-black ring-inset ring-2 ring-indigo-500' 
+                                  : hIdx % 2 === 0 ? 'bg-white text-slate-700' : 'bg-slate-50 text-slate-700'
                               }`}>
-                                <div className="flex flex-col">
-                                  <span className="text-[11px] font-black text-indigo-900">{dayName}</span>
-                                  <span className="text-[10px] text-slate-500 font-mono">
-                                    g. {hour.num} ({hour.start}-{hour.end})
+                                <div className="flex flex-col items-center justify-center gap-0.5">
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Lekcja</span>
+                                    <span className={`text-xs font-black px-1.5 py-0.2 rounded-md ${
+                                      isCurrentActiveSlot 
+                                        ? 'bg-indigo-600 text-white shadow-2xs' 
+                                        : 'bg-slate-100 border border-slate-200 text-slate-900'
+                                    }`}>
+                                      {hour.num}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11px] text-slate-600 font-mono font-bold tracking-tight mt-0.5">
+                                    {hour.start} – {hour.end}
                                   </span>
                                 </div>
                               </td>
