@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  AppState, SchedData, ClassRoom, Subject, Teacher, Class, PlanVariant, Hour 
+  AppState, SchedData, ClassRoom, PlanVariant, Hour 
 } from '../types';
 import { 
   dualScreenService, DualScreenMessage, ScreenInteractionPayload 
@@ -13,9 +13,9 @@ import {
 } from './PlanKlas';
 import PlachtaDyrektorska from './PlachtaDyrektorska';
 import { 
-  Maximize2, Minimize2, RefreshCw, X, Monitor, Layers, MapPin, Shield, Printer, 
-  BarChart2, Sparkles, Check, Filter, Search, CheckCircle2, AlertCircle, 
-  DoorOpen, Dumbbell, HeartPulse, Building2, Eye, EyeOff, Info, ArrowRight
+  Maximize2, Minimize2, RefreshCw, X, Monitor, Layers, 
+  Sparkles, Filter, Search, CheckCircle2, 
+  DoorOpen, Dumbbell, HeartPulse, Building2, Shield
 } from 'lucide-react';
 
 interface CompanionWindowViewProps {
@@ -57,7 +57,7 @@ export default function CompanionWindowView({
 
   // Active view tab on Companion Screen
   const [activeCompanionTab, setActiveCompanionTab] = useState<
-    'rooms_matrix' | 'plachta' | 'building_map' | 'duties' | 'print_preview' | 'school_stats'
+    'rooms_matrix' | 'plachta' | 'building_map' | 'duties' | 'school_stats'
   >('rooms_matrix');
 
   // Connection & Handshake status
@@ -69,13 +69,12 @@ export default function CompanionWindowView({
   const [highlightedSlot, setHighlightedSlot] = useState<ScreenInteractionPayload | null>(null);
   const [lastAssignedRoomAlert, setLastAssignedRoomAlert] = useState<string | null>(null);
 
-  // Rooms Matrix Filter State (as explicitly requested by user)
+  // Rooms Matrix Filter State
   const [filterGeneralRooms, setFilterGeneralRooms] = useState(true);
   const [filterSportsRooms, setFilterSportsRooms] = useState(true);
   const [filterNIRooms, setFilterNIRooms] = useState(true);
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'all'>('all');
   const [roomSearchQuery, setRoomSearchQuery] = useState('');
-  const [onlyFreeRoomsInHighlightedSlot, setOnlyFreeRoomsInHighlightedSlot] = useState(false);
 
   // ── DUAL SCREEN MESSAGING & SYNC ──
   useEffect(() => {
@@ -106,7 +105,7 @@ export default function CompanionWindowView({
             if (masterTab === 'plan_klas') setActiveCompanionTab('rooms_matrix');
             else if (masterTab === 'plan_sal') setActiveCompanionTab('building_map');
             else if (masterTab === 'dyzury') setActiveCompanionTab('duties');
-            else if (masterTab === 'wydruki') setActiveCompanionTab('print_preview');
+            else if (masterTab === 'wydruki') setActiveCompanionTab('plachta');
             else if (masterTab === 'kreator') setActiveCompanionTab('school_stats');
           }
           break;
@@ -139,7 +138,6 @@ export default function CompanionWindowView({
         type: 'PING',
         timestamp: Date.now()
       });
-      // Check if master window is responsive
       if (Date.now() - lastHeartbeat > 8000) {
         setIsConnectedToMaster(false);
       }
@@ -293,7 +291,6 @@ export default function CompanionWindowView({
               if (roomsObj && typeof roomsObj === 'object') {
                 Object.entries(roomsObj).forEach(([rColKey, cell]: [string, any]) => {
                   if (cell && (cell.className || cell.k)) {
-                    // Match room column key to room ID or room name
                     const matchedRoom = allRooms.find(r => 
                       rColKey.endsWith(`_${r.name}`) || 
                       rColKey.endsWith(`_${r.id}`) ||
@@ -349,14 +346,14 @@ export default function CompanionWindowView({
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-900 text-slate-100 font-sans overflow-hidden select-none">
-      {/* ── GÓRNY PASEK STATUSU I NAWIGACJI OKNA TOWARZYSZĄCEGO ── */}
-      <header className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 shadow-md">
+    <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-800 font-sans overflow-hidden select-none">
+      {/* ── GÓRNY PASEK STATUSU I NAWIGACJI OKNA TOWARZYSZĄCEGO (SPÓJNY Z EKRANEM 1) ── */}
+      <header className="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3 shrink-0 shadow-sm text-white">
         {/* Lewa strona: Identyfikator Ekranu 2 */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600/25 border border-indigo-500/40 rounded-lg text-indigo-300 font-black text-xs">
-            <Monitor size={15} className="text-indigo-400 shrink-0" />
-            <span className="whitespace-nowrap">EKRAN 2</span>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600 border border-indigo-400/50 rounded-lg text-white font-black text-xs shadow-xs">
+            <Monitor size={15} className="text-white shrink-0" />
+            <span className="whitespace-nowrap tracking-wider">EKRAN 2</span>
           </div>
 
           <div className="min-w-0">
@@ -365,12 +362,12 @@ export default function CompanionWindowView({
                 SalePlan Pro • Monitor Towarzyszący
               </h1>
               {isConnectedToMaster ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-950 border border-emerald-500/40 px-2 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Połączono z Oknem 1
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-950 border border-amber-500/40 px-2 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                   Oczekiwanie na sygnał
                 </span>
@@ -465,12 +462,12 @@ export default function CompanionWindowView({
             className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-slate-800 transition cursor-pointer"
             title={isFullscreen ? "Wyjdź z pełnego ekranu" : "Pełny ekran na monitorze zewnętrznym"}
           >
-            {isFullscreen ? <Minimize2 size={14} className="text-amber-400" /> : <Maximize2 size={14} />}
+            {isFullscreen ? <Minimize2 size={14} className="text-amber-300" /> : <Maximize2 size={14} />}
           </button>
 
           <button
             onClick={() => window.close()}
-            className="p-1.5 bg-slate-900 hover:bg-red-950/60 text-slate-400 hover:text-red-400 rounded-lg border border-slate-800 hover:border-red-900/40 transition cursor-pointer"
+            className="p-1.5 bg-slate-900 hover:bg-red-600 text-slate-300 hover:text-white rounded-lg border border-slate-800 hover:border-red-500 transition cursor-pointer"
             title="Zamknij drugie okno i wróć do trybu 1 ekranu"
           >
             <X size={14} />
@@ -480,7 +477,7 @@ export default function CompanionWindowView({
 
       {/* ── POWIADOMIENIE O PRZYPISANIU SALI ── */}
       {lastAssignedRoomAlert && (
-        <div className="bg-emerald-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-between shadow-lg transition-all animate-fadeIn">
+        <div className="bg-emerald-600 text-white text-xs font-bold px-4 py-2 flex items-center justify-between shadow-xs transition-all animate-fadeIn">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={16} />
             <span>{lastAssignedRoomAlert}</span>
@@ -489,36 +486,36 @@ export default function CompanionWindowView({
         </div>
       )}
 
-      {/* ── GŁÓWNA STREFA ZAWARTOŚCI EKRANU 2 ── */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-950 text-slate-200">
+      {/* ── GŁÓWNA STREFA ZAWARTOŚCI EKRANU 2 (JASNA, IDENTYCZNA Z EKRANEM 1) ── */}
+      <main className="flex-1 flex flex-col overflow-hidden bg-slate-100 text-slate-800">
         
         {/* ======================================================== */}
-        {/* WIDOK 1: MATRYCA SAL (PLAN KLAS) — DOKŁADNIE WG ŻYCZENIA */}
+        {/* WIDOK 1: MATRYCA SAL (PLAN KLAS)                         */}
         {/* ======================================================== */}
         {activeCompanionTab === 'rooms_matrix' && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Pasek filtrów sal i synchronizacji aktywnego slotu */}
-            <div className="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0">
+            {/* Pasek filtrów sal i wyszukiwarki (białe tło, czyste ramki jak na Ekranie 1) */}
+            <div className="px-4 py-2.5 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
               
               {/* Grupa 1: Przełączniki kategorii sal (Ogólne, Sportowe, NI) */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider flex items-center gap-1 mr-1">
-                  <Filter size={12} className="text-blue-400" /> Filtry sal:
+                <span className="text-[11px] text-slate-500 uppercase font-black tracking-wider flex items-center gap-1 mr-1">
+                  <Filter size={13} className="text-blue-600" /> Filtry sal:
                 </span>
 
                 {/* 1. Sale Ogólne */}
                 <button
                   onClick={() => setFilterGeneralRooms(!filterGeneralRooms)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
                     filterGeneralRooms
-                      ? 'bg-blue-600/20 border-blue-500/60 text-blue-300 shadow-xs'
-                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                      ? 'bg-blue-50 border-blue-300 text-blue-800 shadow-2xs'
+                      : 'bg-slate-100 border-slate-200 text-slate-400 hover:text-slate-600'
                   }`}
                   title="Przełącz wyświetlanie sal ogólnych i pracowni przedmiotowych"
                 >
-                  <DoorOpen size={13} className={filterGeneralRooms ? 'text-blue-400' : 'text-slate-600'} />
+                  <DoorOpen size={13} className={filterGeneralRooms ? 'text-blue-600' : 'text-slate-400'} />
                   <span>Sale ogólne ({categorizedRooms.general.length})</span>
-                  <span className={`text-[9px] px-1 rounded-full font-mono ${filterGeneralRooms ? 'bg-blue-500/30' : 'bg-slate-800'}`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono font-extrabold ${filterGeneralRooms ? 'bg-blue-200 text-blue-800' : 'bg-slate-200 text-slate-500'}`}>
                     {filterGeneralRooms ? 'WŁ' : 'WYŁ'}
                   </span>
                 </button>
@@ -526,16 +523,16 @@ export default function CompanionWindowView({
                 {/* 2. Sale Sportowe */}
                 <button
                   onClick={() => setFilterSportsRooms(!filterSportsRooms)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
                     filterSportsRooms
-                      ? 'bg-emerald-600/20 border-emerald-500/60 text-emerald-300 shadow-xs'
-                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-2xs'
+                      : 'bg-slate-100 border-slate-200 text-slate-400 hover:text-slate-600'
                   }`}
                   title="Przełącz wyświetlanie hal sportowych, sal gimnastycznych, basenu i boisk"
                 >
-                  <Dumbbell size={13} className={filterSportsRooms ? 'text-emerald-400' : 'text-slate-600'} />
+                  <Dumbbell size={13} className={filterSportsRooms ? 'text-emerald-600' : 'text-slate-400'} />
                   <span>Sale sportowe ({categorizedRooms.sport.length})</span>
-                  <span className={`text-[9px] px-1 rounded-full font-mono ${filterSportsRooms ? 'bg-emerald-500/30' : 'bg-slate-800'}`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono font-extrabold ${filterSportsRooms ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-200 text-slate-500'}`}>
                     {filterSportsRooms ? 'WŁ' : 'WYŁ'}
                   </span>
                 </button>
@@ -543,16 +540,16 @@ export default function CompanionWindowView({
                 {/* 3. Sale Nauczania Indywidualnego i Wsparcia */}
                 <button
                   onClick={() => setFilterNIRooms(!filterNIRooms)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
                     filterNIRooms
-                      ? 'bg-purple-600/20 border-purple-500/60 text-purple-300 shadow-xs'
-                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-300'
+                      ? 'bg-purple-50 border-purple-300 text-purple-800 shadow-2xs'
+                      : 'bg-slate-100 border-slate-200 text-slate-400 hover:text-slate-600'
                   }`}
                   title="Przełącz wyświetlanie gabinetów rewalidacji, logopedii, psychologa i sal NI"
                 >
-                  <HeartPulse size={13} className={filterNIRooms ? 'text-purple-400' : 'text-slate-600'} />
+                  <HeartPulse size={13} className={filterNIRooms ? 'text-purple-600' : 'text-slate-400'} />
                   <span>Sale NI i wsparcia ({categorizedRooms.ni.length})</span>
-                  <span className={`text-[9px] px-1 rounded-full font-mono ${filterNIRooms ? 'bg-purple-500/30' : 'bg-slate-800'}`}>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono font-extrabold ${filterNIRooms ? 'bg-purple-200 text-purple-800' : 'bg-slate-200 text-slate-500'}`}>
                     {filterNIRooms ? 'WŁ' : 'WYŁ'}
                   </span>
                 </button>
@@ -561,11 +558,11 @@ export default function CompanionWindowView({
               {/* Grupa 2: Dzień tygodnia i wyszukiwarka sali */}
               <div className="flex items-center gap-2">
                 {/* Selektor dnia */}
-                <div className="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-0.5 text-xs font-bold">
+                <div className="flex items-center bg-slate-100 border border-slate-200 rounded-lg p-0.5 text-xs font-bold">
                   <button
                     onClick={() => setSelectedDayFilter('all')}
-                    className={`px-2 py-0.5 rounded transition ${
-                      selectedDayFilter === 'all' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'
+                    className={`px-2.5 py-1 rounded transition ${
+                      selectedDayFilter === 'all' ? 'bg-white text-slate-800 shadow-2xs font-extrabold' : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
                     Cały tydzień
@@ -574,8 +571,8 @@ export default function CompanionWindowView({
                     <button
                       key={dIdx}
                       onClick={() => setSelectedDayFilter(dIdx)}
-                      className={`px-2 py-0.5 rounded transition ${
-                        selectedDayFilter === dIdx ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                      className={`px-2 py-1 rounded transition ${
+                        selectedDayFilter === dIdx ? 'bg-indigo-600 text-white font-extrabold shadow-2xs' : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
                       {dName.substring(0, 2)}
@@ -585,53 +582,53 @@ export default function CompanionWindowView({
 
                 {/* Szybka szukajka sali */}
                 <div className="relative">
-                  <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={roomSearchQuery}
                     onChange={(e) => setRoomSearchQuery(e.target.value)}
-                    placeholder="Filtruj gabinet..."
-                    className="w-36 pl-7 pr-2 py-1 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder:text-slate-500 outline-none focus:border-indigo-500"
+                    placeholder="Szukaj sali..."
+                    className="w-36 pl-7 pr-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition shadow-2xs"
                   />
                 </div>
               </div>
             </div>
 
-            {/* AKTYWNY PASEK INTERAKCJI Z EKRANEM 1 (SLOT SYNC BANNER) */}
+            {/* AKTYWNY PASEK INTERAKCJI Z EKRANEM 1 (JASNA BELKA W STYLU EKRANU 1) */}
             {highlightedSlot && highlightedSlot.dayIdx !== undefined && highlightedSlot.hourIdx !== undefined && (
-              <div className="bg-indigo-950/80 border-b border-indigo-500/40 px-4 py-2 flex items-center justify-between gap-3 text-xs">
+              <div className="bg-indigo-50 border-b border-indigo-200 px-4 py-2 flex items-center justify-between gap-3 text-xs shadow-2xs animate-fadeIn">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2 py-0.5 bg-indigo-600 text-white font-black rounded-md text-[10px] uppercase tracking-wide flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                    Wybrany slot w Oknie 1:
+                  <span className="px-2 py-0.5 bg-indigo-600 text-white font-black rounded-md text-[10px] uppercase tracking-wide flex items-center gap-1.5 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping" />
+                    Wybrany slot na Ekranie 1:
                   </span>
-                  <span className="font-extrabold text-indigo-200">
+                  <span className="font-extrabold text-indigo-950">
                     {DAYS_NAMES[highlightedSlot.dayIdx]}, godzina {highlightedSlot.hourIdx + 1}
                   </span>
                   {highlightedSlot.className && (
-                    <span className="bg-indigo-900/60 border border-indigo-700/60 text-indigo-300 px-1.5 py-0.5 rounded font-mono font-bold">
-                      Oddział {highlightedSlot.className}
+                    <span className="bg-white border border-indigo-200 text-indigo-800 px-2 py-0.5 rounded font-bold shadow-2xs">
+                      Klasa {highlightedSlot.className}
                     </span>
                   )}
                   {highlightedSlot.subjectShort && (
-                    <span className="bg-blue-900/60 border border-blue-700/60 text-blue-300 px-1.5 py-0.5 rounded font-mono font-bold">
-                      Przedmiot: {highlightedSlot.subjectShort}
+                    <span className="bg-blue-100 border border-blue-200 text-blue-800 px-2 py-0.5 rounded font-mono font-bold shadow-2xs">
+                      Przedmiot: [{highlightedSlot.subjectShort}]
                     </span>
                   )}
                   {highlightedSlot.teacherAbbr && (
-                    <span className="text-slate-400">
+                    <span className="text-slate-600 font-medium">
                       (Nauczyciel: {highlightedSlot.teacherAbbr})
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-indigo-300 font-bold hidden md:inline">
-                    👉 Kliknij zieloną wolną salę w tabeli poniżej, aby przypisać ją do tej lekcji
+                  <span className="text-indigo-800 font-bold hidden md:inline">
+                    👉 Kliknij zielony przycisk „Wolna” przy sali, aby natychmiast przypisać ją do tej lekcji
                   </span>
                   <button
                     onClick={() => setHighlightedSlot(null)}
-                    className="p-1 text-indigo-300 hover:text-white rounded hover:bg-indigo-800/40 cursor-pointer"
+                    className="p-1 text-slate-500 hover:text-slate-800 rounded-md hover:bg-indigo-100 transition cursor-pointer"
                     title="Ukryj podświetlenie slotu"
                   >
                     <X size={14} />
@@ -640,52 +637,52 @@ export default function CompanionWindowView({
               </div>
             )}
 
-            {/* TABELA MATRYCY SAL (W STYLU PŁACHTY ZORIENTOWANEJ NA SALE) */}
-            <div className="flex-1 overflow-auto bg-slate-950 p-2 sm:p-4">
+            {/* TABELA MATRYCY SAL (JASNY PROJEKT IDENTYCZNY ZE STYLEM SIATKI PLANU KLAS) */}
+            <div className="flex-1 overflow-auto bg-slate-100 p-3 sm:p-4">
               {filteredRooms.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 border border-dashed border-slate-800 rounded-xl">
-                  <DoorOpen size={36} className="text-slate-600 mb-2" />
-                  <span className="text-sm font-bold">Brak sal spełniających kryteria filtrów</span>
+                <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 border border-dashed border-slate-300 bg-white rounded-2xl shadow-xs">
+                  <DoorOpen size={40} className="text-slate-400 mb-2" />
+                  <span className="text-sm font-bold text-slate-700">Brak sal spełniających kryteria filtrów</span>
                   <span className="text-xs text-slate-500 mt-1">Włącz co najmniej jedną z kategorii sal na pasku u góry.</span>
                 </div>
               ) : (
-                <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900 shadow-xl inline-block min-w-full">
+                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs inline-block min-w-full">
                   <table className="min-w-full border-collapse text-left">
                     {/* NAGŁÓWKI SAL */}
                     <thead>
-                      <tr className="bg-slate-950 border-b border-slate-800 sticky top-0 z-20">
-                        <th className="p-2 sm:p-2.5 text-xs font-black text-slate-400 uppercase tracking-wider bg-slate-950 border-r border-slate-800 sticky left-0 z-30 min-w-[110px]">
+                      <tr className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
+                        <th className="p-2.5 sm:p-3 text-xs font-black text-slate-700 uppercase tracking-wider bg-slate-50 border-r border-slate-200 sticky left-0 z-30 min-w-[130px]">
                           Dzień & Godzina
                         </th>
                         {filteredRooms.map(room => (
                           <th 
                             key={room.id}
-                            className={`p-2 text-center border-r border-slate-800/80 min-w-[100px] max-w-[130px] select-none ${
+                            className={`p-2 text-center border-r border-slate-200 min-w-[110px] max-w-[140px] select-none ${
                               room.categoryType === 'sport' 
-                                ? 'bg-emerald-950/20' 
+                                ? 'bg-emerald-50/70 text-emerald-950' 
                                 : room.categoryType === 'ni' 
-                                ? 'bg-purple-950/20' 
-                                : 'bg-slate-950'
+                                ? 'bg-purple-50/70 text-purple-950' 
+                                : 'bg-slate-50 text-slate-800'
                             }`}
                           >
                             <div className="flex flex-col items-center">
-                              <span className="text-xs font-black text-white truncate max-w-full" title={room.name}>
+                              <span className="text-xs font-black text-slate-900 truncate max-w-full" title={room.name}>
                                 {room.name}
                               </span>
                               <div className="flex items-center gap-1 mt-0.5">
                                 {room.categoryType === 'sport' && (
-                                  <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-1 rounded">
-                                    ⚽ Sport
+                                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.2 rounded-sm">
+                                    Sport
                                   </span>
                                 )}
                                 {room.categoryType === 'ni' && (
-                                  <span className="text-[9px] font-bold text-purple-400 bg-purple-950/60 border border-purple-800/60 px-1 rounded">
-                                    🧩 NI
+                                  <span className="text-[9px] font-bold text-purple-700 bg-purple-100 border border-purple-200 px-1.5 py-0.2 rounded-sm">
+                                    NI / SPE
                                   </span>
                                 )}
                                 {room.categoryType === 'general' && (
-                                  <span className="text-[9px] font-bold text-blue-400 bg-blue-950/60 border border-blue-800/60 px-1 rounded">
-                                    🏫 Ogólna
+                                  <span className="text-[9px] font-bold text-blue-700 bg-blue-100 border border-blue-200 px-1.5 py-0.2 rounded-sm">
+                                    Ogólna
                                   </span>
                                 )}
                               </div>
@@ -709,19 +706,19 @@ export default function CompanionWindowView({
                           return (
                             <tr 
                               key={`${dayIdx}-${hIdx}`}
-                              className={`border-b border-slate-800/60 transition-colors ${
+                              className={`border-b border-slate-200 transition-colors ${
                                 isCurrentActiveSlot 
-                                  ? 'bg-indigo-950/70 ring-2 ring-indigo-400 relative z-10' 
-                                  : hIdx % 2 === 0 ? 'bg-slate-900/40' : 'bg-slate-900/10'
-                              } hover:bg-slate-800/40`}
+                                  ? 'bg-indigo-50/90 ring-2 ring-indigo-500 relative z-10' 
+                                  : hIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                              } hover:bg-slate-100/70`}
                             >
                               {/* Kolumna nagłówka wiersza: Dzień + Godzina */}
-                              <td className={`p-2 text-xs font-bold border-r border-slate-800 sticky left-0 z-10 select-none ${
-                                isCurrentActiveSlot ? 'bg-indigo-900 text-white' : 'bg-slate-950 text-slate-300'
+                              <td className={`p-2.5 text-xs font-bold border-r border-slate-200 sticky left-0 z-10 select-none ${
+                                isCurrentActiveSlot ? 'bg-indigo-100 text-indigo-950 font-black' : 'bg-slate-50 text-slate-700'
                               }`}>
                                 <div className="flex flex-col">
-                                  <span className="text-[11px] font-black text-indigo-300">{dayName}</span>
-                                  <span className="text-[10px] text-slate-400 font-mono">
+                                  <span className="text-[11px] font-black text-indigo-900">{dayName}</span>
+                                  <span className="text-[10px] text-slate-500 font-mono">
                                     g. {hour.num} ({hour.start}-{hour.end})
                                   </span>
                                 </div>
@@ -733,30 +730,36 @@ export default function CompanionWindowView({
                                 const occ = roomOccupancyMap.get(occKey);
 
                                 if (occ) {
-                                  // SALA ZAJĘTA
+                                  // SALA ZAJĘTA — elegancka jasna karta z barwną ramką w stylu kart lekcji na Ekranie 1
                                   return (
                                     <td 
                                       key={room.id}
-                                      className="p-1 text-center border-r border-slate-800/60 align-middle"
+                                      className="p-1 text-center border-r border-slate-200 align-middle"
                                     >
                                       <div 
-                                        className="p-1.5 rounded-lg border flex flex-col justify-center min-h-[48px] shadow-2xs"
+                                        className="p-1.5 rounded-lg border bg-white flex flex-col justify-center min-h-[50px] shadow-2xs hover:shadow-xs transition"
                                         style={{
-                                          backgroundColor: `${occ.subjectColor}18`,
-                                          borderColor: `${occ.subjectColor}45`
+                                          borderLeftWidth: '3px',
+                                          borderLeftColor: occ.subjectColor,
+                                          borderRightColor: '#e2e8f0',
+                                          borderTopColor: '#e2e8f0',
+                                          borderBottomColor: '#e2e8f0'
                                         }}
                                         title={`Sala ${room.name} jest ZAJĘTA przez klasę ${occ.className} (${occ.subjectName}, nauczyciel: ${occ.teacherAbbr})`}
                                       >
                                         <div className="flex items-center justify-between gap-1 text-[10px] font-black">
-                                          <span className="text-white bg-slate-950/70 px-1 rounded">
+                                          <span className="text-slate-900 font-extrabold bg-slate-100 px-1 py-0.5 rounded border border-slate-200">
                                             {occ.className}
                                           </span>
-                                          <span className="text-amber-300 font-mono">
+                                          <span 
+                                            className="font-mono font-bold text-[10px] px-1 rounded"
+                                            style={{ color: occ.subjectColor }}
+                                          >
                                             [{occ.subjectShort}]
                                           </span>
                                         </div>
-                                        <div className="text-[9px] text-slate-400 truncate mt-0.5 font-medium">
-                                          👤 {occ.teacherAbbr || '—'}
+                                        <div className="text-[9px] text-slate-600 truncate mt-1 font-semibold flex items-center justify-between">
+                                          <span>👤 {occ.teacherAbbr || '—'}</span>
                                         </div>
                                       </div>
                                     </td>
@@ -767,29 +770,29 @@ export default function CompanionWindowView({
                                 return (
                                   <td 
                                     key={room.id}
-                                    className={`p-1 text-center border-r border-slate-800/60 align-middle ${
-                                      isCurrentActiveSlot ? 'bg-emerald-950/20' : ''
+                                    className={`p-1 text-center border-r border-slate-200 align-middle ${
+                                      isCurrentActiveSlot ? 'bg-emerald-50/60' : ''
                                     }`}
                                   >
                                     {isCurrentActiveSlot ? (
                                       <button
                                         onClick={() => handleAssignRoomToActiveSlot(room)}
-                                        className="w-full p-1.5 bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/50 hover:border-emerald-400 rounded-lg text-[10px] font-bold transition flex flex-col items-center justify-center min-h-[48px] cursor-pointer shadow-xs group"
+                                        className="w-full p-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-300 hover:border-emerald-600 rounded-lg text-[10px] font-bold transition flex flex-col items-center justify-center min-h-[50px] cursor-pointer shadow-2xs group"
                                         title={`Kliknij, aby przypisać salę ${room.name} do aktywnej lekcji w Oknie 1`}
                                       >
-                                        <span className="text-[9px] font-black uppercase text-emerald-400 group-hover:text-white leading-tight">
+                                        <span className="text-[9px] font-black uppercase text-emerald-700 group-hover:text-white leading-tight">
                                           ✓ Wolna
                                         </span>
-                                        <span className="text-[8px] opacity-90 group-hover:underline">
+                                        <span className="text-[8px] opacity-90 group-hover:underline text-emerald-800 group-hover:text-white mt-0.5">
                                           Przypisz salę
                                         </span>
                                       </button>
                                     ) : (
                                       <div 
-                                        className="h-full min-h-[48px] rounded flex items-center justify-center text-[10px] text-slate-700 hover:text-slate-400 transition"
+                                        className="h-full min-h-[50px] rounded flex items-center justify-center text-slate-300 hover:text-slate-500 transition"
                                         title={`Sala ${room.name} jest wolna`}
                                       >
-                                        <span className="opacity-40 font-mono text-xs">·</span>
+                                        <span className="opacity-60 font-mono text-base font-bold">+</span>
                                       </div>
                                     )}
                                   </td>
@@ -825,76 +828,78 @@ export default function CompanionWindowView({
         {/* WIDOK 3: RZUT KONDYGNACJI (PLAN SAL)                     */}
         {/* ======================================================== */}
         {activeCompanionTab === 'building_map' && (
-          <div className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 space-y-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
+          <div className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-100">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Building2 size={18} className="text-teal-400" />
-                  <h3 className="font-extrabold text-sm text-white">Rozmieszczenie i Obłożenie Sal na Kondygnacjach</h3>
+                  <Building2 size={20} className="text-teal-600" />
+                  <h3 className="font-black text-base text-slate-900">Rozmieszczenie i Obłożenie Sal na Kondygnacjach</h3>
                 </div>
-                <span className="text-xs text-slate-400 font-bold">Liczba sal w szkole: {allRooms.length}</span>
+                <span className="text-xs text-slate-600 font-bold bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                  Liczba sal w szkole: {allRooms.length}
+                </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 leading-relaxed">
                 Poniższy widok pozwala monitorować rozmieszczenie klas pomiędzy parterem, piętrami oraz skrzydłem sportowym podczas układania Planu Sal (Etap 2).
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Sekcja Sal Ogólnych */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-xs font-black text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <DoorOpen size={14} /> Sale ogólne & przedmiotowe
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="text-xs font-black text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <DoorOpen size={15} /> Sale ogólne & pracownie
                   </span>
-                  <span className="text-xs font-mono font-bold bg-blue-950 text-blue-300 px-2 py-0.5 rounded">
+                  <span className="text-xs font-mono font-bold bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded">
                     {categorizedRooms.general.length}
                   </span>
                 </div>
                 <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
                   {categorizedRooms.general.map(r => (
-                    <div key={r.id} className="p-2 bg-slate-950 border border-slate-800/80 rounded-lg flex items-center justify-between text-xs">
-                      <span className="font-bold text-white">{r.name}</span>
-                      <span className="text-[10px] text-slate-500">{r.desc || 'Gabinet ogólny'}</span>
+                    <div key={r.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs hover:bg-slate-100 transition">
+                      <span className="font-extrabold text-slate-900">{r.name}</span>
+                      <span className="text-[11px] text-slate-500">{r.desc || 'Gabinet ogólny'}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Sekcja Sal Sportowych */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Dumbbell size={14} /> Obiekty sportowe
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="text-xs font-black text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Dumbbell size={15} /> Obiekty sportowe
                   </span>
-                  <span className="text-xs font-mono font-bold bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded">
+                  <span className="text-xs font-mono font-bold bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded">
                     {categorizedRooms.sport.length}
                   </span>
                 </div>
                 <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
                   {categorizedRooms.sport.map(r => (
-                    <div key={r.id} className="p-2 bg-slate-950 border border-slate-800/80 rounded-lg flex items-center justify-between text-xs">
-                      <span className="font-bold text-white">{r.name}</span>
-                      <span className="text-[10px] text-emerald-400">{r.desc || 'Hala/Basen/WF'}</span>
+                    <div key={r.id} className="p-2.5 bg-emerald-50/50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs hover:bg-emerald-50 transition">
+                      <span className="font-extrabold text-emerald-950">{r.name}</span>
+                      <span className="text-[11px] text-emerald-700 font-medium">{r.desc || 'Hala/Basen/WF'}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Sekcja Sal Wsparcia & NI */}
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <span className="text-xs font-black text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <HeartPulse size={14} /> Gabinety wsparcia & NI
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="text-xs font-black text-purple-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <HeartPulse size={15} /> Gabinety wsparcia & NI
                   </span>
-                  <span className="text-xs font-mono font-bold bg-purple-950 text-purple-300 px-2 py-0.5 rounded">
+                  <span className="text-xs font-mono font-bold bg-purple-50 border border-purple-200 text-purple-800 px-2 py-0.5 rounded">
                     {categorizedRooms.ni.length}
                   </span>
                 </div>
                 <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
                   {categorizedRooms.ni.map(r => (
-                    <div key={r.id} className="p-2 bg-slate-950 border border-slate-800/80 rounded-lg flex items-center justify-between text-xs">
-                      <span className="font-bold text-white">{r.name}</span>
-                      <span className="text-[10px] text-purple-400">{r.desc || 'Terapia/Rewalidacja'}</span>
+                    <div key={r.id} className="p-2.5 bg-purple-50/50 border border-purple-200 rounded-xl flex items-center justify-between text-xs hover:bg-purple-50 transition">
+                      <span className="font-extrabold text-purple-950">{r.name}</span>
+                      <span className="text-[11px] text-purple-700 font-medium">{r.desc || 'Terapia/Rewalidacja'}</span>
                     </div>
                   ))}
                 </div>
@@ -907,25 +912,25 @@ export default function CompanionWindowView({
         {/* WIDOK 4: STREFY DYŻURÓW                                  */}
         {/* ======================================================== */}
         {activeCompanionTab === 'duties' && (
-          <div className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 space-y-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-100">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
               <div className="flex items-center gap-2 mb-2">
-                <Shield size={18} className="text-purple-400" />
-                <h3 className="font-extrabold text-sm text-white">Inspekcja Stref Dyżurów i Dyspozycyjności Nauczycieli</h3>
+                <Shield size={20} className="text-purple-600" />
+                <h3 className="font-black text-base text-slate-900">Inspekcja Stref Dyżurów i Kadry</h3>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 leading-relaxed">
                 Wspomaga planowanie opieki na przerwach międzylekcyjnych (Etap 3). W oknie głównym układasz dyżury, a tutaj na bieżąco weryfikujesz, którzy nauczyciele mają okienka lub ułożone lekcje w danej strefie.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {pl.teachers.map(t => (
-                <div key={t.id} className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+                <div key={t.id} className="p-3 bg-white border border-slate-200 rounded-2xl flex items-center justify-between shadow-xs hover:bg-slate-50 transition">
                   <div>
-                    <span className="font-bold text-xs text-white block">{t.first} {t.last}</span>
-                    <span className="text-[10px] text-slate-400 font-mono">Inicjały: {t.abbr}</span>
+                    <span className="font-extrabold text-xs text-slate-900 block">{t.first} {t.last}</span>
+                    <span className="text-[11px] text-slate-500 font-mono">Inicjały: {t.abbr}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2 py-0.5 rounded">
+                  <span className="text-[10px] font-bold text-purple-800 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
                     Pensum: {t.maxHours || 18}h
                   </span>
                 </div>
@@ -938,33 +943,33 @@ export default function CompanionWindowView({
         {/* WIDOK 5: BILANS SZKOŁY (KREATOR)                         */}
         {/* ======================================================== */}
         {activeCompanionTab === 'school_stats' && (
-          <div className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 space-y-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 space-y-4 bg-slate-100">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
               <div className="flex items-center gap-2 mb-2">
-                <Sparkles size={18} className="text-amber-400" />
-                <h3 className="font-extrabold text-sm text-white">Bilans Struktury Szkoły i Etatów (Kreator)</h3>
+                <Sparkles size={20} className="text-amber-600" />
+                <h3 className="font-black text-base text-slate-900">Bilans Struktury Szkoły i Etatów (Kreator)</h3>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 leading-relaxed">
                 Podsumowanie liczby oddziałów, kadry pedagogicznej, puli sal oraz zdefiniowanych przydziałów w Kreatorze Szkoły.
               </p>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Liczba Klas</span>
-                <span className="text-2xl font-black text-white mt-1 block">{pl.classes.length}</span>
+              <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Liczba Klas</span>
+                <span className="text-2xl font-black text-slate-900 mt-1 block">{pl.classes.length}</span>
               </div>
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Nauczyciele</span>
-                <span className="text-2xl font-black text-blue-400 mt-1 block">{pl.teachers.length}</span>
+              <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Nauczyciele</span>
+                <span className="text-2xl font-black text-blue-600 mt-1 block">{pl.teachers.length}</span>
               </div>
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Sale Lekcyjne</span>
-                <span className="text-2xl font-black text-emerald-400 mt-1 block">{allRooms.length}</span>
+              <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Sale Lekcyjne</span>
+                <span className="text-2xl font-black text-emerald-600 mt-1 block">{allRooms.length}</span>
               </div>
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Przydziały Lekcji</span>
-                <span className="text-2xl font-black text-purple-400 mt-1 block">{pl.assignments.length}</span>
+              <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Przedmioty</span>
+                <span className="text-2xl font-black text-purple-600 mt-1 block">{pl.subjects.length}</span>
               </div>
             </div>
           </div>
@@ -972,11 +977,17 @@ export default function CompanionWindowView({
 
       </main>
 
-      {/* ── STOPKA EKRANU 2 ── */}
-      <footer className="px-4 py-2 bg-slate-950 border-t border-slate-800 text-slate-500 text-[10px] flex items-center justify-between shrink-0 font-medium">
-        <span>SalePlan Pro • Companion Workspace • Submilisekundowa synchronizacja BroadcastChannel</span>
+      {/* ── STOPKA EKRANU 2 (IDENTYCZNA ZE STOPKĄ EKRANU 1) ── */}
+      <footer className="px-4 py-2 bg-slate-950 border-t border-slate-800 text-slate-400 text-[10px] flex items-center justify-between shrink-0 font-medium">
         <div className="flex items-center gap-2">
-          <span>Monitor zewnętrzny: <strong>Aktywny</strong></span>
+          <span className="text-emerald-400 font-bold">✓ EKRAN 2 SYNCHRONIZACJA AKTYWNA</span>
+          <span className="text-slate-600">|</span>
+          <span>SalePlan Pro • Companion Workspace</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="bg-slate-900 border border-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">
+            Submilisekundowa magistrala BroadcastChannel
+          </span>
           <span className="text-slate-700">|</span>
           <button 
             onClick={() => window.close()} 
