@@ -6,12 +6,15 @@ import {
   dualScreenService, DualScreenMessage, ScreenInteractionPayload 
 } from '../services/dualScreenService';
 import { 
-  STORAGE_KEYS, getStorageItemSync 
+  STORAGE_KEYS, getStorageItemSync, setStorageItem 
 } from '../services/dbStorage';
 import { 
   isSportsFacility 
 } from './PlanKlas';
 import PlachtaDyrektorska from './PlachtaDyrektorska';
+import DualScreen2Kreator from './DualScreen2Kreator';
+import DualScreen2PlanKlas from './DualScreen2PlanKlas';
+import DualScreen2PlanSal from './DualScreen2PlanSal';
 import { 
   Maximize2, Minimize2, RefreshCw, X, Monitor, Layers, 
   Sparkles, Filter, Search, CheckCircle2, 
@@ -55,11 +58,21 @@ export default function CompanionWindowView({
   });
 
   const [activeVariant, setActiveVariant] = useState<PlanVariant | null>(initialActiveVariant || null);
+  const [planVariants, setPlanVariants] = useState<PlanVariant[]>(() => {
+    const saved = getStorageItemSync<PlanVariant[]>(STORAGE_KEYS.PLAN_VARIANTS);
+    return saved || [];
+  });
 
   // Active view tab on Companion Screen
   const [activeCompanionTab, setActiveCompanionTab] = useState<
-    'rooms_matrix' | 'plachta' | 'building_map' | 'duties' | 'school_stats'
-  >('rooms_matrix');
+    'kreator' | 'plan_klas' | 'plan_sal' | 'dyzury' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow' | 'rooms_matrix' | 'plachta' | 'building_map' | 'duties' | 'school_stats'
+  >(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('tab') as any;
+      if (p) return p;
+    }
+    return 'plan_klas';
+  });
 
   // Connection & Handshake status
   const [isConnectedToMaster, setIsConnectedToMaster] = useState(false);
@@ -77,6 +90,33 @@ export default function CompanionWindowView({
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'all'>('all');
   const [roomSearchQuery, setRoomSearchQuery] = useState('');
 
+  const handleUpdateLessons = (newLessons: Record<string, any>) => {
+    setAppState(prev => {
+      const updated = {
+        ...prev,
+        planLekcji: {
+          ...prev.planLekcji,
+          lessons: newLessons
+        }
+      };
+      setStorageItem(STORAGE_KEYS.APP_STATE, updated);
+      return updated;
+    });
+  };
+
+  const handleChangeSchedData = (newSched: SchedData) => {
+    setSchedData(newSched);
+    setStorageItem(STORAGE_KEYS.SCHED_DATA, newSched);
+  };
+
+  const handleVariantCreated = (newVariant: PlanVariant) => {
+    setPlanVariants(prev => {
+      const updated = [...prev, newVariant];
+      setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, updated);
+      return updated;
+    });
+  };
+
   // ── DUAL SCREEN MESSAGING & SYNC ──
   useEffect(() => {
     // 1. Initial Handshake to ask Master Window for latest live data
@@ -93,6 +133,8 @@ export default function CompanionWindowView({
           if (msg.payload?.appState) setAppState(msg.payload.appState);
           if (msg.payload?.schedData) setSchedData(msg.payload.schedData);
           if (msg.payload?.activeVariant) setActiveVariant(msg.payload.activeVariant);
+          if (msg.payload?.planVariants) setPlanVariants(msg.payload.planVariants);
+          if (msg.payload?.currentTab) setActiveCompanionTab(msg.payload.currentTab);
           setIsConnectedToMaster(true);
           setLastHeartbeat(Date.now());
           break;
@@ -102,12 +144,39 @@ export default function CompanionWindowView({
           setLastHeartbeat(Date.now());
           // Auto-adapt companion view to the active tab in main window
           if (msg.payload?.tab) {
-            const masterTab = msg.payload.tab;
-            if (masterTab === 'plan_klas') setActiveCompanionTab('rooms_matrix');
-            else if (masterTab === 'plan_sal') setActiveCompanionTab('building_map');
-            else if (masterTab === 'dyzury') setActiveCompanionTab('duties');
-            else if (masterTab === 'wydruki') setActiveCompanionTab('plachta');
-            else if (masterTab === 'kreator') setActiveCompanionTab('school_stats');
+            setActiveCompanionTab(msg.payload.tab as any);
+          }
+          break;
+
+        case 'UPDATE_LESSONS':
+          if (msg.payload?.lessons) {
+            setAppState(prev => ({
+              ...prev,
+              planLekcji: {
+                ...prev.planLekcji,
+                lessons: msg.payload.lessons
+              }
+            }));
+          }
+          break;
+
+        case 'UPDATE_SCHED_DATA':
+          if (msg.payload?.schedData) {
+            setSchedData(msg.payload.schedData);
+          }
+          break;
+
+        case 'CREATE_VARIANT':
+          if (msg.payload?.variant) {
+            setPlanVariants(prev => {
+              const exists = prev.some(v => v.id === msg.payload.variant.id);
+              const updated = exists ? prev.map(v => v.id === msg.payload.variant.id ? msg.payload.variant : v) : [...prev, msg.payload.variant];
+              setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, updated);
+              return updated;
+            });
+            if (msg.payload.activateImmediately) {
+              setActiveVariant(msg.payload.variant);
+            }
           }
           break;
 
@@ -472,18 +541,57 @@ export default function CompanionWindowView({
         </div>
 
         {/* Środek: Selektor widoków drugiego ekranu */}
-        <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 text-xs font-bold overflow-x-auto no-scrollbar">
+        <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 text-xs font-bold overflow-x-auto no-scrollbar gap-1">
           <button
-            onClick={() => setActiveCompanionTab('rooms_matrix')}
+            onClick={() => setActiveCompanionTab('kreator')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeCompanionTab === 'rooms_matrix'
+              activeCompanionTab === 'kreator'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Kreator Szkoły: Nowy wariant (Ekran 2)"
+          >
+            <Sparkles size={14} className={activeCompanionTab === 'kreator' ? 'text-white' : 'text-indigo-400'} />
+            <span>Kreator (Nowy wariant)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCompanionTab('plan_klas')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeCompanionTab === 'plan_klas'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
-            title="Dedykowana matryca wszystkich sal z podziałem na ogólne, sportowe i NI"
+            title="Etap 1: Siatka klas, dni tygodnia i godzin z przeciąganiem i klikaniem"
           >
-            <DoorOpen size={14} className={activeCompanionTab === 'rooms_matrix' ? 'text-white' : 'text-blue-400'} />
-            <span>Matryca Sal (Plan Klas)</span>
+            <Layers size={14} className={activeCompanionTab === 'plan_klas' ? 'text-white' : 'text-blue-400'} />
+            <span>Etap 1: Plan Klas</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCompanionTab('plan_sal')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeCompanionTab === 'plan_sal'
+                ? 'bg-teal-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Etap 2: Siatka sal (Budynek, Piętro, Sala) z czyszczeniem"
+          >
+            <DoorOpen size={14} className={activeCompanionTab === 'plan_sal' ? 'text-white' : 'text-teal-400'} />
+            <span>Etap 2: Plan Sal</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCompanionTab('dyzury')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeCompanionTab === 'dyzury'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Etap 3: Dyżury (W budowie na Ekranie 2)"
+          >
+            <Shield size={14} className={activeCompanionTab === 'dyzury' ? 'text-white' : 'text-purple-400'} />
+            <span>Etap 3: Dyżury</span>
           </button>
 
           <button
@@ -495,47 +603,21 @@ export default function CompanionWindowView({
             }`}
             title="Pełna Płachta Dyrektorska całego tygodnia"
           >
-            <Layers size={14} className={activeCompanionTab === 'plachta' ? 'text-white' : 'text-indigo-400'} />
+            <Monitor size={14} className={activeCompanionTab === 'plachta' ? 'text-white' : 'text-indigo-400'} />
             <span>Płachta Dyrektorska</span>
           </button>
 
           <button
-            onClick={() => setActiveCompanionTab('building_map')}
+            onClick={() => setActiveCompanionTab('rooms_matrix')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeCompanionTab === 'building_map'
-                ? 'bg-teal-600 text-white shadow-xs'
+              activeCompanionTab === 'rooms_matrix'
+                ? 'bg-slate-700 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
-            title="Rzut kondygnacji i obłożenie sal (Etap 2: Plan Sal)"
+            title="Szczegółowa matryca sal z filtrami (ogólne, sportowe, NI)"
           >
-            <Building2 size={14} className={activeCompanionTab === 'building_map' ? 'text-white' : 'text-teal-400'} />
-            <span>Rzut Kondygnacji (Plan Sal)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveCompanionTab('duties')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeCompanionTab === 'duties'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-            title="Strefy dyżurów i okienka nauczycieli (Etap 3: Dyżury)"
-          >
-            <Shield size={14} className={activeCompanionTab === 'duties' ? 'text-white' : 'text-purple-400'} />
-            <span>Strefy Dyżurów</span>
-          </button>
-
-          <button
-            onClick={() => setActiveCompanionTab('school_stats')}
-            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-              activeCompanionTab === 'school_stats'
-                ? 'bg-amber-600 text-white shadow-xs'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-            title="Bilans etatów i pensum nauczycieli (Kreator)"
-          >
-            <Sparkles size={14} className={activeCompanionTab === 'school_stats' ? 'text-white' : 'text-amber-400'} />
-            <span>Bilans Szkoły (Kreator)</span>
+            <Filter size={14} className={activeCompanionTab === 'rooms_matrix' ? 'text-white' : 'text-slate-400'} />
+            <span>Matryca Sal</span>
           </button>
         </div>
 
@@ -580,6 +662,72 @@ export default function CompanionWindowView({
 
       {/* ── GŁÓWNA STREFA ZAWARTOŚCI EKRANU 2 (JASNA, IDENTYCZNA Z EKRANEM 1) ── */}
       <main className="flex-1 flex flex-col overflow-hidden bg-slate-100 text-slate-800">
+        
+        {/* ======================================================== */}
+        {/* WIDOK 1: KREATOR SZKOŁY (NOWY WARIANT)                   */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'kreator' && (
+          <DualScreen2Kreator
+            appState={appState}
+            schedData={schedData}
+            activeVariant={activeVariant}
+            planVariants={planVariants}
+            onVariantCreated={handleVariantCreated}
+          />
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOK 2: ETAP 1 PLAN KLAS (SIATKA KLAS, DNI I GODZIN)   */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'plan_klas' && (
+          <DualScreen2PlanKlas
+            appState={appState}
+            schedData={schedData}
+            onUpdateLessons={handleUpdateLessons}
+          />
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOK 3: ETAP 2 PLAN SAL (SIATKA: BUDYNEK, PIĘTRO, SALA) */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'plan_sal' && (
+          <DualScreen2PlanSal
+            appState={appState}
+            schedData={schedData}
+            onChangeSchedData={handleChangeSchedData}
+          />
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOKI W BUDOWIE NA EKRANIE 2 (DYŻURY, STATYSTYKI, ETC)  */}
+        {/* ======================================================== */}
+        {(activeCompanionTab === 'dyzury' || activeCompanionTab === 'statystyki' || activeCompanionTab === 'ustawienia_generatorow' || activeCompanionTab === 'o_programie') && (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-100 text-slate-800 select-none">
+            <div className="max-w-md p-8 bg-white border border-slate-200 rounded-3xl shadow-xl space-y-4">
+              <div className="w-16 h-16 mx-auto bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center text-amber-500 shadow-xs">
+                <Sparkles size={32} />
+              </div>
+              <span className="text-xs font-black uppercase tracking-wider text-amber-700 bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
+                Ekran 2 • W Budowie
+              </span>
+              <h2 className="text-xl font-black text-slate-800">
+                {activeCompanionTab === 'dyzury' ? 'Etap 3: Dyżury' : activeCompanionTab === 'statystyki' ? 'Statystyki' : 'Moduł w budowie'}
+              </h2>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Widok drugiego ekranu dla tej sekcji nawigacji jest w trakcie przygotowania. Pełne sterowanie i edycja odbywają się w Oknie Głównym (Ekran 1).
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOK 4: PŁACHTA DYREKTORSKA                             */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'plachta' && (
+          <div className="flex-1 overflow-auto p-4 bg-slate-900">
+            <PlachtaDyrektorska appState={appState} schedData={schedData} />
+          </div>
+        )}
         
         {/* ======================================================== */}
         {/* WIDOK 1: MATRYCA SAL (PLAN KLAS)                         */}

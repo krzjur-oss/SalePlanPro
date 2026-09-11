@@ -27,6 +27,7 @@ const Dyzury = lazy(() => import('./components/Dyzury'));
 const OProgramie = lazy(() => import('./components/OProgramie'));
 const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
 const PlanVariantsModal = lazy(() => import('./components/PlanVariantsModal'));
+const DualScreenMasterView = lazy(() => import('./components/DualScreenMasterView'));
 import CompanionWindowView from './components/CompanionWindowView';
 import { dualScreenService, DualScreenMessage } from './services/dualScreenService';
 import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
@@ -687,11 +688,51 @@ export default function App() {
         setIsCompanionActive(true);
         dualScreenService.sendMessage({
           type: 'HANDSHAKE_ACK',
-          payload: { appState, schedData, activeVariant, currentTab },
+          payload: { appState, schedData, activeVariant, planVariants, currentTab },
           timestamp: Date.now()
         });
       } else if (msg.type === 'COMPANION_CLOSED') {
         setIsCompanionActive(false);
+      } else if (msg.type === 'CREATE_VARIANT') {
+        const { variant, activateImmediately } = msg.payload || {};
+        if (variant) {
+          setPlanVariants(prev => {
+            const exists = prev.some(v => v.id === variant.id);
+            const updated = exists ? prev.map(v => v.id === variant.id ? variant : v) : [...prev, variant];
+            setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, updated);
+            return updated;
+          });
+          if (activateImmediately) {
+            handleSwitchVariant(variant.id);
+          }
+          notify(`Utworzono nowy wariant: "${variant.name}" z Ekranu 2!`, 'ok');
+        }
+      } else if (msg.type === 'SWITCH_VARIANT') {
+        const { variantId } = msg.payload || {};
+        if (variantId) {
+          handleSwitchVariant(variantId);
+        }
+      } else if (msg.type === 'UPDATE_LESSONS') {
+        const { lessons } = msg.payload || {};
+        if (lessons) {
+          setAppState(prev => {
+            const nextState = {
+              ...prev,
+              planLekcji: {
+                ...prev.planLekcji,
+                lessons
+              }
+            };
+            setStorageItem(STORAGE_KEYS.APP_STATE, nextState);
+            return nextState;
+          });
+        }
+      } else if (msg.type === 'UPDATE_SCHED_DATA') {
+        const { schedData: newSched } = msg.payload || {};
+        if (newSched) {
+          setSchedData(newSched);
+          setStorageItem(STORAGE_KEYS.SCHED_DATA, newSched);
+        }
       } else if (msg.type === 'ASSIGN_ROOM_CLICK') {
         const { dayIdx, hourIdx, classId, roomId, roomName } = msg.payload || {};
         if (dayIdx !== undefined && hourIdx !== undefined && roomId) {
@@ -727,7 +768,7 @@ export default function App() {
     });
 
     return () => unsub();
-  }, [appState, schedData, activeVariant, currentTab]);
+  }, [appState, schedData, activeVariant, planVariants, currentTab]);
 
   const handleToggleDualScreen = async () => {
     if (isCompanionActive) {
@@ -2057,69 +2098,87 @@ export default function App() {
                 onReset={() => handleRollbackToLastValid('Reset po błędzie widoku')}
                 fallbackTitle="Wystąpił nieoczekiwany błąd w module planu"
               >
-                {currentTab === 'kreator' && (
-                  <KreatorSzkoly
+                {isCompanionActive ? (
+                  <DualScreenMasterView
+                    currentTab={currentTab}
                     appState={appState}
-                    onChangeAppState={handleUpdateAppState}
-                    onNavigateToTab={(tab) => setCurrentTab(tab)}
-                    archive={archive}
-                    onChangeArchive={handleUpdateArchive}
-                  />
-                )}
-                {currentTab === 'plan_klas' && (
-                  <PlanKlas 
-                    appState={appState} 
-                    onChangeAppState={handleUpdateAppState} 
-                    onTransfer={() => {
-                      handleImportFromPlanKlas();
-                      setCurrentTab('plan_sal');
-                    }}
-                    presentationMode={isPresentationMode}
-                    initialTab="plan"
+                    schedData={schedData}
                     activeVariant={activeVariant}
-                    onOpenVariantsModal={() => setShowVariantsModal(true)}
+                    planVariants={planVariants}
+                    onChangeAppState={handleUpdateAppState}
+                    onChangeSchedData={handleUpdateSchedData}
+                    onNavigateToTab={(tab) => setCurrentTab(tab)}
+                    onSwitchVariant={handleSwitchVariant}
+                    onToggleSingleScreen={() => setIsCompanionActive(false)}
+                    onRecallCompanionWindow={() => handleToggleDualScreen()}
                   />
-                )}
-                {currentTab === 'plan_sal' && (
-                  <PlanSal 
-                    appState={appState} 
-                    schedData={schedData} 
-                    onChangeAppState={handleUpdateAppState} 
-                    onChangeSchedData={handleUpdateSchedData} 
-                    onImportFromPlanKlas={handleImportFromPlanKlas}
-                    presentationMode={isPresentationMode}
-                  />
-                )}
-                {currentTab === 'dyzury' && (
-                  <Dyzury 
-                    appState={appState} 
-                    onChangeAppState={handleUpdateAppState} 
-                    schedData={schedData}
-                    presentationMode={isPresentationMode}
-                  />
-                )}
-                {currentTab === 'wydruki' && (
-                  <Wydruki 
-                    appState={appState} 
-                    schedData={schedData}
-                  />
-                )}
-                {currentTab === 'statystyki' && (
-                  <Statystyki 
-                    appState={appState} 
-                    schedData={schedData}
-                    historyLogs={historyLogs}
-                    onClearHistoryLogs={() => setHistoryLogs([])}
-                  />
-                )}
-                {currentTab === 'ustawienia_generatorow' && (
-                  <UstawieniaGeneratorow 
-                    appState={appState} 
-                    onChangeAppState={handleUpdateAppState} 
-                  />
-                )}
-                {currentTab === 'o_programie' && (
-                  <OProgramie initialTab={oProgramieTab} />
+                ) : (
+                  <>
+                    {currentTab === 'kreator' && (
+                      <KreatorSzkoly
+                        appState={appState}
+                        onChangeAppState={handleUpdateAppState}
+                        onNavigateToTab={(tab) => setCurrentTab(tab)}
+                        archive={archive}
+                        onChangeArchive={handleUpdateArchive}
+                      />
+                    )}
+                    {currentTab === 'plan_klas' && (
+                      <PlanKlas 
+                        appState={appState} 
+                        onChangeAppState={handleUpdateAppState} 
+                        onTransfer={() => {
+                          handleImportFromPlanKlas();
+                          setCurrentTab('plan_sal');
+                        }}
+                        presentationMode={isPresentationMode}
+                        initialTab="plan"
+                        activeVariant={activeVariant}
+                        onOpenVariantsModal={() => setShowVariantsModal(true)}
+                      />
+                    )}
+                    {currentTab === 'plan_sal' && (
+                      <PlanSal 
+                        appState={appState} 
+                        schedData={schedData} 
+                        onChangeAppState={handleUpdateAppState} 
+                        onChangeSchedData={handleUpdateSchedData} 
+                        onImportFromPlanKlas={handleImportFromPlanKlas}
+                        presentationMode={isPresentationMode}
+                      />
+                    )}
+                    {currentTab === 'dyzury' && (
+                      <Dyzury 
+                        appState={appState} 
+                        onChangeAppState={handleUpdateAppState} 
+                        schedData={schedData}
+                        presentationMode={isPresentationMode}
+                      />
+                    )}
+                    {currentTab === 'wydruki' && (
+                      <Wydruki 
+                        appState={appState} 
+                        schedData={schedData}
+                      />
+                    )}
+                    {currentTab === 'statystyki' && (
+                      <Statystyki 
+                        appState={appState} 
+                        schedData={schedData}
+                        historyLogs={historyLogs}
+                        onClearHistoryLogs={() => setHistoryLogs([])}
+                      />
+                    )}
+                    {currentTab === 'ustawienia_generatorow' && (
+                      <UstawieniaGeneratorow 
+                        appState={appState} 
+                        onChangeAppState={handleUpdateAppState} 
+                      />
+                    )}
+                    {currentTab === 'o_programie' && (
+                      <OProgramie initialTab={oProgramieTab} />
+                    )}
+                  </>
                 )}
               </ErrorBoundary>
             </Suspense>

@@ -24,6 +24,12 @@ export interface DualScreenMessage {
     | 'PLAN_KLAS_HIGHLIGHT'
     | 'ASSIGN_ROOM_CLICK'
     | 'COMPANION_CLOSED'
+    | 'CREATE_VARIANT'
+    | 'SWITCH_VARIANT'
+    | 'UPDATE_LESSONS'
+    | 'UPDATE_SCHED_DATA'
+    | 'SELECT_LESSON_POOL'
+    | 'CLEAR_ROOM_SCHEDULE'
     | 'PING'
     | 'PONG';
   payload?: any;
