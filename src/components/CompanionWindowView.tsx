@@ -15,7 +15,8 @@ import PlachtaDyrektorska from './PlachtaDyrektorska';
 import { 
   Maximize2, Minimize2, RefreshCw, X, Monitor, Layers, 
   Sparkles, Filter, Search, CheckCircle2, 
-  DoorOpen, Dumbbell, HeartPulse, Building2, Shield
+  DoorOpen, Dumbbell, HeartPulse, Building2, Shield,
+  Scan, ZoomIn, ZoomOut, RotateCcw
 } from 'lucide-react';
 
 interface CompanionWindowViewProps {
@@ -355,6 +356,87 @@ export default function CompanionWindowView({
     setTimeout(() => setLastAssignedRoomAlert(null), 3500);
   };
 
+  // ── AUTO-FIT & ZOOM ENGINE DLA MATRYCY SAL ──
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const tableRef = React.useRef<HTMLTableElement>(null);
+
+  const [fitToScreen, setFitToScreen] = useState<boolean>(() => {
+    const saved = localStorage.getItem('saleplan_companion_fit_to_screen');
+    return saved !== null ? JSON.parse(saved) : true; // Domyślnie WŁĄCZONE
+  });
+  const [cellDensity, setCellDensity] = useState<'normal' | 'compact'>(() => {
+    const saved = localStorage.getItem('saleplan_companion_cell_density');
+    return (saved === 'compact' || saved === 'normal') ? saved : 'compact';
+  });
+  const [zoomPercent, setZoomPercent] = useState<number>(100);
+  const [autoScale, setAutoScale] = useState<number>(1);
+  const [hoveredCellInfo, setHoveredCellInfo] = useState<{
+    roomName: string;
+    categoryType: string;
+    dayName: string;
+    hourText: string;
+    isOccupied: boolean;
+    className?: string;
+    subjectName?: string;
+    subjectShort?: string;
+    subjectColor?: string;
+    teacherName?: string;
+    teacherAbbr?: string;
+  } | null>(null);
+
+  // Zapisz preferencje w localStorage
+  useEffect(() => {
+    localStorage.setItem('saleplan_companion_fit_to_screen', JSON.stringify(fitToScreen));
+  }, [fitToScreen]);
+
+  useEffect(() => {
+    localStorage.setItem('saleplan_companion_cell_density', cellDensity);
+  }, [cellDensity]);
+
+  // Automatyczne obliczanie współczynnika skali w czasie rzeczywistym
+  useEffect(() => {
+    if (!fitToScreen || !containerRef.current || !tableRef.current) {
+      setAutoScale(1);
+      return;
+    }
+
+    const calculateScale = () => {
+      if (!containerRef.current || !tableRef.current) return;
+      const cWidth = containerRef.current.clientWidth - 20; // margines bezpieczeństwa
+      const cHeight = containerRef.current.clientHeight - 20;
+
+      const tWidth = tableRef.current.offsetWidth;
+      const tHeight = tableRef.current.offsetHeight;
+
+      if (cWidth > 40 && cHeight > 40 && tWidth > 40 && tHeight > 40) {
+        const scaleX = cWidth / tWidth;
+        const scaleY = cHeight / tHeight;
+        // Bierzemy mniejszą wartość, aby zagwarantować 100% zmieszczenia w pionie I w poziomie
+        const minScale = Math.min(scaleX, scaleY);
+        setAutoScale(Math.max(0.1, Math.min(1.5, minScale)));
+      }
+    };
+
+    calculateScale();
+    const timer = setTimeout(calculateScale, 120);
+
+    const observer = new ResizeObserver(() => {
+      calculateScale();
+    });
+
+    if (containerRef.current) observer.observe(containerRef.current);
+    if (tableRef.current) observer.observe(tableRef.current);
+    window.addEventListener('resize', calculateScale);
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      window.removeEventListener('resize', calculateScale);
+    };
+  }, [fitToScreen, filteredRooms.length, hoursList.length, selectedDayFilter, cellDensity]);
+
+  const effectiveScale = fitToScreen ? autoScale * (zoomPercent / 100) : (zoomPercent / 100);
+
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-800 font-sans overflow-hidden select-none">
       {/* ── GÓRNY PASEK STATUSU I NAWIGACJI OKNA TOWARZYSZĄCEGO (SPÓJNY Z EKRANEM 1) ── */}
@@ -604,6 +686,164 @@ export default function CompanionWindowView({
               </div>
             </div>
 
+            {/* PASEK KONTROLI SKALOWANIA I DOPASOWANIA DO EKRANU (AUTO-FIT & ZOOM) */}
+            <div className="px-4 py-2 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shrink-0 text-white shadow-xs">
+              {/* Lewa strona: Przełącznik Auto-Fit 100% bez przewijania */}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  onClick={() => {
+                    setFitToScreen(prev => !prev);
+                    if (!fitToScreen) setZoomPercent(100);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-2 cursor-pointer border ${
+                    fitToScreen
+                      ? 'bg-emerald-600 border-emerald-400 text-white shadow-sm ring-2 ring-emerald-500/40'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+                  }`}
+                  title="Automatycznie skaluje całą matrycę (wszystkie dni, godziny i sale), aby mieściła się w 100% w oknie bez konieczności przewijania w pionie i poziomie"
+                >
+                  <Scan size={14} className={fitToScreen ? 'text-white animate-pulse' : 'text-slate-400'} />
+                  <span>DOPASUJ DO EKRANU (100% BEZ PRZEWIJANIA)</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-black ${
+                    fitToScreen ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-900 text-slate-400'
+                  }`}>
+                    {fitToScreen ? `WŁ (${Math.round(effectiveScale * 100)}%)` : 'WYŁ (1:1)'}
+                  </span>
+                </button>
+
+                {/* Kontrolki ręcznego zoomu */}
+                <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs font-bold text-slate-200">
+                  <button
+                    onClick={() => setZoomPercent(z => Math.max(20, z - 10))}
+                    className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded transition cursor-pointer"
+                    title="Zmniejsz powiększenie (-10%)"
+                  >
+                    <ZoomOut size={13} />
+                  </button>
+                  <span className="px-2 text-[11px] font-mono font-bold text-slate-300 min-w-[48px] text-center">
+                    {Math.round(effectiveScale * 100)}%
+                  </span>
+                  <button
+                    onClick={() => setZoomPercent(z => Math.min(250, z + 10))}
+                    className="p-1 hover:bg-slate-700 text-slate-300 hover:text-white rounded transition cursor-pointer"
+                    title="Zwiększ powiększenie (+10%)"
+                  >
+                    <ZoomIn size={13} />
+                  </button>
+                  <button
+                    onClick={() => setZoomPercent(100)}
+                    className="ml-1 px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded text-[10px] font-mono transition cursor-pointer flex items-center gap-1"
+                    title="Zresetuj powiększenie do 100%"
+                  >
+                    <RotateCcw size={10} /> Reset
+                  </button>
+                </div>
+
+                {/* Przełącznik gęstości komórek */}
+                <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-xs font-bold">
+                  <button
+                    onClick={() => setCellDensity('normal')}
+                    className={`px-2.5 py-1 rounded text-xs transition cursor-pointer ${
+                      cellDensity === 'normal'
+                        ? 'bg-slate-700 text-white font-extrabold shadow-2xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Standardowy układ i szerokość kolumn"
+                  >
+                    Normalny
+                  </button>
+                  <button
+                    onClick={() => setCellDensity('compact')}
+                    className={`px-2.5 py-1 rounded text-xs transition cursor-pointer ${
+                      cellDensity === 'compact'
+                        ? 'bg-indigo-600 text-white font-extrabold shadow-2xs'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                    title="Zagęszczone kolumny – pozwala zmieścić znacznie więcej sal w poziomie w wyższej skali"
+                  >
+                    Kompaktowy (więcej sal)
+                  </button>
+                </div>
+              </div>
+
+              {/* Prawa strona: Przycisk pełnego ekranu */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!document.fullscreenElement) {
+                      document.documentElement.requestFullscreen().catch(() => {});
+                    } else {
+                      document.exitFullscreen().catch(() => {});
+                    }
+                  }}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition flex items-center gap-1.5 cursor-pointer"
+                  title="Przełącz pełny ekran przeglądarki (klawisz F11)"
+                >
+                  <Maximize2 size={13} />
+                  <span>Pełny ekran (F11)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* INSPEKTOR NAJECHANEJ KOMÓRKI / STATUS BAR MATRYCY */}
+            <div className="bg-slate-950 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between text-xs min-h-[34px] shadow-2xs shrink-0">
+              {hoveredCellInfo ? (
+                <div className="flex items-center gap-3 overflow-hidden text-ellipsis whitespace-nowrap">
+                  <span className="font-extrabold text-amber-400 flex items-center gap-1">
+                    <DoorOpen size={14} className="text-amber-400" />
+                    Sala {hoveredCellInfo.roomName}
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      ({hoveredCellInfo.categoryType === 'sport' ? 'Sportowa' : hoveredCellInfo.categoryType === 'ni' ? 'NI/SPE' : 'Ogólna'})
+                    </span>
+                  </span>
+                  <span className="text-slate-700">|</span>
+                  <span className="text-slate-300 font-medium">
+                    📅 {hoveredCellInfo.dayName}, {hoveredCellInfo.hourText}
+                  </span>
+                  <span className="text-slate-700">|</span>
+                  {hoveredCellInfo.isOccupied ? (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-red-500/20 text-red-300 border border-red-500/30">
+                        ZAJĘTA
+                      </span>
+                      <span className="bg-white text-slate-900 font-black px-1.5 py-0.5 rounded text-[11px]">
+                        Klasa {hoveredCellInfo.className}
+                      </span>
+                      <span className="font-bold text-indigo-300">
+                        {hoveredCellInfo.subjectName} [{hoveredCellInfo.subjectShort}]
+                      </span>
+                      <span className="text-slate-400">
+                        (👤 {hoveredCellInfo.teacherName || hoveredCellInfo.teacherAbbr})
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        ✓ SALA WOLNA
+                      </span>
+                      <span className="text-slate-400 text-[11px]">
+                        Dostępna w tym terminie do przydziału
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between w-full text-slate-400 text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>
+                      {fitToScreen 
+                        ? 'Tryb dopasowania aktywny: cała matryca mieści się na ekranie bez suwaków. Najedź kursorem na dowolną komórkę, aby powiększyć jej szczegóły.' 
+                        : 'Tryb standardowy 1:1. Włącz „Dopasuj do ekranu”, aby automatycznie zmieścić wszystkie klasy, godziny i sale bez przewijania.'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400 hidden sm:inline">
+                    Sale: {filteredRooms.length} • Dni: {selectedDayFilter === 'all' ? DAYS_NAMES.length : 1} • Godziny: {hoursList.length}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* AKTYWNY PASEK INTERAKCJI Z EKRANEM 1 (JASNA BELKA W STYLU EKRANU 1) */}
             {highlightedSlot && highlightedSlot.dayIdx !== undefined && highlightedSlot.hourIdx !== undefined && (
               <div className="bg-indigo-50 border-b border-indigo-200 px-4 py-2 flex items-center justify-between gap-3 text-xs shadow-2xs animate-fadeIn">
@@ -648,7 +888,10 @@ export default function CompanionWindowView({
             )}
 
             {/* TABELA MATRYCY SAL (JASNY PROJEKT IDENTYCZNY ZE STYLEM SIATKI PLANU KLAS) */}
-            <div className="flex-1 overflow-auto bg-slate-100 p-3 sm:p-4">
+            <div 
+              ref={containerRef}
+              className={`flex-1 ${fitToScreen ? 'overflow-hidden' : 'overflow-auto'} bg-slate-100 p-2 sm:p-3 relative`}
+            >
               {filteredRooms.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-slate-500 p-8 border border-dashed border-slate-300 bg-white rounded-2xl shadow-xs">
                   <DoorOpen size={40} className="text-slate-400 mb-2" />
@@ -656,197 +899,264 @@ export default function CompanionWindowView({
                   <span className="text-xs text-slate-500 mt-1">Włącz co najmniej jedną z kategorii sal na pasku u góry.</span>
                 </div>
               ) : (
-                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs inline-block min-w-full">
-                  <table className="min-w-full border-collapse text-left">
-                    {/* NAGŁÓWKI SAL */}
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
-                        <th className="p-2.5 sm:p-3 text-center text-xs font-black text-slate-800 uppercase tracking-wider bg-slate-100 border-r border-slate-200 sticky left-0 z-30 min-w-[130px] w-[130px]">
-                          Dzień
-                        </th>
-                        <th className="p-2.5 sm:p-3 text-center text-xs font-black text-slate-800 uppercase tracking-wider bg-slate-100 border-r border-slate-200 sticky left-[130px] z-30 min-w-[125px] w-[125px]">
-                          Nr lekcji & Godziny
-                        </th>
-                        {filteredRooms.map(room => (
-                          <th 
-                            key={room.id}
-                            className={`p-2 text-center border-r border-slate-200 min-w-[110px] max-w-[140px] select-none ${
-                              room.categoryType === 'sport' 
-                                ? 'bg-emerald-50/70 text-emerald-950' 
-                                : room.categoryType === 'ni' 
-                                ? 'bg-purple-50/70 text-purple-950' 
-                                : 'bg-slate-50 text-slate-800'
-                            }`}
-                          >
-                            <div className="flex flex-col items-center">
-                              <span className="text-xs font-black text-slate-900 truncate max-w-full" title={room.name}>
-                                {room.name}
-                              </span>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                {room.categoryType === 'sport' && (
-                                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.2 rounded-sm">
-                                    Sport
-                                  </span>
-                                )}
-                                {room.categoryType === 'ni' && (
-                                  <span className="text-[9px] font-bold text-purple-700 bg-purple-100 border border-purple-200 px-1.5 py-0.2 rounded-sm">
-                                    NI / SPE
-                                  </span>
-                                )}
-                                {room.categoryType === 'general' && (
-                                  <span className="text-[9px] font-bold text-blue-700 bg-blue-100 border border-blue-200 px-1.5 py-0.2 rounded-sm">
-                                    Ogólna
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                <div 
+                  style={{
+                    transform: `scale(${effectiveScale})`,
+                    transformOrigin: 'top left',
+                    width: 'max-content',
+                  }}
+                  className="inline-block"
+                >
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs inline-block">
+                    <table ref={tableRef} className="border-collapse text-left">
+                      {/* NAGŁÓWKI SAL */}
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 sticky top-0 z-20">
+                          <th className={`text-center font-black text-slate-800 uppercase tracking-wider bg-slate-100 border-r border-slate-200 sticky left-0 z-30 ${
+                            cellDensity === 'compact' 
+                              ? 'p-1.5 text-[11px] min-w-[90px] w-[90px]' 
+                              : 'p-2.5 sm:p-3 text-xs min-w-[130px] w-[130px]'
+                          }`}>
+                            Dzień
                           </th>
-                        ))}
-                      </tr>
-                    </thead>
-
-                    {/* WIERSZE: DNI I GODZINY LEKCYJNE */}
-                    <tbody>
-                      {DAYS_NAMES.map((dayName, dayIdx) => {
-                        if (selectedDayFilter !== 'all' && selectedDayFilter !== dayIdx) return null;
-
-                        const totalHoursInDay = hoursList.length;
-
-                        return hoursList.map((hour, hIdx) => {
-                          const isCurrentActiveSlot = 
-                            highlightedSlot && 
-                            highlightedSlot.dayIdx === dayIdx && 
-                            highlightedSlot.hourIdx === hIdx;
-
-                          return (
-                            <tr 
-                              key={`${dayIdx}-${hIdx}`}
-                              className={`border-b border-slate-200 transition-colors ${
-                                isCurrentActiveSlot 
-                                  ? 'bg-indigo-50/90 ring-2 ring-indigo-500 relative z-10' 
-                                  : hIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
-                              } hover:bg-slate-100/70`}
+                          <th className={`text-center font-black text-slate-800 uppercase tracking-wider bg-slate-100 border-r border-slate-200 sticky z-30 ${
+                            cellDensity === 'compact' 
+                              ? 'p-1.5 text-[11px] min-w-[95px] w-[95px] left-[90px]' 
+                              : 'p-2.5 sm:p-3 text-xs min-w-[125px] w-[125px] left-[130px]'
+                          }`}>
+                            Nr lekcji & Godziny
+                          </th>
+                          {filteredRooms.map(room => (
+                            <th 
+                              key={room.id}
+                              className={`text-center border-r border-slate-200 select-none ${
+                                cellDensity === 'compact'
+                                  ? 'p-1.5 min-w-[75px] max-w-[95px]'
+                                  : 'p-2 min-w-[110px] max-w-[140px]'
+                              } ${
+                                room.categoryType === 'sport' 
+                                  ? 'bg-emerald-50/70 text-emerald-950' 
+                                  : room.categoryType === 'ni' 
+                                  ? 'bg-purple-50/70 text-purple-950' 
+                                  : 'bg-slate-50 text-slate-800'
+                              }`}
                             >
-                              {/* Kolumna 1: Dzień tygodnia (rowSpan na wszystkie godziny w danym dniu) */}
-                              {hIdx === 0 && (
-                                <td 
-                                  rowSpan={totalHoursInDay}
-                                  className="p-3 text-center border-r-2 border-r-slate-300 sticky left-0 z-15 bg-slate-50 align-middle select-none border-b-2 border-b-slate-300 shadow-2xs"
-                                >
-                                  <div className="flex flex-col items-center justify-center gap-1.5 py-3">
-                                    <span className="text-xs font-black uppercase tracking-wider text-slate-900 bg-white border border-slate-300 px-3 py-2 rounded-xl shadow-xs">
-                                      {dayName}
+                              <div className="flex flex-col items-center">
+                                <span className={`font-black text-slate-900 truncate max-w-full ${
+                                  cellDensity === 'compact' ? 'text-[11px]' : 'text-xs'
+                                }`} title={room.name}>
+                                  {room.name}
+                                </span>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  {room.categoryType === 'sport' && (
+                                    <span className="text-[8px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-1 py-0.2 rounded-sm">
+                                      Sport
                                     </span>
-                                    <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-bold font-mono">
-                                      {totalHoursInDay} lekcji
+                                  )}
+                                  {room.categoryType === 'ni' && (
+                                    <span className="text-[8px] font-bold text-purple-700 bg-purple-100 border border-purple-200 px-1 py-0.2 rounded-sm">
+                                      NI/SPE
+                                    </span>
+                                  )}
+                                  {room.categoryType === 'general' && (
+                                    <span className="text-[8px] font-bold text-blue-700 bg-blue-100 border border-blue-200 px-1 py-0.2 rounded-sm">
+                                      Ogólna
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+
+                      {/* WIERSZE: DNI I GODZINY LEKCYJNE */}
+                      <tbody>
+                        {DAYS_NAMES.map((dayName, dayIdx) => {
+                          if (selectedDayFilter !== 'all' && selectedDayFilter !== dayIdx) return null;
+
+                          const totalHoursInDay = hoursList.length;
+
+                          return hoursList.map((hour, hIdx) => {
+                            const isCurrentActiveSlot = 
+                              highlightedSlot && 
+                              highlightedSlot.dayIdx === dayIdx && 
+                              highlightedSlot.hourIdx === hIdx;
+
+                            return (
+                              <tr 
+                                key={`${dayIdx}-${hIdx}`}
+                                className={`border-b border-slate-200 transition-colors ${
+                                  isCurrentActiveSlot 
+                                    ? 'bg-indigo-50/90 ring-2 ring-indigo-500 relative z-10' 
+                                    : hIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
+                                } hover:bg-slate-100/70`}
+                              >
+                                {/* Kolumna 1: Dzień tygodnia (rowSpan na wszystkie godziny w danym dniu) */}
+                                {hIdx === 0 && (
+                                  <td 
+                                    rowSpan={totalHoursInDay}
+                                    className={`text-center border-r-2 border-r-slate-300 sticky left-0 z-15 bg-slate-50 align-middle select-none border-b-2 border-b-slate-300 shadow-2xs ${
+                                      cellDensity === 'compact' ? 'p-1.5' : 'p-3'
+                                    }`}
+                                  >
+                                    <div className="flex flex-col items-center justify-center gap-1 py-2">
+                                      <span className={`font-black uppercase tracking-wider text-slate-900 bg-white border border-slate-300 rounded-xl shadow-xs ${
+                                        cellDensity === 'compact' ? 'text-[11px] px-2 py-1' : 'text-xs px-3 py-2'
+                                      }`}>
+                                        {dayName}
+                                      </span>
+                                      <span className="text-[9px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-md font-bold font-mono">
+                                        {totalHoursInDay} lekcji
+                                      </span>
+                                    </div>
+                                  </td>
+                                )}
+
+                                {/* Kolumna 2: Nr lekcji oraz godziny zajęć */}
+                                <td className={`text-center font-bold border-r-2 border-r-slate-300 sticky z-10 select-none shadow-2xs ${
+                                  cellDensity === 'compact' 
+                                    ? 'p-1 text-[11px] left-[90px]' 
+                                    : 'p-2 text-xs left-[130px]'
+                                } ${
+                                  isCurrentActiveSlot 
+                                    ? 'bg-indigo-100 text-indigo-950 font-black ring-inset ring-2 ring-indigo-500' 
+                                    : hIdx % 2 === 0 ? 'bg-white text-slate-700' : 'bg-slate-50 text-slate-700'
+                                }`}>
+                                  <div className="flex flex-col items-center justify-center gap-0.5">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[9px] font-bold text-slate-400 uppercase">Lekcja</span>
+                                      <span className={`font-black px-1.5 py-0.2 rounded-md ${
+                                        cellDensity === 'compact' ? 'text-[11px]' : 'text-xs'
+                                      } ${
+                                        isCurrentActiveSlot 
+                                          ? 'bg-indigo-600 text-white shadow-2xs' 
+                                          : 'bg-slate-100 border border-slate-200 text-slate-900'
+                                      }`}>
+                                        {hour.num}
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-600 font-mono font-bold tracking-tight mt-0.5">
+                                      {hour.start}–{hour.end}
                                     </span>
                                   </div>
                                 </td>
-                              )}
 
-                              {/* Kolumna 2: Nr lekcji oraz godziny zajęć */}
-                              <td className={`p-2 text-center text-xs font-bold border-r-2 border-r-slate-300 sticky left-[130px] z-10 select-none shadow-2xs ${
-                                isCurrentActiveSlot 
-                                  ? 'bg-indigo-100 text-indigo-950 font-black ring-inset ring-2 ring-indigo-500' 
-                                  : hIdx % 2 === 0 ? 'bg-white text-slate-700' : 'bg-slate-50 text-slate-700'
-                              }`}>
-                                <div className="flex flex-col items-center justify-center gap-0.5">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Lekcja</span>
-                                    <span className={`text-xs font-black px-1.5 py-0.2 rounded-md ${
-                                      isCurrentActiveSlot 
-                                        ? 'bg-indigo-600 text-white shadow-2xs' 
-                                        : 'bg-slate-100 border border-slate-200 text-slate-900'
-                                    }`}>
-                                      {hour.num}
-                                    </span>
-                                  </div>
-                                  <span className="text-[11px] text-slate-600 font-mono font-bold tracking-tight mt-0.5">
-                                    {hour.start} – {hour.end}
-                                  </span>
-                                </div>
-                              </td>
+                                {/* Komórki sal dla danej godziny */}
+                                {filteredRooms.map(room => {
+                                  const occKey = `${dayIdx}-${hIdx}-${room.id}`;
+                                  const occ = roomOccupancyMap.get(occKey);
 
-                              {/* Komórki sal dla danej godziny */}
-                              {filteredRooms.map(room => {
-                                const occKey = `${dayIdx}-${hIdx}-${room.id}`;
-                                const occ = roomOccupancyMap.get(occKey);
+                                  const hourText = `Lekcja ${hour.num} (${hour.start}–${hour.end})`;
 
-                                if (occ) {
-                                  // SALA ZAJĘTA — elegancka jasna karta z barwną ramką w stylu kart lekcji na Ekranie 1
+                                  if (occ) {
+                                    // SALA ZAJĘTA — elegancka jasna karta z barwną ramką w stylu kart lekcji na Ekranie 1
+                                    return (
+                                      <td 
+                                        key={room.id}
+                                        className="p-1 text-center border-r border-slate-200 align-middle"
+                                        onMouseEnter={() => {
+                                          setHoveredCellInfo({
+                                            roomName: room.name,
+                                            categoryType: room.categoryType,
+                                            dayName,
+                                            hourText,
+                                            isOccupied: true,
+                                            className: occ.className,
+                                            subjectName: occ.subjectName,
+                                            subjectShort: occ.subjectShort,
+                                            subjectColor: occ.subjectColor,
+                                            teacherName: occ.teacherAbbr,
+                                            teacherAbbr: occ.teacherAbbr,
+                                          });
+                                        }}
+                                        onMouseLeave={() => setHoveredCellInfo(null)}
+                                      >
+                                        <div 
+                                          className={`rounded-lg border bg-white flex flex-col justify-center shadow-2xs hover:shadow-xs transition ${
+                                            cellDensity === 'compact' ? 'p-1 min-h-[38px]' : 'p-1.5 min-h-[48px]'
+                                          }`}
+                                          style={{
+                                            borderLeftWidth: '3px',
+                                            borderLeftColor: occ.subjectColor,
+                                            borderRightColor: '#e2e8f0',
+                                            borderTopColor: '#e2e8f0',
+                                            borderBottomColor: '#e2e8f0'
+                                          }}
+                                          title={`Sala ${room.name}: Klasa ${occ.className} (${occ.subjectName}, nauczyciel: ${occ.teacherAbbr})`}
+                                        >
+                                          <div className="flex items-center justify-between gap-1 text-[10px] font-black">
+                                            <span className="text-slate-900 font-extrabold bg-slate-100 px-1 py-0.2 rounded border border-slate-200">
+                                              {occ.className}
+                                            </span>
+                                            <span 
+                                              className="font-mono font-bold text-[9px] px-0.5 rounded"
+                                              style={{ color: occ.subjectColor }}
+                                            >
+                                              [{occ.subjectShort}]
+                                            </span>
+                                          </div>
+                                          <div className="text-[9px] text-slate-600 truncate mt-0.5 font-semibold flex items-center justify-between">
+                                            <span>👤 {occ.teacherAbbr || '—'}</span>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    );
+                                  }
+
+                                  // SALA WOLNA
                                   return (
                                     <td 
                                       key={room.id}
-                                      className="p-1 text-center border-r border-slate-200 align-middle"
+                                      className={`p-1 text-center border-r border-slate-200 align-middle ${
+                                        isCurrentActiveSlot ? 'bg-emerald-50/60' : ''
+                                      }`}
+                                      onMouseEnter={() => {
+                                        setHoveredCellInfo({
+                                          roomName: room.name,
+                                          categoryType: room.categoryType,
+                                          dayName,
+                                          hourText,
+                                          isOccupied: false
+                                        });
+                                      }}
+                                      onMouseLeave={() => setHoveredCellInfo(null)}
                                     >
-                                      <div 
-                                        className="p-1.5 rounded-lg border bg-white flex flex-col justify-center min-h-[50px] shadow-2xs hover:shadow-xs transition"
-                                        style={{
-                                          borderLeftWidth: '3px',
-                                          borderLeftColor: occ.subjectColor,
-                                          borderRightColor: '#e2e8f0',
-                                          borderTopColor: '#e2e8f0',
-                                          borderBottomColor: '#e2e8f0'
-                                        }}
-                                        title={`Sala ${room.name} jest ZAJĘTA przez klasę ${occ.className} (${occ.subjectName}, nauczyciel: ${occ.teacherAbbr})`}
-                                      >
-                                        <div className="flex items-center justify-between gap-1 text-[10px] font-black">
-                                          <span className="text-slate-900 font-extrabold bg-slate-100 px-1 py-0.5 rounded border border-slate-200">
-                                            {occ.className}
+                                      {isCurrentActiveSlot ? (
+                                        <button
+                                          onClick={() => handleAssignRoomToActiveSlot(room)}
+                                          className={`w-full bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-300 hover:border-emerald-600 rounded-lg text-[10px] font-bold transition flex flex-col items-center justify-center cursor-pointer shadow-2xs group ${
+                                            cellDensity === 'compact' ? 'p-1 min-h-[38px]' : 'p-1.5 min-h-[48px]'
+                                          }`}
+                                          title={`Kliknij, aby przypisać salę ${room.name} do aktywnej lekcji w Oknie 1`}
+                                        >
+                                          <span className="text-[9px] font-black uppercase text-emerald-700 group-hover:text-white leading-tight">
+                                            ✓ Wolna
                                           </span>
-                                          <span 
-                                            className="font-mono font-bold text-[10px] px-1 rounded"
-                                            style={{ color: occ.subjectColor }}
-                                          >
-                                            [{occ.subjectShort}]
+                                          <span className="text-[8px] opacity-90 group-hover:underline text-emerald-800 group-hover:text-white mt-0.2">
+                                            Przypisz
                                           </span>
+                                        </button>
+                                      ) : (
+                                        <div 
+                                          className={`h-full rounded flex items-center justify-center text-slate-300 hover:text-slate-500 transition ${
+                                            cellDensity === 'compact' ? 'min-h-[38px]' : 'min-h-[48px]'
+                                          }`}
+                                          title={`Sala ${room.name} jest wolna (${dayName}, ${hourText})`}
+                                        >
+                                          <span className="opacity-60 font-mono text-xs font-bold">+</span>
                                         </div>
-                                        <div className="text-[9px] text-slate-600 truncate mt-1 font-semibold flex items-center justify-between">
-                                          <span>👤 {occ.teacherAbbr || '—'}</span>
-                                        </div>
-                                      </div>
+                                      )}
                                     </td>
                                   );
-                                }
-
-                                // SALA WOLNA
-                                return (
-                                  <td 
-                                    key={room.id}
-                                    className={`p-1 text-center border-r border-slate-200 align-middle ${
-                                      isCurrentActiveSlot ? 'bg-emerald-50/60' : ''
-                                    }`}
-                                  >
-                                    {isCurrentActiveSlot ? (
-                                      <button
-                                        onClick={() => handleAssignRoomToActiveSlot(room)}
-                                        className="w-full p-1.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white border border-emerald-300 hover:border-emerald-600 rounded-lg text-[10px] font-bold transition flex flex-col items-center justify-center min-h-[50px] cursor-pointer shadow-2xs group"
-                                        title={`Kliknij, aby przypisać salę ${room.name} do aktywnej lekcji w Oknie 1`}
-                                      >
-                                        <span className="text-[9px] font-black uppercase text-emerald-700 group-hover:text-white leading-tight">
-                                          ✓ Wolna
-                                        </span>
-                                        <span className="text-[8px] opacity-90 group-hover:underline text-emerald-800 group-hover:text-white mt-0.5">
-                                          Przypisz salę
-                                        </span>
-                                      </button>
-                                    ) : (
-                                      <div 
-                                        className="h-full min-h-[50px] rounded flex items-center justify-center text-slate-300 hover:text-slate-500 transition"
-                                        title={`Sala ${room.name} jest wolna`}
-                                      >
-                                        <span className="opacity-60 font-mono text-base font-bold">+</span>
-                                      </div>
-                                    )}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        });
-                      })}
-                    </tbody>
-                  </table>
+                                })}
+                              </tr>
+                            );
+                          });
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
