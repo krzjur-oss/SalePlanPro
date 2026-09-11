@@ -81,22 +81,27 @@ export default function DualScreen2PlanKlas({
 
     const calculateScale = () => {
       if (!containerRef.current || !tableRef.current) return;
-      const cWidth = containerRef.current.clientWidth - 20;
-      const cHeight = containerRef.current.clientHeight - 20;
+      const cWidth = containerRef.current.clientWidth - 24;
+      const cHeight = containerRef.current.clientHeight - 24;
       const tWidth = tableRef.current.offsetWidth || 1400;
       const tHeight = tableRef.current.offsetHeight || 800;
 
       if (tWidth > 0 && tHeight > 0) {
         const scaleX = cWidth / tWidth;
         const scaleY = cHeight / tHeight;
-        const idealScale = Math.min(scaleX, scaleY, 1.1);
-        setZoomLevel(Math.max(0.4, idealScale));
+        // Perfect fit for both X and Y so no scrollbars are required
+        const idealScale = Math.min(scaleX, scaleY, 1.05);
+        setZoomLevel(Math.max(0.15, idealScale));
       }
     };
 
     calculateScale();
+    const timer = setTimeout(calculateScale, 100);
     window.addEventListener('resize', calculateScale);
-    return () => window.removeEventListener('resize', calculateScale);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', calculateScale);
+    };
   }, [isAutoFit, pl.classes, isCompact]);
 
   // Lessons map helper
@@ -141,38 +146,38 @@ export default function DualScreen2PlanKlas({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full bg-slate-100 text-slate-800 overflow-hidden select-none">
       
-      {/* ── PASEK KONTROLNY DLA SIATKI KLAS NA EKRANIE 2 ── */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-sm">
+      {/* ── PASEK KONTROLNY DLA SIATKI KLAS NA EKRANIE 2 (JASNY MOTYW) ── */}
+      <div className="bg-white border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
         
         {/* Lewa sekcja: Informacja i aktywny wybór z puli */}
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider text-blue-400 bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded-md">
+            <span className="text-xs font-black uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
               Siatka Klas (Plan Klas)
             </span>
-            <span className="text-xs text-slate-400 hidden sm:inline">
-              Oddziałów: <strong className="text-white">{pl.classes.length}</strong> • Dni: 5 • Godzin: 8
+            <span className="text-xs text-slate-500 hidden sm:inline">
+              Oddziałów: <strong className="text-slate-800">{pl.classes.length}</strong> • Dni: 5 • Godzin: 8
             </span>
           </div>
 
           {/* Plakietka aktywnej lekcji wybranej z Ekranu 1 */}
           {selectedPoolLesson && (
-            <div className="flex items-center gap-2 bg-blue-950/80 border border-blue-500 text-blue-200 px-3 py-1 rounded-xl text-xs shadow-md animate-pulse">
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-300 text-blue-900 px-3 py-1 rounded-xl text-xs shadow-2xs animate-pulse">
               <span 
-                className="w-2.5 h-2.5 rounded-full shrink-0" 
+                className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" 
                 style={{ backgroundColor: selectedPoolLesson.subjectColor }} 
               />
-              <span className="font-extrabold text-white truncate max-w-[200px]">
+              <span className="font-extrabold text-blue-950 truncate max-w-[200px]">
                 {selectedPoolLesson.subjectName} ({selectedPoolLesson.className})
               </span>
-              <span className="text-[11px] text-blue-300">
+              <span className="text-[11px] text-blue-700">
                 — kliknij pustą komórkę, aby wstawić
               </span>
               <button
                 onClick={() => setSelectedPoolLesson(null)}
-                className="p-0.5 hover:bg-blue-800 rounded text-blue-300 hover:text-white cursor-pointer ml-1"
+                className="p-0.5 hover:bg-blue-100 rounded text-blue-700 hover:text-blue-900 cursor-pointer ml-1"
                 title="Anuluj wybór"
               >
                 <X size={13} />
@@ -186,7 +191,7 @@ export default function DualScreen2PlanKlas({
           <button
             onClick={() => setIsCompact(!isCompact)}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-              isCompact ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+              isCompact ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
             }`}
           >
             {isCompact ? 'Tryb Standard' : 'Kompaktowy'}
@@ -195,34 +200,34 @@ export default function DualScreen2PlanKlas({
           <button
             onClick={() => setIsAutoFit(!isAutoFit)}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-              isAutoFit ? 'bg-blue-600 border-blue-500 text-white shadow-xs' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+              isAutoFit ? 'bg-blue-600 border-blue-600 text-white shadow-2xs' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
             }`}
-            title="Automatycznie dopasuj do 100% szerokości i wysokości ekranu"
+            title="Automatycznie dopasuj do 100% szerokości i wysokości ekranu bez przewijania"
           >
-            Dopasuj do ekranu
+            {isAutoFit ? 'Dopasowano (100% ekranu)' : 'Dopasuj do ekranu'}
           </button>
 
-          <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
-              onClick={() => { setIsAutoFit(false); setZoomLevel(prev => Math.max(0.3, prev - 0.1)); }}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+              onClick={() => { setIsAutoFit(false); setZoomLevel(prev => Math.max(0.2, prev - 0.1)); }}
+              className="p-1 hover:bg-white rounded text-slate-600 hover:text-slate-900 cursor-pointer"
               title="Oddal (Zoom -)"
             >
               <ZoomOut size={14} />
             </button>
-            <span className="text-[11px] font-mono font-bold text-slate-300 px-1">
+            <span className="text-[11px] font-mono font-bold text-slate-700 px-1">
               {Math.round(zoomLevel * 100)}%
             </span>
             <button
               onClick={() => { setIsAutoFit(false); setZoomLevel(prev => Math.min(2.0, prev + 0.1)); }}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+              className="p-1 hover:bg-white rounded text-slate-600 hover:text-slate-900 cursor-pointer"
               title="Przybliż (Zoom +)"
             >
               <ZoomIn size={14} />
             </button>
             <button
               onClick={() => { setIsAutoFit(false); setZoomLevel(1); }}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+              className="p-1 hover:bg-white rounded text-slate-600 hover:text-slate-900 cursor-pointer"
               title="Resetuj zoom (100%)"
             >
               <RotateCcw size={12} />
@@ -234,7 +239,9 @@ export default function DualScreen2PlanKlas({
       {/* ── KONTENER SIATKI TABELARYCZNEJ (KLASY X DNI X GODZINY) ── */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-auto p-2 sm:p-4 relative bg-slate-950/80 flex items-start justify-center"
+        className={`flex-1 p-2 sm:p-3 relative bg-slate-100 flex items-start justify-center ${
+          isAutoFit ? 'overflow-hidden' : 'overflow-auto'
+        }`}
       >
         <div 
           style={{ 
@@ -246,14 +253,14 @@ export default function DualScreen2PlanKlas({
         >
           <table 
             ref={tableRef}
-            className="border-collapse text-left border border-slate-800 bg-slate-900/90 shadow-2xl rounded-xl overflow-hidden"
+            className="border-collapse text-left border border-slate-300 bg-white shadow-xs rounded-xl overflow-hidden"
           >
             <thead>
               {/* WIERSZ 1 NAGŁÓWKA: DNI TYGODNIA */}
-              <tr className="bg-slate-950 text-slate-200 border-b border-slate-800">
+              <tr className="bg-slate-100 text-slate-800 border-b border-slate-300">
                 <th 
                   rowSpan={2}
-                  className="px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-400 border-r border-slate-800 bg-slate-950 sticky left-0 z-20 min-w-[110px]"
+                  className="px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-700 border-r border-slate-300 bg-slate-100 sticky left-0 z-20 min-w-[110px]"
                 >
                   Klasa (Oddział)
                 </th>
@@ -261,7 +268,7 @@ export default function DualScreen2PlanKlas({
                   <th 
                     key={dIdx}
                     colSpan={8}
-                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider text-blue-400 border-r border-slate-800 bg-slate-950/90"
+                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider text-blue-800 border-r border-slate-300 bg-blue-50/60"
                   >
                     {dayName}
                   </th>
@@ -269,17 +276,17 @@ export default function DualScreen2PlanKlas({
               </tr>
 
               {/* WIERSZ 2 NAGŁÓWKA: GODZINY LEKCJI (DLA KAŻDEGO DNIA) */}
-              <tr className="bg-slate-900 text-slate-400 border-b border-slate-800 text-[10px] font-bold">
+              <tr className="bg-slate-50 text-slate-600 border-b border-slate-300 text-[10px] font-bold">
                 {DAYS.map((_, dIdx) => 
                   DEFAULT_HOURS.map(h => (
                     <th 
                       key={`${dIdx}_${h.num}`}
-                      className={`px-1.5 py-1 text-center border-r border-slate-800/80 font-mono ${
-                        isCompact ? 'w-[52px] min-w-[52px]' : 'w-[68px] min-w-[68px]'
+                      className={`px-1 py-1 text-center border-r border-slate-200 font-mono ${
+                        isCompact ? 'w-[50px] min-w-[50px]' : 'w-[64px] min-w-[64px]'
                       }`}
                     >
-                      <span className="block text-slate-200 font-black">{h.num}</span>
-                      <span className="text-[9px] text-slate-500 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
+                      <span className="block text-slate-800 font-black">{h.num}</span>
+                      <span className="text-[9px] text-slate-400 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
                     </th>
                   ))
                 )}
@@ -287,15 +294,15 @@ export default function DualScreen2PlanKlas({
             </thead>
 
             {/* POZOSTAŁE WIERSZE: WSZYSTKIE KLASY / ODDZIAŁY */}
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200">
               {pl.classes.map(cls => (
-                <tr key={cls.id} className="hover:bg-slate-800/30 transition">
+                <tr key={cls.id} className="hover:bg-blue-50/30 transition">
                   
                   {/* Stała pierwsza kolumna: Nazwa klasy */}
-                  <td className="px-3 py-2 bg-slate-900/95 sticky left-0 z-10 border-r border-slate-800 font-black text-xs text-white">
+                  <td className="px-3 py-1.5 bg-white sticky left-0 z-10 border-r border-slate-300 font-black text-xs text-slate-900 shadow-2xs">
                     <div className="flex items-center gap-2">
                       <span 
-                        className="w-2.5 h-2.5 rounded-full shrink-0" 
+                        className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" 
                         style={{ backgroundColor: cls.color || '#3b82f6' }} 
                       />
                       <span className="truncate">{cls.name}</span>
@@ -369,48 +376,48 @@ export default function DualScreen2PlanKlas({
                             }
                           }}
                           onMouseLeave={() => setHoveredCell(null)}
-                          className={`p-0.5 border-r border-b border-slate-800/80 transition relative group cursor-pointer ${
+                          className={`p-0.5 border-r border-b border-slate-200 transition relative group cursor-pointer ${
                             lesson 
-                              ? 'bg-slate-950/60 hover:bg-slate-800/80' 
+                              ? 'bg-white hover:bg-slate-50' 
                               : selectedPoolLesson 
-                              ? 'hover:bg-blue-950/40' 
-                              : 'hover:bg-slate-800/40'
-                          } ${isCompact ? 'h-9 max-h-9' : 'h-11 max-h-11'}`}
+                              ? 'hover:bg-blue-50/60' 
+                              : 'hover:bg-slate-100/70'
+                          } ${isCompact ? 'h-8 max-h-8' : 'h-10 max-h-10'}`}
                         >
                           {lesson ? (
                             <div 
-                              className="w-full h-full rounded-md p-1 flex flex-col justify-between overflow-hidden shadow-xs border border-white/10"
+                              className="w-full h-full rounded-md p-1 flex flex-col justify-between overflow-hidden shadow-2xs border border-slate-200"
                               style={{ 
-                                backgroundColor: subject?.color ? `${subject.color}25` : '#3b82f625',
+                                backgroundColor: subject?.color ? `${subject.color}15` : '#3b82f615',
                                 borderLeftColor: subject?.color || '#3b82f6',
                                 borderLeftWidth: '3px'
                               }}
                             >
                               <div className="flex items-center justify-between gap-0.5 leading-none">
-                                <span className="font-extrabold text-[10px] text-white truncate">
+                                <span className="font-extrabold text-[10px] text-slate-900 truncate">
                                   {subject?.short || subject?.name?.slice(0, 4) || 'Lekcja'}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={(e) => handleRemoveLesson(cellKey, e)}
-                                  className="opacity-0 group-hover:opacity-100 hover:bg-rose-600 rounded p-0.5 text-slate-300 hover:text-white transition cursor-pointer"
+                                  className="opacity-0 group-hover:opacity-100 hover:bg-rose-500 rounded p-0.5 text-slate-400 hover:text-white transition cursor-pointer"
                                   title="Usuń lekcję z tego slotu"
                                 >
                                   <X size={10} />
                                 </button>
                               </div>
 
-                              <div className="flex items-center justify-between text-[9px] text-slate-300 font-mono leading-none">
-                                <span className="font-black text-indigo-300">{teacher?.abbr || '—'}</span>
+                              <div className="flex items-center justify-between text-[9px] text-slate-600 font-mono leading-none">
+                                <span className="font-black text-indigo-700">{teacher?.abbr || '—'}</span>
                                 {room && (
-                                  <span className="text-[8px] bg-slate-900/80 px-1 rounded text-slate-400">
+                                  <span className="text-[8px] bg-white border border-slate-200 px-1 rounded text-slate-600 font-bold">
                                     {room.name}
                                   </span>
                                 )}
                               </div>
                             </div>
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-80 transition text-slate-500">
+                            <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-80 transition text-slate-400">
                               <Plus size={12} />
                             </div>
                           )}
@@ -426,46 +433,46 @@ export default function DualScreen2PlanKlas({
       </div>
 
       {/* ── PASEK INSPEKTORA NA ŻYWO (LIVE INSPECTOR) ── */}
-      <div className="bg-slate-900/90 border-t border-slate-800 px-4 py-1.5 text-xs text-slate-400 flex items-center justify-between shrink-0">
+      <div className="bg-white border-t border-slate-200 px-4 py-1.5 text-xs text-slate-600 flex items-center justify-between shrink-0 shadow-2xs">
         <div>
           {hoveredCell ? (
             <div className="flex items-center gap-3">
-              <span className="font-black text-white">Klasa {hoveredCell.className}</span>
+              <span className="font-black text-slate-900">Klasa {hoveredCell.className}</span>
               <span>•</span>
-              <span className="text-slate-300">{hoveredCell.dayName}, Lekcja {hoveredCell.hourNum}</span>
+              <span className="text-slate-700">{hoveredCell.dayName}, Lekcja {hoveredCell.hourNum}</span>
               <span>•</span>
-              <span className="font-bold text-blue-400">{hoveredCell.subjectName}</span>
+              <span className="font-bold text-blue-700">{hoveredCell.subjectName}</span>
               <span>•</span>
-              <span className="text-indigo-300">{hoveredCell.teacherName}</span>
+              <span className="text-indigo-700 font-medium">{hoveredCell.teacherName}</span>
               <span>•</span>
-              <span className="text-emerald-400">Sala: {hoveredCell.roomName}</span>
+              <span className="text-emerald-700 font-bold">Sala: {hoveredCell.roomName}</span>
             </div>
           ) : (
             <span>Najedź na komórkę, aby wyświetlić szczegóły lekcji. Przeciągaj lekcje z Ekranu 1 lub klikaj komórki, aby wstawiać zajęcia.</span>
           )}
         </div>
 
-        <div className="text-[11px] text-slate-500 font-mono hidden md:block">
+        <div className="text-[11px] text-slate-400 font-mono hidden md:block">
           Siatka zsynchronizowana z Ekranem 1
         </div>
       </div>
 
       {/* ── SZYBKI MODAL DODAWANIA PRZEDMIOTU DO KOMÓRKI ── */}
       {quickAddCell && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-scale-in">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-2xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
-                <h3 className="text-sm font-black text-white">
+                <h3 className="text-sm font-black text-slate-900">
                   Wstaw lekcję do planu
                 </h3>
-                <p className="text-xs text-slate-400">
-                  Klasa: <strong className="text-white">{quickAddCell.className}</strong> • {DAYS[quickAddCell.dayIdx]}, Lekcja {quickAddCell.hourIdx + 1}
+                <p className="text-xs text-slate-500">
+                  Klasa: <strong className="text-slate-800">{quickAddCell.className}</strong> • {DAYS[quickAddCell.dayIdx]}, Lekcja {quickAddCell.hourIdx + 1}
                 </p>
               </div>
               <button
                 onClick={() => setQuickAddCell(null)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -493,28 +500,28 @@ export default function DualScreen2PlanKlas({
                           handlePlaceLesson(asg, quickAddCell.classId, quickAddCell.dayIdx, quickAddCell.hourIdx);
                           setQuickAddCell(null);
                         }}
-                        className="w-full p-2.5 rounded-xl border border-slate-800 bg-slate-950 hover:bg-slate-800 hover:border-slate-700 text-left transition flex items-center justify-between gap-3 cursor-pointer"
+                        className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 text-left transition flex items-center justify-between gap-3 cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <span 
-                            className="w-3 h-3 rounded-full shrink-0" 
+                            className="w-3 h-3 rounded-full shrink-0 shadow-2xs" 
                             style={{ backgroundColor: subject?.color || '#3b82f6' }} 
                           />
                           <div className="min-w-0">
-                            <span className="font-extrabold text-xs text-white block truncate">
+                            <span className="font-extrabold text-xs text-slate-900 block truncate">
                               {subject?.name || 'Przedmiot'}
                             </span>
-                            <span className="text-[11px] text-slate-400 block truncate">
+                            <span className="text-[11px] text-slate-500 block truncate">
                               {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Brak nauczyciela'}
                             </span>
                           </div>
                         </div>
 
                         <div className="text-right shrink-0">
-                          <span className="text-[11px] font-bold text-indigo-400 block">
+                          <span className="text-[11px] font-bold text-indigo-600 block">
                             {currentPlaced} / {asg.hoursPerWeek || 0} godz.
                           </span>
-                          <span className="text-[10px] text-slate-500 block">Wybierz →</span>
+                          <span className="text-[10px] text-slate-400 block">Wybierz →</span>
                         </div>
                       </button>
                     );
@@ -522,11 +529,11 @@ export default function DualScreen2PlanKlas({
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-800 flex justify-end">
+            <div className="pt-2 border-t border-slate-200 flex justify-end">
               <button
                 type="button"
                 onClick={() => setQuickAddCell(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold cursor-pointer"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer border border-slate-200"
               >
                 Anuluj
               </button>

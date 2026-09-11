@@ -89,7 +89,15 @@ class DualScreenManager {
       detected = Boolean((window.screen as any).isExtended);
     }
 
-    // 2. Fallback check for manually forced / simulation mode in settings
+    // 2. Heuristic check: desktop width spanning multiple monitors
+    if (!detected && window.screen) {
+      if ((window.screen.availWidth && window.screen.availWidth >= 2560) || 
+          (window.screen.width && window.screen.width >= 2560)) {
+        detected = true;
+      }
+    }
+
+    // 3. Fallback check for manually forced / simulation mode in settings
     try {
       const forced = localStorage.getItem(FORCE_DUAL_SCREEN_KEY) === 'true';
       if (forced) {
@@ -99,6 +107,40 @@ class DualScreenManager {
 
     this.isMultiScreenDetected = detected;
     return detected;
+  }
+
+  /**
+   * Requests native Window Management API permission on Windows 11 / Edge / Chrome.
+   * If accepted by user, screen.isExtended becomes true and exact screen positions are unlocked.
+   */
+  public async requestScreenPermission(): Promise<boolean> {
+    if (typeof window === 'undefined') return false;
+
+    // 1. Try modern getScreenDetails()
+    if ('getScreenDetails' in window) {
+      try {
+        const details = await (window as any).getScreenDetails();
+        if (details && details.screens && details.screens.length > 1) {
+          this.isMultiScreenDetected = true;
+          return true;
+        }
+      } catch (err) {
+        console.warn('Window management permission prompt dismissed or rejected:', err);
+      }
+    }
+
+    // 2. Try permission query
+    if (navigator.permissions && (navigator.permissions as any).query) {
+      try {
+        const status = await (navigator.permissions as any).query({ name: 'window-management' });
+        if (status.state === 'granted') {
+          this.updateMultiScreenStatus();
+          return this.isMultiScreenDetected;
+        }
+      } catch (e) {}
+    }
+
+    return this.updateMultiScreenStatus();
   }
 
   public getIsMultiScreenAvailable(): boolean {

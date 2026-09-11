@@ -351,25 +351,25 @@ export default function DualScreenMasterView({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-900 text-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full bg-slate-100 text-slate-800 overflow-hidden select-none">
       
       {/* ── PASEK INFORMACYJNY TRYBU 2 EKRANÓW (EKRAN 1) ── */}
-      <div className="bg-indigo-950/90 border-b border-indigo-800/80 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 shadow-sm">
+      <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 shadow-xs text-slate-800">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="bg-indigo-600 text-white p-1.5 rounded-lg shadow-xs flex items-center justify-center">
             <Monitor size={16} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-white tracking-wide uppercase">
+              <span className="text-xs font-black text-slate-900 tracking-wide uppercase">
                 Ekran 1 (Główny) • Tryb 2 Ekrany
               </span>
-              <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Ekran 2 zsynchronizowany
               </span>
             </div>
-            <p className="text-[11px] text-indigo-200/80 truncate">
+            <p className="text-[11px] text-slate-500 truncate">
               {currentTab === 'kreator' && 'Pokazuje aktywną konfigurację szkoły. Na Ekranie 2 możesz utworzyć nowy wariant.'}
               {currentTab === 'plan_klas' && 'Pula godzin lekcyjnych & Ustawienia generatora. Na Ekranie 2 otwarta jest siatka klas i godzin.'}
               {currentTab === 'plan_sal' && 'Pula zajęć dnia z podziałem na godziny. Na Ekranie 2 otwarta jest siatka sal z lokalizacjami.'}
@@ -381,7 +381,7 @@ export default function DualScreenMasterView({
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={onRecallCompanionWindow}
-            className="px-2.5 py-1.5 bg-indigo-900/80 hover:bg-indigo-800 text-indigo-200 hover:text-white border border-indigo-700/80 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Przywołaj Okno Towarzyszące (Ekran 2) na wierzch"
           >
             <ExternalLink size={13} />
@@ -389,7 +389,7 @@ export default function DualScreenMasterView({
           </button>
           <button
             onClick={onToggleSingleScreen}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Przełącz z powrotem na standardowy widok pojedynczego ekranu"
           >
             <span>Tryb 1 ekranu</span>
@@ -398,7 +398,7 @@ export default function DualScreenMasterView({
       </div>
 
       {/* ── GŁÓWNA ZAWARTOŚĆ DLA AKTYWNEJ ZAKŁADKI W TRYBIE 2 EKRANÓW ── */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950/60">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100">
 
         {/* ══════════════════════════════════════════════════════════════
             1. KREATOR SZKOŁY: Ostatnia konfiguracja szkoły (wariant aktywny)
@@ -407,32 +407,32 @@ export default function DualScreenMasterView({
           <div className="max-w-7xl mx-auto space-y-6">
             
             {/* Karta aktywnego wariantu szkoły */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm text-slate-800">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                    <span className="text-xs font-black uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md">
                       Wariant Aktywny
                     </span>
-                    <span className="text-slate-400 text-xs font-medium">
+                    <span className="text-slate-500 text-xs font-medium">
                       Ostatnia konfiguracja bazy szkoły
                     </span>
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
                     {activeVariant?.name || 'Wariant Główny (Podstawowy)'}
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     {activeVariant?.description || 'Podstawowa konfiguracja organizacyjna szkoły i rozkładu zajęć.'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block">Szkoła</span>
-                    <span className="text-sm font-extrabold text-slate-200 block">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Szkoła</span>
+                    <span className="text-sm font-extrabold text-slate-800 block">
                       {appState.school?.name || 'Szkoła Demonstracyjna'}
                     </span>
-                    <span className="text-[11px] text-slate-400 block">
+                    <span className="text-[11px] text-slate-500 block">
                       Rok szkolny: {appState.yearLabel || '2025/2026'}
                     </span>
                   </div>
@@ -441,41 +441,41 @@ export default function DualScreenMasterView({
 
               {/* Kluczowe wskaźniki bilansu */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
-                  <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-1">
-                    <Layers size={14} className="text-blue-400" />
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold mb-1">
+                    <Layers size={14} className="text-blue-600" />
                     <span>Oddziały (Klasy)</span>
                   </div>
-                  <div className="text-2xl font-black text-white">{stats.totalClasses}</div>
-                  <span className="text-[10px] text-slate-500">Zarejestrowanych oddziałów</span>
+                  <div className="text-2xl font-black text-slate-900">{stats.totalClasses}</div>
+                  <span className="text-[10px] text-slate-400">Zarejestrowanych oddziałów</span>
                 </div>
 
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
-                  <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-1">
-                    <User size={14} className="text-emerald-400" />
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold mb-1">
+                    <User size={14} className="text-emerald-600" />
                     <span>Kadra Nauczycieli</span>
                   </div>
-                  <div className="text-2xl font-black text-white">{stats.totalTeachers}</div>
-                  <span className="text-[10px] text-slate-500">Wszyscy pedagodzy</span>
+                  <div className="text-2xl font-black text-slate-900">{stats.totalTeachers}</div>
+                  <span className="text-[10px] text-slate-400">Wszyscy pedagodzy</span>
                 </div>
 
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
-                  <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-1">
-                    <DoorOpen size={14} className="text-amber-400" />
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold mb-1">
+                    <DoorOpen size={14} className="text-amber-600" />
                     <span>Gabinety & Sale</span>
                   </div>
-                  <div className="text-2xl font-black text-white">{stats.totalRooms}</div>
+                  <div className="text-2xl font-black text-slate-900">{stats.totalRooms}</div>
                   <span className="text-[10px] text-slate-500">
                     Ogólne: {stats.generalRooms} • WF: {stats.sportsRooms} • NI: {stats.niRooms}
                   </span>
                 </div>
 
-                <div className="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3">
-                  <div className="flex items-center gap-2 text-slate-400 text-xs font-bold mb-1">
-                    <Clock size={14} className="text-indigo-400" />
+                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3">
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-bold mb-1">
+                    <Clock size={14} className="text-indigo-600" />
                     <span>Godziny w Tygodniu</span>
                   </div>
-                  <div className="text-2xl font-black text-white">{stats.totalWeeklyHours}</div>
+                  <div className="text-2xl font-black text-slate-900">{stats.totalWeeklyHours}</div>
                   <span className="text-[10px] text-slate-500">
                     Zaplanowano: {stats.plannedHours} z {stats.totalWeeklyHours} godz.
                   </span>
@@ -484,13 +484,13 @@ export default function DualScreenMasterView({
             </div>
 
             {/* Przegląd szczegółów aktywnej konfiguracji */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
-              <div className="p-4 bg-slate-900/90 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm text-slate-800">
+              <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
                   <button
                     onClick={() => setKreatorPreviewTab('overview')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-                      kreatorPreviewTab === 'overview' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                      kreatorPreviewTab === 'overview' ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     Podsumowanie
@@ -498,7 +498,7 @@ export default function DualScreenMasterView({
                   <button
                     onClick={() => setKreatorPreviewTab('classes')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-                      kreatorPreviewTab === 'classes' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                      kreatorPreviewTab === 'classes' ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     Klasy ({stats.totalClasses})
@@ -506,7 +506,7 @@ export default function DualScreenMasterView({
                   <button
                     onClick={() => setKreatorPreviewTab('teachers')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-                      kreatorPreviewTab === 'teachers' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                      kreatorPreviewTab === 'teachers' ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     Nauczyciele ({stats.totalTeachers})
@@ -514,7 +514,7 @@ export default function DualScreenMasterView({
                   <button
                     onClick={() => setKreatorPreviewTab('rooms')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer ${
-                      kreatorPreviewTab === 'rooms' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                      kreatorPreviewTab === 'rooms' ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     Sale ({stats.totalRooms})
@@ -522,13 +522,13 @@ export default function DualScreenMasterView({
                 </div>
 
                 <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={kreatorSearch}
                     onChange={(e) => setKreatorSearch(e.target.value)}
                     placeholder="Filtruj zestawienie..."
-                    className="pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 w-full sm:w-64"
+                    className="pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 w-full sm:w-64"
                   />
                 </div>
               </div>
@@ -536,8 +536,8 @@ export default function DualScreenMasterView({
               {/* Tabela Klas */}
               {kreatorPreviewTab === 'classes' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/80 text-slate-400 uppercase font-black text-[10px] border-b border-slate-800">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-slate-500 uppercase font-black text-[10px] border-b border-slate-200">
                       <tr>
                         <th className="px-4 py-3">Oddział</th>
                         <th className="px-4 py-3">Poziom / Rocznik</th>
@@ -547,25 +547,25 @@ export default function DualScreenMasterView({
                         <th className="px-4 py-3">Suma Godzin</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody className="divide-y divide-slate-100">
                       {pl.classes
                         .filter(c => !kreatorSearch || c.name.toLowerCase().includes(kreatorSearch.toLowerCase()))
                         .map(cls => {
                           const classAssignments = pl.assignments.filter(a => a.classId === cls.id);
                           const totalHours = classAssignments.reduce((sum, a) => sum + (a.hoursPerWeek || 0), 0);
                           return (
-                            <tr key={cls.id} className="hover:bg-slate-800/40 transition">
-                              <td className="px-4 py-2.5 font-black text-white flex items-center gap-2">
+                            <tr key={cls.id} className="hover:bg-slate-50 transition">
+                              <td className="px-4 py-2.5 font-black text-slate-900 flex items-center gap-2">
                                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cls.color || '#3b82f6' }} />
                                 {cls.name}
                               </td>
-                              <td className="px-4 py-2.5 text-slate-400">Klasa {cls.year || cls.name[0] || '—'}</td>
-                              <td className="px-4 py-2.5 text-slate-300 font-medium">
+                              <td className="px-4 py-2.5 text-slate-500">Klasa {cls.year || cls.name[0] || '—'}</td>
+                              <td className="px-4 py-2.5 text-slate-700 font-medium">
                                 {cls.abbr || '—'}
                               </td>
-                              <td className="px-4 py-2.5 text-slate-400">{cls.baseClass || '—'}</td>
-                              <td className="px-4 py-2.5 text-slate-400">{cls.students || 24} uczniów</td>
-                              <td className="px-4 py-2.5 font-bold text-indigo-400">{totalHours} godz./tydz.</td>
+                              <td className="px-4 py-2.5 text-slate-500">{cls.baseClass || '—'}</td>
+                              <td className="px-4 py-2.5 text-slate-500">{cls.students || 24} uczniów</td>
+                              <td className="px-4 py-2.5 font-bold text-indigo-600">{totalHours} godz./tydz.</td>
                             </tr>
                           );
                         })}
@@ -577,8 +577,8 @@ export default function DualScreenMasterView({
               {/* Tabela Nauczycieli */}
               {kreatorPreviewTab === 'teachers' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/80 text-slate-400 uppercase font-black text-[10px] border-b border-slate-800">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-slate-500 uppercase font-black text-[10px] border-b border-slate-200">
                       <tr>
                         <th className="px-4 py-3">Nauczyciel</th>
                         <th className="px-4 py-3">Skrót</th>
@@ -587,7 +587,7 @@ export default function DualScreenMasterView({
                         <th className="px-4 py-3">Nadgodziny</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody className="divide-y divide-slate-100">
                       {pl.teachers
                         .filter(t => !kreatorSearch || `${t.first} ${t.last}`.toLowerCase().includes(kreatorSearch.toLowerCase()) || t.abbr.toLowerCase().includes(kreatorSearch.toLowerCase()))
                         .map(tea => {
@@ -596,14 +596,14 @@ export default function DualScreenMasterView({
                           const maxH = tea.maxHours || 18;
                           const overtime = Math.max(0, totalAssigned - maxH);
                           return (
-                            <tr key={tea.id} className="hover:bg-slate-800/40 transition">
-                              <td className="px-4 py-2.5 font-bold text-white">
+                            <tr key={tea.id} className="hover:bg-slate-50 transition">
+                              <td className="px-4 py-2.5 font-bold text-slate-900">
                                 {tea.first} {tea.last}
                               </td>
-                              <td className="px-4 py-2.5 font-mono font-black text-indigo-400">{tea.abbr}</td>
-                              <td className="px-4 py-2.5 text-slate-400">{maxH} godz.</td>
-                              <td className="px-4 py-2.5 font-extrabold text-slate-200">{totalAssigned} godz.</td>
-                              <td className="px-4 py-2.5 font-bold text-amber-400">
+                              <td className="px-4 py-2.5 font-mono font-black text-indigo-600">{tea.abbr}</td>
+                              <td className="px-4 py-2.5 text-slate-500">{maxH} godz.</td>
+                              <td className="px-4 py-2.5 font-extrabold text-slate-800">{totalAssigned} godz.</td>
+                              <td className="px-4 py-2.5 font-bold text-amber-600">
                                 {overtime > 0 ? `+${overtime} godz.` : '—'}
                               </td>
                             </tr>
@@ -617,8 +617,8 @@ export default function DualScreenMasterView({
               {/* Tabela Sal */}
               {kreatorPreviewTab === 'rooms' && (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs text-slate-300">
-                    <thead className="bg-slate-950/80 text-slate-400 uppercase font-black text-[10px] border-b border-slate-800">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    <thead className="bg-slate-50 text-slate-500 uppercase font-black text-[10px] border-b border-slate-200">
                       <tr>
                         <th className="px-4 py-3">Sala</th>
                         <th className="px-4 py-3">Typ</th>
@@ -626,29 +626,29 @@ export default function DualScreenMasterView({
                         <th className="px-4 py-3">Pojemność</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800/60">
+                    <tbody className="divide-y divide-slate-100">
                       {pl.rooms
                         .filter(r => !kreatorSearch || r.name.toLowerCase().includes(kreatorSearch.toLowerCase()))
                         .map(r => (
-                          <tr key={r.id} className="hover:bg-slate-800/40 transition">
-                            <td className="px-4 py-2.5 font-black text-white">{r.name}</td>
+                          <tr key={r.id} className="hover:bg-slate-50 transition">
+                            <td className="px-4 py-2.5 font-black text-slate-900">{r.name}</td>
                             <td className="px-4 py-2.5">
                               {isSportsFacility(r) ? (
-                                <span className="bg-teal-500/20 text-teal-300 border border-teal-500/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                                <span className="bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[10px] font-bold">
                                   Sportowa
                                 </span>
                               ) : isNIRoom(r) ? (
-                                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                                <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded text-[10px] font-bold">
                                   NI / Wsparcie
                                 </span>
                               ) : (
-                                <span className="bg-blue-500/20 text-blue-300 border border-blue-500/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-bold">
                                   Ogólna
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-2.5 text-slate-400">{r.desc || 'Sala lekcyjna'}</td>
-                            <td className="px-4 py-2.5 text-slate-300 font-bold">{r.capacity || 26} miejsc</td>
+                            <td className="px-4 py-2.5 text-slate-500">{r.desc || 'Sala lekcyjna'}</td>
+                            <td className="px-4 py-2.5 text-slate-700 font-bold">{r.capacity || 26} miejsc</td>
                           </tr>
                         ))}
                     </tbody>
@@ -659,14 +659,14 @@ export default function DualScreenMasterView({
               {/* Podsumowanie ogólne */}
               {kreatorPreviewTab === 'overview' && (
                 <div className="p-6 text-center space-y-4">
-                  <div className="inline-flex p-3 rounded-2xl bg-indigo-600/10 border border-indigo-500/30 text-indigo-400">
+                  <div className="inline-flex p-3 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600">
                     <Sparkles size={28} />
                   </div>
-                  <h3 className="text-base font-black text-white">
+                  <h3 className="text-base font-black text-slate-900">
                     Konfiguracja szkoły w aktywnym wariancie jest zsynchronizowana
                   </h3>
-                  <p className="text-xs text-slate-400 max-w-xl mx-auto leading-relaxed">
-                    Na tym ekranie wyświetlane są aktualne parametry aktywnego wariantu szkoły. Aby utworzyć kolejny scenariusz, semestr lub wariant roboczy z nowymi przydziałami, przejdź do <strong className="text-white font-bold">Ekranu 2 (Drugie Okno)</strong>, gdzie dostępny jest interaktywny formularz tworzenia nowego wariantu.
+                  <p className="text-xs text-slate-600 max-w-xl mx-auto leading-relaxed">
+                    Na tym ekranie wyświetlane są aktualne parametry aktywnego wariantu szkoły. Aby utworzyć kolejny scenariusz, semestr lub wariant roboczy z nowymi przydziałami, przejdź do <strong className="text-slate-900 font-bold">Ekranu 2 (Drugie Okno)</strong>, gdzie dostępny jest interaktywny formularz tworzenia nowego wariantu.
                   </p>
                 </div>
               )}
@@ -682,14 +682,14 @@ export default function DualScreenMasterView({
             
             {/* Lewa kolumna (7/12): Wszystkie godziny lekcyjne do umieszczenia w planie */}
             <div className="lg:col-span-7 flex flex-col gap-4">
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg flex-1 flex flex-col">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm flex-1 flex flex-col text-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3.5">
                   <div>
-                    <h2 className="text-base font-black text-white flex items-center gap-2">
-                      <BookOpen size={17} className="text-blue-400" />
+                    <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                      <BookOpen size={17} className="text-blue-600" />
                       Pula godzin lekcyjnych do umieszczenia
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-500 mt-0.5">
                       Przeciągnij kartę lub kliknij, aby wybrać lekcję i wstawić ją na siatce Ekranu 2
                     </p>
                   </div>
@@ -699,7 +699,7 @@ export default function DualScreenMasterView({
                     <select
                       value={selectedClassId}
                       onChange={(e) => setSelectedClassId(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-200 focus:outline-none focus:border-blue-500"
+                      className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500"
                     >
                       <option value="all">Wszystkie klasy ({pl.classes.length})</option>
                       {pl.classes.map(c => (
@@ -711,20 +711,20 @@ export default function DualScreenMasterView({
 
                 {/* Pasek wyszukiwania w puli */}
                 <div className="mt-3 relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={lessonPoolSearch}
                     onChange={(e) => setLessonPoolSearch(e.target.value)}
                     placeholder="Szukaj przedmiotu, klasy, nauczyciela..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                    className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
                 {/* Lista kart lekcji */}
                 <div className="mt-3 space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
                   {classAssignmentsPool.length === 0 ? (
-                    <div className="text-center py-10 text-slate-500 text-xs font-medium">
+                    <div className="text-center py-10 text-slate-400 text-xs font-medium">
                       Brak lekcji spełniających kryteria wyszukiwania.
                     </div>
                   ) : (
@@ -756,14 +756,14 @@ export default function DualScreenMasterView({
                           onClick={() => handleSelectPoolLesson(item)}
                           className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
                             isSelected
-                              ? 'bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/50'
+                              ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-500/40'
                               : isComplete
-                              ? 'bg-slate-950/40 border-slate-800/60 opacity-60'
-                              : 'bg-slate-950/90 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                              ? 'bg-slate-50 border-slate-200 opacity-60'
+                              : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50/20 shadow-xs'
                           }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="text-slate-500 cursor-grab shrink-0">
+                            <div className="text-slate-400 cursor-grab shrink-0">
                               <GripVertical size={16} />
                             </div>
                             <span 
@@ -772,14 +772,14 @@ export default function DualScreenMasterView({
                             />
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-extrabold text-xs text-white truncate">
+                                <span className="font-extrabold text-xs text-slate-900 truncate">
                                   {item.subject?.name || 'Przedmiot'}
                                 </span>
-                                <span className="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[10px] font-black px-1.5 py-0.2 rounded font-mono">
+                                <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black px-1.5 py-0.2 rounded font-mono">
                                   {item.targetClass?.name}
                                 </span>
                               </div>
-                              <span className="text-[11px] text-slate-400 block truncate">
+                              <span className="text-[11px] text-slate-500 block truncate">
                                 Prowadzący: {item.teacher ? `${item.teacher.first} ${item.teacher.last} (${item.teacher.abbr})` : 'Nieprzypisany'}
                               </span>
                             </div>
@@ -787,11 +787,11 @@ export default function DualScreenMasterView({
 
                           <div className="flex items-center gap-2 shrink-0">
                             <div className="text-right">
-                              <span className="text-xs font-black block text-slate-200">
+                              <span className="text-xs font-black block text-slate-800">
                                 {item.placedHours} / {item.totalHours} godz.
                               </span>
                               <span className={`text-[10px] font-bold block ${
-                                isComplete ? 'text-emerald-400' : 'text-amber-400'
+                                isComplete ? 'text-emerald-600' : 'text-amber-600'
                               }`}>
                                 {isComplete ? 'Komplet ✓' : `Pozostało: ${item.remainingHours} godz.`}
                               </span>
@@ -805,7 +805,7 @@ export default function DualScreenMasterView({
                               className={`px-2 py-1 rounded-lg text-[10px] font-black transition cursor-pointer ${
                                 isSelected 
                                   ? 'bg-blue-600 text-white shadow-xs' 
-                                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                               }`}
                             >
                               {isSelected ? 'Wybrano' : 'Wstaw'}
@@ -821,14 +821,14 @@ export default function DualScreenMasterView({
 
             {/* Prawa kolumna (5/12): Ustawienia generatora planu lekcji */}
             <div className="lg:col-span-5 flex flex-col gap-4">
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg flex-1 flex flex-col justify-between">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm flex-1 flex flex-col justify-between text-slate-800">
                 <div>
-                  <div className="border-b border-slate-800/80 pb-3.5 mb-4">
-                    <h2 className="text-base font-black text-white flex items-center gap-2">
-                      <Sliders size={17} className="text-indigo-400" />
+                  <div className="border-b border-slate-200 pb-3.5 mb-4">
+                    <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                      <Sliders size={17} className="text-indigo-600" />
                       Ustawienia generatora planu lekcji
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-500 mt-0.5">
                       Parametry i wagi dla algorytmu rozmieszczania siatki lekcji
                     </p>
                   </div>
@@ -837,10 +837,10 @@ export default function DualScreenMasterView({
                   <div className="space-y-4 text-xs">
                     
                     {/* Maksymalna liczba okienek */}
-                    <div className="bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl">
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl">
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-bold text-slate-200">Maks. okienek u nauczyciela:</span>
-                        <span className="font-black text-indigo-400 text-sm">{genMaxGaps}</span>
+                        <span className="font-bold text-slate-800">Maks. okienek u nauczyciela:</span>
+                        <span className="font-black text-indigo-600 text-sm">{genMaxGaps}</span>
                       </div>
                       <input
                         type="range"
@@ -848,7 +848,7 @@ export default function DualScreenMasterView({
                         max={4}
                         value={genMaxGaps}
                         onChange={(e) => setGenMaxGaps(parseInt(e.target.value, 10))}
-                        className="w-full accent-indigo-500 cursor-pointer"
+                        className="w-full accent-indigo-600 cursor-pointer"
                       />
                       <span className="text-[10px] text-slate-500 block mt-1">
                         0 = całkowity brak okienek (najwyższy rygor), 2 = kompromis
@@ -856,15 +856,15 @@ export default function DualScreenMasterView({
                     </div>
 
                     {/* Brak okienek u uczniów */}
-                    <label className="flex items-center gap-3 bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl cursor-pointer hover:bg-slate-950 transition">
+                    <label className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl cursor-pointer hover:bg-slate-100/80 transition">
                       <input
                         type="checkbox"
                         checked={genNoStudentGaps}
                         onChange={(e) => setGenNoStudentGaps(e.target.checked)}
-                        className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
                       />
                       <div>
-                        <span className="font-bold text-slate-200 block">Brak okienek u uczniów (Zwarty plan)</span>
+                        <span className="font-bold text-slate-800 block">Brak okienek u uczniów (Zwarty plan)</span>
                         <span className="text-[10px] text-slate-500 block mt-0.5">
                           Lekcje oddziałów układane są w ciągły blok bez przerw w środku dnia
                         </span>
@@ -872,15 +872,15 @@ export default function DualScreenMasterView({
                     </label>
 
                     {/* Dyspozycyjność nauczycieli */}
-                    <label className="flex items-center gap-3 bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl cursor-pointer hover:bg-slate-950 transition">
+                    <label className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl cursor-pointer hover:bg-slate-100/80 transition">
                       <input
                         type="checkbox"
                         checked={genObeyAvailability}
                         onChange={(e) => setGenObeyAvailability(e.target.checked)}
-                        className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
                       />
                       <div>
-                        <span className="font-bold text-slate-200 block">Przestrzegaj dyspozycyjności nauczycieli</span>
+                        <span className="font-bold text-slate-800 block">Przestrzegaj dyspozycyjności nauczycieli</span>
                         <span className="text-[10px] text-slate-500 block mt-0.5">
                           Nie planuj zajęć w zadeklarowanych dniach i godzinach niedostępności
                         </span>
@@ -888,15 +888,15 @@ export default function DualScreenMasterView({
                     </label>
 
                     {/* Unikanie trudnych przedmiotów na skrajach */}
-                    <label className="flex items-center gap-3 bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl cursor-pointer hover:bg-slate-950 transition">
+                    <label className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl cursor-pointer hover:bg-slate-100/80 transition">
                       <input
                         type="checkbox"
                         checked={genAvoidExtremes}
                         onChange={(e) => setGenAvoidExtremes(e.target.checked)}
-                        className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
                       />
                       <div>
-                        <span className="font-bold text-slate-200 block">Ochrona godzin skrajnych</span>
+                        <span className="font-bold text-slate-800 block">Ochrona godzin skrajnych</span>
                         <span className="text-[10px] text-slate-500 block mt-0.5">
                           Matematyka i fizyka w środku dnia, religia i plastyka na skrajach
                         </span>
@@ -904,15 +904,15 @@ export default function DualScreenMasterView({
                     </label>
 
                     {/* Bloki dwugodzinne */}
-                    <label className="flex items-center gap-3 bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl cursor-pointer hover:bg-slate-950 transition">
+                    <label className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl cursor-pointer hover:bg-slate-100/80 transition">
                       <input
                         type="checkbox"
                         checked={genAllowDoubleBlocks}
                         onChange={(e) => setGenAllowDoubleBlocks(e.target.checked)}
-                        className="w-4 h-4 rounded accent-indigo-500 cursor-pointer"
+                        className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
                       />
                       <div>
-                        <span className="font-bold text-slate-200 block">Zezwalaj na bloki 2-godzinne</span>
+                        <span className="font-bold text-slate-800 block">Zezwalaj na bloki 2-godzinne</span>
                         <span className="text-[10px] text-slate-500 block mt-0.5">
                           Umożliwia łączenie lekcji WF, pracowni lub języków w bloki podwójne
                         </span>
@@ -922,11 +922,11 @@ export default function DualScreenMasterView({
                 </div>
 
                 {/* Przyciski wykonawcze generatora */}
-                <div className="pt-4 border-t border-slate-800/80 space-y-2 mt-4">
+                <div className="pt-4 border-t border-slate-200 space-y-2 mt-4">
                   <button
                     onClick={handleRunGeneratorFromScreen1}
                     disabled={isGenerating}
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-indigo-950"
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-extrabold text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     {isGenerating ? (
                       <>
@@ -943,7 +943,7 @@ export default function DualScreenMasterView({
 
                   <button
                     onClick={handleClearAllLessons}
-                    className="w-full py-2 bg-slate-950 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-900/60 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full py-2 bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-slate-200 hover:border-rose-300 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                   >
                     <Trash2 size={13} />
                     <span>Wyczyść siatkę planu klas</span>
@@ -961,19 +961,19 @@ export default function DualScreenMasterView({
           <div className="max-w-7xl mx-auto space-y-5">
             
             {/* Pasek wyboru dnia oraz wyszukiwarki */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 text-slate-800">
               <div>
-                <h2 className="text-base font-black text-white flex items-center gap-2">
-                  <MapPin size={17} className="text-teal-400" />
+                <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <MapPin size={17} className="text-teal-600" />
                   Pula zajęć zaplanowanych na dany dzień (wg Etapu 1)
                 </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Wybierz dzień tygodnia, aby przejrzeć zajęcia wymagające przypisania do sal na Ekranie 2
                 </p>
               </div>
 
               {/* Przyciski dni tygodnia */}
-              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-auto">
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 overflow-x-auto">
                 {DAYS.map((dayName, dIdx) => (
                   <button
                     key={dIdx}
@@ -981,7 +981,7 @@ export default function DualScreenMasterView({
                     className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer whitespace-nowrap ${
                       salSelectedDay === dIdx
                         ? 'bg-teal-600 text-white shadow-xs'
-                        : 'text-slate-400 hover:text-white'
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     {dayName}
@@ -995,25 +995,25 @@ export default function DualScreenMasterView({
               {dayScheduledHours.map(hourGroup => (
                 <div 
                   key={hourGroup.hourIdx}
-                  className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-md"
+                  className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm"
                 >
-                  <div className="bg-slate-950/80 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between gap-2">
+                  <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="bg-teal-600/20 text-teal-400 border border-teal-500/30 text-xs font-black px-2 py-0.5 rounded-md font-mono">
+                      <span className="bg-teal-50 text-teal-700 border border-teal-200 text-xs font-black px-2 py-0.5 rounded-md font-mono">
                         Lekcja {hourGroup.hourNum}
                       </span>
-                      <span className="text-xs font-bold text-slate-300">
+                      <span className="text-xs font-bold text-slate-700">
                         {hourGroup.timeRange}
                       </span>
                     </div>
-                    <span className="text-xs text-slate-400 font-medium">
-                      Liczba zaplanowanych grup: <strong className="text-white font-bold">{hourGroup.lessons.length}</strong>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Liczba zaplanowanych grup: <strong className="text-slate-900 font-bold">{hourGroup.lessons.length}</strong>
                     </span>
                   </div>
 
                   <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5">
                     {hourGroup.lessons.length === 0 ? (
-                      <div className="col-span-full py-4 text-center text-xs text-slate-500">
+                      <div className="col-span-full py-4 text-center text-xs text-slate-400">
                         Brak zajęć oddziałowych zaplanowanych w tym slocie godzinowym.
                       </div>
                     ) : (
@@ -1025,13 +1025,13 @@ export default function DualScreenMasterView({
                             onClick={() => handleHighlightLessonOnScreen2(lessonItem, hourGroup.hourIdx)}
                             className={`p-3 rounded-xl border transition cursor-pointer flex flex-col justify-between gap-2 ${
                               hasRoom
-                                ? 'bg-slate-950/70 border-slate-800 hover:border-teal-500/60'
-                                : 'bg-amber-950/20 border-amber-800/60 hover:border-amber-500/80'
+                                ? 'bg-teal-50/40 border-teal-200/80 hover:border-teal-400'
+                                : 'bg-amber-50/50 border-amber-300/80 hover:border-amber-400'
                             }`}
                           >
                             <div>
                               <div className="flex items-center justify-between gap-2">
-                                <span className="bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[10px] font-black px-1.5 py-0.2 rounded font-mono">
+                                <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-black px-1.5 py-0.2 rounded font-mono">
                                   Klasa {lessonItem.className}
                                 </span>
                                 <span 
@@ -1039,22 +1039,22 @@ export default function DualScreenMasterView({
                                   style={{ backgroundColor: lessonItem.subjectColor }} 
                                 />
                               </div>
-                              <h4 className="text-xs font-extrabold text-white mt-1.5 truncate">
+                              <h4 className="text-xs font-extrabold text-slate-900 mt-1.5 truncate">
                                 {lessonItem.subjectName}
                               </h4>
-                              <p className="text-[11px] text-slate-400 truncate">
+                              <p className="text-[11px] text-slate-500 truncate">
                                 Nauczyciel: {lessonItem.teacherAbbr} {lessonItem.teacherName && `(${lessonItem.teacherName})`}
                               </p>
                             </div>
 
-                            <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                            <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
                               {hasRoom ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
                                   <DoorOpen size={11} />
                                   {lessonItem.assignedRoomName || 'Sala przydzielona'}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded animate-pulse">
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded animate-pulse">
                                   <AlertTriangle size={11} />
                                   Brak sali
                                 </span>
@@ -1062,7 +1062,7 @@ export default function DualScreenMasterView({
 
                               <button
                                 type="button"
-                                className="text-[10px] text-indigo-400 hover:text-indigo-300 font-extrabold"
+                                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold"
                               >
                                 Wskaż na Ekranie 2 →
                               </button>
@@ -1082,29 +1082,29 @@ export default function DualScreenMasterView({
             4. ETAP 3 DYŻURY ORAZ KOLEJNE ZAKŁADKI: W budowie dla trybu 2 ekranów
             ══════════════════════════════════════════════════════════════ */}
         {(currentTab === 'dyzury' || currentTab === 'wydruki' || currentTab === 'statystyki' || currentTab === 'ustawienia_generatorow' || currentTab === 'o_programie') && (
-          <div className="max-w-2xl mx-auto my-12 bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center shadow-2xl space-y-5">
-            <div className="inline-flex p-4 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+          <div className="max-w-2xl mx-auto my-12 bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-sm space-y-5 text-slate-800">
+            <div className="inline-flex p-4 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600">
               <Shield size={36} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white">
+              <h2 className="text-xl font-black text-slate-900">
                 {currentTab === 'dyzury' && '🛡️ Etap 3: Dyżury nauczycielskie'}
                 {currentTab === 'wydruki' && '🖨️ Wydruki i Publikacje'}
                 {currentTab === 'statystyki' && '📊 Statystyki i Diagnoza'}
                 {currentTab === 'ustawienia_generatorow' && '⚙️ Ustawienia generatorów'}
                 {currentTab === 'o_programie' && 'ℹ️ O programie'}
               </h2>
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-400 mt-1">
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mt-1">
                 Moduł w budowie – Tryb dwóch ekranów
               </p>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed max-w-lg mx-auto">
+            <p className="text-xs text-slate-600 leading-relaxed max-w-lg mx-auto">
               Ten moduł w trybie pracy na dwa ekrany jest aktualnie w fazie projektowej. Aby korzystać z pełnej funkcjonalności tego modułu w tradycyjnym układzie, możesz jednym kliknięciem przełączyć się na standardowy tryb jednego ekranu.
             </p>
             <div className="pt-2">
               <button
                 onClick={onToggleSingleScreen}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-lg shadow-indigo-950"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm"
               >
                 Przełącz na standardowy tryb 1 ekranu
               </button>

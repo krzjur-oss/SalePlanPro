@@ -127,8 +127,8 @@ export default function DualScreen2PlanSal({
 
     const calculateScale = () => {
       if (!containerRef.current || !tableRef.current) return;
-      const cWidth = containerRef.current.clientWidth - 20;
-      const cHeight = containerRef.current.clientHeight - 20;
+      const cWidth = containerRef.current.clientWidth - 24;
+      const cHeight = containerRef.current.clientHeight - 24;
       const tWidth = tableRef.current.offsetWidth || 1500;
       const tHeight = tableRef.current.offsetHeight || 900;
 
@@ -136,13 +136,17 @@ export default function DualScreen2PlanSal({
         const scaleX = cWidth / tWidth;
         const scaleY = cHeight / tHeight;
         const idealScale = Math.min(scaleX, scaleY, 1.05);
-        setZoomLevel(Math.max(0.35, idealScale));
+        setZoomLevel(Math.max(0.15, idealScale));
       }
     };
 
     calculateScale();
+    const timer = setTimeout(calculateScale, 100);
     window.addEventListener('resize', calculateScale);
-    return () => window.removeEventListener('resize', calculateScale);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', calculateScale);
+    };
   }, [isAutoFit, filteredRooms.length, isCompact]);
 
   // Helper to read cell from schedData
@@ -264,31 +268,31 @@ export default function DualScreen2PlanSal({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950 text-slate-100 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full bg-slate-100 text-slate-800 overflow-hidden select-none">
       
-      {/* ── PASEK KONTROLNY DLA SIATKI SAL NA EKRANIE 2 ── */}
-      <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-sm">
+      {/* ── PASEK KONTROLNY DLA SIATKI SAL NA EKRANIE 2 (JASNY MOTYW) ── */}
+      <div className="bg-white border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
         
         {/* Lewa strona: Tytuł i aktywny wybór z Ekranu 1 */}
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider text-teal-400 bg-teal-500/10 border border-teal-500/30 px-2 py-0.5 rounded-md">
+            <span className="text-xs font-black uppercase tracking-wider text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">
               Siatka Sal (Plan Sal)
             </span>
-            <span className="text-xs text-slate-400 hidden sm:inline">
-              Sal: <strong className="text-white">{filteredRooms.length}</strong> • Kolumny: Budynek, Piętro, Sala
+            <span className="text-xs text-slate-500 hidden sm:inline">
+              Sal: <strong className="text-slate-800">{filteredRooms.length}</strong> • Kolumny: Budynek, Piętro, Sala
             </span>
           </div>
 
           {/* Plakietka zajęcia wybranego z Ekranu 1 do przypisania */}
           {highlightedLesson && (
-            <div className="flex items-center gap-2 bg-teal-950/80 border border-teal-500 text-teal-200 px-3 py-1 rounded-xl text-xs shadow-md animate-pulse">
-              <span className="font-extrabold text-white truncate max-w-[220px]">
+            <div className="flex items-center gap-2 bg-teal-50 border border-teal-300 text-teal-900 px-3 py-1 rounded-xl text-xs shadow-2xs animate-pulse">
+              <span className="font-extrabold text-teal-950 truncate max-w-[220px]">
                 Wskaż salę dla: {highlightedLesson.className} • {highlightedLesson.subjectShort || highlightedLesson.subjectName} ({highlightedLesson.teacherAbbr})
               </span>
               <button
                 onClick={() => setHighlightedLesson(null)}
-                className="p-0.5 hover:bg-teal-800 rounded text-teal-300 hover:text-white cursor-pointer ml-1"
+                className="p-0.5 hover:bg-teal-100 rounded text-teal-700 hover:text-teal-900 cursor-pointer ml-1"
                 title="Anuluj przypisywanie"
               >
                 <X size={13} />
@@ -300,11 +304,11 @@ export default function DualScreen2PlanSal({
         {/* Prawa strona: Filtry, Czyszczenie, Zoom */}
         <div className="flex items-center gap-2 shrink-0">
           {/* Filtr kategorii sal */}
-          <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
               onClick={() => setCategoryFilter('all')}
               className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                categoryFilter === 'all' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'
+                categoryFilter === 'all' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Wszystkie ({roomRows.length})
@@ -312,7 +316,7 @@ export default function DualScreen2PlanSal({
             <button
               onClick={() => setCategoryFilter('general')}
               className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                categoryFilter === 'general' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'
+                categoryFilter === 'general' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Ogólne
@@ -320,7 +324,7 @@ export default function DualScreen2PlanSal({
             <button
               onClick={() => setCategoryFilter('sports')}
               className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                categoryFilter === 'sports' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'
+                categoryFilter === 'sports' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               WF
@@ -328,7 +332,7 @@ export default function DualScreen2PlanSal({
             <button
               onClick={() => setCategoryFilter('ni')}
               className={`px-2 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
-                categoryFilter === 'ni' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'
+                categoryFilter === 'ni' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               NI / SPE
@@ -337,7 +341,7 @@ export default function DualScreen2PlanSal({
 
           <button
             onClick={handleClearAllRoomsSchedule}
-            className="px-2.5 py-1 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/80 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
             title="Wyczyść wszystkie wpisy ze wszystkich sal"
           >
             <Trash2 size={13} />
@@ -346,8 +350,8 @@ export default function DualScreen2PlanSal({
 
           <button
             onClick={() => setIsCompact(!isCompact)}
-            className={`px-2 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-              isCompact ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
+              isCompact ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
             }`}
           >
             {isCompact ? 'Standard' : 'Kompakt'}
@@ -356,34 +360,34 @@ export default function DualScreen2PlanSal({
           <button
             onClick={() => setIsAutoFit(!isAutoFit)}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-              isAutoFit ? 'bg-teal-600 border-teal-500 text-white shadow-xs' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+              isAutoFit ? 'bg-teal-600 border-teal-600 text-white shadow-2xs' : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
             }`}
-            title="Automatycznie dopasuj do 100% szerokości i wysokości ekranu"
+            title="Automatycznie dopasuj do 100% szerokości i wysokości ekranu bez przewijania"
           >
-            Dopasuj do ekranu
+            {isAutoFit ? 'Dopasowano (100% ekranu)' : 'Dopasuj do ekranu'}
           </button>
 
-          <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
-              onClick={() => { setIsAutoFit(false); setZoomLevel(prev => Math.max(0.3, prev - 0.1)); }}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+              onClick={() => { setIsAutoFit(false); setZoomLevel(prev => Math.max(0.2, prev - 0.1)); }}
+              className="p-1 hover:bg-white rounded text-slate-600 hover:text-slate-900 cursor-pointer"
               title="Oddal (Zoom -)"
             >
               <ZoomOut size={14} />
             </button>
-            <span className="text-[11px] font-mono font-bold text-slate-300 px-1">
+            <span className="text-[11px] font-mono font-bold text-slate-700 px-1">
               {Math.round(zoomLevel * 100)}%
             </span>
             <button
               onClick={() => { setIsAutoFit(false); setZoomLevel(prev => Math.min(2.0, prev + 0.1)); }}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+              className="p-1 hover:bg-white rounded text-slate-600 hover:text-slate-900 cursor-pointer"
               title="Przybliż (Zoom +)"
             >
               <ZoomIn size={14} />
             </button>
             <button
               onClick={() => { setIsAutoFit(false); setZoomLevel(1); }}
-              className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white cursor-pointer"
+              className="p-1 hover:bg-white rounded text-slate-600 hover:text-slate-900 cursor-pointer"
               title="Resetuj zoom (100%)"
             >
               <RotateCcw size={12} />
@@ -395,7 +399,9 @@ export default function DualScreen2PlanSal({
       {/* ── KONTENER TABELI SIATKI SAL ── */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-auto p-2 sm:p-4 relative bg-slate-950/80 flex items-start justify-center"
+        className={`flex-1 p-2 sm:p-3 relative bg-slate-100 flex items-start justify-center ${
+          isAutoFit ? 'overflow-hidden' : 'overflow-auto'
+        }`}
       >
         <div 
           style={{ 
@@ -407,27 +413,27 @@ export default function DualScreen2PlanSal({
         >
           <table 
             ref={tableRef}
-            className="border-collapse text-left border border-slate-800 bg-slate-900/90 shadow-2xl rounded-xl overflow-hidden"
+            className="border-collapse text-left border border-slate-300 bg-white shadow-xs rounded-xl overflow-hidden"
           >
             <thead>
               {/* WIERSZ 1 NAGŁÓWKA: DNI TYGODNIA */}
-              <tr className="bg-slate-950 text-slate-200 border-b border-slate-800">
+              <tr className="bg-slate-100 text-slate-800 border-b border-slate-300">
                 {/* 3 KOLUMNY IDENTYFIKACYJNE SALI: BUDYNEK, PIĘTRO, SALA */}
                 <th 
                   rowSpan={2}
-                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-400 border-r border-slate-800 bg-slate-950 sticky left-0 z-30 min-w-[90px]"
+                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-700 border-r border-slate-300 bg-slate-100 sticky left-0 z-30 min-w-[90px]"
                 >
                   Budynek
                 </th>
                 <th 
                   rowSpan={2}
-                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-400 border-r border-slate-800 bg-slate-950 sticky left-[90px] z-30 min-w-[80px]"
+                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-700 border-r border-slate-300 bg-slate-100 sticky left-[90px] z-30 min-w-[80px]"
                 >
                   Piętro
                 </th>
                 <th 
                   rowSpan={2}
-                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-teal-400 border-r border-slate-800 bg-slate-950 sticky left-[170px] z-30 min-w-[100px]"
+                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-teal-800 border-r border-slate-300 bg-teal-50/70 sticky left-[170px] z-30 min-w-[100px]"
                 >
                   Sala
                 </th>
@@ -437,7 +443,7 @@ export default function DualScreen2PlanSal({
                   <th 
                     key={dIdx}
                     colSpan={8}
-                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider text-teal-400 border-r border-slate-800 bg-slate-950/90"
+                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider text-teal-800 border-r border-slate-300 bg-teal-50/60"
                   >
                     {dayName}
                   </th>
@@ -445,17 +451,17 @@ export default function DualScreen2PlanSal({
               </tr>
 
               {/* WIERSZ 2 NAGŁÓWKA: GODZINY I NR LEKCJI */}
-              <tr className="bg-slate-900 text-slate-400 border-b border-slate-800 text-[10px] font-bold">
+              <tr className="bg-slate-50 text-slate-600 border-b border-slate-300 text-[10px] font-bold">
                 {DAYS.map((_, dIdx) => 
                   DEFAULT_HOURS.map(h => (
                     <th 
                       key={`${dIdx}_${h.num}`}
-                      className={`px-1.5 py-1 text-center border-r border-slate-800/80 font-mono ${
-                        isCompact ? 'w-[52px] min-w-[52px]' : 'w-[68px] min-w-[68px]'
+                      className={`px-1 py-1 text-center border-r border-slate-200 font-mono ${
+                        isCompact ? 'w-[50px] min-w-[50px]' : 'w-[64px] min-w-[64px]'
                       }`}
                     >
-                      <span className="block text-slate-200 font-black">{h.num}</span>
-                      <span className="text-[9px] text-slate-500 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
+                      <span className="block text-slate-800 font-black">{h.num}</span>
+                      <span className="text-[9px] text-slate-400 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
                     </th>
                   ))
                 )}
@@ -463,27 +469,27 @@ export default function DualScreen2PlanSal({
             </thead>
 
             {/* WIERSZE SAL ZAJĘCIOWYCH */}
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-slate-200">
               {filteredRooms.map(r => (
-                <tr key={r.key} className="hover:bg-slate-800/30 transition group">
+                <tr key={r.key} className="hover:bg-teal-50/30 transition group">
                   
                   {/* Kolumna 1: Budynek */}
-                  <td className="px-2.5 py-1.5 bg-slate-900/95 sticky left-0 z-20 border-r border-slate-800 text-xs font-bold text-slate-400 truncate">
+                  <td className="px-2.5 py-1.5 bg-white sticky left-0 z-20 border-r border-slate-300 text-xs font-bold text-slate-600 truncate">
                     {r.building}
                   </td>
 
                   {/* Kolumna 2: Piętro */}
-                  <td className="px-2.5 py-1.5 bg-slate-900/95 sticky left-[90px] z-20 border-r border-slate-800 text-xs text-slate-400 truncate">
+                  <td className="px-2.5 py-1.5 bg-white sticky left-[90px] z-20 border-r border-slate-300 text-xs text-slate-600 truncate">
                     {r.floor}
                   </td>
 
                   {/* Kolumna 3: Sala */}
-                  <td className="px-2.5 py-1.5 bg-slate-900/95 sticky left-[170px] z-20 border-r border-slate-800 text-xs font-black text-white flex items-center justify-between gap-1">
+                  <td className="px-2.5 py-1.5 bg-teal-50/40 sticky left-[170px] z-20 border-r border-slate-300 text-xs font-black text-slate-900 flex items-center justify-between gap-1 shadow-2xs">
                     <span className="truncate">{r.room}</span>
                     <button
                       type="button"
                       onClick={() => handleClearEntireRoom(r.key, r.room)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 rounded transition cursor-pointer"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
                       title={`Wyczyść wszystkie wpisy w sali ${r.room}`}
                     >
                       <Trash2 size={11} />
@@ -500,37 +506,37 @@ export default function DualScreen2PlanSal({
                         <td
                           key={`${dayIdx}_${hourIdx}`}
                           onClick={() => handleAssignToRoom(dayIdx, hourIdx, r.key, r.room)}
-                          className={`p-0.5 border-r border-b border-slate-800/80 transition relative group cursor-pointer ${
+                          className={`p-0.5 border-r border-b border-slate-200 transition relative group cursor-pointer ${
                             cell 
-                              ? 'bg-teal-950/30 hover:bg-teal-900/40' 
+                              ? 'bg-white hover:bg-slate-50' 
                               : isHighlighted
-                              ? 'bg-amber-950/30 ring-1 ring-amber-500/50 animate-pulse'
-                              : 'hover:bg-slate-800/40'
-                          } ${isCompact ? 'h-9 max-h-9' : 'h-11 max-h-11'}`}
+                              ? 'bg-amber-50 ring-1 ring-amber-400 animate-pulse'
+                              : 'hover:bg-slate-100/70'
+                          } ${isCompact ? 'h-8 max-h-8' : 'h-10 max-h-10'}`}
                         >
                           {cell ? (
-                            <div className="w-full h-full rounded-md p-1 bg-slate-950/80 border border-teal-500/40 flex flex-col justify-between overflow-hidden shadow-xs">
+                            <div className="w-full h-full rounded-md p-1 bg-white border border-teal-200 flex flex-col justify-between overflow-hidden shadow-2xs">
                               <div className="flex items-center justify-between leading-none gap-0.5">
-                                <span className="font-black text-[10px] text-teal-300 truncate">
+                                <span className="font-black text-[10px] text-teal-800 truncate">
                                   {cell.className || (cell.classes && cell.classes[0])}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={(e) => handleClearCell(dayIdx, hourIdx, r.key, e)}
-                                  className="opacity-0 group-hover:opacity-100 hover:bg-rose-600 rounded p-0.5 text-slate-300 hover:text-white transition cursor-pointer"
+                                  className="opacity-0 group-hover:opacity-100 hover:bg-rose-500 rounded p-0.5 text-slate-400 hover:text-white transition cursor-pointer"
                                   title="Wyczyść wpis z tej sali"
                                 >
                                   <X size={10} />
                                 </button>
                               </div>
 
-                              <div className="flex items-center justify-between text-[9px] text-slate-400 font-mono leading-none">
+                              <div className="flex items-center justify-between text-[9px] text-slate-600 font-mono leading-none">
                                 <span className="truncate">{cell.subject}</span>
-                                <span className="font-bold text-indigo-300">{cell.teacherAbbr}</span>
+                                <span className="font-bold text-indigo-700">{cell.teacherAbbr}</span>
                               </div>
                             </div>
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-60 transition text-teal-400 text-xs">
+                            <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-60 transition text-teal-600 text-xs">
                               +
                             </div>
                           )}
@@ -542,12 +548,12 @@ export default function DualScreen2PlanSal({
               ))}
 
               {/* ── OSTATNI WIERSZ TABELI: CZYSZCZENIE WSZYSTKICH WPISÓW W SALI ── */}
-              <tr className="bg-slate-950 border-t-2 border-rose-900/60 sticky bottom-0 z-30">
+              <tr className="bg-slate-50 border-t-2 border-rose-200 sticky bottom-0 z-30 shadow-xs">
                 <td 
                   colSpan={3}
-                  className="px-3 py-2.5 bg-slate-950 sticky left-0 z-40 border-r border-slate-800 font-black text-xs text-rose-400 flex items-center gap-2"
+                  className="px-3 py-2 bg-slate-50 sticky left-0 z-40 border-r border-slate-300 font-black text-xs text-rose-700 flex items-center gap-2 shadow-2xs"
                 >
-                  <Trash2 size={14} className="text-rose-400" />
+                  <Trash2 size={14} className="text-rose-600" />
                   <span>Czyszczenie wpisów w salach</span>
                 </td>
 
@@ -556,7 +562,7 @@ export default function DualScreen2PlanSal({
                   DEFAULT_HOURS.map((_, hourIdx) => (
                     <td 
                       key={`clear_${dayIdx}_${hourIdx}`}
-                      className="p-1 text-center border-r border-slate-800 bg-slate-950"
+                      className="p-0.5 text-center border-r border-slate-200 bg-slate-50"
                     >
                       <button
                         type="button"
@@ -575,7 +581,7 @@ export default function DualScreen2PlanSal({
                             });
                           }
                         }}
-                        className="w-full py-1 text-[9px] font-bold text-rose-400/70 hover:text-rose-300 hover:bg-rose-950/40 rounded transition cursor-pointer"
+                        className="w-full py-0.5 text-[9px] font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-100 rounded transition cursor-pointer"
                         title={`Wyczyść wszystkie sale w ${dayName} na lekcji ${hourIdx + 1}`}
                       >
                         Wyczyść
@@ -590,12 +596,12 @@ export default function DualScreen2PlanSal({
       </div>
 
       {/* ── PASEK INFORMACYJNY STOPKI ── */}
-      <div className="bg-slate-900/90 border-t border-slate-800 px-4 py-1.5 text-xs text-slate-400 flex items-center justify-between shrink-0">
+      <div className="bg-white border-t border-slate-200 px-4 py-1.5 text-xs text-slate-600 flex items-center justify-between shrink-0 shadow-2xs">
         <div className="flex items-center gap-2">
-          <span className="text-teal-400 font-bold">Wskazówka:</span>
+          <span className="text-teal-700 font-bold">Wskazówka:</span>
           <span>Wybierz lekcję z puli na Ekranie 1, a następnie kliknij wybraną salę i godzinę na tym ekranie, aby dokonać przydziału. Ostatni wiersz pozwala na błyskawiczne czyszczenie wpisów.</span>
         </div>
-        <div className="text-[11px] text-slate-500 font-mono hidden md:block">
+        <div className="text-[11px] text-slate-400 font-mono hidden md:block">
           Siatka zsynchronizowana z Ekranem 1
         </div>
       </div>
