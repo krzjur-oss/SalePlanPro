@@ -6777,7 +6777,7 @@ export default function KreatorSzkoly({
                           {assignmentFormMode === 'uspe' ? '6. Gabinet / Sala' : '5. Sugerowana sala'}
                         </label>
                         <select 
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                          className="assign-room-dropdown w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
                           value={newAsgRoom}
                           onChange={(e) => setNewAsgRoom(e.target.value)}
                         >

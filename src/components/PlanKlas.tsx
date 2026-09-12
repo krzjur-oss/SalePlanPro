@@ -10,6 +10,7 @@ import {
 import PlanGenerator from './PlanGenerator';
 import SwapAssistantModal, { SwapSlotItem } from './SwapAssistantModal';
 import LockManagerModal from './LockManagerModal';
+import { AssignRoomDropdown } from './AssignRoomDropdown';
 import { dualScreenService, DualScreenMessage } from '../services/dualScreenService';
 
 const PALETTE_COLORS = [
@@ -3905,16 +3906,13 @@ export default function PlanKlas({
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Dedykowana Sala</label>
-                    <select 
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50 outline-none"
+                    <AssignRoomDropdown
+                      planLekcji={pl}
                       value={assignRoom}
-                      onChange={(e) => setAssignRoom(e.target.value)}
-                    >
-                      <option value="">Wybierz salę</option>
-                      {pl.rooms.map(r => (
-                        <option key={r.id} value={r.id}>{r.name} {r.desc ? `(${r.desc})` : ''}</option>
-                      ))}
-                    </select>
+                      onChange={(roomId) => setAssignRoom(roomId)}
+                      placeholder="-- Wybierz salę --"
+                      showSortControl={true}
+                    />
                   </div>
                   <div className="space-y-1">
                     <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Rozkład lekcji (Bloki)</label>
@@ -6640,6 +6638,60 @@ export default function PlanKlas({
                                 </option>
                               ))}
                             </select>
+                          </div>
+
+                          {/* Ręczna alokacja sali z sortowaniem po wolnych slotach w tej godzinie */}
+                          <div className="pt-2 border-t border-slate-200/70 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10.5px] font-bold text-slate-700 flex items-center gap-1">
+                                <span>🚪</span> Przypisana sala (alokacja w tej godzinie):
+                              </span>
+                              {asg?.roomId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedAssignments = pl.assignments.map(a =>
+                                      a.id === asg.id ? { ...a, roomId: null } : a
+                                    );
+                                    onChangeAppState({
+                                      ...appState,
+                                      planLekcji: {
+                                        ...pl,
+                                        assignments: updatedAssignments
+                                      }
+                                    });
+                                    notify('Odłączono salę od lekcji');
+                                  }}
+                                  className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                                >
+                                  Odłącz salę
+                                </button>
+                              )}
+                            </div>
+                            <AssignRoomDropdown
+                              planLekcji={pl}
+                              dayIdx={cellPickerTarget.dayIndex}
+                              hourIdx={cellPickerTarget.hourIndex}
+                              currentAssignmentId={asg?.id}
+                              value={asg?.roomId}
+                              onChange={(roomId) => {
+                                if (!asg) return;
+                                const targetRoom = pl.rooms.find(r => r.id === roomId);
+                                const updatedAssignments = pl.assignments.map(a =>
+                                  a.id === asg.id ? { ...a, roomId: roomId || null } : a
+                                );
+                                onChangeAppState({
+                                  ...appState,
+                                  planLekcji: {
+                                    ...pl,
+                                    assignments: updatedAssignments
+                                  }
+                                });
+                                notify(roomId ? `Przypisano salę ${targetRoom?.name || ''}` : 'Usunięto przypisanie sali');
+                              }}
+                              placeholder="-- Wybierz salę dla tej godziny --"
+                              showSortControl={true}
+                            />
                           </div>
 
                           {isConf && (

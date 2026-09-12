@@ -507,9 +507,9 @@ export default function CompanionWindowView({
   const effectiveScale = fitToScreen ? autoScale * (zoomPercent / 100) : (zoomPercent / 100);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-100 text-slate-800 font-sans overflow-hidden select-none">
-      {/* ── GÓRNY PASEK STATUSU I NAWIGACJI OKNA TOWARZYSZĄCEGO (JASNY, SPÓJNY Z EKRANEM 1) ── */}
-      <header className="px-4 py-2 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shrink-0 shadow-xs text-slate-800">
+    <div className="flex flex-col h-screen w-screen app-workspace-canvas font-sans overflow-hidden select-none">
+      {/* ── GÓRNY PASEK STATUSU I NAWIGACJI OKNA TOWARZYSZĄCEGO (SPÓJNY Z GŁÓWNYM NAGŁÓWKIEM PROGRAMU) ── */}
+      <header className="px-4 py-2 app-header-bar flex items-center justify-between gap-3 shrink-0 shadow-xl">
         {/* Lewa strona: Identyfikator Ekranu 2 */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-600 border border-indigo-500 rounded-lg text-white font-black text-xs shadow-xs">
@@ -519,39 +519,39 @@ export default function CompanionWindowView({
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-sm text-slate-900 tracking-tight truncate">
+              <h1 className="font-extrabold text-sm text-white tracking-tight truncate">
                 SalePlan Pro • Monitor Towarzyszący
               </h1>
               {isConnectedToMaster ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Połączono z Oknem 1
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                   Oczekiwanie na sygnał
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-slate-500 font-medium truncate">
+            <p className="text-[10px] text-slate-400 font-medium truncate">
               {appState?.school?.name || 'Szkoła'} • {appState?.yearLabel || 'Rok szkolny'}
             </p>
           </div>
         </div>
 
         {/* Środek: Selektor widoków drugiego ekranu */}
-        <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5 text-xs font-bold overflow-x-auto no-scrollbar gap-1">
+        <div className="flex items-center bg-slate-950/60 border border-slate-800 rounded-xl p-0.5 text-xs font-bold overflow-x-auto no-scrollbar gap-1">
           <button
             onClick={() => setActiveCompanionTab('kreator')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeCompanionTab === 'kreator'
-                ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80 font-black'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                ? 'bg-amber-950/50 text-amber-200 border border-amber-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
             title="Kreator Szkoły: Nowy wariant (Ekran 2)"
           >
-            <Sparkles size={14} className={activeCompanionTab === 'kreator' ? 'text-indigo-600' : 'text-slate-400'} />
+            <Sparkles size={14} className={activeCompanionTab === 'kreator' ? 'text-amber-400' : 'text-slate-400'} />
             <span>Kreator (Nowy wariant)</span>
           </button>
 
@@ -559,12 +559,12 @@ export default function CompanionWindowView({
             onClick={() => setActiveCompanionTab('plan_klas')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeCompanionTab === 'plan_klas'
-                ? 'bg-white text-blue-700 shadow-xs border border-slate-200/80 font-black'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                ? 'bg-blue-950/50 text-blue-200 border border-blue-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
             title="Etap 1: Siatka klas, dni tygodnia i godzin z przeciąganiem i klikaniem"
           >
-            <Layers size={14} className={activeCompanionTab === 'plan_klas' ? 'text-blue-600' : 'text-slate-400'} />
+            <Layers size={14} className={activeCompanionTab === 'plan_klas' ? 'text-blue-400' : 'text-slate-400'} />
             <span>Etap 1: Plan Klas</span>
           </button>
 
@@ -572,12 +572,12 @@ export default function CompanionWindowView({
             onClick={() => setActiveCompanionTab('plan_sal')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeCompanionTab === 'plan_sal'
-                ? 'bg-white text-teal-700 shadow-xs border border-slate-200/80 font-black'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                ? 'bg-teal-950/50 text-teal-200 border border-teal-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
             title="Etap 2: Siatka sal (Budynek, Piętro, Sala) z czyszczeniem"
           >
-            <DoorOpen size={14} className={activeCompanionTab === 'plan_sal' ? 'text-teal-600' : 'text-slate-400'} />
+            <DoorOpen size={14} className={activeCompanionTab === 'plan_sal' ? 'text-teal-400' : 'text-slate-400'} />
             <span>Etap 2: Plan Sal</span>
           </button>
 
@@ -585,12 +585,12 @@ export default function CompanionWindowView({
             onClick={() => setActiveCompanionTab('dyzury')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeCompanionTab === 'dyzury'
-                ? 'bg-white text-purple-700 shadow-xs border border-slate-200/80 font-black'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                ? 'bg-purple-950/50 text-purple-200 border border-purple-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
             title="Etap 3: Dyżury (W budowie na Ekranie 2)"
           >
-            <Shield size={14} className={activeCompanionTab === 'dyzury' ? 'text-purple-600' : 'text-slate-400'} />
+            <Shield size={14} className={activeCompanionTab === 'dyzury' ? 'text-purple-400' : 'text-slate-400'} />
             <span>Etap 3: Dyżury</span>
           </button>
 
@@ -598,12 +598,12 @@ export default function CompanionWindowView({
             onClick={() => setActiveCompanionTab('plachta')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeCompanionTab === 'plachta'
-                ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80 font-black'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                ? 'bg-indigo-950/50 text-indigo-200 border border-indigo-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
             title="Pełna Płachta Dyrektorska całego tygodnia"
           >
-            <Monitor size={14} className={activeCompanionTab === 'plachta' ? 'text-indigo-600' : 'text-slate-400'} />
+            <Monitor size={14} className={activeCompanionTab === 'plachta' ? 'text-indigo-400' : 'text-slate-400'} />
             <span>Płachta Dyrektorska</span>
           </button>
 
@@ -611,12 +611,12 @@ export default function CompanionWindowView({
             onClick={() => setActiveCompanionTab('rooms_matrix')}
             className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeCompanionTab === 'rooms_matrix'
-                ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80 font-black'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                ? 'bg-slate-800 text-white border border-slate-700 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
             title="Szczegółowa matryca sal z filtrami (ogólne, sportowe, NI)"
           >
-            <Filter size={14} className={activeCompanionTab === 'rooms_matrix' ? 'text-slate-800' : 'text-slate-400'} />
+            <Filter size={14} className={activeCompanionTab === 'rooms_matrix' ? 'text-indigo-400' : 'text-slate-400'} />
             <span>Matryca Sal</span>
           </button>
         </div>
@@ -625,7 +625,7 @@ export default function CompanionWindowView({
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={handleManualRefresh}
-            className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
+            className="p-1.5 app-header-btn rounded-lg shadow-xs cursor-pointer"
             title="Wymuś synchronizację stanu z bazy danych"
           >
             <RefreshCw size={14} />
@@ -633,15 +633,15 @@ export default function CompanionWindowView({
 
           <button
             onClick={handleToggleFullscreen}
-            className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 shadow-xs transition cursor-pointer"
+            className="p-1.5 app-header-btn rounded-lg shadow-xs cursor-pointer"
             title={isFullscreen ? "Wyjdź z pełnego ekranu" : "Pełny ekran na monitorze zewnętrznym"}
           >
-            {isFullscreen ? <Minimize2 size={14} className="text-amber-600" /> : <Maximize2 size={14} />}
+            {isFullscreen ? <Minimize2 size={14} className="text-amber-400" /> : <Maximize2 size={14} />}
           </button>
 
           <button
             onClick={() => window.close()}
-            className="p-1.5 bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-lg border border-slate-200 hover:border-red-200 shadow-xs transition cursor-pointer"
+            className="p-1.5 app-header-btn hover:bg-red-950/50 hover:text-red-400 hover:border-red-900/50 rounded-lg shadow-xs cursor-pointer"
             title="Zamknij drugie okno i wróć do trybu 1 ekranu"
           >
             <X size={14} />
@@ -661,7 +661,7 @@ export default function CompanionWindowView({
       )}
 
       {/* ── GŁÓWNA STREFA ZAWARTOŚCI EKRANU 2 (JASNA, IDENTYCZNA Z EKRANEM 1) ── */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-slate-100 text-slate-800">
+      <main className="flex-1 flex flex-col overflow-hidden app-workspace-canvas">
         
         {/* ======================================================== */}
         {/* WIDOK 1: KREATOR SZKOŁY (NOWY WARIANT)                   */}

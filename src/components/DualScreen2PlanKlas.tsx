@@ -146,10 +146,10 @@ export default function DualScreen2PlanKlas({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-100 text-slate-800 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full app-workspace-canvas overflow-hidden select-none">
       
-      {/* ── PASEK KONTROLNY DLA SIATKI KLAS NA EKRANIE 2 (JASNY MOTYW) ── */}
-      <div className="bg-white border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
+      {/* ── PASEK KONTROLNY DLA SIATKI KLAS NA EKRANIE 2 ── */}
+      <div className="bg-white border-b border-slate-300 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
         
         {/* Lewa sekcja: Informacja i aktywny wybór z puli */}
         <div className="flex items-center gap-3 min-w-0">
@@ -239,7 +239,7 @@ export default function DualScreen2PlanKlas({
       {/* ── KONTENER SIATKI TABELARYCZNEJ (KLASY X DNI X GODZINY) ── */}
       <div 
         ref={containerRef}
-        className={`flex-1 p-2 sm:p-3 relative bg-slate-100 flex items-start justify-center ${
+        className={`flex-1 p-2 sm:p-3 relative app-workspace-canvas flex items-start justify-center ${
           isAutoFit ? 'overflow-hidden' : 'overflow-auto'
         }`}
       >
@@ -253,14 +253,14 @@ export default function DualScreen2PlanKlas({
         >
           <table 
             ref={tableRef}
-            className="border-collapse text-left border border-slate-300 bg-white shadow-xs rounded-xl overflow-hidden"
+            className="border-collapse text-left plan-table-container shadow-xs rounded-xl overflow-hidden"
           >
             <thead>
               {/* WIERSZ 1 NAGŁÓWKA: DNI TYGODNIA */}
-              <tr className="bg-slate-100 text-slate-800 border-b border-slate-300">
+              <tr className="border-b border-slate-300">
                 <th 
                   rowSpan={2}
-                  className="px-3 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-700 border-r border-slate-300 bg-slate-100 sticky left-0 z-20 min-w-[110px]"
+                  className="px-3 py-2 text-center text-xs font-black uppercase tracking-wider plan-grid-header-day sticky left-0 z-20 min-w-[110px]"
                 >
                   Klasa (Oddział)
                 </th>
@@ -268,7 +268,7 @@ export default function DualScreen2PlanKlas({
                   <th 
                     key={dIdx}
                     colSpan={8}
-                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider text-blue-800 border-r border-slate-300 bg-blue-50/60"
+                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider plan-grid-header-day border-r border-slate-700"
                   >
                     {dayName}
                   </th>
@@ -276,17 +276,17 @@ export default function DualScreen2PlanKlas({
               </tr>
 
               {/* WIERSZ 2 NAGŁÓWKA: GODZINY LEKCJI (DLA KAŻDEGO DNIA) */}
-              <tr className="bg-slate-50 text-slate-600 border-b border-slate-300 text-[10px] font-bold">
+              <tr className="border-b border-slate-300 text-[10px] font-bold">
                 {DAYS.map((_, dIdx) => 
                   DEFAULT_HOURS.map(h => (
                     <th 
                       key={`${dIdx}_${h.num}`}
-                      className={`px-1 py-1 text-center border-r border-slate-200 font-mono ${
+                      className={`px-1 py-1 text-center border-r border-slate-300 font-mono plan-grid-header-time ${
                         isCompact ? 'w-[50px] min-w-[50px]' : 'w-[64px] min-w-[64px]'
                       }`}
                     >
-                      <span className="block text-slate-800 font-black">{h.num}</span>
-                      <span className="text-[9px] text-slate-400 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
+                      <span className="block text-slate-900 font-black">{h.num}</span>
+                      <span className="text-[9px] text-slate-500 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
                     </th>
                   ))
                 )}

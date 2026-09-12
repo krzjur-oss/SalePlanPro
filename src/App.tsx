@@ -1721,9 +1721,9 @@ export default function App() {
       
       {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY (ORGANIZACJA DWUPOZIOMOWA DLA TABLETÓW I DESKTOPU) ── */}
       {!isPresentationMode && (
-        <header className="relative z-50 bg-white text-slate-800 shadow-xs select-none shrink-0 border-b border-slate-200">
+        <header className="relative z-50 bg-slate-900 text-slate-100 shadow-xl select-none shrink-0 border-b border-slate-800">
           {/* Poziom 1: Tożsamość szkoły, moduł nawigacji oraz narzędzia widoku */}
-          <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-200">
+          <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-800/80">
             {/* Lewa strona: Logo + Nazwa programu + Nazwa szkoły */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="bg-blue-600 rounded-lg p-1.5 sm:p-2 text-white flex items-center justify-center font-black text-xs sm:text-sm shrink-0 shadow-xs">
@@ -1731,15 +1731,15 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 leading-none">
-                  <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-slate-900 leading-none whitespace-nowrap">
+                  <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-white leading-none whitespace-nowrap">
                     SalePlan Pro
                   </h1>
-                  <span className="bg-blue-50 text-blue-700 border border-blue-200 font-bold px-1.5 py-0.5 rounded text-[9px] uppercase font-mono tracking-wide hidden sm:inline-block leading-none">
+                  <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold px-1.5 py-0.5 rounded text-[9px] uppercase font-mono tracking-wide hidden sm:inline-block leading-none">
                     PWA App
                   </span>
                 </div>
                 <p 
-                  className="text-[10px] sm:text-xs text-slate-500 font-semibold mt-0.5 truncate max-w-[160px] sm:max-w-xs md:max-w-sm lg:max-w-md"
+                  className="text-[10px] sm:text-xs text-slate-400 font-semibold mt-0.5 truncate max-w-[160px] sm:max-w-xs md:max-w-sm lg:max-w-md"
                   title={`${appState.school.name || 'Wersja Demonstracyjna'} • Rok szkolny ${appState.yearLabel}`}
                 >
                   {appState.school.name || 'Wersja Demonstracyjna'} • {appState.yearLabel}
@@ -1753,174 +1753,174 @@ export default function App() {
               <div className="relative z-50">
                 <button
                   onClick={() => setHamburgerOpen(!hamburgerOpen)}
-                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 bg-slate-50 border border-slate-300 hover:border-slate-400 rounded-xl hover:bg-slate-100 text-xs text-slate-800 font-extrabold shadow-2xs transition select-none cursor-pointer"
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 bg-slate-950/60 border border-slate-800 hover:border-slate-700 rounded-xl hover:bg-slate-900 text-xs text-slate-200 font-extrabold shadow-2xs transition select-none cursor-pointer"
                   id="hamburger-navigation-trigger"
                   title="Wybierz moduł programu"
                 >
-                  {hamburgerOpen ? <X size={14} className="text-red-500 animate-pulse" /> : <Menu size={14} className="text-blue-600" />}
+                  {hamburgerOpen ? <X size={14} className="text-red-400 animate-pulse" /> : <Menu size={14} className="text-blue-400" />}
                   <span className="text-slate-400 font-bold uppercase hidden md:inline text-[10px] tracking-wider pointer-events-none">Nawigacja:</span>
-                  <span className="flex items-center gap-1 leading-none text-xs text-slate-900">
-                    {currentTab === 'kreator' && <><Sparkles size={13} className="text-amber-600 font-bold" /> <span className="hidden sm:inline">Kreator Szkoły</span><span className="sm:hidden">Kreator</span></>}
-                    {currentTab === 'plan_klas' && <><Layers size={13} className="text-blue-600" /> <span className="hidden sm:inline">Etap 1: Plan Klas</span><span className="sm:hidden">Plan Klas</span></>}
-                    {currentTab === 'plan_sal' && <><MapPin size={13} className="text-teal-600" /> <span className="hidden sm:inline">Etap 2: Plan Sal</span><span className="sm:hidden">Plan Sal</span></>}
-                    {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-600" /> <span className="hidden sm:inline">Etap 3: Dyżury</span><span className="sm:hidden">Dyżury</span></>}
-                    {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-600" /> <span className="hidden sm:inline">Wydruki</span><span className="sm:hidden">Druk</span></>}
-                    {currentTab === 'statystyki' && <><BarChart2 size={13} className="text-rose-600" /> <span className="hidden sm:inline">Statystyki</span><span className="sm:hidden">Stats</span></>}
-                    {currentTab === 'ustawienia_generatorow' && <><Sliders size={13} className="text-indigo-600 font-bold" /> <span className="hidden sm:inline">Generator</span><span className="sm:hidden">Algorytmy</span></>}
-                    {currentTab === 'o_programie' && <><HelpCircle size={13} className="text-sky-600 font-bold" /> <span className="hidden sm:inline">O programie</span><span className="sm:hidden">Info</span></>}
+                  <span className="flex items-center gap-1 leading-none text-xs text-white">
+                    {currentTab === 'kreator' && <><Sparkles size={13} className="text-amber-400 font-bold" /> <span className="hidden sm:inline">Kreator Szkoły</span><span className="sm:hidden">Kreator</span></>}
+                    {currentTab === 'plan_klas' && <><Layers size={13} className="text-blue-400" /> <span className="hidden sm:inline">Etap 1: Plan Klas</span><span className="sm:hidden">Plan Klas</span></>}
+                    {currentTab === 'plan_sal' && <><MapPin size={13} className="text-teal-400" /> <span className="hidden sm:inline">Etap 2: Plan Sal</span><span className="sm:hidden">Plan Sal</span></>}
+                    {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-400" /> <span className="hidden sm:inline">Etap 3: Dyżury</span><span className="sm:hidden">Dyżury</span></>}
+                    {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-400" /> <span className="hidden sm:inline">Wydruki</span><span className="sm:hidden">Druk</span></>}
+                    {currentTab === 'statystyki' && <><BarChart2 size={13} className="text-rose-400" /> <span className="hidden sm:inline">Statystyki</span><span className="sm:hidden">Stats</span></>}
+                    {currentTab === 'ustawienia_generatorow' && <><Sliders size={13} className="text-indigo-400 font-bold" /> <span className="hidden sm:inline">Generator</span><span className="sm:hidden">Algorytmy</span></>}
+                    {currentTab === 'o_programie' && <><HelpCircle size={13} className="text-sky-400 font-bold" /> <span className="hidden sm:inline">O programie</span><span className="sm:hidden">Info</span></>}
                   </span>
-                  <ChevronDown size={13} className="text-slate-500 ml-0.5" />
+                  <ChevronDown size={13} className="text-slate-400 ml-0.5" />
                 </button>
 
                 {hamburgerOpen && (
                   <>
                     <div 
-                      className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-40" 
+                      className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-40" 
                       onClick={() => setHamburgerOpen(false)} 
                     />
                     
-                    <div className="absolute right-0 top-full mt-2 w-72 max-h-[calc(100vh-5rem)] overflow-y-auto bg-white border border-slate-200 p-2.5 rounded-2xl shadow-xl z-50 text-left">
-                      <div className="px-3.5 py-2 border-b border-slate-200 mb-2">
-                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-wider block">Główne moduły programu</span>
+                    <div className="absolute right-0 top-full mt-2 w-72 max-h-[calc(100vh-5rem)] overflow-y-auto bg-slate-900 border border-slate-800 p-2.5 rounded-2xl shadow-2xl z-50 text-left">
+                      <div className="px-3.5 py-2 border-b border-slate-800 mb-2">
+                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block">Główne moduły programu</span>
                       </div>
 
                       <div className="space-y-0.5">
                         <button
                           onClick={() => { setCurrentTab('kreator'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'kreator'
-                              ? 'bg-amber-50 border-l-4 border-amber-500 text-amber-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-amber-950/50 border-l-4 border-amber-500 text-amber-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <Sparkles size={15} className={`shrink-0 mt-0.5 ${currentTab === 'kreator' ? 'text-amber-600' : 'text-slate-400'}`} />
+                          <Sparkles size={15} className={`shrink-0 mt-0.5 ${currentTab === 'kreator' ? 'text-amber-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">🧙‍♀️ Kreator Szkoły</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Klasy, nauczyciele, gabinety</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Klasy, nauczyciele, gabinety</span>
                           </div>
                         </button>
 
                         <button
                           onClick={() => { setCurrentTab('plan_klas'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'plan_klas'
-                              ? 'bg-blue-50 border-l-4 border-blue-500 text-blue-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-blue-950/50 border-l-4 border-blue-500 text-blue-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <Layers size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_klas' ? 'text-blue-600' : 'text-slate-400'}`} />
+                          <Layers size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_klas' ? 'text-blue-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">📚 Etap 1: Plan Klas</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Siatka godzin oddziałowych</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Siatka godzin oddziałowych</span>
                           </div>
                         </button>
 
                         <button
                           onClick={() => { setCurrentTab('plan_sal'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'plan_sal'
-                              ? 'bg-teal-50 border-l-4 border-teal-500 text-teal-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-teal-950/50 border-l-4 border-teal-500 text-teal-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <MapPin size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_sal' ? 'text-teal-600' : 'text-slate-400'}`} />
+                          <MapPin size={15} className={`shrink-0 mt-0.5 ${currentTab === 'plan_sal' ? 'text-teal-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">🎨 Etap 2: Plan Sal</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Lokalizacje & obłożenie sal</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase font-mono">Lokalizacje & obłożenie sal</span>
                           </div>
                         </button>
 
                         <button
                           onClick={() => { setCurrentTab('dyzury'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'dyzury'
-                              ? 'bg-indigo-50 border-l-4 border-indigo-500 text-indigo-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-indigo-950/50 border-l-4 border-indigo-500 text-indigo-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <Shield size={15} className={`shrink-0 mt-0.5 ${currentTab === 'dyzury' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <Shield size={15} className={`shrink-0 mt-0.5 ${currentTab === 'dyzury' ? 'text-indigo-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">🛡️ Etap 3: Dyżury</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opieka na przerwach</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Opieka na przerwach</span>
                           </div>
                         </button>
 
-                        <div className="border-t border-slate-200 my-1 pb-1" />
+                        <div className="border-t border-slate-800 my-1 pb-1" />
 
                         <button
                           onClick={() => { setCurrentTab('wydruki'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'wydruki'
-                              ? 'bg-emerald-50 border-l-4 border-emerald-500 text-emerald-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-emerald-950/50 border-l-4 border-emerald-500 text-emerald-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <Printer size={15} className={`shrink-0 mt-0.5 ${currentTab === 'wydruki' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          <Printer size={15} className={`shrink-0 mt-0.5 ${currentTab === 'wydruki' ? 'text-emerald-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">🖨️ Wydruki i Publikacje</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Plany klas, nauczycieli, sal</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Plany klas, nauczycieli, sal</span>
                           </div>
                         </button>
 
                         <button
                           onClick={() => { setCurrentTab('statystyki'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'statystyki'
-                              ? 'bg-rose-50 border-l-4 border-rose-500 text-rose-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-rose-950/50 border-l-4 border-rose-500 text-rose-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <BarChart2 size={15} className={`shrink-0 mt-0.5 ${currentTab === 'statystyki' ? 'text-rose-600' : 'text-slate-400'}`} />
+                          <BarChart2 size={15} className={`shrink-0 mt-0.5 ${currentTab === 'statystyki' ? 'text-rose-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">📊 Statystyki i Diagnoza</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Okienka, limity, obciążenia</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase font-mono">Okienka, limity, obciążenia</span>
                           </div>
                         </button>
 
-                        <div className="border-t border-slate-200 my-1 pb-1" />
+                        <div className="border-t border-slate-800 my-1 pb-1" />
 
                         <button
                           onClick={() => { setCurrentTab('ustawienia_generatorow'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'ustawienia_generatorow'
-                              ? 'bg-indigo-50 border-l-4 border-indigo-500 text-indigo-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-indigo-950/50 border-l-4 border-indigo-500 text-indigo-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <Sliders size={15} className={`shrink-0 mt-0.5 ${currentTab === 'ustawienia_generatorow' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <Sliders size={15} className={`shrink-0 mt-0.5 ${currentTab === 'ustawienia_generatorow' ? 'text-indigo-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">⚙️ Ustawienia generatorów</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase font-mono">Kryteria i wagi algorytmów</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase font-mono">Kryteria i wagi algorytmów</span>
                           </div>
                         </button>
 
-                        <div className="border-t border-slate-200 my-1 pb-1" />
+                        <div className="border-t border-slate-800 my-1 pb-1" />
 
                         <button
                           onClick={() => { setCurrentTab('o_programie'); setOProgramieTab('info'); setHamburgerOpen(false); }}
-                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-100 ${
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
                             currentTab === 'o_programie'
-                              ? 'bg-sky-50 border-l-4 border-sky-500 text-sky-950 font-extrabold pl-2'
-                              : 'text-slate-700 hover:text-slate-900'
+                              ? 'bg-sky-950/50 border-l-4 border-sky-500 text-sky-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
                           }`}
                         >
-                          <HelpCircle size={15} className={`shrink-0 mt-0.5 ${currentTab === 'o_programie' ? 'text-sky-600' : 'text-slate-400'}`} />
+                          <HelpCircle size={15} className={`shrink-0 mt-0.5 ${currentTab === 'o_programie' ? 'text-sky-400' : 'text-slate-400'}`} />
                           <div>
                             <span className="text-xs font-black block">ℹ️ O programie & regulamin</span>
-                            <span className="text-[9px] text-slate-500 block leading-tight mt-0.5 font-bold uppercase">Opis, instrukcja i licencja</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Opis, instrukcja i licencja</span>
                           </div>
                         </button>
 
-                        <div className="border-t border-slate-200 my-1 pb-1" />
+                        <div className="border-t border-slate-800 my-1 pb-1" />
 
                         {/* Opcja trybu 2 ekranów w menu (z możliwością symulacji) */}
-                        <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+                        <div className="px-3 py-2 rounded-xl bg-slate-950/60 border border-slate-800">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
-                              <Monitor size={15} className="text-indigo-600 shrink-0" />
+                              <Monitor size={15} className="text-indigo-400 shrink-0" />
                               <div className="min-w-0">
-                                <span className="text-xs font-black block text-slate-800 truncate">🖥️ Dwa ekrany (Dual-Screen)</span>
-                                <span className="text-[9px] text-slate-500 block leading-tight mt-0.5">
+                                <span className="text-xs font-black block text-slate-200 truncate">🖥️ Dwa ekrany (Dual-Screen)</span>
+                                <span className="text-[9px] text-slate-400 block leading-tight mt-0.5">
                                   {isMultiScreenAvailable ? 'Wykryto drugi monitor (aktywny)' : 'Tryb 2 okien (wymuszenie / test)'}
                                 </span>
                               </div>
@@ -1936,7 +1936,7 @@ export default function App() {
                               className={`px-2 py-1 rounded text-[10px] font-extrabold transition cursor-pointer shrink-0 ${
                                 isForcedDualScreen || isMultiScreenAvailable
                                   ? 'bg-indigo-600 text-white shadow-xs'
-                                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                               }`}
                             >
                               {isForcedDualScreen ? 'Wymuszone' : isMultiScreenAvailable ? 'Dostępne' : 'Włącz test'}
@@ -1956,8 +1956,8 @@ export default function App() {
                   onClick={handleToggleDualScreen}
                   className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition select-none cursor-pointer border shadow-2xs ${
                     isCompanionActive
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-200 ring-2 ring-indigo-300'
-                      : 'bg-white border-slate-300 text-slate-700 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-400'
+                      ? 'bg-indigo-600 text-white border-indigo-500 shadow-indigo-900/50 ring-2 ring-indigo-400/50'
+                      : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900 hover:border-slate-700'
                   }`}
                   title={
                     isCompanionActive
@@ -1965,8 +1965,8 @@ export default function App() {
                       : "Wykryto 2 ekrany! Kliknij, aby podzielić program na dwa okna (Ekran 1: Plan Klas, Ekran 2: Matryca Sal i Płachta)."
                   }
                 >
-                  <Monitor size={14} className={isCompanionActive ? 'text-amber-300 animate-pulse' : 'text-indigo-600'} />
-                  <span className="hidden xl:inline text-slate-500 font-medium">Tryb pracy:</span>
+                  <Monitor size={14} className={isCompanionActive ? 'text-amber-300 animate-pulse' : 'text-indigo-400'} />
+                  <span className="hidden xl:inline text-slate-400 font-medium">Tryb pracy:</span>
                   <span className="font-extrabold tracking-tight">
                     {isCompanionActive ? '2 Ekrany' : '1 Ekran'}
                   </span>
@@ -1977,11 +1977,11 @@ export default function App() {
               )}
 
               {/* Segmented Controls: Wstecz / Ponów / Pełen ekran / Tryb czytania */}
-              <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5 shadow-2xs">
+              <div className="flex items-center bg-slate-950/60 border border-slate-800 rounded-xl p-0.5 shadow-2xs">
                 <button 
                   onClick={handleUndo}
                   disabled={undoStack.length === 0}
-                  className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent transition select-none cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent transition select-none cursor-pointer"
                   title="Cofnij ostatnie działanie (Undo) • Ctrl+Z"
                 >
                   <RotateCcw size={14} />
@@ -1989,18 +1989,18 @@ export default function App() {
                 <button 
                   onClick={handleRedo}
                   disabled={redoStack.length === 0}
-                  className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white disabled:opacity-30 disabled:hover:bg-transparent transition select-none cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent transition select-none cursor-pointer"
                   title="Ponów cofnięte działanie (Redo) • Ctrl+Y"
                 >
                   <RotateCw size={14} />
                 </button>
-                <div className="h-3.5 w-px bg-slate-300 mx-0.5" />
+                <div className="h-3.5 w-px bg-slate-800 mx-0.5" />
                 <button 
                   onClick={handleToggleFullscreen}
-                  className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white transition select-none cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition select-none cursor-pointer"
                   title={isFullscreen ? "Wyjdź z pełnego ekranu" : "Pełny ekran (Fullscreen)"}
                 >
-                  {isFullscreen ? <Minimize2 size={14} className="text-amber-600" /> : <Maximize2 size={14} />}
+                  {isFullscreen ? <Minimize2 size={14} className="text-amber-400" /> : <Maximize2 size={14} />}
                 </button>
                 <button 
                   onClick={() => {
@@ -2008,7 +2008,7 @@ export default function App() {
                     notify(isPresentationMode ? 'Wyłączono tryb czytania' : 'Włączono tryb czytania / prezentacji (Esc aby wyjść)', 'info');
                   }}
                   className={`p-1.5 rounded-lg transition select-none cursor-pointer ${
-                    isPresentationMode ? 'text-amber-700 bg-amber-100 hover:bg-amber-200' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+                    isPresentationMode ? 'text-amber-300 bg-amber-950/50 hover:bg-amber-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                   title={isPresentationMode ? "Wyjdź z trybu czytania" : "Tryb czytania i prezentacji"}
                 >
@@ -2019,24 +2019,24 @@ export default function App() {
           </div>
 
           {/* Poziom 2: Pasek operacyjny — Bezpieczeństwo & RODO, Punkty przywracania, Eksport i Import ze scalaniem */}
-          <div className="px-3 sm:px-4 md:px-6 py-1.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+          <div className="px-3 sm:px-4 md:px-6 py-1.5 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
             {/* Lewa grupa: Ochrona danych i historia migawek */}
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => setShowSecurityModal(true)}
-                className="px-2.5 py-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-white border border-slate-300 hover:border-emerald-500 cursor-pointer shadow-2xs"
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 cursor-pointer shadow-2xs"
                 title="Tarcza Bezpieczeństwa & RODO (Szyfrowanie bazy AES-256, Anonimizacja)"
               >
-                <Shield size={14} className="text-emerald-600 shrink-0" />
+                <Shield size={14} className="text-emerald-400 shrink-0" />
                 <span className="leading-none">Bezpieczeństwo & RODO</span>
               </button>
 
               <button 
                 onClick={() => setShowSnapshotManager(true)}
-                className="px-2.5 py-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-white border border-slate-300 hover:border-violet-500 cursor-pointer shadow-2xs"
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-violet-500/50 cursor-pointer shadow-2xs"
                 title="Zarządzaj punktami przywracania planu (Snapshots)"
               >
-                <History size={14} className="text-violet-600 shrink-0" />
+                <History size={14} className="text-violet-400 shrink-0" />
                 <span className="leading-none">Punkty przywracania</span>
                 {snapshots.length > 0 && (
                   <span className="bg-violet-600 font-black text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center">
@@ -2048,12 +2048,12 @@ export default function App() {
               <button 
                 id="toolbar-plan-variants-btn"
                 onClick={() => setShowVariantsModal(true)}
-                className="px-2.5 py-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-white border border-slate-300 hover:border-indigo-500 cursor-pointer shadow-2xs"
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 cursor-pointer shadow-2xs"
                 title="Wariantowanie planu (Semestr I/II, warianty robocze, diff porównawczy)"
               >
-                <Layers size={14} className="text-indigo-600 shrink-0" />
-                <span className="leading-none text-slate-500 hidden sm:inline">Wariant:</span>
-                <span className="text-indigo-700 font-bold max-w-[130px] truncate leading-none">
+                <Layers size={14} className="text-indigo-400 shrink-0" />
+                <span className="leading-none text-slate-400 hidden sm:inline">Wariant:</span>
+                <span className="text-indigo-300 font-bold max-w-[130px] truncate leading-none">
                   {activeVariant?.name || 'Domyślny'}
                 </span>
                 {planVariants.length > 1 && (
@@ -2068,18 +2068,18 @@ export default function App() {
             <div className="flex items-center gap-2 shrink-0">
               <button 
                 onClick={handleExportBackup}
-                className="px-2.5 py-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-white border border-slate-300 hover:border-blue-500 cursor-pointer shadow-2xs"
+                className="px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800/80 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 hover:border-blue-500/50 cursor-pointer shadow-2xs"
                 title="Pobierz pełny plik konfiguracyjny lub zanonimizowaną kopię RODO (JSON)"
               >
-                <Download size={14} className="text-blue-600 shrink-0" />
+                <Download size={14} className="text-blue-400 shrink-0" />
                 <span className="leading-none">Eksport</span>
               </button>
               
               <label 
-                className="px-2.5 py-1.5 text-emerald-800 hover:text-emerald-950 hover:bg-emerald-50 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-white border border-emerald-300 hover:border-emerald-500 cursor-pointer shadow-2xs"
+                className="px-2.5 py-1.5 text-emerald-300 hover:text-emerald-100 hover:bg-emerald-950/40 rounded-lg transition text-xs font-bold flex items-center gap-1.5 bg-slate-900/90 border border-emerald-500/30 hover:border-emerald-500/60 cursor-pointer shadow-2xs"
                 title="Wczytaj kopię planu lub scal dane z wielu plików JSON"
               >
-                <Upload size={14} className="text-emerald-600 shrink-0" />
+                <Upload size={14} className="text-emerald-400 shrink-0" />
                 <span className="leading-none whitespace-nowrap">Import i scalanie</span>
                 <input 
                   type="file" 
@@ -2092,7 +2092,7 @@ export default function App() {
 
               <button 
                 onClick={handleResetTimetable}
-                className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition border border-transparent hover:border-red-200 cursor-pointer"
+                className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition border border-transparent hover:border-red-900/50 cursor-pointer"
                 title="Resetuj dane i przywróć stan początkowy"
               >
                 <Trash2 size={14} />

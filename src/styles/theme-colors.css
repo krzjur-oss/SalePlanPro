@@ -1,0 +1,268 @@
+/* ==========================================================================
+   SALEPLAN PRO — GLOBALNA PALETA BARW I KLASY MOTYWÓW (1 ORAZ 2 EKRANY)
+   Plik: src/styles/theme-colors.css
+   
+   Wszystkie kolory aplikacji sterowane są z tego pliku.
+   Zmieniając wartości poniższych zmiennych CSS zmieniasz wygląd 
+   zarówno widoku pojedynczego ekranu, jak i monitora pomocniczego (Ekran 2).
+   ========================================================================== */
+
+:root {
+  /* ──────────────────────────────────────────────────────────────────────────
+     1. GŁÓWNA NAWIGACJA I PASKI SYSTEMOWE (NAGŁÓWKI EKRANU 1 I EKRANU 2)
+     Odpowiada za:
+     - Główny pasek programu z logo i nazwą szkoły na samej górze
+     - Pasek nagłówkowy okna drugiego ekranu (Companion Window)
+     - Przełącznik modułów (hamburger menu / widoki drugiego monitora)
+     ────────────────────────────────────────────────────────────────────────── */
+  --header-bg: #0f172a;               /* Tło głównego nagłówka (Slate 900) */
+  --header-border: #1e293b;           /* Dolna linia podziału nagłówka (Slate 800) */
+  --header-text: #ffffff;             /* Kolor głównego tytułu i tekstu (Biały) */
+  --header-text-muted: #94a3b8;       /* Tekst pomocniczy, np. rok szkolny, etykiety (Slate 400) */
+  --header-control-bg: rgba(2, 6, 23, 0.7); /* Tło przycisków w nagłówku (Slate 950 z przezroczystością) */
+  --header-control-border: #1e293b;   /* Ramka przycisków w nagłówku (Slate 800) */
+  --header-control-hover: #1e293b;    /* Tło przycisku po najechaniu kursorem (Slate 800) */
+  --header-badge-bg: rgba(59, 130, 246, 0.2); /* Tło plakietki PWA App */
+  --header-badge-border: rgba(59, 130, 246, 0.35); /* Ramka plakietki PWA App */
+  --header-badge-text: #93c5fd;       /* Tekst plakietki PWA App (Błękit) */
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     2. PASEK OPERACYJNY (TOOLBAR: RODO, MIGAWI WARIANTY, EKSPORT/IMPORT)
+     Odpowiada za:
+     - Drugi poziom paska głównego (Tarcza RODO, Punkty przywracania, Warianty, Eksport, Import)
+     - Pasek informacyjny trybu 2 ekranów w oknie nadrzędnym (Master View)
+     ────────────────────────────────────────────────────────────────────────── */
+  --toolbar-bg: rgba(2, 6, 23, 0.95); /* Bardzo ciemne tło paska narzędziowego (Slate 950) */
+  --toolbar-border: #1e293b;          /* Linia podziału paska narzędziowego (Slate 800) */
+  --toolbar-btn-bg: rgba(15, 23, 42, 0.9); /* Tło przycisków na pasku narzędzi (Slate 900) */
+  --toolbar-btn-border: #1e293b;      /* Obramowanie przycisków (Slate 800) */
+  --toolbar-btn-text: #cbd5e1;        /* Tekst przycisków narzędziowych (Slate 300) */
+  --toolbar-btn-hover-bg: #1e293b;    /* Tło po najechaniu kursorem (Slate 800) */
+  --toolbar-btn-hover-text: #ffffff;  /* Tekst po najechaniu kursorem (Biały) */
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     3. OBSZAR ROBOCZY I KONTENERY (PULPIT DANYCH)
+     Odpowiada za:
+     - Tło całego pulpitu pod tabelami i dokerami na obu ekranach
+     - Standardowe panele, karty i sekcje informacyjne
+     ────────────────────────────────────────────────────────────────────────── */
+  --workspace-bg: #f1f5f9;            /* Tło całego pulpitu roboczego (Jasnoszary Slate 100) */
+  --card-bg: #ffffff;                 /* Tło białych kart i paneli (White) */
+  --card-border: #cbd5e1;             /* Obramowanie paneli (Slate 300) */
+  --card-text-main: #0f172a;          /* Główny kolor tekstu na kartach (Ciemny Slate 900) */
+  --card-text-muted: #64748b;         /* Tekst wygaszony, opisy (Slate 500) */
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     4. SIATKA TABELI (PLAN KLAS, PLAN SAL, PŁACHTA DYREKTORSKA NA OBU EKRANACH)
+     Odpowiada za:
+     - Nagłówki kolumn z dniami tygodnia (Poniedziałek – Piątek)
+     - Nagłówki wierszy z numerami i godzinami lekcyjnymi (np. 1. 8:00 - 8:45)
+     - Komórki siatki (puste komórki, komórki wyłączone/nieaktywne)
+     - Linie podziału tabeli
+     ────────────────────────────────────────────────────────────────────────── */
+  --grid-header-day-bg: #0f172a;      /* Tło nagłówka dnia tygodnia (Bardzo ciemny Slate 900) */
+  --grid-header-day-border: #1e293b;  /* Krawędzie nagłówka dnia */
+  --grid-header-day-text: #ffffff;    /* Biały tekst nagłówka dnia */
+  --grid-header-time-bg: #f8fafc;     /* Tło kolumny z godziną lekcyjną (Slate 50) */
+  --grid-header-time-text: #1e293b;   /* Cyfry i godziny lekcyjne (Slate 800) */
+  --grid-border: #cbd5e1;             /* Główna siatka linii podziału (Slate 300) */
+  --grid-border-heavy: #94a3b8;       /* Grubsza linia rozdzielająca dni tygodnia (Slate 400) */
+  --grid-cell-bg: #ffffff;            /* Czysta, aktywna komórka lekcyjna (Biały) */
+  --grid-cell-empty-bg: #f8fafc;      /* Pusta komórka bez zajęć (Slate 50) */
+  --grid-cell-disabled-bg: #f1f5f9;   /* Komórka nieaktywna / poza limitem (Slate 100) */
+  --grid-cell-hover-bg: #e0e7ff;      /* Podświetlenie komórki przy przeciąganiu lekcji (Indigo 100) */
+  --grid-cell-hover-border: #6366f1;  /* Ramka aktywnego celu upuszczenia (Indigo 500) */
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     5. KLOCKI LEKCJI (KAFLIKI ZAJĘĆ W KOMÓRKACH TABELI)
+     Odpowiada za:
+     - Domyślny wygląd klocka lekcji w planie klas i planie sal
+     - Styl zaznaczonego/klikniętego klocka lekcji
+     ────────────────────────────────────────────────────────────────────────── */
+  --lesson-default-bg: #f8fafc;       /* Tło kafelka lekcji (Slate 50) */
+  --lesson-default-border: #cbd5e1;   /* Obramowanie kafelka (Slate 300) */
+  --lesson-default-text: #0f172a;     /* Nazwa przedmiotu (Slate 900) */
+  --lesson-subtext: #475569;          /* Nauczyciel i sala (Slate 600) */
+  --lesson-selected-ring: #4f46e5;    /* Pierścień podświetlenia zaznaczonej lekcji (Indigo 600) */
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     6. OSTRZEŻENIA I SYGNALIZACJA KOLIZJI (BŁĘDY / BRAK SALI / ZAJĘTY NAUCZYCIEL)
+     Odpowiada za:
+     - Wykryte konflikty w planie (np. ten sam nauczyciel w 2 miejscach, brak gabinetu)
+     ────────────────────────────────────────────────────────────────────────── */
+  --conflict-bg: #fff1f2;             /* Tło klocka z błędem / kolizją (Rose 50) */
+  --conflict-border: #f43f5e;         /* Czerwona krawędź błędu (Rose 500) */
+  --conflict-text: #9f1239;           /* Ciemnoczerwony tekst błędu (Rose 800) */
+  --conflict-badge-bg: #e11d48;       /* Tło plakietki błędu (Rose 600) */
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     7. PULA GODZIN / PANEL BOCZNY (DOKER ZAJĘĆ DO WSTAWIENIA)
+     Odpowiada za:
+     - Pasek boczny/dolny z niewstawionymi lekcjami oddziału lub pulą sal
+     ────────────────────────────────────────────────────────────────────────── */
+  --pool-header-bg: #0f172a;          /* Nagłówek panelu puli (Slate 900) */
+  --pool-header-text: #ffffff;        /* Tekst nagłówka puli (Biały) */
+  --pool-body-bg: #ffffff;            /* Tło listy przydziałów w puli (Biały) */
+  --pool-body-border: #cbd5e1;        /* Ramka panelu puli (Slate 300) */
+  --pool-item-bg: #f8fafc;            /* Kafelek przedmiotu w puli (Slate 50) */
+  --pool-item-border: #e2e8f0;        /* Ramka kafelka w puli (Slate 200) */
+  --pool-item-text: #0f172a;          /* Tekst przedmiotu w puli */
+  --pool-badge-bg: #e2e8f0;           /* Plakietka licznika godzin */
+  --pool-badge-text: #1e293b;         /* Tekst licznika godzin */
+}
+
+/* ==========================================================================
+   SEMANTYCZNE KLASY POMOCNICZE W OPARCIU O POWYŻSZE ZMIENNE
+   Ułatwiają stosowanie spójnego schematu w komponentach JSX/TSX
+   ========================================================================== */
+
+/* 1. Nagłówek systemowy aplikacji (Ekran 1 oraz Ekran 2) */
+.app-header-bar {
+  background-color: var(--header-bg);
+  border-bottom: 1px solid var(--header-border);
+  color: var(--header-text);
+}
+
+/* Przyciski i przełączniki w nagłówku */
+.app-header-btn {
+  background-color: var(--header-control-bg);
+  border: 1px solid var(--header-control-border);
+  color: var(--header-text);
+  transition: all 0.15s ease;
+}
+.app-header-btn:hover {
+  background-color: var(--header-control-hover);
+  border-color: #334155;
+}
+
+/* 2. Pasek operacyjny (Toolbar) */
+.app-toolbar-bar {
+  background-color: var(--toolbar-bg);
+  border-bottom: 1px solid var(--toolbar-border);
+  color: var(--toolbar-btn-text);
+}
+
+.app-toolbar-btn {
+  background-color: var(--toolbar-btn-bg);
+  border: 1px solid var(--toolbar-btn-border);
+  color: var(--toolbar-btn-text);
+  transition: all 0.15s ease;
+}
+.app-toolbar-btn:hover {
+  background-color: var(--toolbar-btn-hover-bg);
+  color: var(--toolbar-btn-hover-text);
+  border-color: #334155;
+}
+
+/* 3. Główny pulpit roboczy */
+.app-workspace-canvas {
+  background-color: var(--workspace-bg);
+  color: var(--card-text-main);
+}
+
+/* 4. Siatka planu lekcji (Tabele planów klas, sal, płachty dyrektorskiej) */
+.plan-table-container {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+}
+
+/* Nagłówek kolumny dnia tygodnia */
+.plan-grid-header-day {
+  background-color: var(--grid-header-day-bg);
+  border-bottom: 2px solid var(--grid-header-day-border);
+  color: var(--grid-header-day-text);
+  font-weight: 800;
+}
+
+/* Nagłówek wiersza godziny lekcyjnej */
+.plan-grid-header-time {
+  background-color: var(--grid-header-time-bg);
+  border-right: 2px solid var(--grid-border);
+  color: var(--grid-header-time-text);
+  font-family: ui-monospace, monospace;
+}
+
+/* Komórka robocza w siatce */
+.plan-grid-cell {
+  background-color: var(--grid-cell-bg);
+  border: 1px solid var(--grid-border);
+  transition: background-color 0.1s ease;
+}
+.plan-grid-cell-empty {
+  background-color: var(--grid-cell-empty-bg);
+  border: 1px solid var(--grid-border);
+}
+.plan-grid-cell-disabled {
+  background-color: var(--grid-cell-disabled-bg);
+  border: 1px solid var(--grid-border);
+}
+
+/* Komórka po najechaniu przeciąganą lekcją */
+.plan-grid-cell-drop-hover {
+  background-color: var(--grid-cell-hover-bg) !important;
+  border: 2px dashed var(--grid-cell-hover-border) !important;
+}
+
+/* 5. Kafelek lekcji w tabeli */
+.plan-lesson-card-base {
+  background-color: var(--lesson-default-bg);
+  border: 1px solid var(--lesson-default-border);
+  color: var(--lesson-default-text);
+}
+
+/* 6. Stan kolizji / błędu */
+.plan-lesson-conflict-card {
+  background-color: var(--conflict-bg) !important;
+  border: 1px solid var(--conflict-border) !important;
+  color: var(--conflict-text) !important;
+}
+
+/* 7. Doker puli lekcji / sal */
+.pool-panel-container {
+  background-color: var(--pool-body-bg);
+  border: 1px solid var(--pool-body-border);
+}
+.pool-panel-header {
+  background-color: var(--pool-header-bg);
+  color: var(--pool-header-text);
+}
+.pool-item-card {
+  background-color: var(--pool-item-bg);
+  border: 1px solid var(--pool-item-border);
+  color: var(--pool-item-text);
+}
+
+/* 8. Selektor wyboru sali (Ręczna alokacja sal / .assign-room-dropdown)
+   Odpowiada za:
+   - Rozwijaną listę sal z podziałem na wolne/zajęte w danej godzinie
+   - Przyspieszoną alokację gabinetów lekcyjnych w planie klas i planie sal
+*/
+.assign-room-dropdown {
+  background-color: #ffffff;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.15rem;
+  padding: 0.375rem 0.625rem;
+  outline: none;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+}
+.assign-room-dropdown:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+.assign-room-dropdown optgroup {
+  font-weight: 800;
+  color: #334155;
+  background-color: #f8fafc;
+  padding: 4px 0;
+}
+.assign-room-dropdown option {
+  font-weight: 500;
+  color: #0f172a;
+  background-color: #ffffff;
+  padding: 2px 4px;
+}
+

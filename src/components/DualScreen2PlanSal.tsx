@@ -268,10 +268,10 @@ export default function DualScreen2PlanSal({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-100 text-slate-800 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full app-workspace-canvas overflow-hidden select-none">
       
-      {/* ── PASEK KONTROLNY DLA SIATKI SAL NA EKRANIE 2 (JASNY MOTYW) ── */}
-      <div className="bg-white border-b border-slate-200 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
+      {/* ── PASEK KONTROLNY DLA SIATKI SAL NA EKRANIE 2 ── */}
+      <div className="bg-white border-b border-slate-300 px-4 py-2 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-2xs">
         
         {/* Lewa strona: Tytuł i aktywny wybór z Ekranu 1 */}
         <div className="flex items-center gap-3 min-w-0">
@@ -399,7 +399,7 @@ export default function DualScreen2PlanSal({
       {/* ── KONTENER TABELI SIATKI SAL ── */}
       <div 
         ref={containerRef}
-        className={`flex-1 p-2 sm:p-3 relative bg-slate-100 flex items-start justify-center ${
+        className={`flex-1 p-2 sm:p-3 relative app-workspace-canvas flex items-start justify-center ${
           isAutoFit ? 'overflow-hidden' : 'overflow-auto'
         }`}
       >
@@ -413,27 +413,27 @@ export default function DualScreen2PlanSal({
         >
           <table 
             ref={tableRef}
-            className="border-collapse text-left border border-slate-300 bg-white shadow-xs rounded-xl overflow-hidden"
+            className="border-collapse text-left plan-table-container shadow-xs rounded-xl overflow-hidden"
           >
             <thead>
               {/* WIERSZ 1 NAGŁÓWKA: DNI TYGODNIA */}
-              <tr className="bg-slate-100 text-slate-800 border-b border-slate-300">
+              <tr className="border-b border-slate-300">
                 {/* 3 KOLUMNY IDENTYFIKACYJNE SALI: BUDYNEK, PIĘTRO, SALA */}
                 <th 
                   rowSpan={2}
-                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-700 border-r border-slate-300 bg-slate-100 sticky left-0 z-30 min-w-[90px]"
+                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider plan-grid-header-day sticky left-0 z-30 min-w-[90px]"
                 >
                   Budynek
                 </th>
                 <th 
                   rowSpan={2}
-                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-slate-700 border-r border-slate-300 bg-slate-100 sticky left-[90px] z-30 min-w-[80px]"
+                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider plan-grid-header-day sticky left-[90px] z-30 min-w-[80px]"
                 >
                   Piętro
                 </th>
                 <th 
                   rowSpan={2}
-                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider text-teal-800 border-r border-slate-300 bg-teal-50/70 sticky left-[170px] z-30 min-w-[100px]"
+                  className="px-2.5 py-2 text-center text-xs font-black uppercase tracking-wider plan-grid-header-day sticky left-[170px] z-30 min-w-[100px]"
                 >
                   Sala
                 </th>
@@ -443,7 +443,7 @@ export default function DualScreen2PlanSal({
                   <th 
                     key={dIdx}
                     colSpan={8}
-                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider text-teal-800 border-r border-slate-300 bg-teal-50/60"
+                    className="px-2 py-1.5 text-center text-xs font-black uppercase tracking-wider plan-grid-header-day border-r border-slate-700"
                   >
                     {dayName}
                   </th>
@@ -451,17 +451,17 @@ export default function DualScreen2PlanSal({
               </tr>
 
               {/* WIERSZ 2 NAGŁÓWKA: GODZINY I NR LEKCJI */}
-              <tr className="bg-slate-50 text-slate-600 border-b border-slate-300 text-[10px] font-bold">
+              <tr className="border-b border-slate-300 text-[10px] font-bold">
                 {DAYS.map((_, dIdx) => 
                   DEFAULT_HOURS.map(h => (
                     <th 
                       key={`${dIdx}_${h.num}`}
-                      className={`px-1 py-1 text-center border-r border-slate-200 font-mono ${
+                      className={`px-1 py-1 text-center border-r border-slate-300 font-mono plan-grid-header-time ${
                         isCompact ? 'w-[50px] min-w-[50px]' : 'w-[64px] min-w-[64px]'
                       }`}
                     >
-                      <span className="block text-slate-800 font-black">{h.num}</span>
-                      <span className="text-[9px] text-slate-400 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
+                      <span className="block text-slate-900 font-black">{h.num}</span>
+                      <span className="text-[9px] text-slate-500 hidden sm:block truncate">{h.range.split(' ')[0]}</span>
                     </th>
                   ))
                 )}

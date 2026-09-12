@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { isSportsFacility } from './PlanKlas';
 import { isNIRoom } from './CompanionWindowView';
+import { AssignRoomDropdown } from './AssignRoomDropdown';
 
 interface DualScreenMasterViewProps {
   currentTab: 'kreator' | 'plan_klas' | 'plan_sal' | 'dyzury' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow';
@@ -350,26 +351,45 @@ export default function DualScreenMasterView({
     });
   };
 
+  const handleAssignRoom = (assignmentId: string, roomId: string) => {
+    const updatedAssignments = pl.assignments.map(a =>
+      a.id === assignmentId ? { ...a, roomId: roomId || null } : a
+    );
+    onChangeAppState(prev => ({
+      ...prev,
+      planLekcji: {
+        ...prev.planLekcji,
+        assignments: updatedAssignments
+      }
+    }));
+
+    dualScreenService.sendMessage({
+      type: 'UPDATE_ASSIGNMENTS',
+      payload: { assignments: updatedAssignments },
+      timestamp: Date.now()
+    });
+  };
+
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-100 text-slate-800 overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full app-workspace-canvas overflow-hidden select-none">
       
       {/* ── PASEK INFORMACYJNY TRYBU 2 EKRANÓW (EKRAN 1) ── */}
-      <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 shadow-xs text-slate-800">
+      <div className="app-header-bar px-4 py-2 flex items-center justify-between gap-3 shrink-0 shadow-md">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="bg-indigo-600 text-white p-1.5 rounded-lg shadow-xs flex items-center justify-center">
             <Monitor size={16} />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-slate-900 tracking-wide uppercase">
+              <span className="text-xs font-black text-white tracking-wide uppercase">
                 Ekran 1 (Główny) • Tryb 2 Ekrany
               </span>
-              <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="inline-flex items-center gap-1 bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 Ekran 2 zsynchronizowany
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 truncate">
+            <p className="text-[11px] text-slate-400 truncate">
               {currentTab === 'kreator' && 'Pokazuje aktywną konfigurację szkoły. Na Ekranie 2 możesz utworzyć nowy wariant.'}
               {currentTab === 'plan_klas' && 'Pula godzin lekcyjnych & Ustawienia generatora. Na Ekranie 2 otwarta jest siatka klas i godzin.'}
               {currentTab === 'plan_sal' && 'Pula zajęć dnia z podziałem na godziny. Na Ekranie 2 otwarta jest siatka sal z lokalizacjami.'}
@@ -381,7 +401,7 @@ export default function DualScreenMasterView({
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={onRecallCompanionWindow}
-            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Przywołaj Okno Towarzyszące (Ekran 2) na wierzch"
           >
             <ExternalLink size={13} />
@@ -389,7 +409,7 @@ export default function DualScreenMasterView({
           </button>
           <button
             onClick={onToggleSingleScreen}
-            className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-2.5 py-1.5 app-header-btn rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Przełącz z powrotem na standardowy widok pojedynczego ekranu"
           >
             <span>Tryb 1 ekranu</span>
@@ -1047,25 +1067,49 @@ export default function DualScreenMasterView({
                               </p>
                             </div>
 
-                            <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between">
-                              {hasRoom ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                                  <DoorOpen size={11} />
-                                  {lessonItem.assignedRoomName || 'Sala przydzielona'}
+                            <div className="pt-2 border-t border-slate-200/80 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-600 flex items-center gap-1">
+                                  <DoorOpen size={11} className={hasRoom ? "text-emerald-600" : "text-amber-500"} />
+                                  <span>Sala (godz. {hourGroup.hourNum}):</span>
                                 </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded animate-pulse">
-                                  <AlertTriangle size={11} />
-                                  Brak sali
-                                </span>
-                              )}
+                                {hasRoom && (
+                                  <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                                    {lessonItem.assignedRoomName}
+                                  </span>
+                                )}
+                              </div>
 
-                              <button
-                                type="button"
-                                className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold"
-                              >
-                                Wskaż na Ekranie 2 →
-                              </button>
+                              <AssignRoomDropdown
+                                planLekcji={pl}
+                                dayIdx={salSelectedDay}
+                                hourIdx={hourGroup.hourIdx}
+                                currentAssignmentId={lessonItem.asg.id}
+                                value={lessonItem.assignedRoomId}
+                                onChange={(roomId) => handleAssignRoom(lessonItem.asg.id, roomId)}
+                                placeholder="-- Wybierz wolną salę --"
+                                showSortControl={false}
+                                compact={true}
+                              />
+
+                              <div className="flex items-center justify-between pt-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleHighlightLessonOnScreen2(lessonItem, hourGroup.hourIdx)}
+                                  className="text-[10px] text-indigo-600 hover:text-indigo-800 font-extrabold hover:underline"
+                                >
+                                  Wskaż na Ekranie 2 →
+                                </button>
+                                {hasRoom && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAssignRoom(lessonItem.asg.id, '')}
+                                    className="text-[9.5px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                                  >
+                                    Odłącz salę
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );

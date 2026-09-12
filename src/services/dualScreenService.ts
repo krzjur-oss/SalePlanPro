@@ -27,6 +27,7 @@ export interface DualScreenMessage {
     | 'CREATE_VARIANT'
     | 'SWITCH_VARIANT'
     | 'UPDATE_LESSONS'
+    | 'UPDATE_ASSIGNMENTS'
     | 'UPDATE_SCHED_DATA'
     | 'SELECT_LESSON_POOL'
     | 'CLEAR_ROOM_SCHEDULE'
