@@ -115,6 +115,16 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
                     <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">Ewidencja dyżurów ze wskaźnikami obciążeń nauczycieli na przerwach.</p>
                   </div>
                 </div>
+
+                <div className="flex items-start gap-2.5">
+                  <div className="p-1 rounded bg-purple-50 text-purple-600 shrink-0 mt-0.5">
+                    <CheckCircle2 size={12} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-700">Dual-Screen & Publikacje</h4>
+                    <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">Obsługa 2 monitorów, Płachta Dyrektorska A3/A2 oraz Tablica TV Kiosk.</p>
+                  </div>
+                </div>
               </div>
             </div>
 

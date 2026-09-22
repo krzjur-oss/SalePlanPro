@@ -3,7 +3,7 @@ import {
   BookOpen, Search, CheckCircle2, ChevronRight, ChevronDown, 
   Settings, Calendar, DoorClosed, Coffee, Users, BarChart3, 
   Printer, ShieldCheck, HelpCircle, Sparkles, Lightbulb, 
-  AlertTriangle, Layers, Clock, Award, Compass, FileText, ArrowUpRight
+  AlertTriangle, Layers, Clock, Award, Compass, FileText, ArrowUpRight, Monitor
 } from 'lucide-react';
 
 interface InstructionSection {
@@ -484,6 +484,44 @@ export default function Instrukcje() {
           points: [
             'Program automatycznie tworzy punkty przywracania przed każdą kluczową operacją (np. przed uruchomieniem generatora lub importem).',
             'W Menedżerze Migawek możesz cofnąć plan do dowolnego stanu z ostatnich dni kilkoma kliknięciami.'
+          ]
+        }
+      ]
+    },
+    {
+      id: 'dual_screen',
+      title: '🖥️🖥️ Inteligentny Tryb Dwóch Ekranów (Dual-Screen Workspace)',
+      shortTitle: 'Dwa Ekrany',
+      icon: <Monitor size={18} />,
+      badge: 'v3.9.5',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      description: 'Optymalizacja pracy na stanowiskach wielomonitorowych: automatyczne wykrywanie konfiguracji wielu ekranów, dynamiczne Okno Towarzyszące i bieżąca synchronizacja.',
+      steps: [
+        {
+          title: 'Podział na dwa niezależne okna robocze (Ekran 1 + Ekran 2)',
+          description: 'Praca na dwóch monitorach pozwala uniknąć ciągłego przełączania widoków:',
+          points: [
+            'Ekran 1 (Główny pulpit): Plan Klas, Kreator Szkoły, Plan Sal lub Harmonogram Dyżurów.',
+            'Ekran 2 (Okno Towarzyszące): Interaktywna matryca dostępności sal w czasie rzeczywistym, Płachta Dyrektorska, rzut kondygnacji i bilans szkoły.',
+            'System automatycznie wykrywa podłączone monitory za pomocą Screen Details API oraz geometrii pulpitu.'
+          ],
+          tip: 'Jeżeli pracujesz na pojedynczym ekranie, możesz przetestować tryb wielu okien, wybierając opcję symulacji w menu podręcznym.'
+        },
+        {
+          title: 'Matryca Sal na żywo i podświetlanie slotów',
+          description: 'Wizualne wsparcie przydziału gabinetów w locie:',
+          points: [
+            'Podczas najeżdżania kursorem lub przeciągania kafelka lekcji na Ekranie 1, Okno Towarzyszące na Ekranie 2 natychmiast rozświetla dany dzień i godzinę w tabeli obłożenia sal.',
+            'Możliwość filtrowania pracowni według typu (sale ogólne, pracownie informatyczne, sale sportowe i gabinety SPE).',
+            'Błyskawiczne przypisanie wolnej sali jednym kliknięciem z poziomu drugiego monitora.'
+          ]
+        },
+        {
+          title: 'Magistrala BroadcastChannel i pełna spójność danych',
+          description: 'Bezpieczna komunikacja lokalna pomiędzy oknami:',
+          points: [
+            'Komunikacja odbywa się bezpośrednio w pamięci przeglądarki za pośrednictwem natywnego kanału BroadcastChannel (Same-Origin).',
+            'Każda zmiana wprowadzona w oknie głównym lub w oknie towarzyszącym natychmiast aktualizuje stan w obu oknach oraz bazę IndexedDB bez przeładowywania stron.'
           ]
         }
       ]
