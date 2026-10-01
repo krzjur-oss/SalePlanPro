@@ -72,7 +72,7 @@ export default function SnapshotManager(props: SnapshotManagerProps) {
   return (
     <SafeErrorBoundary
       fallback={(error, resetError) => (
-        <div className="fixed inset-0 z-[1000] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white border border-red-200 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden leading-normal text-slate-800">
             <div className="p-4 bg-red-600 text-white flex items-center gap-2 select-none">
               <AlertTriangle size={18} />
@@ -617,7 +617,7 @@ function SnapshotManagerInner({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[1000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div 
         className={`relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full ${
           selectedSnapshot && showLessonComparison ? 'max-w-4xl font-semibold' : 'max-w-2xl'
@@ -625,7 +625,7 @@ function SnapshotManagerInner({
         id="snapshot-manager-dialog"
       >
         {isRestoring && (
-          <div className="absolute inset-0 z-[1100] bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center">
+          <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center">
             <Loader2 className="w-12 h-12 text-violet-400 animate-spin mb-4" />
             <h3 className="text-white font-extrabold text-base md:text-lg mb-2 font-sans tracking-tight">
               Przywracanie planu lekcji...
@@ -1465,7 +1465,7 @@ function SnapshotManagerInner({
 
         {/* Custom Confirmation Dialog Modal */}
         {confirmConfig && (
-          <div className="absolute inset-0 z-[1200] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="absolute inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
               <div className="p-4 bg-slate-900 text-white flex items-center gap-2 select-none">
                 <AlertTriangle size={16} className="text-amber-400 shrink-0" />
@@ -1498,7 +1498,7 @@ function SnapshotManagerInner({
 
         {/* Custom Alert Dialog Modal */}
         {alertConfig && (
-          <div className="absolute inset-0 z-[1200] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="absolute inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
             <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
               <div className="p-4 bg-slate-900 text-white flex items-center gap-2 select-none">
                 <Info size={16} className="text-blue-400 shrink-0" />

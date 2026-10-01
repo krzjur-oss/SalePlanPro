@@ -429,8 +429,8 @@ export default function KreatorSzkoly({
     if (copyData.assignments) {
       const sourceAssignments: Assignment[] = JSON.parse(JSON.stringify(appState.planLekcji.assignments));
       const activeClassIds = new Set(newClasses.map(c => c.id));
-      const activeTeacherIds = new Set(newTeachers.map(t => t.id));
-      const activeSubjectIds = new Set(newSubjects.map(s => s.id));
+      const activeTeacherIds = new Set(newTeachers.map((t: Teacher) => t.id));
+      const activeSubjectIds = new Set(newSubjects.map((s: Subject) => s.id));
 
       newAssignments = sourceAssignments.filter(asg => {
         return activeClassIds.has(asg.classId) && 
@@ -2769,7 +2769,7 @@ export default function KreatorSzkoly({
         
         {/* Floating Success Notifications */}
         {noti && (
-          <div className="absolute top-4 right-4 bg-slate-900 border-l-4 border-emerald-500 px-4 py-3 rounded-lg text-white text-xs font-bold shadow-2xl z-[9000] flex items-center gap-2">
+          <div className="absolute top-4 right-4 bg-slate-900 border-l-4 border-emerald-500 px-4 py-3 rounded-lg text-white text-xs font-bold shadow-2xl z-[60] flex items-center gap-2">
             <CheckCircle size={14} className="text-emerald-500 shrink-0" />
             <span>{noti.text}</span>
           </div>
@@ -3788,7 +3788,7 @@ export default function KreatorSzkoly({
                               setNewRoomNum(r.name);
                               setNewRoomAutomaticAbbr(false);
                               setNewRoomCustomAbbr(r.name);
-                              setNewRoomDesc(r.desc);
+                              setNewRoomDesc(r.desc || '');
                               setNewRoomType(r.isGrade1_3 ? 'wczesnoszkolna' : ((r.type || 'ogolna') as any));
                               setNewRoomSingleClassLimit(!!r.singleClassLimit);
                               
@@ -4010,7 +4010,7 @@ export default function KreatorSzkoly({
                                     onClick={() => {
                                       setEditingGroupId(g.id);
                                       setNewGrpName(g.name);
-                                      setSelectedClsForGrp(g.classId);
+                                      setSelectedClsForGrp(g.classId || '');
                                     }}
                                     title="Kliknij, aby edytować podgrupę"
                                   >
@@ -4248,7 +4248,7 @@ export default function KreatorSzkoly({
                 const subjectsList = dict.subjects;
 
                 return (
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[99999] no-print">
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[100] no-print">
                     <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
                       {/* Modal Header */}
                       <div className="bg-slate-900 text-white p-5 px-6 flex items-center justify-between border-b border-slate-800 shrink-0">
@@ -7295,7 +7295,7 @@ export default function KreatorSzkoly({
                           const studSpAsgs = allSpecialAssignments.filter(sa => sa.studentId === stud.id);
                           const studCls = stud.classId ? classesMap.get(stud.classId) : null;
                           const totalHours = studSpAsgs.reduce((sum, sa) => sum + sa.hoursPerWeek, 0);
-                          const declaredHours = Object.values(stud.supportHours || {}).reduce((sum, h) => sum + (Number(h) || 0), 0);
+                          const declaredHours = Object.values(stud.supportHours || {}).reduce((sum: number, h) => sum + (Number(h) || 0), 0);
                           const studentSupportTypes = stud.supportTypes && stud.supportTypes.length > 0 ? stud.supportTypes : (stud.type ? [stud.type] : ['ni']);
 
                           return (
@@ -7620,7 +7620,7 @@ export default function KreatorSzkoly({
         const supportTeacherIds = student.supportTeacherIds || [];
 
         return (
-          <div className="fixed inset-0 z-[1000] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[100] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-fade-in text-left">
               
               {/* Nagłówek modalu */}
@@ -7933,7 +7933,7 @@ export default function KreatorSzkoly({
 
       {/* Custom Confirmation Dialog Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden p-5 space-y-4">
             <div className="flex items-start gap-3.5">
               <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">

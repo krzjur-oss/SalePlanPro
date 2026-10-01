@@ -366,9 +366,9 @@ export function inspectFilePayload(rawPayload: ImportPayload, fileName: string =
                     cellsArr.forEach(c => {
                       if (c) {
                         schedRoomsTotal++;
-                        const cNames = Array.isArray(c.classes) ? c.classes : (c.className ? [c.className] : []);
-                        const has1_3 = cNames.some(cn => isClassGrade1_3(String(cn || '')));
-                        const has4_8 = cNames.some(cn => isClassGrade4_8(String(cn || '')));
+                        const cNames: string[] = Array.isArray(c.classes) ? c.classes : (c.className ? [c.className] : []);
+                        const has1_3 = cNames.some((cn: string) => isClassGrade1_3(String(cn || '')));
+                        const has4_8 = cNames.some((cn: string) => isClassGrade4_8(String(cn || '')));
                         if (has1_3) sched1_3++;
                         if (has4_8) sched4_8++;
                       }

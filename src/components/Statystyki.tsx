@@ -13,8 +13,8 @@ import {
 interface StatystykiProps {
   appState: AppState;
   schedData: SchedData;
-  historyLogs: AppEventLog[];
-  onClearHistoryLogs: () => void;
+  historyLogs?: AppEventLog[];
+  onClearHistoryLogs?: () => void;
 }
 
   export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs }: StatystykiProps) {
@@ -2312,7 +2312,7 @@ interface StatystykiProps {
                     type="button"
                     onClick={() => {
                       if (confirm('Czy na pewno chcesz bezpowrotnie wyczyścić cały dziennik zdarzeń?')) {
-                        onClearHistoryLogs();
+                        onClearHistoryLogs?.();
                       }
                     }}
                     className="flex items-center gap-1.5 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-650 font-black border border-red-200 hover:border-red-300 rounded-xl text-[11px] uppercase tracking-wider cursor-pointer transition shadow-xs"

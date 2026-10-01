@@ -362,6 +362,10 @@ export interface AppState {
   planLekcji: PlanLekcjiState;
   dyzury: PlanDyzuryState;
   generatorSettings?: GeneratorSettings;
+  revision?: number;
+  tabId?: string;
+  _revision?: number;
+  _tabId?: string;
 }
 
 export interface ArchiveEntry {

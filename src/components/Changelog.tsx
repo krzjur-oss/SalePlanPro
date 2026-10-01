@@ -34,7 +34,8 @@ export default function Changelog() {
         { type: 'feature', text: 'Podział na Dwa Okna (Ekran 1 + Ekran 2): Kliknięcie przycisku otwiera drugie, niezależne okno przeglądarki bezpośrednio na sąsiednim monitorze z natychmiastowym nawiązaniem szybkiej magistrali BroadcastChannel.', badgeText: 'Drugie Okno' },
         { type: 'feature', text: 'Interaktywna Matryca Sal i Podświetlanie Slotów: Podczas najeżdżania kursorem lub przeciągania kafelków na Ekranie 1, Okno Towarzyszące na Ekranie 2 natychmiast rozświetla dany dzień i godzinę w tabeli sal, filtrując sale ogólne, sportowe i SPE oraz umożliwiając przypisanie sali jednym kliknięciem.', badgeText: 'Matryca Sal na Żywo' },
         { type: 'feature', text: 'Równoległa Płachta Dyrektorska i Zintegrowane Widoki: Na drugim monitorze planista ma stały wgląd w Płachtę Dyrektorską ze słownikiem skrótów, rzuty kondygnacji pięter, strefy dyżurów i bilans obciążenia bez konieczności opuszczania Planu Klas.', badgeText: 'Równoległy Podgląd' },
-        { type: 'improvement', text: 'Dwukierunkowa Synchronizacja w Czasie Rzeczywistym: Wszelkie zmiany w planie, wariantach czy bazie IndexedDB są natychmiast rozgłaszane pomiędzy oknami bez opóźnień i bez odświeżania strony.', badgeText: 'BroadcastChannel Sync' }
+        { type: 'improvement', text: 'Etap 3 (Dyżury nauczycielskie na dwóch ekranach): w przygotowaniu – pełna integracja z natychmiastową synchronizacją UPDATE_DUTIES (< 1 s) oraz detekcją konfliktów wersji.', badgeText: 'Etap 3: w przygotowaniu' },
+        { type: 'improvement', text: 'Dwukierunkowa Synchronizacja w Czasie Rzeczywistym: Wszelkie zmiany w planie, wariantach, dyżurach czy bazie IndexedDB są natychmiast rozgłaszane pomiędzy oknami bez opóźnień z automatycznym odrzucaniem nieaktualnych wersji.', badgeText: 'BroadcastChannel Sync' }
       ]
     },
     {

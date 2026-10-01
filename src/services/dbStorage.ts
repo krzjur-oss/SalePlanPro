@@ -1,5 +1,5 @@
 /**
- * SalePlan Pro - High-Capacity IndexedDB Storage Engine & Migration Adapter
+ * SalePlan Pro - High-Capacity IndexedDB Storage Engine & Cryptographic Adapter
  * 
  * Provides unlimited offline storage for large schools, extensive snapshot histories,
  * and massive timetables without the 5MB localStorage limitation.
@@ -7,8 +7,12 @@
  * Features:
  * - Native Promise-based IndexedDB engine (zero dependencies, high performance)
  * - Automatic seamless migration of existing data from localStorage on first launch
+ * - High-speed AES-256 GCM encryption ('encrypted-v2' format with PBKDF2 600,000 iterations)
+ * - Single-session non-extractable CryptoKey held in memory (zero PBKDF2 overhead per write)
+ * - Transparent backward-compatibility for 'encrypted-v1' payloads with automatic v2 migration
+ * - Pre-encryption backup and comprehensive verification with automatic rollback
+ * - Zero plaintext password persistence in sessionStorage
  * - Storage quota detection via navigator.storage.estimate()
- * - Safe fallback to localStorage if IndexedDB is blocked in private browsing
  */
 
 const DB_NAME = 'SalePlanProDB';
@@ -25,8 +29,21 @@ import {
   setupStorageEncryptionMeta, 
   removeStorageEncryptionMeta,
   verifyMasterPassword,
-  STORAGE_ENC_META_KEY
+  STORAGE_ENC_META_KEY,
+  getSessionCryptoKey,
+  setSessionCryptoKey,
+  deriveCryptoKeyFromPassword,
+  encryptWithKey,
+  decryptWithKey,
+  base64ToArrayBuffer,
+  getAutoLockMinutes,
+  setAutoLockMinutes,
+  lockSession,
+  getStorageEncryptionMeta,
+  PBKDF2_ITERATIONS_V1,
+  PBKDF2_ITERATIONS_V2
 } from '../lib/crypto';
+import { getStorageSchemaForKey } from '../utils/validationSchemas';
 
 export { 
   isDatabaseEncryptionActive,
@@ -34,7 +51,12 @@ export {
   isSessionUnlocked,
   verifyMasterPassword as verifyStoragePassword,
   setSessionPassword as setSessionStoragePassword,
-  getSessionPassword
+  getSessionPassword,
+  removeStorageEncryptionMeta,
+  setupStorageEncryptionMeta,
+  getAutoLockMinutes,
+  setAutoLockMinutes,
+  lockSession
 } from '../lib/crypto';
 
 // Known storage keys
@@ -53,17 +75,18 @@ export const STORAGE_KEYS = {
   PLAN_VARIANTS: 'saleplan_v3_plan_variants',
   ACTIVE_VARIANT_ID: 'saleplan_v3_active_variant_id',
   STORAGE_ENC_META: STORAGE_ENC_META_KEY,
+  PRE_ENCRYPTION_BACKUP: 'saleplan_pre_encryption_backup',
 } as const;
 
 function isEncryptedObject(val: any): boolean {
   if (!val) return false;
-  if (typeof val === 'object' && val.type === 'encrypted-v1' && val.ciphertext && val.salt && val.iv) {
+  if (typeof val === 'object' && (val.type === 'encrypted-v1' || val.type === 'encrypted-v2') && val.ciphertext) {
     return true;
   }
-  if (typeof val === 'string' && val.includes('"type":"encrypted-v1"')) {
+  if (typeof val === 'string' && (val.includes('"type":"encrypted-v1"') || val.includes('"type":"encrypted-v2"'))) {
     try {
       const p = JSON.parse(val);
-      return p && p.type === 'encrypted-v1' && !!p.ciphertext;
+      return p && (p.type === 'encrypted-v1' || p.type === 'encrypted-v2') && !!p.ciphertext;
     } catch {
       return false;
     }
@@ -117,23 +140,145 @@ function getDB(): Promise<IDBDatabase> {
 }
 
 /**
- * Helper to process retrieved raw value, handling transparent AES-GCM decryption if encrypted.
+ * Internal raw read without decryption (used for rollback, migration, and raw checks)
  */
-async function processRetrievedValue<T>(rawVal: any): Promise<T | null> {
+async function getRawItem<T = any>(key: string): Promise<T | null> {
+  try {
+    const db = await getDB();
+    return await new Promise<any>((resolve) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    });
+  } catch {
+    try {
+      const val = localStorage.getItem(key);
+      return val ? JSON.parse(val) : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Internal raw write without encryption (used for rollback, pre-encryption backups, and metadata)
+ */
+async function setRawItem(key: string, value: any): Promise<void> {
+  if (isIndexedDBAvailable) {
+    try {
+      const db = await getDB();
+      await new Promise<void>((resolve, reject) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.put(value, key);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    } catch {
+      isIndexedDBAvailable = false;
+    }
+  }
+
+  try {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    localStorage.setItem(key, serialized);
+  } catch {}
+}
+
+/**
+ * Internal raw remove
+ */
+async function removeRawItem(key: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await new Promise<void>((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  } catch {}
+
+  try {
+    localStorage.removeItem(key);
+  } catch {}
+}
+
+/**
+ * Helper to process retrieved raw value, handling transparent AES-GCM decryption if encrypted.
+ * - Uses in-memory CryptoKey for 'encrypted-v2' (sub-millisecond instant decryption)
+ * - Seamlessly decrypts 'encrypted-v1' payloads (100,000 iterations)
+ * - Auto-migrates decrypted v1 items to 'encrypted-v2' once session is unlocked
+ */
+async function processRetrievedValue<T>(rawVal: any, key?: string): Promise<T | null> {
   if (rawVal === null || rawVal === undefined) return null;
 
   if (isEncryptedObject(rawVal)) {
+    const payload = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
+
+    let sessionKey = getSessionCryptoKey();
     const pwd = getSessionPassword();
-    if (!pwd) {
+
+    if (!sessionKey && !pwd) {
       // Database is encrypted and session is locked
       return null;
     }
+
     try {
-      const payloadStr = typeof rawVal === 'string' ? rawVal : JSON.stringify(rawVal);
-      const decrypted = await decryptText(payloadStr, pwd);
-      return JSON.parse(decrypted) as T;
+      let decryptedStr = '';
+
+      if (payload.type === 'encrypted-v2') {
+        if (!sessionKey && pwd) {
+          const meta = getStorageEncryptionMeta();
+          const salt = base64ToArrayBuffer(payload.salt || meta?.salt || '');
+          const iterations = payload.iterations || meta?.iterations || PBKDF2_ITERATIONS_V2;
+          sessionKey = await deriveCryptoKeyFromPassword(pwd, salt, iterations);
+          setSessionCryptoKey(sessionKey);
+        }
+
+        if (sessionKey) {
+          decryptedStr = await decryptWithKey(payload.iv, payload.ciphertext, sessionKey);
+        } else if (pwd) {
+          decryptedStr = await decryptText(JSON.stringify(payload), pwd);
+        }
+      } else if (payload.type === 'encrypted-v1') {
+        // Legacy v1 payload (100,000 iterations)
+        if (!pwd) {
+          return null;
+        }
+        decryptedStr = await decryptText(JSON.stringify(payload), pwd);
+
+        // Auto-migrate legacy v1 entry to encrypted-v2
+        if (key && (sessionKey || pwd)) {
+          try {
+            const parsedData = JSON.parse(decryptedStr);
+            setTimeout(() => {
+              setStorageItem(key, parsedData).catch(err => {
+                console.warn(`[SalePlan Pro] Auto-migration of key "${key}" to encrypted-v2:`, err);
+              });
+            }, 50);
+          } catch {}
+        }
+      }
+
+      return JSON.parse(decryptedStr) as T;
     } catch (e) {
-      console.warn('Failed to decrypt storage item with session password:', e);
+      console.warn('Failed to decrypt storage item:', e);
       return null;
     }
   }
@@ -178,7 +323,6 @@ export async function getStorageItem<T = any>(key: string): Promise<T | null> {
         };
 
         req.onerror = () => {
-          // Fallback to localStorage on request error
           try {
             const val = localStorage.getItem(key);
             resolve(val ? JSON.parse(val) : null);
@@ -197,13 +341,34 @@ export async function getStorageItem<T = any>(key: string): Promise<T | null> {
       }
     });
 
-    return processRetrievedValue<T>(rawResult);
+    const val = await processRetrievedValue<T>(rawResult, key);
+    if (val === null || val === undefined) return null;
+    const schema = getStorageSchemaForKey(key);
+    if (schema) {
+      const parsed = schema.safeParse(val);
+      if (!parsed.success) {
+        console.warn(`[dbStorage] Błąd walidacji danych ze storage dla klucza "${key}":`, parsed.error.issues);
+        return null;
+      }
+      return parsed.data as T;
+    }
+    return val;
   } catch {
-    // If IndexedDB unavailable, use localStorage
     try {
-      const val = localStorage.getItem(key);
-      const parsed = val ? JSON.parse(val) : null;
-      return processRetrievedValue<T>(parsed);
+      const valLocal = localStorage.getItem(key);
+      const parsedLocal = valLocal ? JSON.parse(valLocal) : null;
+      const val = await processRetrievedValue<T>(parsedLocal, key);
+      if (val === null || val === undefined) return null;
+      const schema = getStorageSchemaForKey(key);
+      if (schema) {
+        const parsed = schema.safeParse(val);
+        if (!parsed.success) {
+          console.warn(`[dbStorage] Błąd walidacji danych ze storage dla klucza "${key}":`, parsed.error.issues);
+          return null;
+        }
+        return parsed.data as T;
+      }
+      return val;
     } catch {
       return null;
     }
@@ -218,8 +383,7 @@ export function getStorageItemSync<T = any>(key: string): T | null {
   try {
     const val = localStorage.getItem(key);
     if (val !== null) {
-      if (val.includes('"type":"encrypted-v1"') || isEncryptedObject(val)) {
-        // Encrypted data requires asynchronous decryption
+      if (val.includes('"type":"encrypted-v1"') || val.includes('"type":"encrypted-v2"') || isEncryptedObject(val)) {
         return null;
       }
       try {
@@ -232,9 +396,17 @@ export function getStorageItemSync<T = any>(key: string): T | null {
   return null;
 }
 
+export class StorageLockedError extends Error {
+  constructor(message = 'Baza danych jest zablokowana lub brak klucza sesji. Zapis został przerwany.') {
+    super(message);
+    this.name = 'StorageLockedError';
+  }
+}
+
 /**
  * Save an item to storage (persists to IndexedDB and syncs to localStorage when size permits).
- * If database encryption is active, encrypts data with AES-256 GCM using the session password.
+ * If database encryption is active, encrypts data with AES-256 GCM using the session CryptoKey.
+ * Eliminates PBKDF2 derivation overhead during normal writes.
  */
 export async function setStorageItem<T = any>(key: string, value: T): Promise<void> {
   let valueToStore: any = value;
@@ -245,56 +417,84 @@ export async function setStorageItem<T = any>(key: string, value: T): Promise<vo
     key !== STORAGE_KEYS.STORAGE_ENC_META &&
     key !== STORAGE_KEYS.MIGRATION_DONE &&
     key !== STORAGE_KEYS.LAST_SEEN_VERSION &&
-    key !== STORAGE_KEYS.TERMS_ACCEPTED
+    key !== STORAGE_KEYS.TERMS_ACCEPTED &&
+    key !== STORAGE_KEYS.PRE_ENCRYPTION_BACKUP
   ) {
+    let sessionKey = getSessionCryptoKey();
     const pwd = getSessionPassword();
-    if (pwd) {
-      try {
-        const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-        const encryptedStr = await encryptText(serialized, pwd);
-        valueToStore = JSON.parse(encryptedStr);
-      } catch (err) {
-        console.error(`Encryption failed for key "${key}", saving plain as fallback:`, err);
-      }
+    const meta = getStorageEncryptionMeta();
+
+    if (!sessionKey && !pwd) {
+      throw new StorageLockedError(`Baza danych jest zaszyfrowana, a sesja jest zablokowana. Próba zapisu klucza "${key}" została zablokowana.`);
+    }
+
+    if (!sessionKey && pwd && meta?.salt) {
+      const salt = base64ToArrayBuffer(meta.salt);
+      const iterations = meta.iterations || PBKDF2_ITERATIONS_V2;
+      sessionKey = await deriveCryptoKeyFromPassword(pwd, salt, iterations);
+      setSessionCryptoKey(sessionKey);
+    }
+
+    if (!sessionKey) {
+      throw new StorageLockedError(`Brak aktywnego klucza sesji do zaszyfrowania rekordu "${key}".`);
+    }
+
+    try {
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      // Fast non-blocking AES-256 GCM encryption using the pre-derived session CryptoKey
+      // Random 12-byte IV for every write
+      const { iv, ciphertext } = await encryptWithKey(serialized, sessionKey);
+      
+      valueToStore = {
+        type: 'encrypted-v2',
+        iterations: meta?.iterations || PBKDF2_ITERATIONS_V2,
+        salt: meta?.salt || '',
+        iv,
+        ciphertext
+      };
+    } catch (err) {
+      console.error(`Błąd szyfrowania dla klucza "${key}":`, err);
+      throw new StorageLockedError(`Szyfrowanie dla klucza "${key}" nie powiodło się: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  // Always update IndexedDB
-  try {
-    const db = await getDB();
-    await new Promise<void>((resolve, reject) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.put(valueToStore, key);
+  // Update IndexedDB if available
+  if (isIndexedDBAvailable) {
+    try {
+      const db = await getDB();
+      await new Promise<void>((resolve, reject) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.put(valueToStore, key);
 
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
-    });
-  } catch (err) {
-    console.warn(`Could not save "${key}" to IndexedDB:`, err);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    } catch (err) {
+      isIndexedDBAvailable = false;
+      console.warn(`Could not save "${key}" to IndexedDB, using localStorage:`, err);
+    }
   }
 
   // Also maintain localStorage mirror for fast synchronous initial render if payload is reasonable
   try {
     const serialized = typeof valueToStore === 'string' ? valueToStore : JSON.stringify(valueToStore);
-    // Only mirror to localStorage if below 2.5MB to avoid quota exceeded crashes
     if (serialized.length < 2.5 * 1024 * 1024) {
       localStorage.setItem(key, serialized);
     }
-  } catch (err) {
-    // If localStorage quota is exceeded, IndexedDB still holds the full data safely!
-    if (import.meta.env.DEV) {
-      console.info(`LocalStorage mirror skipped for "${key}" (safely stored in high-capacity IndexedDB).`);
-    }
-  }
+  } catch {}
 }
 
 /**
- * Encrypts all existing database keys with a new master password.
+ * Encrypts all existing database keys with a new master password in 'encrypted-v2' format.
+ * - Creates pre-encryption backup in IndexedDB before starting
+ * - Derives master key once (PBKDF2 600,000 iterations, extractable=false)
+ * - Verifies decryption of every key after migration
+ * - Automatically rolls back all data to plaintext on any verification failure
  */
 export async function enableDatabaseEncryption(password: string): Promise<void> {
   const keysToEncrypt = [
@@ -309,20 +509,60 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
     STORAGE_KEYS.ACTIVE_VARIANT_ID,
   ];
 
+  // 1. Collect all current plaintext data
   const currentData: Record<string, any> = {};
   for (const k of keysToEncrypt) {
     const val = await getStorageItem(k);
     if (val !== null && val !== undefined) {
-      currentData[k] = val;
+      currentData[k] = JSON.parse(JSON.stringify(val));
     }
   }
 
-  // Set encryption metadata and activate session
-  await setupStorageEncryptionMeta(password);
+  // 2. Create pre-encryption backup for rollback safety
+  const preEncryptionBackup = {
+    timestamp: new Date().toISOString(),
+    keys: Object.keys(currentData),
+    data: currentData,
+  };
+  await setRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP, preEncryptionBackup);
 
-  // Store back all items (now encrypting)
-  for (const [k, val] of Object.entries(currentData)) {
-    await setStorageItem(k, val);
+  try {
+    // 3. Set encryption metadata (v2, 600,000 iterations) and activate session
+    await setupStorageEncryptionMeta(password);
+
+    // 4. Store back all items (now encrypting with the new CryptoKey)
+    for (const [k, val] of Object.entries(currentData)) {
+      await setStorageItem(k, val);
+    }
+
+    // 5. Verification step: verify read & decryption of every single key
+    for (const [k, originalVal] of Object.entries(currentData)) {
+      const readBack = await getStorageItem(k);
+      if (readBack === null || readBack === undefined) {
+        throw new Error(`Klucz "${k}" zwrócił pusty wynik podczas weryfikacji odczytu.`);
+      }
+      const origStr = JSON.stringify(originalVal);
+      const readStr = JSON.stringify(readBack);
+      if (origStr !== readStr) {
+        throw new Error(`Niezgodność danych dla klucza "${k}" po zaszyfrowaniu.`);
+      }
+    }
+
+    // 6. Verification passed! Remove temporary pre-encryption backup
+    await removeRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
+  } catch (err) {
+    console.error('Błąd podczas aktywacji szyfrowania bazy. Rozpoczynanie bezpiecznego rollbacku...', err);
+    // ROLLBACK: restore original plaintext data and disable encryption
+    try {
+      removeStorageEncryptionMeta();
+      for (const [k, val] of Object.entries(currentData)) {
+        await setRawItem(k, val);
+      }
+      await removeRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
+    } catch (rollbackErr) {
+      console.error('Krytyczny błąd podczas rollbacku:', rollbackErr);
+    }
+    throw new Error(`Błąd podczas szyfrowania bazy: ${err instanceof Error ? err.message : String(err)}. Dane zostały bezpiecznie przywrócone do stanu pierwotnego.`);
   }
 }
 
@@ -332,8 +572,6 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
 export async function disableDatabaseEncryption(password: string): Promise<boolean> {
   const isValid = await verifyMasterPassword(password);
   if (!isValid) return false;
-
-  setSessionPassword(password);
 
   const keysToDecrypt = [
     STORAGE_KEYS.APP_STATE,
@@ -355,12 +593,12 @@ export async function disableDatabaseEncryption(password: string): Promise<boole
     }
   }
 
-  // Remove encryption meta and session password
+  // Remove encryption meta and in-memory session keys
   removeStorageEncryptionMeta();
 
   // Save all items back as unencrypted
   for (const [k, val] of Object.entries(currentData)) {
-    await setStorageItem(k, val);
+    await setRawItem(k, val);
   }
 
   return true;
@@ -372,8 +610,6 @@ export async function disableDatabaseEncryption(password: string): Promise<boole
 export async function changeDatabaseEncryptionPassword(oldPass: string, newPass: string): Promise<boolean> {
   const isValid = await verifyMasterPassword(oldPass);
   if (!isValid) return false;
-
-  setSessionPassword(oldPass);
 
   const keys = [
     STORAGE_KEYS.APP_STATE,
@@ -395,7 +631,7 @@ export async function changeDatabaseEncryptionPassword(oldPass: string, newPass:
     }
   }
 
-  // Set new encryption metadata and active session
+  // Set new encryption metadata (v2, 600,000 iterations) and active session
   await setupStorageEncryptionMeta(newPass);
 
   // Store items back re-encrypted with new password
@@ -404,6 +640,42 @@ export async function changeDatabaseEncryptionPassword(oldPass: string, newPass:
   }
 
   return true;
+}
+
+/**
+ * Migrates all stored items from 'encrypted-v1' to 'encrypted-v2' format.
+ * Called automatically after unlocking the database.
+ */
+export async function migrateAllStoredItemsToV2(): Promise<number> {
+  if (!isDatabaseEncryptionActive()) {
+    return 0;
+  }
+
+  const keys = [
+    STORAGE_KEYS.APP_STATE,
+    STORAGE_KEYS.SCHED_DATA,
+    STORAGE_KEYS.ARCHIVE,
+    STORAGE_KEYS.SNAPSHOTS,
+    STORAGE_KEYS.AUTOSAVE_VERSIONS,
+    STORAGE_KEYS.HISTORY_LOGS,
+    STORAGE_KEYS.STRUCTURE_TEMPLATES,
+    STORAGE_KEYS.PLAN_VARIANTS,
+    STORAGE_KEYS.ACTIVE_VARIANT_ID,
+  ];
+
+  let migrated = 0;
+  for (const k of keys) {
+    const raw = await getRawItem(k);
+    if (raw && (raw.type === 'encrypted-v1' || (typeof raw === 'string' && raw.includes('"type":"encrypted-v1"')))) {
+      const val = await getStorageItem(k);
+      if (val !== null) {
+        await setStorageItem(k, val);
+        migrated++;
+      }
+    }
+  }
+
+  return migrated;
 }
 
 /**
@@ -468,6 +740,9 @@ export async function clearAllStorage(): Promise<void> {
 export async function migrateFromLocalStorage(): Promise<{ migratedCount: number }> {
   let migratedCount = 0;
   try {
+    if (isDatabaseEncryptionActive() && !getSessionPassword() && !getSessionCryptoKey()) {
+      return { migratedCount: 0 };
+    }
     const migrationFlag = await getStorageItem<boolean>(STORAGE_KEYS.MIGRATION_DONE);
     if (migrationFlag) {
       return { migratedCount: 0 };
@@ -543,11 +818,10 @@ export async function getDetailedStorageStats(): Promise<StorageStatistics> {
     for (const item of allData) {
       try {
         const str = typeof item === 'string' ? item : JSON.stringify(item);
-        usedBytes += str.length * 2; // UTF-16 approximate byte size
+        usedBytes += str.length * 2;
       } catch {}
     }
   } catch {
-    // Fallback: sum localStorage sizes
     isIDB = false;
     for (const key in localStorage) {
       if (Object.prototype.hasOwnProperty.call(localStorage, key)) {

@@ -123,7 +123,8 @@ Przełomowe rozszerzenie ergonomii pracy planisty przy podpiętych dwóch monito
     *   Podczas najechania kursorem na lekcję w oknie Planu Klas, Okno Towarzyszące natychmiast rozświetla dany dzień i godzinę w Matrycy Sal.
     *   Jedno kliknięcie na wolną salę w Oknie Towarzyszącym natychmiast przypisuje tę salę do podświetlonej lekcji w Oknie Głównym i zapisuje stan w bazie danych.
 *   **Spójność z Pozostałymi Etapami**:
-    *   Okno Towarzyszące dynamicznie dostosowuje swój widok pomocniczy w zależności od aktywnego etapu (Kreator -> Rzut budynku i audyt sal, Plan Klas -> Matryca sal, Plan Sal -> Płachta i konflikty, Plan Dyżurów -> Matryca nadzoru przerw i stref, Wydruki -> Podgląd arkusza wielkoformatowego).
+    *   Okno Towarzyszące dynamicznie dostosowuje swój widok pomocniczy w zależności od aktywnego etapu (Kreator -> Nowy wariant i rzut budynku, Plan Klas -> Matryca sal, Plan Sal -> Płachta i konflikty, Wydruki -> Arkusze publikacji, Statystyki -> Diagnoza w trybie do odczytu, Ustawienia -> Parametry generatorów).
+    *   **Etap 3 (Dyżury nauczycielskie)**: w przygotowaniu – moduł zintegrowany z dwukierunkową synchronizacją w czasie rzeczywistym (< 1 s) oraz mechanizmem rozwiązywania konfliktów wersji, z dedykowaną rozszerzoną matrycą stref w trakcie finalizacji.
 
 ### 6. 🤝 Centrum Wieloosobowego Scalania i Baza IndexedDB
 *   **Scalanie Wieloplikowe**: Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.

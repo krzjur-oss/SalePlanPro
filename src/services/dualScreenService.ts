@@ -2,6 +2,8 @@
 // Supports Multi-Screen Detection (Window Management API / screen.isExtended)
 // and instant two-way synchronization via BroadcastChannel.
 
+import { DualScreenMessageSchema } from '../utils/validationSchemas';
+
 export interface ScreenInteractionPayload {
   dayIdx?: number;
   hourIdx?: number;
@@ -29,12 +31,14 @@ export interface DualScreenMessage {
     | 'UPDATE_LESSONS'
     | 'UPDATE_ASSIGNMENTS'
     | 'UPDATE_SCHED_DATA'
+    | 'UPDATE_DUTIES'
     | 'SELECT_LESSON_POOL'
     | 'CLEAR_ROOM_SCHEDULE'
     | 'PING'
     | 'PONG';
-  payload?: any;
+  payload?: Record<string, any> | any;
   timestamp: number;
+  version?: number;
 }
 
 export const DUAL_SCREEN_CHANNEL_NAME = 'saleplan_dual_screen_sync_v1';
@@ -45,7 +49,7 @@ class DualScreenManager {
   private companionWindowRef: Window | null = null;
   private listeners: ((msg: DualScreenMessage) => void)[] = [];
   private isMultiScreenDetected: boolean = false;
-  private checkInterval: any = null;
+  private checkInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
@@ -252,7 +256,14 @@ class DualScreenManager {
     };
   }
 
-  private handleIncomingMessage(msg: DualScreenMessage) {
+  private handleIncomingMessage(rawData: unknown) {
+    const parsed = DualScreenMessageSchema.safeParse(rawData);
+    if (!parsed.success) {
+      console.warn('[dualScreenService] Odrzucono niepoprawny komunikat BroadcastChannel:', parsed.error.issues);
+      return;
+    }
+
+    const msg = parsed.data as DualScreenMessage;
     this.listeners.forEach(cb => {
       try {
         cb(msg);

@@ -553,6 +553,14 @@ export default function ImportModal({
       return;
     }
 
+    const invalidFile = files.find(f => f.isValidSchema === false);
+    if (invalidFile) {
+      setActiveFileId(invalidFile.id);
+      setActiveTab('files');
+      alert(`Plik "${invalidFile.name}" zawiera błędy walidacji schematu: ${invalidFile.validationErrors?.slice(0, 3).join('; ') || 'Niepoprawny format danych'}. Import został przerwany, aby zapobiec uszkodzeniu bazy.`);
+      return;
+    }
+
     const validConfigs = files.map(f => f.config).filter(Boolean) as FileMergeConfig[];
     if (validConfigs.length === 0) {
       alert('Brak poprawnie skonfigurowanych plików do zaimportowania.');
@@ -581,7 +589,7 @@ export default function ImportModal({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-3 sm:p-5">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}

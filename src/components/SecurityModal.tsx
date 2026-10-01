@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Shield, Lock, Unlock, Key, CheckCircle2, AlertTriangle, X, ShieldAlert,
-  Database, UserX, FileCheck, RefreshCw, Eye, EyeOff
+  Database, UserX, FileCheck, RefreshCw, Eye, EyeOff, Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -10,7 +10,10 @@ import {
   enableDatabaseEncryption, 
   disableDatabaseEncryption,
   verifyStoragePassword,
-  setSessionStoragePassword
+  setSessionStoragePassword,
+  getAutoLockMinutes,
+  setAutoLockMinutes,
+  lockSession
 } from '../services/dbStorage';
 
 interface SecurityModalProps {
@@ -28,6 +31,7 @@ export default function SecurityModal({
 }: SecurityModalProps) {
   const [isEncrypted, setIsEncrypted] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [autoLockMinutes, setAutoLockMinutesState] = useState<number>(() => getAutoLockMinutes());
   
   // Form states
   const [mode, setMode] = useState<'view' | 'enable' | 'disable' | 'change'>('view');
@@ -117,7 +121,7 @@ export default function SecurityModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -187,7 +191,7 @@ export default function SecurityModal({
                       Szyfrowanie bazy w pamięci przeglądarki
                     </h3>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Standard AES-256 GCM (Web Cryptography API + PBKDF2 100 000 cykli)
+                      Standard AES-256 GCM (Web Cryptography API + PBKDF2 600 000 cykli, format encrypted-v2)
                     </p>
                   </div>
                 </div>
@@ -207,23 +211,71 @@ export default function SecurityModal({
 
               {/* Mode switch / buttons */}
               {mode === 'view' && (
-                <div className="pt-2 flex flex-wrap gap-2">
-                  {!isEncrypted ? (
-                    <button
-                      type="button"
-                      onClick={() => { setMode('enable'); setErrorMsg(''); setSuccessMsg(''); }}
-                      className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <Lock size={14} /> Włącz szyfrowanie bazy hasłem
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => { setMode('disable'); setErrorMsg(''); setSuccessMsg(''); }}
-                      className="py-2 px-3.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Unlock size={14} /> Wyłącz szyfrowanie bazy
-                    </button>
+                <div className="pt-2 flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    {!isEncrypted ? (
+                      <button
+                        type="button"
+                        onClick={() => { setMode('enable'); setErrorMsg(''); setSuccessMsg(''); }}
+                        className="py-2 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Lock size={14} /> Włącz szyfrowanie bazy hasłem
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            lockSession();
+                            onClose();
+                          }}
+                          className="py-2 px-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          title="Natychmiastowo zablokuj sesję (wymaga ponownego wpisania hasła)"
+                        >
+                          <Lock size={14} /> Zablokuj sesję teraz
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setMode('disable'); setErrorMsg(''); setSuccessMsg(''); }}
+                          className="py-2 px-3.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Unlock size={14} /> Wyłącz szyfrowanie bazy
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Auto-lock Settings (visible when encryption is enabled) */}
+                  {isEncrypted && (
+                    <div className="p-3 bg-slate-100/80 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2">
+                        <Clock size={15} className="text-indigo-500 shrink-0" />
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                            Automatyczna blokada po bezczynności
+                          </span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                            Zabezpiecza aplikację, gdy odejdziesz od stanowiska
+                          </span>
+                        </div>
+                      </div>
+                      <select
+                        value={autoLockMinutes}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setAutoLockMinutesState(val);
+                          setAutoLockMinutes(val);
+                        }}
+                        className="text-xs font-bold px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 cursor-pointer shadow-xs"
+                      >
+                        <option value={0}>Wyłączona</option>
+                        <option value={5}>Po 5 minutach</option>
+                        <option value={10}>Po 10 minutach</option>
+                        <option value={15}>Po 15 minutach (zalecane)</option>
+                        <option value={30}>Po 30 minutach</option>
+                        <option value={60}>Po 1 godzinie</option>
+                      </select>
+                    </div>
                   )}
                 </div>
               )}
@@ -232,8 +284,12 @@ export default function SecurityModal({
               {mode === 'enable' && (
                 <form onSubmit={handleEnableEncryption} className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
                   <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    Ustaw hasło główne do szyfrowania bazy:
+                    Ustaw hasło główne do szyfrowania bazy (PBKDF2-SHA256 600 000 cykli):
                   </div>
+
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Przed szyfrowaniem tworzona jest kopia bezpieczeństwa, a po zapisie sprawdzana jest poprawność odczytu każdego rekordu. W razie błędu następuje automatyczny powrót do stanu pierwotnego.
+                  </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="relative">

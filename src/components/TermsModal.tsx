@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, FileText, Award, CheckCircle2, Lock, Scale, AlertTriangle, ArrowRight, ExternalLink } from 'lucide-react';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 
 interface TermsModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+    <div className={`fixed inset-0 ${Z_INDEX_CLASSES.TERMS_MODAL} flex items-center justify-center p-3 sm:p-5 bg-slate-950/80 backdrop-blur-md animate-fade-in`}>
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         
         {/* NAGŁÓWEK */}

@@ -388,13 +388,13 @@ export default function PlanSal({
               // Rule 1: Homerooms (Sala wychowawcza klasy lub gospodarz sali)
               const hr = appState.homerooms?.[key];
               if (genPriorityHomerooms && hr) {
-                if (hr.className && lesson.combinedClasses.some(cName => cName.toUpperCase().trim() === hr.className.toUpperCase().trim())) {
+                if (hr.className && lesson.combinedClasses.some((cName: string) => cName.toUpperCase().trim() === hr.className.toUpperCase().trim())) {
                   score += 2000;
                 }
                 if (hr.teacherAbbr && lesson.teacherAbbr && hr.teacherAbbr.toUpperCase().trim() === lesson.teacherAbbr.toUpperCase().trim()) {
                   score += 1200;
                 }
-                if (hr.className2 && lesson.combinedClasses.some(cName => cName.toUpperCase().trim() === hr.className2.toUpperCase().trim())) {
+                if (hr.className2 && lesson.combinedClasses.some((cName: string) => hr.className2 && cName.toUpperCase().trim() === hr.className2.toUpperCase().trim())) {
                   score += 800;
                 }
                 if (hr.teacherAbbr2 && lesson.teacherAbbr && hr.teacherAbbr2.toUpperCase().trim() === lesson.teacherAbbr.toUpperCase().trim()) {
@@ -1311,7 +1311,7 @@ export default function PlanSal({
           if (hIdx !== -1) {
             const classObjs = uniqueBaseClasses.map(name => 
               appState.planLekcji.classes.find(c => c.name.toUpperCase().trim() === name.toUpperCase().trim())
-            ).filter(Boolean);
+            ).filter((c): c is NonNullable<typeof c> => Boolean(c));
 
             if (classObjs.length === uniqueBaseClasses.length) {
               const targetClassIds = new Set(classObjs.map(c => c.id));
@@ -1414,7 +1414,7 @@ export default function PlanSal({
           // Detect duplicate teacher or duplicate class WITHIN the gym slots
           // (They shouldn't be assigned twice in different slots of the same gym at the same hour)
           const teacherCounts = new Map<string, number>();
-          teachersInThisRoom.forEach(t => teacherCounts.set(t, (teacherCounts.get(t) || 0) + 1));
+          teachersInThisRoom.filter((t): t is string => Boolean(t)).forEach(t => teacherCounts.set(t, (teacherCounts.get(t) || 0) + 1));
           
           let duplicatedTeacher = '';
           teacherCounts.forEach((count, t) => {
@@ -2027,7 +2027,7 @@ export default function PlanSal({
 
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
     const toast = document.createElement('div');
-    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg transition-transform z-[9999] ${
+    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg transition-transform z-[60] ${
       type === 'ok' ? 'border-emerald-500' : 'border-red-500'
     }`;
     toast.textContent = msg;

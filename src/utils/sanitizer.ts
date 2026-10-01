@@ -1,22 +1,30 @@
 /**
  * Sanitization utility for user-generated textual content in SalePlan Pro.
  * Protects print templates, exported files, and UI components from HTML/Script injection
- * and malformed control characters while preserving Polish diacritics and formatting.
+ * and malformed control characters while preserving Polish diacritics, dates, and formulas.
  */
 
-const HTML_ENTITIES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#x27;',
-  '/': '&#x2F;',
-  '`': '&#x60;'
-};
+/**
+ * Escapes characters that have special meaning in HTML contexts.
+ * Escapes exclusively: & < > " '
+ * Does NOT call sanitizeText inside, and does NOT escape '/' or '`'.
+ */
+export function escapeHtml(input: unknown): string {
+  if (input === null || input === undefined) {
+    return '';
+  }
+  return String(input)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 /**
- * Sanitizes a single string by stripping dangerous HTML tags, script elements,
- * event attributes (e.g. onload=, onerror=), and JavaScript pseudo-protocols.
+ * Sanitizes a single string by stripping dangerous non-printable control characters
+ * and normalizing whitespace.
+ * DOES NOT remove HTML tags, angle brackets, or keywords like javascript:, data:, vbscript: from free text.
  */
 export function sanitizeText(input: unknown): string {
   if (input === null || input === undefined) {
@@ -28,17 +36,47 @@ export function sanitizeText(input: unknown): string {
   // 1. Remove dangerous control characters (preserve normal whitespace: newline, return, tab)
   str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
-  // 2. Strip dangerous tags completely along with their contents
-  str = str.replace(/<\s*(?:script|iframe|object|embed|style|meta|link|base|form|svg)[\s\S]*?(?:<\s*\/\s*(?:script|iframe|object|embed|style|meta|link|base|form|svg)\s*>|$)/gi, '');
+  // 2. Normalize whitespace (collapse multiple horizontal spaces/tabs, keep linebreaks)
+  str = str.replace(/[^\S\r\n]+/g, ' ');
 
-  // 3. Strip all other HTML tags while keeping their inner text
-  str = str.replace(/<[^>]+>/g, '');
-
-  // 4. Strip dangerous pseudo-protocols in case text is placed in href/src
-  str = str.replace(/(?:javascript|data|vbscript)\s*:/gi, '');
-
-  // 5. Trim extraneous control whitespace but preserve reasonable spacing
   return str.trim();
+}
+
+/**
+ * Sanitizes URLs for safe usage in href and src attributes.
+ * Allows ONLY:
+ * - Absolute URLs with protocols: http:, https:, mailto:
+ * - Relative URLs (/path, ./path, ../path, path/to/resource, ?query, #hash)
+ * Everything else (including javascript:, data:, vbscript:, file:) returns ''.
+ */
+export function sanitizeUrl(input: unknown): string {
+  if (input === null || input === undefined) return '';
+  const url = String(input).trim().replace(/[\x00-\x1F\x7F]/g, '');
+  if (!url) return '';
+
+  // Allowed absolute protocols
+  if (/^(?:https?:|mailto:)/i.test(url)) {
+    return url;
+  }
+
+  // If it contains a colon before any path/query/fragment delimiter (/ ? #), it is an unknown/unsafe protocol
+  const firstColon = url.indexOf(':');
+  if (firstColon !== -1) {
+    const firstSlash = url.indexOf('/');
+    const firstQuestion = url.indexOf('?');
+    const firstHash = url.indexOf('#');
+    const minDelimiter = Math.min(
+      firstSlash === -1 ? Infinity : firstSlash,
+      firstQuestion === -1 ? Infinity : firstQuestion,
+      firstHash === -1 ? Infinity : firstHash
+    );
+    if (firstColon < minDelimiter) {
+      return '';
+    }
+  }
+
+  // Allow safe relative URLs
+  return url;
 }
 
 /**
@@ -51,28 +89,20 @@ export function sanitizePrintMetric(input: unknown): string {
 }
 
 /**
- * Escapes characters that have special meaning in HTML contexts.
- * Useful when injecting text into raw HTML strings or print documents.
- */
-export function escapeHtml(input: unknown): string {
-  const clean = sanitizeText(input);
-  return clean.replace(/[&<>"'`/]/g, char => HTML_ENTITIES[char] || char);
-}
-
-/**
  * Sanitizes student educational support notes (SPE / WOPFU / IPET / Rewalidacja).
- * Ensures safe display in print templates while retaining multi-line structure.
+ * Ensures safe display in print templates while retaining multi-line structure and formulas.
  */
 export function sanitizeStudentNotes(note: unknown): string {
   if (!note) return '';
   const clean = sanitizeText(note);
-  // Truncate extreme malicious length if payload exceeds reasonable limits (e.g. 10 000 chars)
+  // Truncate extreme length if payload exceeds reasonable limits (e.g. 10 000 chars)
   return clean.slice(0, 10000);
 }
 
 /**
- * Recursively cleans all string properties in an object or array.
- * Safe for state objects, print headers, and export payloads.
+ * Recursively cleans string properties in an object or array.
+ * Does NOT modify semantic values (hashes, base64, identifiers).
+ * Strictly skips prototype pollution keys (__proto__, constructor, prototype).
  */
 export function sanitizeObjectStrings<T>(target: T): T {
   if (target === null || target === undefined) {
@@ -80,7 +110,8 @@ export function sanitizeObjectStrings<T>(target: T): T {
   }
 
   if (typeof target === 'string') {
-    return sanitizeText(target) as unknown as T;
+    // Only strip non-printable control characters, preserving semantic values intact
+    return target.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') as unknown as T;
   }
 
   if (Array.isArray(target)) {

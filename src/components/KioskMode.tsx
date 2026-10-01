@@ -158,7 +158,7 @@ export default function KioskMode({
             const actualRoomName = resolveRoomFromColKey(colKeyStr);
 
             if (cell.classes && cell.classes.length > 0) {
-              cell.classes.forEach(clsName => {
+              cell.classes.forEach((clsName: string) => {
                 const clsId = pl.classes.find(c => c.name === clsName)?.id || clsName;
                 if (!classMap[clsId]) classMap[clsId] = {};
                 if (!classMap[clsId][dayIdx]) classMap[clsId][dayIdx] = {};
@@ -1398,7 +1398,7 @@ export default function KioskMode({
       {/* ── MODAL EDYCJI KOMUNIKATU SZKOŁY DLA TABLETÓW I EKRANÓW DOTYKOWYCH ── */}
       {showAnnouncementModal && (
         <div 
-          className="fixed inset-0 z-[10000] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
+          className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
           onClick={() => setShowAnnouncementModal(false)}
         >
           <div 

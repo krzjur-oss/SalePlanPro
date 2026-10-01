@@ -33,16 +33,8 @@ const PALETTE_COLORS = [
 
 const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
-export const isSportsFacility = (room: ClassRoom | undefined | null): boolean => {
-  if (!room) return false;
-  if (room.type === 'sport') return true;
-  const name = (room.name || '').toLowerCase().trim();
-  const desc = (room.desc || '').toLowerCase().trim();
-  const keywords = ['basen', 'hala', 'wf', 'gimn', 'sport', 'boisko', 'orlik', 'stadion', 'fitness', 'siłownia', 'silownia'];
-  if (keywords.some(kw => name.includes(kw) || desc.includes(kw))) return true;
-  if (name === 'sg' || name.startsWith('sg') || name.startsWith('sg_') || name.startsWith('sg-')) return true;
-  return false;
-};
+import { isSportsFacility } from '../utils/roomUtils';
+export { isSportsFacility };
 
 interface PlanKlasProps {
   appState: AppState;
@@ -69,7 +61,7 @@ export default function PlanKlas({
 
   const notify = (msg: string, type: 'ok' | 'err' | 'info' = 'ok') => {
     const toast = document.createElement('div');
-    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg transition-transform z-[9999] ${
+    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg transition-transform z-[60] ${
       type === 'ok' ? 'border-emerald-500' : type === 'info' ? 'border-indigo-500' : 'border-red-500'
     }`;
     toast.textContent = msg;
@@ -268,7 +260,7 @@ export default function PlanKlas({
   React.useEffect(() => {
     const unsub = dualScreenService.subscribe((msg: DualScreenMessage) => {
       if (msg.type === 'ASSIGN_ROOM_CLICK') {
-        const { dayIdx, hourIdx, classId, roomId, roomName } = msg.payload || {};
+        const { dayIdx, hourIdx, classId, roomId, roomName } = (msg.payload as any) || {};
         const targetClassId = classId || activeClassId;
         if (dayIdx !== undefined && hourIdx !== undefined && targetClassId && roomId) {
           const slotItems = getSlotLessons(targetClassId, dayIdx, hourIdx);
@@ -2014,9 +2006,9 @@ export default function PlanKlas({
       notify(`Ustawiono uczestnictwo w lekcji z klasą.`);
     } else if (mode === 'individual') {
       let targetAsgId = specialAssignmentId;
-      let targetTeacherId = '';
+      let targetTeacherId: string | null = '';
       let targetSubjectId = '';
-      let targetRoomId: string | undefined = undefined;
+      let targetRoomId: string | null | undefined = undefined;
       let targetType: StudentSupportType = customType || 'ni';
 
       if (!targetAsgId && customSubjectId && customTeacherId) {
@@ -2066,9 +2058,9 @@ export default function PlanKlas({
       }
     } else if (mode === 'group_special') {
       let targetAsgId = specialAssignmentId;
-      let targetTeacherId = '';
+      let targetTeacherId: string | null = '';
       let targetSubjectId = '';
-      let targetRoomId: string | undefined = undefined;
+      let targetRoomId: string | null | undefined = undefined;
       let targetType: StudentSupportType = customType || 'logopedia';
       const grpName = slotConfig.groupName?.trim() || undefined;
       const linkedIds = slotConfig.linkedStudentIds || [];
@@ -2635,8 +2627,8 @@ export default function PlanKlas({
                             }}
                           >
                             <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                              <span className={`px-1 py-0.2 rounded text-[9px] font-black border shrink-0 ${typeColors[s.type] || 'bg-slate-100 text-slate-700'}`}>
-                                {typeLabels[s.type] || s.type.toUpperCase()}
+                              <span className={`px-1 py-0.2 rounded text-[9px] font-black border shrink-0 ${(typeColors as Record<string, string>)[s.type] || 'bg-slate-100 text-slate-700'}`}>
+                                {(typeLabels as Record<string, string>)[s.type] || s.type.toUpperCase()}
                               </span>
                               <span className="truncate font-bold text-slate-800">{s.lastName} {s.firstName}</span>
                             </div>
@@ -3150,9 +3142,9 @@ export default function PlanKlas({
                                               hour: hourIndex,
                                               lesson,
                                               assignment: asg,
-                                              subject: subj,
-                                              teacher,
-                                              room,
+                                              subject: subj || undefined,
+                                              teacher: teacher || undefined,
+                                              room: room || undefined,
                                               groupName: group?.name
                                             });
                                             return;
@@ -3241,9 +3233,9 @@ export default function PlanKlas({
                                                       hour: hourIndex,
                                                       lesson,
                                                       assignment: asg,
-                                                      subject: subj,
-                                                      teacher,
-                                                      room,
+                                                      subject: subj || undefined,
+                                                      teacher: teacher || undefined,
+                                                      room: room || undefined,
                                                       groupName: group?.name
                                                     });
                                                   }
@@ -3260,9 +3252,9 @@ export default function PlanKlas({
                                                       hour: hourIndex,
                                                       lesson,
                                                       assignment: asg,
-                                                      subject: subj,
-                                                      teacher,
-                                                      room,
+                                                      subject: subj || undefined,
+                                                      teacher: teacher || undefined,
+                                                      room: room || undefined,
                                                       groupName: group?.name
                                                     });
                                                   }
@@ -3466,7 +3458,7 @@ export default function PlanKlas({
                           </td>
                           {/* Dni */}
                           {DAYS.map((_, dayIndex) => {
-                            const slotItems = getSlotLessons(activeClassId, dayIndex, hourIndex);
+                            const slotItems = getSlotLessons(activeClassId || '', dayIndex, hourIndex);
                             const anyConf = slotItems.some(it => it.isConf);
                             const allConfReasons = Array.from(new Set(slotItems.flatMap(it => it.confReasons)));
 
@@ -3520,9 +3512,9 @@ export default function PlanKlas({
                                                 hour: hourIndex,
                                                 lesson,
                                                 assignment: asg,
-                                                subject: subj,
-                                                teacher,
-                                                room,
+                                                subject: subj || undefined,
+                                                teacher: teacher || undefined,
+                                                room: room || undefined,
                                                 groupName: group?.name
                                               });
                                               return;
@@ -3530,7 +3522,7 @@ export default function PlanKlas({
                                             if (selectedAssignmentId) {
                                               placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
                                             } else {
-                                              setCellPickerTarget({ classId: activeClassId, dayIndex, hourIndex });
+                                              setCellPickerTarget({ classId: activeClassId || '', dayIndex, hourIndex });
                                             }
                                           }}
                                           draggable={!isTouchDevice}
@@ -3611,9 +3603,9 @@ export default function PlanKlas({
                                                         hour: hourIndex,
                                                         lesson,
                                                         assignment: asg,
-                                                        subject: subj,
-                                                        teacher,
-                                                        room,
+                                                        subject: subj || undefined,
+                                                        teacher: teacher || undefined,
+                                                        room: room || undefined,
                                                         groupName: group?.name
                                                       });
                                                     }
@@ -3630,9 +3622,9 @@ export default function PlanKlas({
                                                         hour: hourIndex,
                                                         lesson,
                                                         assignment: asg,
-                                                        subject: subj,
-                                                        teacher,
-                                                        room,
+                                                        subject: subj || undefined,
+                                                        teacher: teacher || undefined,
+                                                        room: room || undefined,
                                                         groupName: group?.name
                                                       });
                                                     }
@@ -3783,7 +3775,7 @@ export default function PlanKlas({
                                       if (selectedAssignmentId) {
                                         placeAssignmentOnCell(selectedAssignmentId, dayIndex, hourIndex);
                                       } else {
-                                        setCellPickerTarget({ classId: activeClassId, dayIndex, hourIndex });
+                                        setCellPickerTarget({ classId: activeClassId || '', dayIndex, hourIndex });
                                       }
                                     }}
                                     className={`h-full border border-dashed rounded-lg flex flex-col items-center justify-center transition-all select-none min-h-[60px] sm:min-h-[75px] md:min-h-[85px] p-1 cursor-pointer ${

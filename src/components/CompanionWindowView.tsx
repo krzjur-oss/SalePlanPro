@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   AppState, SchedData, ClassRoom, PlanVariant, Hour 
 } from '../types';
@@ -10,16 +10,22 @@ import {
 } from '../services/dbStorage';
 import { 
   isSportsFacility 
-} from './PlanKlas';
+} from '../utils/roomUtils';
 import PlachtaDyrektorska from './PlachtaDyrektorska';
 import DualScreen2Kreator from './DualScreen2Kreator';
 import DualScreen2PlanKlas from './DualScreen2PlanKlas';
 import DualScreen2PlanSal from './DualScreen2PlanSal';
+import Dyzury from './Dyzury';
+import Wydruki from './Wydruki';
+import Statystyki from './Statystyki';
+import UstawieniaGeneratorow from './UstawieniaGeneratorow';
+import OProgramie from './OProgramie';
 import { 
   Maximize2, Minimize2, RefreshCw, X, Monitor, Layers, 
   Sparkles, Filter, Search, CheckCircle2, 
   DoorOpen, Dumbbell, HeartPulse, Building2, Shield,
-  Scan, ZoomIn, ZoomOut, RotateCcw
+  Scan, ZoomIn, ZoomOut, RotateCcw, Printer, BarChart2,
+  Sliders, HelpCircle
 } from 'lucide-react';
 
 interface CompanionWindowViewProps {
@@ -74,6 +80,9 @@ export default function CompanionWindowView({
     return 'plan_klas';
   });
 
+  // Timestamp dla detekcji i odrzucania konfliktów (starszych wersji)
+  const lastSyncTimestampRef = useRef<number>(Date.now());
+
   // Connection & Handshake status
   const [isConnectedToMaster, setIsConnectedToMaster] = useState(false);
   const [lastHeartbeat, setLastHeartbeat] = useState(Date.now());
@@ -100,6 +109,13 @@ export default function CompanionWindowView({
         }
       };
       setStorageItem(STORAGE_KEYS.APP_STATE, updated);
+      const now = Date.now();
+      lastSyncTimestampRef.current = now;
+      dualScreenService.sendMessage({
+        type: 'UPDATE_LESSONS',
+        payload: { lessons: newLessons },
+        timestamp: now
+      });
       return updated;
     });
   };
@@ -107,6 +123,50 @@ export default function CompanionWindowView({
   const handleChangeSchedData = (newSched: SchedData) => {
     setSchedData(newSched);
     setStorageItem(STORAGE_KEYS.SCHED_DATA, newSched);
+    const now = Date.now();
+    lastSyncTimestampRef.current = now;
+    dualScreenService.sendMessage({
+      type: 'UPDATE_SCHED_DATA',
+      payload: { schedData: newSched },
+      timestamp: now
+    });
+  };
+
+  const handleUpdateDuties = (newState: AppState | ((prev: AppState) => AppState)) => {
+    setAppState(prev => {
+      const next = typeof newState === 'function' ? newState(prev) : newState;
+      setStorageItem(STORAGE_KEYS.APP_STATE, next);
+      const now = Date.now();
+      lastSyncTimestampRef.current = now;
+      dualScreenService.sendMessage({
+        type: 'UPDATE_DUTIES',
+        payload: {
+          dyzury: next.dyzury,
+          appState: next
+        },
+        timestamp: now
+      });
+      return next;
+    });
+  };
+
+  const handleUpdateSettings = (newState: AppState | ((prev: AppState) => AppState)) => {
+    setAppState(prev => {
+      const next = typeof newState === 'function' ? newState(prev) : newState;
+      setStorageItem(STORAGE_KEYS.APP_STATE, next);
+      const now = Date.now();
+      lastSyncTimestampRef.current = now;
+      dualScreenService.sendMessage({
+        type: 'STATE_SYNC',
+        payload: {
+          appState: next,
+          schedData,
+          activeVariant
+        },
+        timestamp: now
+      });
+      return next;
+    });
   };
 
   const handleVariantCreated = (newVariant: PlanVariant) => {
@@ -125,8 +185,27 @@ export default function CompanionWindowView({
       timestamp: Date.now()
     });
 
+    // Powiadomienie Okna Głównego o zamknięciu okna towarzyszącego
+    const handleUnload = () => {
+      dualScreenService.sendMessage({
+        type: 'COMPANION_CLOSED',
+        timestamp: Date.now()
+      });
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('unload', handleUnload);
+
     // 2. Subscribe to incoming messages
     const unsubscribe = dualScreenService.subscribe((msg: DualScreenMessage) => {
+      // Etap 2: Odrzucanie nieaktualnych zmian (konflikt wersji/czasu)
+      if (msg.timestamp && msg.timestamp < lastSyncTimestampRef.current) {
+        console.warn('[CompanionWindow] Odrzucono przestarzałą wiadomość:', msg.type, msg.timestamp, '<', lastSyncTimestampRef.current);
+        return;
+      }
+      if (msg.timestamp) {
+        lastSyncTimestampRef.current = msg.timestamp;
+      }
+
       switch (msg.type) {
         case 'HANDSHAKE_ACK':
         case 'STATE_SYNC':
@@ -163,6 +242,17 @@ export default function CompanionWindowView({
         case 'UPDATE_SCHED_DATA':
           if (msg.payload?.schedData) {
             setSchedData(msg.payload.schedData);
+          }
+          break;
+
+        case 'UPDATE_DUTIES':
+          if (msg.payload?.dyzury) {
+            setAppState(prev => ({
+              ...prev,
+              dyzury: msg.payload.dyzury
+            }));
+          } else if (msg.payload?.appState) {
+            setAppState(msg.payload.appState);
           }
           break;
 
@@ -214,6 +304,8 @@ export default function CompanionWindowView({
     }, 3000);
 
     return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('unload', handleUnload);
       unsubscribe();
       clearInterval(pingInterval);
     };
@@ -588,10 +680,62 @@ export default function CompanionWindowView({
                 ? 'bg-purple-950/50 text-purple-200 border border-purple-500/40 font-black shadow-xs'
                 : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
             }`}
-            title="Etap 3: Dyżury (W budowie na Ekranie 2)"
+            title="Etap 3: Dyżury nauczycielskie"
           >
             <Shield size={14} className={activeCompanionTab === 'dyzury' ? 'text-purple-400' : 'text-slate-400'} />
             <span>Etap 3: Dyżury</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCompanionTab('wydruki')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeCompanionTab === 'wydruki'
+                ? 'bg-emerald-950/50 text-emerald-200 border border-emerald-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+            title="Wydruki i Publikacje"
+          >
+            <Printer size={14} className={activeCompanionTab === 'wydruki' ? 'text-emerald-400' : 'text-slate-400'} />
+            <span>Wydruki</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCompanionTab('statystyki')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeCompanionTab === 'statystyki'
+                ? 'bg-cyan-950/50 text-cyan-200 border border-cyan-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+            title="Statystyki i Diagnoza (tryb tylko do odczytu)"
+          >
+            <BarChart2 size={14} className={activeCompanionTab === 'statystyki' ? 'text-cyan-400' : 'text-slate-400'} />
+            <span>Statystyki</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCompanionTab('ustawienia_generatorow')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeCompanionTab === 'ustawienia_generatorow'
+                ? 'bg-rose-950/50 text-rose-200 border border-rose-500/40 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+            title="Ustawienia generatorów"
+          >
+            <Sliders size={14} className={activeCompanionTab === 'ustawienia_generatorow' ? 'text-rose-400' : 'text-slate-400'} />
+            <span>Ustawienia</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCompanionTab('o_programie')}
+            className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              activeCompanionTab === 'o_programie'
+                ? 'bg-slate-800 text-white border border-slate-700 font-black shadow-xs'
+                : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            }`}
+            title="O programie"
+          >
+            <HelpCircle size={14} className={activeCompanionTab === 'o_programie' ? 'text-indigo-400' : 'text-slate-400'} />
+            <span>O programie</span>
           </button>
 
           <button
@@ -640,7 +784,13 @@ export default function CompanionWindowView({
           </button>
 
           <button
-            onClick={() => window.close()}
+            onClick={() => {
+              dualScreenService.sendMessage({
+                type: 'COMPANION_CLOSED',
+                timestamp: Date.now()
+              });
+              window.close();
+            }}
             className="p-1.5 app-header-btn hover:bg-red-950/50 hover:text-red-400 hover:border-red-900/50 rounded-lg shadow-xs cursor-pointer"
             title="Zamknij drugie okno i wróć do trybu 1 ekranu"
           >
@@ -699,24 +849,60 @@ export default function CompanionWindowView({
         )}
 
         {/* ======================================================== */}
-        {/* WIDOKI W BUDOWIE NA EKRANIE 2 (DYŻURY, STATYSTYKI, ETC)  */}
+        {/* WIDOK 4: ETAP 3 DYŻURY NAUCZYCIELSKIE                     */}
         {/* ======================================================== */}
-        {(activeCompanionTab === 'dyzury' || activeCompanionTab === 'statystyki' || activeCompanionTab === 'ustawienia_generatorow' || activeCompanionTab === 'o_programie') && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-100 text-slate-800 select-none">
-            <div className="max-w-md p-8 bg-white border border-slate-200 rounded-3xl shadow-xl space-y-4">
-              <div className="w-16 h-16 mx-auto bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-center text-amber-500 shadow-xs">
-                <Sparkles size={32} />
-              </div>
-              <span className="text-xs font-black uppercase tracking-wider text-amber-700 bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
-                Ekran 2 • W Budowie
-              </span>
-              <h2 className="text-xl font-black text-slate-800">
-                {activeCompanionTab === 'dyzury' ? 'Etap 3: Dyżury' : activeCompanionTab === 'statystyki' ? 'Statystyki' : 'Moduł w budowie'}
-              </h2>
-              <p className="text-xs text-slate-500 leading-relaxed font-medium">
-                Widok drugiego ekranu dla tej sekcji nawigacji jest w trakcie przygotowania. Pełne sterowanie i edycja odbywają się w Oknie Głównym (Ekran 1).
-              </p>
-            </div>
+        {activeCompanionTab === 'dyzury' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <Dyzury
+              appState={appState}
+              onChangeAppState={handleUpdateDuties}
+              schedData={schedData}
+            />
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOK 5: WYDRUKI I PUBLIKACJE                            */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'wydruki' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <Wydruki
+              appState={appState}
+              schedData={schedData}
+            />
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOK 6: STATYSTYKI I DIAGNOZA (TYLKO DO ODCZYTU)        */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'statystyki' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <Statystyki
+              appState={appState}
+              schedData={schedData}
+            />
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOK 7: USTAWIENIA GENERATORÓW                          */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'ustawienia_generatorow' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <UstawieniaGeneratorow
+              appState={appState}
+              onChangeAppState={handleUpdateSettings}
+            />
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* WIDOK 8: O PROGRAMIE                                     */}
+        {/* ======================================================== */}
+        {activeCompanionTab === 'o_programie' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <OProgramie />
           </div>
         )}
 

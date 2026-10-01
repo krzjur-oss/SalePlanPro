@@ -2,5 +2,5 @@
   "name": "SalePlan Pro",
   "description": "Zintegrowany system planowania lekcji, sal lekcyjnych oraz dyżurów nauczycielskich.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

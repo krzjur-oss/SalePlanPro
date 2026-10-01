@@ -1131,7 +1131,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
   const notify = (msg: string, type: 'ok' | 'err' = 'ok') => {
     const toast = document.createElement('div');
-    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg z-[9999] ${
+    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg z-[60] ${
       type === 'ok' ? 'border-emerald-500' : 'border-red-500'
     }`;
     toast.textContent = msg;
@@ -2234,8 +2234,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
               
               if (roomBeforeConnected || roomAfterConnected) {
                 score = 3;
-                const matchingRoom = roomBeforeConnected ? lessonBefore.roomName : lessonAfter.roomName;
-                const matchingSubj = roomBeforeConnected ? lessonBefore.subject : lessonAfter.subject;
+                const matchingRoom = roomBeforeConnected ? lessonBefore?.roomName : lessonAfter?.roomName;
+                const matchingSubj = roomBeforeConnected ? lessonBefore?.subject : lessonAfter?.subject;
                 reason = `⭐⭐⭐ Polecany obok: Lekcja w sali ${matchingRoom} (${matchingSubj})`;
               } else if (lessonBefore || lessonAfter) {
                 score = 2;

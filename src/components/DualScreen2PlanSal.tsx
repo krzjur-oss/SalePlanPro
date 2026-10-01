@@ -8,7 +8,7 @@ import {
 import { 
   colKey, flattenColumns, cleanFloorName 
 } from '../utils';
-import { isSportsFacility } from './PlanKlas';
+import { isSportsFacility } from '../utils/roomUtils';
 import { isNIRoom } from './CompanionWindowView';
 import { 
   ZoomIn, ZoomOut, RotateCcw, Trash2, X, AlertTriangle, 

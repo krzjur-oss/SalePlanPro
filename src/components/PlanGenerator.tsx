@@ -697,6 +697,11 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
           ...appState,
           planLekcji: updatedPL,
           generatorSettings: {
+            genPriorityHomerooms: true,
+            genPriorityTeachers: true,
+            genExcludeWF: true,
+            genAutoPlaceWF: true,
+            genClearExisting: false,
             ...appState.generatorSettings,
             maxGapsPerTeacher,
             obeyAvailability,

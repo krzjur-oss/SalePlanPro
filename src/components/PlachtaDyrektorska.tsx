@@ -348,7 +348,7 @@ export default function PlachtaDyrektorska({
 
             // By class
             if (cell.classes && cell.classes.length > 0) {
-              cell.classes.forEach(clsName => {
+              cell.classes.forEach((clsName: string) => {
                 const clsId = pl.classes.find(c => c.name === clsName)?.id || clsName;
                 if (!classMap[clsId]) classMap[clsId] = {};
                 if (!classMap[clsId][dayIdx]) classMap[clsId][dayIdx] = {};
@@ -1475,7 +1475,7 @@ export default function PlachtaDyrektorska({
                             key={ent.id} 
                             style={{ width: colWidthPercent }}
                             className={`border border-slate-700 p-0.5 text-center font-black ${densityConfig.headerText} print:border-slate-800 overflow-hidden`}
-                            title={ent.name}
+                            title={'name' in ent ? (ent as ClassRoom | Class).name : `${(ent as Teacher).first} ${(ent as Teacher).last}`}
                           >
                             <span className="block leading-none truncate">{label}</span>
                             {subLabel && (
@@ -1764,7 +1764,7 @@ export default function PlachtaDyrektorska({
                               key={ent.id}
                               style={{ width: colWidthPercent }}
                               className={`border border-slate-700 p-0.5 text-center font-black ${densityConfig.headerText} print:border-slate-800 overflow-hidden`}
-                              title={ent.name}
+                              title={'name' in ent ? (ent as ClassRoom | Class).name : `${(ent as Teacher).first} ${(ent as Teacher).last}`}
                             >
                               <span className="block leading-none truncate">{label}</span>
                               {subLabel && (

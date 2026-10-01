@@ -27,8 +27,6 @@ export default function LockManagerModal({
   const [activeTab, setActiveTab] = useState<'classes' | 'teachers' | 'spe'>('classes');
   const [search, setSearch] = useState('');
 
-  if (!isOpen) return null;
-
   const pl = appState.planLekcji;
 
   // Compute stats per class
@@ -110,6 +108,8 @@ export default function LockManagerModal({
   const filteredSPE = speLockStats.filter(item => 
     `${item.student.firstName} ${item.student.lastName}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">

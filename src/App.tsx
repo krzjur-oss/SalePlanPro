@@ -7,8 +7,11 @@ import {
 } from './utils';
 import {
   STORAGE_KEYS, getStorageItem, getStorageItemSync, setStorageItem, removeStorageItem,
-  clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics
+  clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics,
+  isDatabaseEncryptionActive, isSessionUnlocked, StorageLockedError, removeStorageEncryptionMeta,
+  migrateAllStoredItemsToV2
 } from './services/dbStorage';
+import UnlockScreen from './components/UnlockScreen';
 import ExportModal, { ExportOptions } from './components/ExportModal';
 import ImportModal from './components/ImportModal';
 import SecurityModal from './components/SecurityModal';
@@ -28,9 +31,14 @@ const OProgramie = lazy(() => import('./components/OProgramie'));
 const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
 const PlanVariantsModal = lazy(() => import('./components/PlanVariantsModal'));
 const DualScreenMasterView = lazy(() => import('./components/DualScreenMasterView'));
-import CompanionWindowView from './components/CompanionWindowView';
+const CompanionWindowView = lazy(() => import('./components/CompanionWindowView'));
+import { SWUpdateBanner } from './components/SWUpdateBanner';
+import { multiTabStateService } from './services/multiTabStateService';
+import MultiTabConflictModal from './components/MultiTabConflictModal';
+import { MultiTabRefreshBanner } from './components/MultiTabRefreshBanner';
 import { dualScreenService, DualScreenMessage } from './services/dualScreenService';
 import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
+import { Z_INDEX, Z_INDEX_CLASSES } from './styles/zIndex';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
@@ -199,60 +207,93 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Asynchronous storage migration and deep load on mount
-  useEffect(() => {
-    let isMounted = true;
-    const initStorage = async () => {
-      try {
-        await migrateFromLocalStorage();
-        
-        const idbState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
-        if (idbState && isMounted) {
-          setAppState(sortAppState(idbState));
-        }
-        const idbSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
-        if (idbSched && isMounted) {
-          setSchedData(idbSched);
-        }
-        const idbArchive = await getStorageItem<ArchiveEntry[]>(STORAGE_KEYS.ARCHIVE);
-        if (idbArchive && isMounted && Array.isArray(idbArchive)) {
-          setArchive(idbArchive);
-        }
-        const idbSnaps = await getStorageItem<SnapshotEntry[]>(STORAGE_KEYS.SNAPSHOTS);
-        if (idbSnaps && isMounted && Array.isArray(idbSnaps)) {
-          setSnapshots(idbSnaps);
-        }
-        const idbAutosaves = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS);
-        if (idbAutosaves && isMounted && Array.isArray(idbAutosaves)) {
-          setAutosaveVersions(idbAutosaves);
-        }
-        const idbLogs = await getStorageItem<AppEventLog[]>(STORAGE_KEYS.HISTORY_LOGS);
-        if (idbLogs && isMounted && Array.isArray(idbLogs) && idbLogs.length > 0) {
-          setHistoryLogs(idbLogs);
-        }
-        const idbVariants = await getStorageItem<PlanVariant[]>(STORAGE_KEYS.PLAN_VARIANTS);
-        if (idbVariants && isMounted && Array.isArray(idbVariants) && idbVariants.length > 0) {
-          setPlanVariants(idbVariants);
-        }
-        const idbActiveVarId = await getStorageItem<string>(STORAGE_KEYS.ACTIVE_VARIANT_ID);
-        if (idbActiveVarId && isMounted) {
-          setActiveVariantId(idbActiveVarId);
-        }
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    return isDatabaseEncryptionActive() && !isSessionUnlocked();
+  });
+  const storageReady = useRef<boolean>(false);
+  const isFirstTabMount = useRef<boolean>(true);
 
-        const stats = await getDetailedStorageStats();
-        if (isMounted) setStorageStats(stats);
-      } catch (e) {
-        console.warn('Inicjalizacja IndexedDB zakończona z ostrzeżeniem:', e);
+  // Asynchronous storage migration and deep load on mount / unlock
+  const initStorage = async () => {
+    try {
+      await migrateFromLocalStorage();
+      
+      const idbState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+      if (idbState) {
+        setAppState(sortAppState(idbState));
+        const rev = multiTabStateService.extractRevision(idbState) || 1;
+        multiTabStateService.setLocalRevision(rev);
       }
-    };
+      const idbSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
+      if (idbSched) {
+        setSchedData(idbSched);
+      }
+      const idbArchive = await getStorageItem<ArchiveEntry[]>(STORAGE_KEYS.ARCHIVE);
+      if (idbArchive && Array.isArray(idbArchive)) {
+        setArchive(idbArchive);
+      }
+      const idbSnaps = await getStorageItem<SnapshotEntry[]>(STORAGE_KEYS.SNAPSHOTS);
+      if (idbSnaps && Array.isArray(idbSnaps)) {
+        setSnapshots(idbSnaps);
+      }
+      const idbAutosaves = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS);
+      if (idbAutosaves && Array.isArray(idbAutosaves)) {
+        setAutosaveVersions(idbAutosaves);
+      }
+      const idbLogs = await getStorageItem<AppEventLog[]>(STORAGE_KEYS.HISTORY_LOGS);
+      if (idbLogs && Array.isArray(idbLogs) && idbLogs.length > 0) {
+        setHistoryLogs(idbLogs);
+      }
+      const idbVariants = await getStorageItem<PlanVariant[]>(STORAGE_KEYS.PLAN_VARIANTS);
+      if (idbVariants && Array.isArray(idbVariants) && idbVariants.length > 0) {
+        setPlanVariants(idbVariants);
+      }
+      const idbActiveVarId = await getStorageItem<string>(STORAGE_KEYS.ACTIVE_VARIANT_ID);
+      if (idbActiveVarId) {
+        setActiveVariantId(idbActiveVarId);
+      }
 
-    initStorage();
-    return () => { isMounted = false; };
+      const stats = await getDetailedStorageStats();
+      setStorageStats(stats);
+      storageReady.current = true;
+    } catch (e) {
+      console.warn('Inicjalizacja IndexedDB zakończona z ostrzeżeniem:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (!isLocked) {
+      initStorage();
+    }
+  }, [isLocked]);
+
+  useEffect(() => {
+    const handleSessionLocked = () => {
+      setIsLocked(true);
+      storageReady.current = false;
+    };
+    window.addEventListener('saleplan-session-locked', handleSessionLocked);
+    return () => window.removeEventListener('saleplan-session-locked', handleSessionLocked);
   }, []);
 
+  const handleUnlocked = async () => {
+    setIsLocked(false);
+    await initStorage();
+    migrateAllStoredItemsToV2().catch(() => {});
+  };
+
+  const handleEmergencyReset = async () => {
+    removeStorageEncryptionMeta();
+    await clearAllStorage();
+    window.location.reload();
+  };
+
   useEffect(() => {
-    setStorageItem(STORAGE_KEYS.HISTORY_LOGS, historyLogs);
-  }, [historyLogs]);
+    if (!storageReady.current || isLocked) return;
+    setStorageItem(STORAGE_KEYS.HISTORY_LOGS, historyLogs).catch((err: any) => {
+      console.warn('Nie udało się zapisać dziennika zdarzeń:', err);
+    });
+  }, [historyLogs, isLocked]);
 
   const addEventLog = (actionType: AppEventLog['actionType'], description: string, details?: string) => {
     const newLog: AppEventLog = {
@@ -295,6 +336,7 @@ export default function App() {
   };
 
   const pushAutosaveVersion = async (newAppState: AppState, newSchedData: SchedData) => {
+    if (!storageReady.current || isLocked) return;
     try {
       const saved = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS) || autosaveVersions;
       let versions: AutosaveVersion[] = Array.isArray(saved) ? saved : [];
@@ -321,6 +363,7 @@ export default function App() {
       setAutosaveVersions(nextVersions);
     } catch (e) {
       console.error('Błąd podczas wersjonowania autozapisu:', e);
+      throw e;
     }
   };
 
@@ -334,6 +377,7 @@ export default function App() {
 
   // Ensure default variant exists if storage was empty
   useEffect(() => {
+    if (!storageReady.current || isLocked) return;
     if (planVariants.length === 0 && appState.planLekcji) {
       const defaultVar: PlanVariant = {
         id: 'default_semestr_1',
@@ -361,13 +405,14 @@ export default function App() {
       };
       setPlanVariants([defaultVar]);
       setActiveVariantId(defaultVar.id);
-      setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, [defaultVar]);
-      setStorageItem(STORAGE_KEYS.ACTIVE_VARIANT_ID, defaultVar.id);
+      setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, [defaultVar]).catch(() => {});
+      setStorageItem(STORAGE_KEYS.ACTIVE_VARIANT_ID, defaultVar.id).catch(() => {});
     }
-  }, [appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
+  }, [storageReady.current, isLocked, appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
 
   // Debounced auto-save of current working changes into the active variant
   useEffect(() => {
+    if (!storageReady.current || isLocked) return;
     if (!activeVariantId || planVariants.length === 0) return;
 
     const timer = setTimeout(() => {
@@ -397,13 +442,16 @@ export default function App() {
         };
         const copy = [...prev];
         copy[idx] = updatedVariant;
-        setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, copy);
+        setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, copy).catch((e: any) => {
+          setSaveStatus('error');
+          notify('Błąd zapisu wariantu planu!', 'err');
+        });
         return copy;
       });
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [appState.planLekcji.lessons, appState.planLekcji.assignments, appState.dyzury?.harmonogram, schedData, activeVariantId]);
+  }, [storageReady.current, isLocked, appState.planLekcji.lessons, appState.planLekcji.assignments, appState.dyzury?.harmonogram, schedData, activeVariantId]);
 
   const handleSwitchVariant = (targetVariantId: string) => {
     const target = planVariants.find(v => v.id === targetVariantId);
@@ -507,8 +555,8 @@ export default function App() {
     });
 
     // 2. Synchronizacja planu sal (schedData) dla danej klasy
-    const sourceSched = sourceVar.data.schedData || {};
-    const targetSched: SchedData = JSON.parse(JSON.stringify(targetVar.data.schedData || {}));
+    const sourceSched: any = sourceVar.data.schedData || {};
+    const targetSched: any = JSON.parse(JSON.stringify(targetVar.data.schedData || {}));
 
     // Czyszczenie starej alokacji sal dla tej klasy
     Object.keys(targetSched).forEach(yK => {
@@ -648,6 +696,7 @@ export default function App() {
   const [isMultiScreenAvailable, setIsMultiScreenAvailable] = useState<boolean>(() => dualScreenService.getIsMultiScreenAvailable());
   const [isCompanionActive, setIsCompanionActive] = useState<boolean>(() => dualScreenService.isCompanionWindowActive());
   const [isForcedDualScreen, setIsForcedDualScreen] = useState<boolean>(() => dualScreenService.isForcedMode());
+  const lastSyncTimestampRef = useRef<number>(Date.now());
 
   useEffect(() => {
     const updateScreens = () => {
@@ -660,40 +709,36 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Broadcast state to companion window on changes
-  useEffect(() => {
-    if (dualScreenService.isCompanionWindowActive()) {
-      dualScreenService.sendMessage({
-        type: 'STATE_SYNC',
-        payload: { appState, schedData, activeVariant },
-        timestamp: Date.now()
-      });
-    }
-  }, [appState, schedData, activeVariant]);
-
-  useEffect(() => {
-    if (dualScreenService.isCompanionWindowActive()) {
-      dualScreenService.sendMessage({
-        type: 'TAB_CHANGE',
-        payload: { tab: currentTab },
-        timestamp: Date.now()
-      });
-    }
-  }, [currentTab]);
-
   // Dual Screen BroadcastChannel subscription for messages from companion
   useEffect(() => {
     const unsub = dualScreenService.subscribe((msg: DualScreenMessage) => {
       if (msg.type === 'HANDSHAKE' || msg.type === 'PING') {
         setIsCompanionActive(true);
+        const now = Date.now();
+        lastSyncTimestampRef.current = now;
         dualScreenService.sendMessage({
           type: 'HANDSHAKE_ACK',
           payload: { appState, schedData, activeVariant, planVariants, currentTab },
-          timestamp: Date.now()
+          timestamp: now
         });
-      } else if (msg.type === 'COMPANION_CLOSED') {
+        return;
+      }
+
+      if (msg.type === 'COMPANION_CLOSED') {
         setIsCompanionActive(false);
-      } else if (msg.type === 'CREATE_VARIANT') {
+        return;
+      }
+
+      // Etap 2: Weryfikacja konfliktu edycji (odrzucanie nieaktualnych zmian)
+      if (msg.timestamp && msg.timestamp < lastSyncTimestampRef.current) {
+        console.warn(`[dualScreen] Odrzucono przestarzałą wiadomość ${msg.type} (${msg.timestamp} < ${lastSyncTimestampRef.current})`);
+        return;
+      }
+      if (msg.timestamp) {
+        lastSyncTimestampRef.current = msg.timestamp;
+      }
+
+      if (msg.type === 'CREATE_VARIANT') {
         const { variant, activateImmediately } = msg.payload || {};
         if (variant) {
           setPlanVariants(prev => {
@@ -732,6 +777,18 @@ export default function App() {
         if (newSched) {
           setSchedData(newSched);
           setStorageItem(STORAGE_KEYS.SCHED_DATA, newSched);
+        }
+      } else if (msg.type === 'UPDATE_DUTIES') {
+        const { dyzury, appState: incomingState } = msg.payload || {};
+        if (dyzury || incomingState) {
+          setAppState(prev => {
+            const nextState: AppState = incomingState ? incomingState : {
+              ...prev,
+              dyzury: dyzury || prev.dyzury
+            };
+            setStorageItem(STORAGE_KEYS.APP_STATE, nextState);
+            return nextState;
+          });
         }
       } else if (msg.type === 'ASSIGN_ROOM_CLICK') {
         const { dayIdx, hourIdx, classId, roomId, roomName } = msg.payload || {};
@@ -784,6 +841,8 @@ export default function App() {
   // Synchronizacja stanu w czasie rzeczywistym z Ekranem 2
   useEffect(() => {
     if (isCompanionActive) {
+      const now = Date.now();
+      lastSyncTimestampRef.current = now;
       dualScreenService.sendMessage({
         type: 'STATE_SYNC',
         payload: {
@@ -793,7 +852,7 @@ export default function App() {
           planVariants,
           currentTab
         },
-        timestamp: Date.now()
+        timestamp: now
       });
     }
   }, [appState, schedData, activeVariant, planVariants, isCompanionActive]);
@@ -820,23 +879,29 @@ export default function App() {
   useEffect(() => {
     const checkTermsAndVersion = async () => {
       // 1. Sprawdzenie akceptacji regulaminu i licencji (wymagane przy 1. uruchomieniu)
+      let needsTerms = false;
       try {
         const termsData = await getStorageItem<any>(STORAGE_KEYS.TERMS_ACCEPTED) || getStorageItemSync<any>(STORAGE_KEYS.TERMS_ACCEPTED);
         if (!termsData || !termsData.accepted) {
           setShowTermsModal(true);
+          needsTerms = true;
         }
       } catch (e) {
         console.warn('Weryfikacja akceptacji regulaminu:', e);
         setShowTermsModal(true);
+        needsTerms = true;
       }
 
       // 2. Sprawdzenie wersji dla powiadomienia o nowościach
-      const lastSeen = await getStorageItem<string>(STORAGE_KEYS.LAST_SEEN_VERSION) || getStorageItemSync<string>(STORAGE_KEYS.LAST_SEEN_VERSION);
-      if (lastSeen !== CURRENT_VERSION) {
-        const timer = setTimeout(() => {
-          setShowVersionToast(true);
-        }, 1500);
-        return () => clearTimeout(timer);
+      // Nie uruchamiaj toastu wersji, dopóki użytkownik nie zaakceptuje regulaminu
+      if (!needsTerms) {
+        const lastSeen = await getStorageItem<string>(STORAGE_KEYS.LAST_SEEN_VERSION) || getStorageItemSync<string>(STORAGE_KEYS.LAST_SEEN_VERSION);
+        if (lastSeen !== CURRENT_VERSION) {
+          const timer = setTimeout(() => {
+            setShowVersionToast(true);
+          }, 1500);
+          return () => clearTimeout(timer);
+        }
       }
     };
     checkTermsAndVersion();
@@ -854,6 +919,18 @@ export default function App() {
       console.error('Błąd zapisu akceptacji regulaminu:', e);
     }
     setShowTermsModal(false);
+
+    // Po zaakceptowaniu regulaminu: sprawdzenie i wyświetlenie toastu nowej wersji
+    try {
+      const lastSeen = await getStorageItem<string>(STORAGE_KEYS.LAST_SEEN_VERSION) || getStorageItemSync<string>(STORAGE_KEYS.LAST_SEEN_VERSION);
+      if (lastSeen !== CURRENT_VERSION) {
+        setTimeout(() => {
+          setShowVersionToast(true);
+        }, 1200);
+      }
+    } catch (e) {
+      console.warn('Weryfikacja wersji po akceptacji regulaminu:', e);
+    }
   };
 
   const handleDismissVersionToast = () => {
@@ -965,7 +1042,7 @@ export default function App() {
 
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isPresentationMode, setIsPresentationMode] = useState<boolean>(false);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty' | 'error'>('saved');
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -989,7 +1066,7 @@ export default function App() {
     }
   };
 
-  // ── LOCALSTORAGE PERSISTENCE EFFECTS (DEBOUNCED) ──
+  // ── LOCALSTORAGE / INDEXEDDB PERSISTENCE EFFECTS (DEBOUNCED) ──
   const isInitialMount = React.useRef(true);
   const stateRef = React.useRef({ appState, schedData });
 
@@ -998,8 +1075,181 @@ export default function App() {
     stateRef.current = { appState, schedData };
   }, [appState, schedData]);
 
+  // ── MULTI-TAB BROADCASTCHANNEL 'saleplan-state' & CONFLICT RESOLUTION ──
+  const [showConflictModal, setShowConflictModal] = useState<boolean>(false);
+  const [conflictData, setConflictData] = useState<{
+    localRevision: number;
+    incomingRevision: number;
+    incomingTabId: string;
+    dbAppState: any;
+    dbSchedData?: any;
+  } | null>(null);
+
+  const [showRefreshBanner, setShowRefreshBanner] = useState<boolean>(false);
+  const [remoteRevision, setRemoteRevision] = useState<number>(1);
+
+  // Subscribe to BroadcastChannel 'saleplan-state' (odrębny od trybu 2 ekranów)
+  useEffect(() => {
+    const unsub = multiTabStateService.subscribe((msg) => {
+      if (msg.type === 'STATE_COMMITTED') {
+        const localRev = multiTabStateService.getLocalRevision();
+        if (msg.revision > localRev) {
+          setRemoteRevision(msg.revision);
+          setShowRefreshBanner(true);
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const persistAppStateAndSchedWithConflictCheck = async (
+    targetAppState: AppState,
+    targetSchedData: SchedData,
+    forceOverwrite: boolean = false
+  ): Promise<boolean> => {
+    if (!storageReady.current || isLocked) return false;
+
+    const currentLocalRev = multiTabStateService.getLocalRevision();
+
+    if (!forceOverwrite) {
+      const conflict = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, currentLocalRev);
+      if (conflict.hasConflict) {
+        let conflictingSched: any = null;
+        try {
+          conflictingSched = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
+        } catch {}
+
+        setConflictData({
+          localRevision: conflict.localRevision,
+          incomingRevision: conflict.dbRevision,
+          incomingTabId: conflict.dbTabId,
+          dbAppState: conflict.dbRecord,
+          dbSchedData: conflictingSched
+        });
+        setShowConflictModal(true);
+        setSaveStatus('dirty');
+        return false;
+      }
+    }
+
+    const baseRev = Math.max(currentLocalRev, conflictData?.incomingRevision || 0);
+    const nextRev = baseRev + 1;
+    const enrichedState = multiTabStateService.enrichWithRevision(targetAppState, nextRev);
+    const enrichedSched = multiTabStateService.enrichWithRevision(targetSchedData, nextRev);
+
+    await setStorageItem(STORAGE_KEYS.APP_STATE, enrichedState);
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, enrichedSched);
+    multiTabStateService.setLocalRevision(nextRev);
+    multiTabStateService.broadcastStateCommitted(STORAGE_KEYS.APP_STATE, nextRev);
+
+    return true;
+  };
+
+  const handleLoadIncomingFromConflict = async () => {
+    try {
+      if (conflictData?.dbAppState) {
+        setAppState(sortAppState(conflictData.dbAppState));
+        if (conflictData.dbSchedData) {
+          setSchedData(conflictData.dbSchedData);
+        }
+        multiTabStateService.setLocalRevision(conflictData.incomingRevision);
+      } else {
+        const freshState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+        const freshSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
+        if (freshState) {
+          setAppState(sortAppState(freshState));
+          const rev = multiTabStateService.extractRevision(freshState) || conflictData?.incomingRevision || 1;
+          multiTabStateService.setLocalRevision(rev);
+        }
+        if (freshSched) {
+          setSchedData(freshSched);
+        }
+      }
+      setShowConflictModal(false);
+      setShowRefreshBanner(false);
+      setConflictData(null);
+      setSaveStatus('saved');
+      notify('Wczytano najnowszą wersję planu z innej karty.', 'ok');
+    } catch (e) {
+      console.error('Błąd wczytywania zmian z innej karty:', e);
+      notify('Błąd podczas wczytywania nowej wersji z bazy danych.', 'err');
+    }
+  };
+
+  const handleKeepLocalFromConflict = async () => {
+    if (!conflictData) return;
+
+    // 1. Zapis kopii drugiej wersji do snapshotów przed nadpisaniem
+    const otherTabRev = conflictData.incomingRevision;
+    const otherTabId = conflictData.incomingTabId || 'inna_karta';
+    const snapshotCopy: SnapshotEntry = {
+      id: 'conflict_' + Date.now(),
+      name: `Kopia z innej karty (przed nadpisaniem) - Rewizja #${otherTabRev}`,
+      createdAt: new Date().toISOString(),
+      appState: conflictData.dbAppState,
+      schedData: conflictData.dbSchedData || {},
+      comment: `Automatyczna kopia zapasowa utworzona podczas rozwiązywania konfliktu w wielu kartach. Karta "${otherTabId}" zapisała rewizję #${otherTabRev}, która została zastąpiona wersją z bieżącej karty.`,
+      stats: {
+        assignedLessonsCount: Object.keys(conflictData.dbAppState?.planLekcji?.lessons || {}).length,
+        classesCount: conflictData.dbAppState?.planLekcji?.classes?.length || 0,
+        teachersCount: conflictData.dbAppState?.planLekcji?.teachers?.length || 0
+      }
+    };
+
+    setSnapshots(prev => {
+      const updated = [snapshotCopy, ...prev];
+      setStorageItem(STORAGE_KEYS.SNAPSHOTS, updated).catch(() => {});
+      return updated;
+    });
+
+    // 2. Bezpieczny zapis własnej wersji z nową rewizją
+    setSaveStatus('saving');
+    try {
+      const saved = await persistAppStateAndSchedWithConflictCheck(
+        stateRef.current.appState,
+        stateRef.current.schedData,
+        true // force overwrite
+      );
+      if (saved) {
+        await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+        setSaveStatus('saved');
+        refreshStorageStats();
+        setShowConflictModal(false);
+        setShowRefreshBanner(false);
+        setConflictData(null);
+        notify('Zachowano Twoją wersję planu. Kopia z innej karty została bezpiecznie zapisana w Punktach Przywracania.', 'ok');
+      }
+    } catch (e) {
+      console.error('Błąd zachowywania własnej wersji:', e);
+      setSaveStatus('error');
+      notify('Nie udało się zapisać własnej wersji planu.', 'err');
+    }
+  };
+
+  const handleReloadFromBanner = async () => {
+    try {
+      const freshState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+      const freshSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
+      if (freshState) {
+        setAppState(sortAppState(freshState));
+        const rev = multiTabStateService.extractRevision(freshState) || remoteRevision;
+        multiTabStateService.setLocalRevision(rev);
+      }
+      if (freshSched) {
+        setSchedData(freshSched);
+      }
+      setShowRefreshBanner(false);
+      setSaveStatus('saved');
+      notify(`Wczytano zaktualizowany plan z bazy danych (Rewizja #${remoteRevision}).`, 'ok');
+    } catch (e) {
+      console.error('Błąd wczytywania zmian z innej karty:', e);
+      notify('Błąd podczas wczytywania nowej wersji planu.', 'err');
+    }
+  };
+
   // Unified debounced save effect for appState and schedData
   useEffect(() => {
+    if (!storageReady.current || isLocked) return;
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
@@ -1012,14 +1262,25 @@ export default function App() {
       // Elegant micro-delay to allow visual status feedback
       setTimeout(async () => {
         try {
-          await setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
-          await setStorageItem(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
-          await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
-          setSaveStatus('saved');
-          refreshStorageStats();
-        } catch (e) {
+          const saved = await persistAppStateAndSchedWithConflictCheck(
+            stateRef.current.appState,
+            stateRef.current.schedData
+          );
+          if (saved) {
+            await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+            setSaveStatus('saved');
+            refreshStorageStats();
+          }
+        } catch (e: any) {
           console.error('Błąd zapisu autozapisu', e);
-          setSaveStatus('saved');
+          setSaveStatus('error');
+          const isLockedErr = e instanceof StorageLockedError || e?.name === 'StorageLockedError';
+          notify(
+            isLockedErr 
+              ? 'Baza danych jest zablokowana. Wprowadź hasło, aby zapisać zmiany.' 
+              : 'Błąd zapisu: Nie udało się utrwalić zmian w bazie danych!',
+            'err'
+          );
         }
       }, 250);
     }, 1000);
@@ -1027,32 +1288,48 @@ export default function App() {
     return () => {
       clearTimeout(handler);
     };
-  }, [appState, schedData]);
+  }, [appState, schedData, isLocked]);
 
-  // Force instant save on tab switch
+  // Force instant save on tab switch (skips first render mount via isFirstTabMount)
   useEffect(() => {
-    if (isInitialMount.current) return;
+    if (isFirstTabMount.current) {
+      isFirstTabMount.current = false;
+      return;
+    }
+    if (!storageReady.current || isLocked) return;
     
     const saveOnTabSwitch = async () => {
       try {
         setSaveStatus('saving');
-        await setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
-        await setStorageItem(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
-        await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
-        setSaveStatus('saved');
-        refreshStorageStats();
-        addEventLog('other', 'Automatyczny zapis przy zmianie zakładki', `Zapisano stan programu w bazie IndexedDB przy przełączeniu na zakładkę "${currentTab}".`);
-      } catch (e) {
+        const saved = await persistAppStateAndSchedWithConflictCheck(
+          stateRef.current.appState,
+          stateRef.current.schedData
+        );
+        if (saved) {
+          await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+          setSaveStatus('saved');
+          refreshStorageStats();
+          addEventLog('other', 'Automatyczny zapis przy zmianie zakładki', `Zapisano stan programu w bazie IndexedDB przy przełączeniu na zakładkę "${currentTab}".`);
+        }
+      } catch (e: any) {
         console.error('Błąd natychmiastowego zapisu przy zmianie zakładki', e);
-        setSaveStatus('saved');
+        setSaveStatus('error');
+        const isLockedErr = e instanceof StorageLockedError || e?.name === 'StorageLockedError';
+        notify(
+          isLockedErr 
+            ? 'Baza danych jest zablokowana. Zmiany nie zostały zapisane.' 
+            : 'Błąd zapisu bazy danych przy zmianie zakładki!',
+          'err'
+        );
       }
     };
     saveOnTabSwitch();
-  }, [currentTab]);
+  }, [currentTab, isLocked]);
 
   // Unload fallback to secure any unsaved drafts instantly
   useEffect(() => {
     const handleBeforeUnload = () => {
+      if (!storageReady.current || isLocked) return;
       try {
         setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
         setStorageItem(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
@@ -1064,17 +1341,31 @@ export default function App() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, []);
+  }, [isLocked]);
 
   // Sync archive immediately (low frequency, separate key)
   useEffect(() => {
-    setStorageItem(STORAGE_KEYS.ARCHIVE, archive).then(refreshStorageStats);
-  }, [archive]);
+    if (!storageReady.current || isLocked) return;
+    setStorageItem(STORAGE_KEYS.ARCHIVE, archive)
+      .then(refreshStorageStats)
+      .catch((e: any) => {
+        console.error('Błąd zapisu archiwum', e);
+        setSaveStatus('error');
+        notify('Nie udało się zapisać archiwum w bazie danych!', 'err');
+      });
+  }, [archive, isLocked]);
 
   // Sync snapshots immediately
   useEffect(() => {
-    setStorageItem(STORAGE_KEYS.SNAPSHOTS, snapshots).then(refreshStorageStats);
-  }, [snapshots]);
+    if (!storageReady.current || isLocked) return;
+    setStorageItem(STORAGE_KEYS.SNAPSHOTS, snapshots)
+      .then(refreshStorageStats)
+      .catch((e: any) => {
+        console.error('Błąd zapisu punktów przywracania', e);
+        setSaveStatus('error');
+        notify('Nie udało się zapisać punktów przywracania!', 'err');
+      });
+  }, [snapshots, isLocked]);
 
   // ── UNDO / REDO STATE HANDLERS ──
   const pushToUndo = (stateToSave: SchedData) => {
@@ -1695,7 +1986,7 @@ export default function App() {
 
   const notify = (msg: string, type: 'ok' | 'err' | 'info' = 'ok') => {
     const toast = document.createElement('div');
-    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg z-[9999] ${
+    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg ${Z_INDEX_CLASSES.TOAST} ${
       type === 'ok' ? 'border-emerald-500' : type === 'info' ? 'border-amber-500' : 'border-red-500'
     }`;
     toast.textContent = msg;
@@ -1705,19 +1996,48 @@ export default function App() {
     }, 3000);
   };
 
+  // If database encryption is active and session is locked, render exclusively the UnlockScreen gate
+  if (isLocked) {
+    return (
+      <UnlockScreen
+        onUnlocked={handleUnlocked}
+        onResetDatabase={handleEmergencyReset}
+      />
+    );
+  }
+
   // If running in companion window mode (?mode=companion), render CompanionWindowView directly
   if (isCompanionMode) {
     return (
-      <CompanionWindowView
-        initialAppState={appState}
-        initialSchedData={schedData}
-        initialActiveVariant={activeVariant}
-      />
+      <>
+        <SWUpdateBanner />
+        <Suspense fallback={
+          <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-slate-100 font-sans">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-sm font-semibold">Ładowanie okna pomocniczego...</p>
+            </div>
+          </div>
+        }>
+          <CompanionWindowView
+            initialAppState={appState}
+            initialSchedData={schedData}
+            initialActiveVariant={activeVariant}
+          />
+        </Suspense>
+      </>
     );
   }
 
   return (
     <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden print:h-auto print:w-full print:overflow-visible print:block print:static ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
+      <SWUpdateBanner />
+      <MultiTabRefreshBanner
+        visible={showRefreshBanner}
+        remoteRevision={remoteRevision}
+        onReload={handleReloadFromBanner}
+        onDismiss={() => setShowRefreshBanner(false)}
+      />
       
       {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY (ORGANIZACJA DWUPOZIOMOWA DLA TABLETÓW I DESKTOPU) ── */}
       {!isPresentationMode && (
@@ -2236,6 +2556,12 @@ export default function App() {
                 ✓ Wszystkie zmiany zapisane w przeglądarce
               </span>
             )}
+            {saveStatus === 'error' && (
+              <span className="text-rose-400 flex items-center gap-1 select-none font-bold">
+                <AlertTriangle size={11} className="text-rose-400 shrink-0" />
+                Błąd zapisu bazy danych!
+              </span>
+            )}
           </div>
         </div>
         
@@ -2278,7 +2604,7 @@ export default function App() {
 
       {/* Floating Presentation Mode Exit Indicator */}
       {isPresentationMode && (
-        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-2.5 bg-slate-900/95 hover:bg-slate-900 backdrop-blur-md px-4 py-2.5 rounded-full shadow-2xl border border-slate-800 text-white animate-fade-in">
+        <div className={`fixed bottom-6 right-6 ${Z_INDEX_CLASSES.TOAST} flex items-center gap-2.5 bg-slate-900/95 hover:bg-slate-900 backdrop-blur-md px-4 py-2.5 rounded-full shadow-2xl border border-slate-800 text-white animate-fade-in`}>
           <span className="text-[11px] text-slate-300 font-bold uppercase tracking-wider">Tryb Prezentacji</span>
           <span className="text-slate-700">|</span>
           <button
@@ -2365,6 +2691,17 @@ export default function App() {
         onAccept={handleAcceptTerms}
       />
 
+      {conflictData && (
+        <MultiTabConflictModal
+          isOpen={showConflictModal}
+          localRevision={conflictData.localRevision}
+          incomingRevision={conflictData.incomingRevision}
+          incomingTabId={conflictData.incomingTabId}
+          onLoadIncoming={handleLoadIncomingFromConflict}
+          onKeepLocal={handleKeepLocalFromConflict}
+        />
+      )}
+
       {isRestoring && (
         <div 
           className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs select-none flex flex-col items-center justify-center text-white"
@@ -2390,14 +2727,14 @@ export default function App() {
         </div>
       )}
 
-      {/* ── TOAST WYKRYCIA NOWEJ WERSJI ── */}
+      {/* ── TOAST WYKRYCIA NOWEJ WERSJI (nie renderowany dopóki aktywny jest TermsModal) ── */}
       <AnimatePresence>
-        {showVersionToast && (
+        {showVersionToast && !showTermsModal && (
           <motion.div
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
-            className="fixed bottom-6 right-6 z-[9000] max-w-sm bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-800 p-4 font-sans"
+            className={`fixed bottom-6 right-6 ${Z_INDEX_CLASSES.TOAST} max-w-sm bg-slate-900 text-white rounded-2xl shadow-2xl border border-slate-800 p-4 font-sans`}
             id="version-changelog-toast"
           >
             <div className="flex gap-3">

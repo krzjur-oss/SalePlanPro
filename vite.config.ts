@@ -1,12 +1,45 @@
+/// <reference types="vitest" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import fs from 'fs';
+import crypto from 'crypto';
+import { defineConfig, Plugin } from 'vite';
+
+function swVersioningPlugin(): Plugin {
+  return {
+    name: 'sw-versioning-plugin',
+    generateBundle(options, bundle) {
+      const assetKeys = Object.keys(bundle);
+      // Generate a unique, deterministic build ID based on timestamp and chunk hashes
+      const contentDigest = crypto
+        .createHash('sha256')
+        .update(assetKeys.sort().join('|'))
+        .digest('hex')
+        .substring(0, 10);
+      const buildId = `v_${Date.now().toString(36)}_${contentDigest}`;
+
+      const swPath = path.resolve(__dirname, 'public/sw.js');
+      if (fs.existsSync(swPath)) {
+        let swCode = fs.readFileSync(swPath, 'utf-8');
+        swCode = swCode
+          .replace(/'__BUILD_ID__'/g, JSON.stringify(buildId))
+          .replace(/__BUILD_ASSETS__/g, JSON.stringify(assetKeys));
+
+        this.emitFile({
+          type: 'asset',
+          fileName: 'sw.js',
+          source: swCode,
+        });
+      }
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
     base: './',
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), swVersioningPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -33,14 +66,13 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       host: '0.0.0.0',
       port: 3000,
-      allowedHosts: true,
-      hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./src/test/setup.ts'],
     },
   };
 });

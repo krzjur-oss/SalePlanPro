@@ -227,6 +227,10 @@ export const AppStateSchema = z.object({
   planLekcji: PlanLekcjiStateSchema.optional(),
   dyzury: PlanDyzuryStateSchema.optional(),
   generatorSettings: z.record(z.string(), z.any()).optional(),
+  revision: z.number().optional(),
+  tabId: z.string().optional(),
+  _revision: z.number().optional(),
+  _tabId: z.string().optional(),
 }).passthrough();
 
 export const SchedCellSchema = z.object({
@@ -397,3 +401,85 @@ export function validateImportJson(rawInput: unknown): ValidationResult {
     }
   };
 }
+
+export const AutosaveVersionSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  appState: AppStateSchema,
+  schedData: z.record(z.string(), z.any()),
+}).passthrough();
+
+export const PlanVariantDataSchema = z.object({
+  lessons: z.record(z.string(), LessonSchema),
+  schedData: z.record(z.string(), z.any()),
+  assignments: z.array(AssignmentSchema).optional(),
+  specialLessons: z.record(z.string(), z.any()).optional(),
+  specialAbsences: z.record(z.string(), z.any()).optional(),
+  spePlan: z.any().optional(),
+  dyzury: z.any().optional(),
+}).passthrough();
+
+export const PlanVariantSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  tag: z.string(),
+  description: z.string().optional(),
+  validFrom: z.string().optional(),
+  validTo: z.string().optional(),
+  isActiveNow: z.boolean().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  color: z.string(),
+  isDefault: z.boolean().optional(),
+  data: PlanVariantDataSchema,
+  stats: z.record(z.string(), z.any()).optional(),
+}).passthrough();
+
+export const DualScreenMessageTypeSchema = z.enum([
+  'HANDSHAKE',
+  'HANDSHAKE_ACK',
+  'STATE_SYNC',
+  'TAB_CHANGE',
+  'PLAN_KLAS_HIGHLIGHT',
+  'ASSIGN_ROOM_CLICK',
+  'COMPANION_CLOSED',
+  'CREATE_VARIANT',
+  'SWITCH_VARIANT',
+  'UPDATE_LESSONS',
+  'UPDATE_ASSIGNMENTS',
+  'UPDATE_SCHED_DATA',
+  'UPDATE_DUTIES',
+  'SELECT_LESSON_POOL',
+  'CLEAR_ROOM_SCHEDULE',
+  'PING',
+  'PONG'
+]);
+
+export const DualScreenMessageSchema = z.object({
+  type: DualScreenMessageTypeSchema,
+  payload: z.unknown().optional(),
+  timestamp: z.number(),
+  version: z.number().optional(),
+}).passthrough();
+
+export function getStorageSchemaForKey(key: string): z.ZodTypeAny | null {
+  switch (key) {
+    case 'saleplan_v3_app_state':
+      return AppStateSchema;
+    case 'saleplan_v3_sched_data':
+      return SchedDataSchema;
+    case 'saleplan_v3_archive':
+      return z.array(ArchiveEntrySchema);
+    case 'saleplan_v3_snapshots':
+      return z.array(SnapshotEntrySchema);
+    case 'saleplan_v3_history_logs':
+      return z.array(AppEventLogSchema);
+    case 'saleplan_v3_autosave_versions':
+      return z.array(AutosaveVersionSchema);
+    case 'saleplan_v3_plan_variants':
+      return z.array(PlanVariantSchema);
+    default:
+      return null;
+  }
+}
+

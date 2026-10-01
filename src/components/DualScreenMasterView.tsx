@@ -11,9 +11,14 @@ import {
   Filter, Building2, User, BookOpen, Clock, ArrowRight, Play, Trash2,
   ChevronRight, GripVertical, Check, Plus, AlertCircle, DoorOpen
 } from 'lucide-react';
-import { isSportsFacility } from './PlanKlas';
+import { isSportsFacility } from '../utils/roomUtils';
 import { isNIRoom } from './CompanionWindowView';
 import { AssignRoomDropdown } from './AssignRoomDropdown';
+import Dyzury from './Dyzury';
+import Wydruki from './Wydruki';
+import Statystyki from './Statystyki';
+import UstawieniaGeneratorow from './UstawieniaGeneratorow';
+import OProgramie from './OProgramie';
 
 interface DualScreenMasterViewProps {
   currentTab: 'kreator' | 'plan_klas' | 'plan_sal' | 'dyzury' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow';
@@ -393,7 +398,11 @@ export default function DualScreenMasterView({
               {currentTab === 'kreator' && 'Pokazuje aktywną konfigurację szkoły. Na Ekranie 2 możesz utworzyć nowy wariant.'}
               {currentTab === 'plan_klas' && 'Pula godzin lekcyjnych & Ustawienia generatora. Na Ekranie 2 otwarta jest siatka klas i godzin.'}
               {currentTab === 'plan_sal' && 'Pula zajęć dnia z podziałem na godziny. Na Ekranie 2 otwarta jest siatka sal z lokalizacjami.'}
-              {(currentTab === 'dyzury' || currentTab === 'wydruki' || currentTab === 'statystyki' || currentTab === 'ustawienia_generatorow' || currentTab === 'o_programie') && 'Wybrany moduł w trybie dwóch ekranów.'}
+              {currentTab === 'dyzury' && 'Etap 3: Dyżury nauczycielskie. Wszelkie zmiany są synchronizowane w czasie rzeczywistym.'}
+              {currentTab === 'wydruki' && 'Wydruki i publikacje arkuszy organizacyjnych szkoły.'}
+              {currentTab === 'statystyki' && 'Statystyki, audyt higieny pracy kadry i diagnostyka rozkładu zajęć.'}
+              {currentTab === 'ustawienia_generatorow' && 'Konfiguracja parametrów i wag generatorów planu.'}
+              {currentTab === 'o_programie' && 'Informacje o systemie SalePlan Pro, instrukcje i historia wersji.'}
             </p>
           </div>
         </div>
@@ -418,7 +427,7 @@ export default function DualScreenMasterView({
       </div>
 
       {/* ── GŁÓWNA ZAWARTOŚĆ DLA AKTYWNEJ ZAKŁADKI W TRYBIE 2 EKRANÓW ── */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100">
+      <div className={`flex-1 ${currentTab === 'kreator' || currentTab === 'plan_klas' || currentTab === 'plan_sal' ? 'overflow-y-auto p-4 sm:p-6' : 'overflow-hidden flex flex-col min-h-0'} bg-slate-100`}>
 
         {/* ══════════════════════════════════════════════════════════════
             1. KREATOR SZKOŁY: Ostatnia konfiguracja szkoły (wariant aktywny)
@@ -1123,36 +1132,66 @@ export default function DualScreenMasterView({
         )}
 
         {/* ══════════════════════════════════════════════════════════════
-            4. ETAP 3 DYŻURY ORAZ KOLEJNE ZAKŁADKI: W budowie dla trybu 2 ekranów
+            4. ETAP 3 DYŻURY ORAZ POZOSTAŁE ZAKŁADKI (PEŁNA FUNKCJONALNOŚĆ)
             ══════════════════════════════════════════════════════════════ */}
-        {(currentTab === 'dyzury' || currentTab === 'wydruki' || currentTab === 'statystyki' || currentTab === 'ustawienia_generatorow' || currentTab === 'o_programie') && (
-          <div className="max-w-2xl mx-auto my-12 bg-white border border-slate-200 rounded-3xl p-8 text-center shadow-sm space-y-5 text-slate-800">
-            <div className="inline-flex p-4 rounded-3xl bg-amber-50 border border-amber-200 text-amber-600">
-              <Shield size={36} />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-900">
-                {currentTab === 'dyzury' && '🛡️ Etap 3: Dyżury nauczycielskie'}
-                {currentTab === 'wydruki' && '🖨️ Wydruki i Publikacje'}
-                {currentTab === 'statystyki' && '📊 Statystyki i Diagnoza'}
-                {currentTab === 'ustawienia_generatorow' && '⚙️ Ustawienia generatorów'}
-                {currentTab === 'o_programie' && 'ℹ️ O programie'}
-              </h2>
-              <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mt-1">
-                Moduł w budowie – Tryb dwóch ekranów
-              </p>
-            </div>
-            <p className="text-xs text-slate-600 leading-relaxed max-w-lg mx-auto">
-              Ten moduł w trybie pracy na dwa ekrany jest aktualnie w fazie projektowej. Aby korzystać z pełnej funkcjonalności tego modułu w tradycyjnym układzie, możesz jednym kliknięciem przełączyć się na standardowy tryb jednego ekranu.
-            </p>
-            <div className="pt-2">
-              <button
-                onClick={onToggleSingleScreen}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition cursor-pointer shadow-sm"
-              >
-                Przełącz na standardowy tryb 1 ekranu
-              </button>
-            </div>
+        {currentTab === 'dyzury' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <Dyzury
+              appState={appState}
+              onChangeAppState={(newState) => {
+                onChangeAppState(newState);
+                const resolved: AppState = typeof newState === 'function' ? (newState as (prev: AppState) => AppState)(appState) : newState;
+                if (resolved?.dyzury) {
+                  dualScreenService.sendMessage({
+                    type: 'UPDATE_DUTIES',
+                    payload: { dyzury: resolved.dyzury, appState: resolved },
+                    timestamp: Date.now()
+                  });
+                }
+              }}
+              schedData={schedData}
+            />
+          </div>
+        )}
+
+        {currentTab === 'wydruki' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <Wydruki
+              appState={appState}
+              schedData={schedData}
+            />
+          </div>
+        )}
+
+        {currentTab === 'statystyki' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <Statystyki
+              appState={appState}
+              schedData={schedData}
+            />
+          </div>
+        )}
+
+        {currentTab === 'ustawienia_generatorow' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <UstawieniaGeneratorow
+              appState={appState}
+              onChangeAppState={(newState) => {
+                onChangeAppState(newState);
+                const resolved: AppState = typeof newState === 'function' ? (newState as (prev: AppState) => AppState)(appState) : newState;
+                dualScreenService.sendMessage({
+                  type: 'STATE_SYNC',
+                  payload: { appState: resolved, schedData, activeVariant },
+                  timestamp: Date.now()
+                });
+              }}
+            />
+          </div>
+        )}
+
+        {currentTab === 'o_programie' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100">
+            <OProgramie />
           </div>
         )}
 
