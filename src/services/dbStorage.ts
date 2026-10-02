@@ -143,26 +143,29 @@ function getDB(): Promise<IDBDatabase> {
  * Internal raw read without decryption (used for rollback, migration, and raw checks)
  */
 async function getRawItem<T = any>(key: string): Promise<T | null> {
-  try {
-    const db = await getDB();
-    return await new Promise<any>((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get(key);
-        req.onsuccess = () => resolve(req.result ?? null);
-        req.onerror = () => resolve(null);
-      } catch {
-        resolve(null);
-      }
-    });
-  } catch {
+  if (isIndexedDBAvailable) {
     try {
-      const val = localStorage.getItem(key);
-      return val ? JSON.parse(val) : null;
-    } catch {
-      return null;
-    }
+      const db = await getDB();
+      const dbResult = await new Promise<any>((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.get(key);
+          req.onsuccess = () => resolve(req.result !== undefined ? req.result : null);
+          req.onerror = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
+      });
+      if (dbResult !== null) return dbResult;
+    } catch {}
+  }
+
+  try {
+    const val = localStorage.getItem(key);
+    return val ? JSON.parse(val) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -308,8 +311,10 @@ export async function getStorageItem<T = any>(key: string): Promise<T | null> {
               if (localVal !== null) {
                 try {
                   const parsed = JSON.parse(localVal);
-                  // Background migrate this item to IndexedDB
-                  setStorageItem(key, parsed).catch(() => {});
+                  // Background migrate unencrypted item to IndexedDB
+                  if (!isEncryptedObject(parsed)) {
+                    setStorageItem(key, parsed).catch(() => {});
+                  }
                   resolve(parsed);
                   return;
                 } catch {

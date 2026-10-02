@@ -39,3 +39,31 @@ if (typeof BroadcastChannel === 'undefined') {
   }
   (globalThis as any).BroadcastChannel = MockBroadcastChannel;
 }
+
+// Window mocks for jsdom
+if (typeof window !== 'undefined') {
+  if (!window.matchMedia) {
+    window.matchMedia = (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    });
+  }
+
+  if (!window.scrollTo) {
+    window.scrollTo = () => {};
+  }
+
+  if (!(globalThis as any).ResizeObserver) {
+    (globalThis as any).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
+}

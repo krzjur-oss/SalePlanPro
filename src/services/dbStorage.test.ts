@@ -50,6 +50,7 @@ describe('dbStorage Encryption & Rollback Tests', () => {
 
     removeStorageEncryptionMeta();
     lockSession();
+    await clearAllStorage();
   });
 
   it('stores data encrypted as "encrypted-v2" and reads it back seamlessly when unlocked', async () => {
