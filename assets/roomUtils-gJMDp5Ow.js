@@ -1,0 +1,1 @@
+const n=t=>{if(!t)return!1;if(t.type==="sport")return!0;const s=(t.name||"").toLowerCase().trim(),i=(t.desc||"").toLowerCase().trim();return!!(["basen","hala","wf","gimn","sport","boisko","orlik","stadion","fitness","siłownia","silownia"].some(e=>s.includes(e)||i.includes(e))||s==="sg"||s.startsWith("sg")||s.startsWith("sg_")||s.startsWith("sg-"))};export{n as i};

@@ -1,21 +1,29 @@
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
-const CACHE_NAME = 'saleplan-cache-v4';
+// Wstrzykiwane automatycznie podczas procesu budowania przez plugin Vite:
+const BUILD_ID = "v_muqpf56j_10ae791b84";
+const CURRENT_ASSETS = ["assets/AssignRoomDropdown-B3R6K8_V.js","assets/CompanionWindowView-BPoKoB_o.js","assets/DualScreenMasterView-BSZlYV7w.js","assets/Dyzury-CPfmiSfT.js","assets/KreatorSzkoly-BdQquL22.js","assets/OProgramie-DSX3B56T.js","assets/PlanKlas-CeCkw9ZW.js","assets/PlanSal-u-i-4U3H.js","assets/PlanVariantsModal-CEdH-Fui.js","assets/SnapshotManager-VShbIWte.js","assets/Statystyki-BndGbU41.js","assets/UstawieniaGeneratorow-ILK5-V1i.js","assets/Wydruki-CmHtW66S.js","assets/adaptationDuty-B4I4e0WH.js","assets/index-_sKC0ajH.css","assets/index-kE3Ky44B.js","assets/roomUtils-gJMDp5Ow.js","assets/vendor-lucide-Dfc4r0yy.js","assets/vendor-motion-eAuBZN-z.js","assets/vendor-react-5GCfeWye.js","assets/vendor-recharts-CH30YZxn.js"];
+
+// Nazwa cache unikalna dla danego builda
+const CACHE_NAME = 'saleplan-cache-' + (typeof BUILD_ID === 'string' && !BUILD_ID.startsWith('__') ? BUILD_ID : 'dev');
+
 const PRE_CACHE_RESOURCES = [
   BASE_PATH,
   BASE_PATH + 'index.html',
   BASE_PATH + 'manifest.json',
   BASE_PATH + 'favicon.svg',
   BASE_PATH + 'icon-192.png',
-  BASE_PATH + 'icon-512.png'
+  BASE_PATH + 'icon-512.png',
+  BASE_PATH + 'icon-maskable-192.png',
+  BASE_PATH + 'icon-maskable-512.png'
 ];
 
 // 1. Zdarzenie Instalacji: cache'owanie zasobów powłoki aplikacji (App Shell)
+// ZAMIAST cichego skipWaiting, nowy worker czeka na sygnał od użytkownika (kliknięcie banera)
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Pre-cache-owanie podstawowych zasobów powłoki...');
+      console.log('[Service Worker ' + BUILD_ID + '] Pre-cache podstawowych zasobów powłoki...');
       return cache.addAll(PRE_CACHE_RESOURCES);
     }).catch(err => {
       console.warn('[Service Worker] Błąd przy pre-cache:', err);
@@ -23,64 +31,86 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. Zdarzenie Aktywacji: czyszczenie starych wersji pamięci podręcznej i przejmowanie kontroli
+// 2. Obsługa komunikatu SKIP_WAITING wysłanego przez baner UI
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[Service Worker ' + BUILD_ID + '] Otrzymano SKIP_WAITING z banera, przejmowanie kontroli...');
+    self.skipWaiting();
+  }
+});
+
+// 3. Zdarzenie Aktywacji: usuwanie starych wersji pamięci podręcznej i przestarzałych plików hashowanych
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName.startsWith('saleplan-cache-') && cacheName !== CACHE_NAME) {
-            console.log('[Service Worker] Usuwanie starych plików cache:', cacheName);
-            return caches.delete(cacheName);
+    (async () => {
+      // Usunięcie starych całych cache'y z poprzednich wersji aplikacji
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames.map((name) => {
+          if (name.startsWith('saleplan-cache-') && name !== CACHE_NAME) {
+            console.log('[Service Worker] Usuwanie starej pamięci podręcznej:', name);
+            return caches.delete(name);
           }
         })
       );
-    }).then(() => {
-      return self.clients.claim();
-    })
+
+      // Usunięcie starych hashowanych zasobów niewystępujących w aktualnym manifeście builda
+      if (Array.isArray(CURRENT_ASSETS) && CURRENT_ASSETS.length > 0) {
+        try {
+          const currentCache = await caches.open(CACHE_NAME);
+          const cachedRequests = await currentCache.keys();
+          await Promise.all(
+            cachedRequests.map(async (req) => {
+              const url = new URL(req.url);
+              if (url.origin === self.location.origin && url.pathname.includes('/assets/')) {
+                const fileName = url.pathname.split('/').pop();
+                const isCurrent = CURRENT_ASSETS.some(a => a.endsWith('/' + fileName) || a === fileName);
+                if (!isCurrent) {
+                  console.log('[Service Worker] Usuwanie przestarzałego hashowanego pliku z cache:', fileName);
+                  return currentCache.delete(req);
+                }
+              }
+            })
+          );
+        } catch (e) {
+          console.warn('[Service Worker] Błąd podczas czyszczenia hashowanych plików:', e);
+        }
+      }
+
+      await self.clients.claim();
+    })()
   );
 });
 
-// 3. Obsługa Zapytań Sieciowych (Fetch) z inteligentną strategią Cache / Network
+// 4. Obsługa Zapytań Sieciowych (Fetch) z inteligentną strategią Cache / Network
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  // Obsługujemy tylko lokalne zapytania z tej samej domeny (origin)
-  if (requestUrl.origin !== self.location.origin) {
+  // Obsługujemy tylko lokalne zapytania z tego samego origin
+  if (requestUrl.origin !== self.location.origin || event.request.method !== 'GET') {
     return;
   }
 
-  // Ignorujemy zapytania typu POST lub inne metody modyfikujące dane
-  if (event.request.method !== 'GET') {
-    return;
-  }
-
-  // Strategia dla stron HTML (zapytania nawigacyjne): "Network-First" (Najpierw Sieć) z zapasowym Cache
-  // Pozwala to na pobieranie świeżego HTML, a gdy jesteśmy całkowicie offline - odpala z cache.
+  // HTML (zapytania nawigacyjne): Network-First z fallbackiem do cache
   if (event.request.mode === 'navigate' || requestUrl.pathname === BASE_PATH || requestUrl.pathname.endsWith('.html')) {
     event.respondWith(
       (async () => {
         try {
           const response = await fetch(event.request);
           if (response.ok) {
-            // Zapisz świeżą wersję strony do pamięci podręcznej
             const cache = await caches.open(CACHE_NAME);
             cache.put(event.request, response.clone());
             return response;
           }
-          // Jeśli odpowiedź sieciowa nie jest prawidłowa (np. 404), spróbuj wczytać z cache
           const fallback = await caches.match(BASE_PATH + 'index.html') || 
                            await caches.match(BASE_PATH) || 
                            await caches.match(event.request);
           return fallback || response;
         } catch (error) {
-          // W przypadku awarii sieci odpalamy bezpieczny, lokalny index.html
           const fallback = await caches.match(BASE_PATH + 'index.html') || 
                            await caches.match(BASE_PATH) || 
                            await caches.match(event.request);
-          if (fallback) {
-            return fallback;
-          }
+          if (fallback) return fallback;
           throw error;
         }
       })()
@@ -88,25 +118,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Strategia dla zasobów statycznych (JS, CSS, Obrazy, Fonty, JSON): "Cache-First" (Najpierw Cache) z tłem sieciowym
-  // Ponieważ Vite generuje hashowane pliki (np. index-[hash].js), są one niezmienne (immutable).
-  // Serwujemy je natychmiast z pamięci, a jeśli ich nie ma - dociągamy i zapisujemy.
+  // Zasoby statyczne (JS, CSS, Obrazy, Fonty, JSON): Cache-First ze sprawdzaniem w tle
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Zwracamy z pamięci natychmiast, ale w tle pobieramy najnowszą wersję (stale-while-revalidate)
         fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, networkResponse);
             });
           }
-        }).catch(() => {/* Ignorujemy tymczasowe błędy sieci w tle */});
-        
+        }).catch(() => {});
         return cachedResponse;
       }
 
-      // Jeżeli nie ma w cache - pobierz z sieci i zapisz
       return fetch(event.request).then((networkResponse) => {
         if (!networkResponse || networkResponse.status !== 200 || (networkResponse.type !== 'basic' && networkResponse.type !== 'cors')) {
           return networkResponse;
@@ -118,8 +143,7 @@ self.addEventListener('fetch', (event) => {
         });
 
         return networkResponse;
-      }).catch((err) => {
-        console.warn('[Service Worker] Brak połączenia i brak w cache dla:', event.request.url);
+      }).catch(() => {
         return new Response('Brak dostępu do sieci w trybie offline.', {
           status: 503,
           statusText: 'Service Unavailable',
