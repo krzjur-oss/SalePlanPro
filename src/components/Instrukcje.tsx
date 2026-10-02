@@ -470,12 +470,23 @@ export default function Instrukcje() {
           tip: 'Zapisuj kopię zapasową na szkolnym dysku sieciowym lub pendrive po każdej większej zmianie organizacyjnej.'
         },
         {
-          title: 'Szyfrowanie bazy danych hasłem (AES-GCM)',
-          description: 'Ochrona przed niepowołanym dostępem na współdzielonym komputerze:',
+          title: 'Tarcza Bezpieczeństwa RODO v2 (AES-256-GCM, 600k PBKDF2)',
+          description: 'Najwyższy poziom ochrony danych szkoły na komputerze w sekretariacie lub pokoju nauczycielskim:',
           points: [
-            'W menu „Bezpieczeństwo” możesz ustawić hasło główne aplikacji.',
-            'Wszystkie dane zapisywane w przeglądarce zostaną zaszyfrowane silnym algorytmem AES-256 GCM.',
-            'Po zamknięciu przeglądarki nikt bez znajomości hasła nie będzie mógł podejrzeć planu ani danych orzeczeń uczniów.'
+            'W menu „Bezpieczeństwo” możesz włączyć szyfrowanie całej bazy danych silnym hasłem głównym.',
+            'Standard "encrypted-v2": derywacja klucza PBKDF2 z 600 000 iteracji (zgodnie z zaleceniami NIST/OWASP) oraz unikalną solą dla każdego wpisu w IndexedDB.',
+            'Klucz kryptograficzny CryptoKey cache’owany jest wyłącznie w pamięci operacyjnej (RAM) – hasło nie jest przechowywane w sessionStorage, co zapewnia pełną odporność na ataki XSS.',
+            'Przed aktywacją szyfrowania system wykonuje lokalny pre-encryption backup i test każdego rekordu; w razie błędu następuje natychmiastowy bezpieczny rollback.'
+          ]
+        },
+        {
+          title: 'Praca w wielu kartach przeglądarki bez utraty zmian (saleplan-state)',
+          description: 'Ochrona przed przypadkowym nadpisaniem planu lekcji przy otwarciu programu w kilku kartach:',
+          points: [
+            'Magistrala BroadcastChannel "saleplan-state" śledzi numery rewizji (revision) oraz identyfikator karty (tabId).',
+            'Gdy jedna karta zapisze nowszą wersję, pozostałe karty otrzymują powiadomienie i wyświetlają baner odświeżenia.',
+            'Jeśli spróbujesz zapisać starszy stan z innej karty, system zablokuje ciche nadpisanie i wyświetli modal: Wczytaj zmiany / Zachowaj moją wersję.',
+            'Wybór opcji zachowania własnej wersji automatycznie archiwizuje wersję z drugiej karty w Punktach Przywracania, uniemożliwiając utratę jakichkolwiek danych.'
           ]
         },
         {

@@ -24,11 +24,29 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.6',
+      date: 'Październik 2026',
+      title: 'Tarcza Bezpieczeństwa RODO v2, Wielokartowa Synchronizacja i Pełny Pakiet Testów Jakościowych CI',
+      description: 'Kompleksowa modernizacja silnika bezpieczeństwa bazy danych (AES-256-GCM z derywacją PBKDF2 600 000 iteracji i Single-Session CryptoKey w RAM), wdrożenie niezależnej magistrali wielu kart (BroadcastChannel saleplan-state) z detekcją konfliktów i ochroną przed nadpisaniem, a także wdrożenie automatycznych testów jednostkowych i integracyjnych z weryfikacją w GitHub Actions CI.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'security', text: 'Tarcza Bezpieczeństwa RODO v2 (Format "encrypted-v2"): Przejście na podwyższoną derywację klucza PBKDF2 (600 000 iteracji wg najnowszych zaleceń OWASP/NIST) z unikalną solą kryptograficzną dla każdego wpisu w IndexedDB.', badgeText: '600k Iteracji PBKDF2' },
+        { type: 'security', text: 'Single-Session CryptoKey (Derywacja ONCE w RAM): Klucz kryptograficzny CryptoKey wyliczany jest jednorazowo przy odblokowaniu i bezpiecznie cache’owany wyłącznie w pamięci operacyjnej sesji (RAM), co zapewnia błyskawiczny zapis i odczyt (< 1 s dla baz > 5 MB) oraz całkowicie eliminuje jawne hasło z sessionStorage.', badgeText: 'Klucz w RAM' },
+        { type: 'security', text: 'Pre-Encryption Backup i Automatyczny Rollback: Przed zaszyfrowaniem bazy danych system tworzy lokalną kopię awaryjną oraz testuje odczyt każdego klucza. W przypadku najmniejszej niezgodności następuje natychmiastowy rollback do stanu pierwotnego, zapobiegając utracie danych.', badgeText: 'Auto-Rollback' },
+        { type: 'feature', text: 'Magistrala Wielokartowa "saleplan-state" (BroadcastChannel): Dedykowany, niezależny kanał synchronizacji stanu wielu kart tego samego programu, pilnujący spójności bez względu na liczbę otwartych zakładek w przeglądarce.', badgeText: 'Wielokartowość' },
+        { type: 'feature', text: 'Licznik Rewizji i Identyfikator Karty (revision & tabId): Każdy zapis planu (APP_STATE i SCHED_DATA) otrzymuje rosnący numer rewizji oraz unikalny identyfikator karty, co umożliwia precyzyjne śledzenie kolejności zapisów.', badgeText: 'Wersjonowanie Zapisów' },
+        { type: 'feature', text: 'Wykrywanie Konfliktów i Ochrona Przed Nadpisaniem: W przypadku wykrycia nowszej wersji zapisanej przez inną kartę, system blokuje ciche nadpisanie i wyświetla modal „Plan został zmieniony w innej karcie” z opcjami: Wczytaj zmiany lub Zachowaj moją wersję (z automatycznym zapisem kopii drugiej wersji do Punktów Przywracania).', badgeText: 'Anty-Nadpisanie' },
+        { type: 'improvement', text: 'Powiadomienia w Czasie Rzeczywistym: Pozostałe otwarte karty otrzymują komunikat o zatwierdzeniu nowej wersji i wyświetlają dyskretny baner z możliwością natychmiastowego odświeżenia widoku.', badgeText: 'Baner Odświeżenia' },
+        { type: 'improvement', text: 'Pełny Zestaw Testów Automatycznych (Vitest + Testing Library + Fake-IndexedDB): 41 testów jednostkowych i integracyjnych pokrywających silnik kryptograficzny, operacje na zablokowanej/odblokowanej bazie danych, sanityzację HTML przeciw XSS, czystość wydruków oraz smoke testy renderowania aplikacji.', badgeText: '41 Testów Vitest' },
+        { type: 'improvement', text: 'Automatyzacja CI w GitHub Actions: Zintegrowano testy z workflow ciągłej integracji (.github/workflows/deploy.yml) – każdy commit i pull request podlega automatycznej walidacji typów TypeScript, lintera oraz testów jednostkowych przed wdrożeniem na GitHub Pages.', badgeText: 'CI / GitHub Actions' }
+      ]
+    },
+    {
       version: 'v3.9.5',
       date: 'Wrzesień 2026',
       title: 'Inteligentny Tryb Dwóch Ekranów (Dual-Screen Workspace) z Dynamicznym Oknem Towarzyszącym',
       description: 'Automatyczne wykrywanie konfiguracji wielomonitorowej i podział środowiska planowania na dwa niezależne okna. Na Ekranie 1 znajduje się główny pulpit (Plan Klas, Kreator, Plan Sal, Dyżury), a na Ekranie 2 dedykowane Okno Towarzyszące z interaktywną Matrycą Sal w czasie rzeczywistym, Płachtą Dyrektorską, rzutem kondygnacji i bilansem szkoły.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Sprzętowe i Heurystyczne Wykrywanie Dwóch Ekranów: Program analizuje Screen Details API (screen.isExtended) oraz geometrię pulpitu. Przycisk „Tryb pracy: 1 Ekran / 2 Ekrany” pojawia się w nagłówku wyłącznie przy wykryciu więcej niż jednego monitora (z opcją symulacji w menu dla celów testowych).', badgeText: 'Auto-Detekcja Ekranów' },
         { type: 'feature', text: 'Podział na Dwa Okna (Ekran 1 + Ekran 2): Kliknięcie przycisku otwiera drugie, niezależne okno przeglądarki bezpośrednio na sąsiednim monitorze z natychmiastowym nawiązaniem szybkiej magistrali BroadcastChannel.', badgeText: 'Drugie Okno' },
