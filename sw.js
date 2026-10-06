@@ -1,8 +1,8 @@
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
 // Wstrzykiwane automatycznie podczas procesu budowania przez plugin Vite:
-const BUILD_ID = "v_muqpoodu_750c80ac78";
-const CURRENT_ASSETS = ["assets/AssignRoomDropdown-B3R6K8_V.js","assets/CompanionWindowView-B3dew3GN.js","assets/DualScreenMasterView-DKsegpGB.js","assets/Dyzury-DolRvgb-.js","assets/KreatorSzkoly-B4Ov9eAc.js","assets/OProgramie-D0WANXrT.js","assets/PlanKlas-NcgkzDWP.js","assets/PlanSal-DAE6I4uw.js","assets/PlanVariantsModal-DID2YM-f.js","assets/SnapshotManager-BfqXk-47.js","assets/Statystyki-DsP3PX5W.js","assets/UstawieniaGeneratorow-B2N_mtGX.js","assets/Wydruki-CtD94okf.js","assets/adaptationDuty-fQjXNpBL.js","assets/index-PPOBW44I.js","assets/index-_sKC0ajH.css","assets/roomUtils-gJMDp5Ow.js","assets/vendor-lucide-Dfc4r0yy.js","assets/vendor-motion-eAuBZN-z.js","assets/vendor-react-5GCfeWye.js","assets/vendor-recharts-CH30YZxn.js"];
+const BUILD_ID = "v_muwfnwxx_409630aa9d";
+const CURRENT_ASSETS = ["assets/AssignRoomDropdown-P8rFuGy1.js","assets/CompanionWindowView-zZVrhwie.js","assets/DualScreenMasterView-Chj9UeSk.js","assets/Dyzury-DvTmv1Nb.js","assets/KreatorSzkoly-DjFrR-YX.js","assets/OProgramie-DBFCg1R-.js","assets/PlanKlas-BcOAQL0f.js","assets/PlanSal-DyJQulX9.js","assets/PlanVariantsModal-BXT235ZP.js","assets/SnapshotManager-BE7GShgV.js","assets/Statystyki--Nr5_XB1.js","assets/UstawieniaGeneratorow-CgADpDgf.js","assets/Wydruki-eImk3ZqF.js","assets/adaptationDuty-DIG9Ot0W.js","assets/index-7E-PK12-.css","assets/index-CV1HIVQZ.js","assets/roomUtils-gJMDp5Ow.js","assets/vendor-dnd-Dk37sCMx.js","assets/vendor-lucide-B1Fyyc6a.js","assets/vendor-motion-7o_NUGSZ.js","assets/vendor-react-M1a6ECPm.js","assets/vendor-recharts-BSefab-z.js","assets/vendor-zod-CMX-6PHh.js"];
 
 // Nazwa cache unikalna dla danego builda
 const CACHE_NAME = 'saleplan-cache-' + (typeof BUILD_ID === 'string' && !BUILD_ID.startsWith('__') ? BUILD_ID : 'dev');
