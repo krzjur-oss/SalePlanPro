@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   AppState, SchedData, PlanVariant, PlanVariantTag, PlanDiffItem, Lesson, Class, Teacher, ClassRoom 
 } from '../types';
@@ -144,7 +144,7 @@ export default function PlanVariantsModal({
   }, [planVariants, diffVariantBId]);
 
   // Helper to get lesson details safely
-  const getLessonDetails = (lesson: Lesson | undefined, variant: PlanVariant | undefined) => {
+  const getLessonDetails = useCallback((lesson: Lesson | undefined, variant: PlanVariant | undefined) => {
     if (!lesson) return null;
     const assignmentsPool = variant?.data.assignments || pl.assignments;
     const asg = assignmentsPool.find(a => a.id === lesson.assignmentId);
@@ -163,7 +163,7 @@ export default function PlanVariantsModal({
       roomName: room ? room.name : '',
       supportTeacherAbbr: supp ? (supp.abbr || supp.last) : ''
     };
-  };
+  }, [pl.assignments, pl.subjects, pl.teachers, pl.rooms]);
 
   // Compute all differences between Variant A and Variant B
   const diffItems = useMemo<PlanDiffItem[]>(() => {
@@ -238,7 +238,7 @@ export default function PlanVariantsModal({
     });
 
     return results;
-  }, [variantA, variantB, pl.classes, pl.hours, pl.assignments, pl.subjects, pl.teachers, pl.rooms]);
+  }, [variantA, variantB, pl.classes, pl.hours, getLessonDetails]);
 
   // Differences grouped by class
   const diffsByClass = useMemo(() => {

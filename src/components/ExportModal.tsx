@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppState, SchedData, ArchiveEntry, SnapshotEntry, AppEventLog } from '../types';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -108,7 +109,7 @@ export default function ExportModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} flex items-center justify-center p-4`}>
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}

@@ -1,4 +1,4 @@
-import { AppState, Class, Przerwa, AdaptationDutySlot } from '../types';
+import { AppState, Class, Przerwa, AdaptationDutySlot, SchedData } from '../types';
 import { flattenColumns, colKey } from '../utils';
 
 export function getBreakDuration(p: Przerwa): number {
@@ -48,7 +48,7 @@ export interface AdaptationDutiesResult {
 /**
  * Calculates all Grade 1 classroom duties during breaks and escort duties after the last lesson.
  */
-export function calculateAdaptationDuties(appState: AppState, schedData: any): AdaptationDutiesResult {
+export function calculateAdaptationDuties(appState: AppState, schedData: SchedData): AdaptationDutiesResult {
   const isEnabled = appState.dyzury.settings.firstGradeAdaptationDuty !== false;
   
   if (!isEnabled) {
@@ -119,14 +119,14 @@ export function calculateAdaptationDuties(appState: AppState, schedData: any): A
             // Check if this lesson belongs to targetClass
             const matchesClass = 
               c.className === targetClass.name ||
-              c.classId === targetClass.id ||
-              (Array.isArray(c.classes) && c.classes.includes(targetClass.name));
+              c._bridgeMeta?.classId === targetClass.id ||
+              (Array.isArray(c.classes) && (c.classes.includes(targetClass.name) || c.classes.includes(targetClass.id)));
 
             if (matchesClass) {
               const matchedCol = cols.find(col => colKey(col) === cKey);
               classLessonsByHour[hourNum] = {
                 teacherAbbr: c.teacherAbbr,
-                roomNum: matchedCol?.room?.num || c.roomName || 'Sala lekcyjna'
+                roomNum: matchedCol?.room?.num || c._bridgeMeta?.roomId || 'Sala lekcyjna'
               };
               break;
             }

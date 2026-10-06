@@ -1,4 +1,4 @@
-import { AppState, SchedData, Teacher, SpecialStudent, SchedCell } from '../types';
+import { AppState, SchedData, Teacher, SpecialStudent, SchedCell, ArchiveEntry, SnapshotEntry } from '../types';
 import { ImportPayload } from './mergeEngine';
 
 export interface AnonymizationSummary {
@@ -166,8 +166,8 @@ export function anonymizeSchedData(
 /**
  * Anonymizes an entire backup payload (including AppState, SchedData, Archives, Snapshots).
  */
-export function anonymizeBackupPayload(rawPayload: ImportPayload | any): { payload: any; summary: AnonymizationSummary } {
-  const payloadClone = JSON.parse(JSON.stringify(rawPayload));
+export function anonymizeBackupPayload(rawPayload: ImportPayload): { payload: ImportPayload; summary: AnonymizationSummary } {
+  const payloadClone: ImportPayload = JSON.parse(JSON.stringify(rawPayload));
   let totalTeachers = 0;
   let totalStudents = 0;
   let totalCells = 0;
@@ -192,7 +192,7 @@ export function anonymizeBackupPayload(rawPayload: ImportPayload | any): { paylo
 
   // 3. Anonymize Archives if present
   if (Array.isArray(payloadClone.archive)) {
-    payloadClone.archive = payloadClone.archive.map((arch: any) => {
+    payloadClone.archive = payloadClone.archive.map((arch: ArchiveEntry) => {
       if (arch.config) {
         const archRes = anonymizeAppState(arch.config);
         return { ...arch, config: archRes.state };
@@ -203,7 +203,7 @@ export function anonymizeBackupPayload(rawPayload: ImportPayload | any): { paylo
 
   // 4. Anonymize Snapshots if present
   if (Array.isArray(payloadClone.snapshots)) {
-    payloadClone.snapshots = payloadClone.snapshots.map((snap: any) => {
+    payloadClone.snapshots = payloadClone.snapshots.map((snap: SnapshotEntry) => {
       let snapApp = snap.appState;
       let snapSched = snap.schedData;
       if (snapApp) {

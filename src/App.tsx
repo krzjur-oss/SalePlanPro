@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { 
   AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion, Lesson, PlanVariant
 } from './types';
@@ -9,16 +9,18 @@ import {
   STORAGE_KEYS, getStorageItem, getStorageItemSync, setStorageItem, removeStorageItem,
   clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics,
   isDatabaseEncryptionActive, isSessionUnlocked, StorageLockedError, removeStorageEncryptionMeta,
-  migrateAllStoredItemsToV2
+  migrateAllStoredItemsToV2, cleanSchedDataMeta, getRawItem, removeRawItem
 } from './services/dbStorage';
+import { persistAppStateAndSchedWithConflictCheck as persistWithConflictCheck } from './services/persistence';
 import UnlockScreen from './components/UnlockScreen';
 import ExportModal, { ExportOptions } from './components/ExportModal';
 import ImportModal from './components/ImportModal';
 import SecurityModal from './components/SecurityModal';
 import TermsModal from './components/TermsModal';
 import ErrorBoundary from './components/ErrorBoundary';
-import { sanitizeAppState } from './utils/mergeEngine';
-import { anonymizeBackupPayload } from './utils/anonymization';
+import { sanitizeAppState, ImportPayload } from './utils/mergeEngine';
+import { StateMeta } from './utils/validationSchemas';
+import { anonymizeBackupPayload, AnonymizationSummary } from './utils/anonymization';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
 const PlanSal = lazy(() => import('./components/PlanSal'));
@@ -37,7 +39,7 @@ import { multiTabStateService } from './services/multiTabStateService';
 import MultiTabConflictModal from './components/MultiTabConflictModal';
 import { MultiTabRefreshBanner } from './components/MultiTabRefreshBanner';
 import { dualScreenService, DualScreenMessage } from './services/dualScreenService';
-import { encryptText, decryptText, isEncryptedBackup } from './lib/crypto';
+import { encryptText, decryptText, isEncryptedBackup, setBeforeLockHook } from './lib/crypto';
 import { Z_INDEX, Z_INDEX_CLASSES } from './styles/zIndex';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -45,7 +47,7 @@ import {
   Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database, Monitor
 } from 'lucide-react';
 
-function sortAppState(rawInput: any): AppState {
+function sortAppState(rawInput: unknown): AppState {
   // Always sanitize first to ensure completely valid schema defaults
   const resolved = sanitizeAppState(rawInput);
 
@@ -210,24 +212,128 @@ export default function App() {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     return isDatabaseEncryptionActive() && !isSessionUnlocked();
   });
-  const storageReady = useRef<boolean>(false);
+  const [storageReady, setStorageReady] = useState<boolean>(false);
+  const storageReadyRef = useRef<boolean>(false);
+  const [storageInitError, setStorageInitError] = useState<string | null>(null);
+  const [corruptDataModal, setCorruptDataModal] = useState<{
+    key: string;
+    rawContent: string;
+  } | null>(null);
+
+  // Hydrated state references for detecting genuine user edits (Task 2)
+  const hydratedRef = useRef<{ appState: AppState; schedData: SchedData } | null>(null);
   const isFirstTabMount = useRef<boolean>(true);
 
   // Asynchronous storage migration and deep load on mount / unlock
   const initStorage = async () => {
+    setStorageInitError(null);
+    let success = false;
     try {
       await migrateFromLocalStorage();
+
+      // Guard: when database is NOT encrypted, verify if physically present records are corrupted
+      const isEncrypted = isDatabaseEncryptionActive();
+      if (!isEncrypted) {
+        const rawAppState = await getRawItem(STORAGE_KEYS.APP_STATE);
+        const parsedAppState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+        if (rawAppState !== null && rawAppState !== undefined && parsedAppState === null) {
+          setCorruptDataModal({
+            key: STORAGE_KEYS.APP_STATE,
+            rawContent: typeof rawAppState === 'string' ? rawAppState : JSON.stringify(rawAppState, null, 2)
+          });
+          setStorageInitError('Wykryto uszkodzone dane konfiguracji (APP_STATE). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+          storageReadyRef.current = false;
+          setStorageReady(false);
+          return;
+        }
+
+        const rawSched = await getRawItem(STORAGE_KEYS.SCHED_DATA);
+        const parsedSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
+        if (rawSched !== null && rawSched !== undefined && parsedSched === null) {
+          setCorruptDataModal({
+            key: STORAGE_KEYS.SCHED_DATA,
+            rawContent: typeof rawSched === 'string' ? rawSched : JSON.stringify(rawSched, null, 2)
+          });
+          setStorageInitError('Wykryto uszkodzone dane planu sal (SCHED_DATA). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+          storageReadyRef.current = false;
+          setStorageReady(false);
+          return;
+        }
+      }
       
+      // Task 4: Check and handle PRE_ENCRYPTION_BACKUP
+      const preBackup = await getRawItem<Record<string, any>>(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
+      if (preBackup && typeof preBackup === 'object' && preBackup.data) {
+        if (isDatabaseEncryptionActive()) {
+          // Encryption active: check if all keys in backup can be cleanly read and decrypted
+          if (isSessionUnlocked()) {
+            let allKeysReadable = true;
+            const keysToCheck = Array.isArray(preBackup.keys) ? preBackup.keys : Object.keys(preBackup.data);
+            for (const k of keysToCheck) {
+              const val = await getStorageItem(k);
+              if (val === null || val === undefined) {
+                allKeysReadable = false;
+                break;
+              }
+            }
+            if (allKeysReadable) {
+              await removeRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
+            }
+          }
+        } else {
+          // Encryption inactive: ask user whether to restore data from backup
+          const shouldRestore = window.confirm(
+            `Wykryto kopię zapasową danych z nieukończonej próby szyfrowania bazy danych. Czy chcesz przywrócić dane z tej kopii zapasowej?`
+          );
+          if (shouldRestore) {
+            for (const [k, v] of Object.entries(preBackup.data)) {
+              await setStorageItem(k, v);
+            }
+            await removeRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
+            notify('Przywrócono dane z kopii zapasowej sprzed próby szyfrowania.', 'ok');
+          } else {
+            const shouldDiscard = window.confirm('Czy usunąć tę kopię zapasową?');
+            if (shouldDiscard) {
+              await removeRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
+            }
+          }
+        }
+      }
+
+      const stateMeta = await getStorageItem<StateMeta>(STORAGE_KEYS.STATE_META);
       const idbState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
-      if (idbState) {
-        setAppState(sortAppState(idbState));
-        const rev = multiTabStateService.extractRevision(idbState) || 1;
-        multiTabStateService.setLocalRevision(rev);
+      const dbRev = (stateMeta && typeof stateMeta.revision === 'number')
+        ? stateMeta.revision
+        : (multiTabStateService.extractRevision(idbState) || 1);
+      const currentLocalRev = multiTabStateService.getLocalRevision(STORAGE_KEYS.APP_STATE);
+
+      let targetAppState = stateRef.current.appState;
+      let targetSchedData = stateRef.current.schedData;
+
+      // Task 2: Po odblokowaniu NIE nadpisuj stanu w pamięci starszym stanem z bazy, jeśli ma wyższą lub równą rewizję
+      const isFirstBoot = !storageReadyRef.current && (hydratedRef.current === null);
+      if (idbState && (isFirstBoot || dbRev > currentLocalRev)) {
+        targetAppState = sortAppState(idbState);
+        setAppState(targetAppState);
+        multiTabStateService.setLocalRevision(dbRev);
+
+        const idbSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
+        if (idbSched) {
+          targetSchedData = cleanSchedDataMeta(idbSched);
+          setSchedData(targetSchedData);
+        }
+      } else {
+        // Keep current in-memory state
+        targetAppState = stateRef.current.appState;
+        targetSchedData = stateRef.current.schedData;
       }
-      const idbSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
-      if (idbSched) {
-        setSchedData(idbSched);
-      }
+
+      // Memorize loaded references as hydratedRef so debounced effect skips unedited initial state
+      hydratedRef.current = {
+        appState: targetAppState,
+        schedData: targetSchedData
+      };
+
       const idbArchive = await getStorageItem<ArchiveEntry[]>(STORAGE_KEYS.ARCHIVE);
       if (idbArchive && Array.isArray(idbArchive)) {
         setArchive(idbArchive);
@@ -255,9 +361,17 @@ export default function App() {
 
       const stats = await getDetailedStorageStats();
       setStorageStats(stats);
-      storageReady.current = true;
-    } catch (e) {
-      console.warn('Inicjalizacja IndexedDB zakończona z ostrzeżeniem:', e);
+      success = true;
+    } catch (e: unknown) {
+      console.warn('Inicjalizacja IndexedDB zakończona z błędem:', e);
+      setStorageInitError(e instanceof Error ? e.message : 'Błąd połączenia z bazą IndexedDB.');
+      storageReadyRef.current = false;
+      setStorageReady(false);
+    } finally {
+      if (success) {
+        storageReadyRef.current = true;
+        setStorageReady(true);
+      }
     }
   };
 
@@ -265,16 +379,41 @@ export default function App() {
     if (!isLocked) {
       initStorage();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initStorage runs on mount and lock transitions only
   }, [isLocked]);
 
   useEffect(() => {
     const handleSessionLocked = () => {
       setIsLocked(true);
-      storageReady.current = false;
+      storageReadyRef.current = false;
+      setStorageReady(false);
     };
     window.addEventListener('saleplan-session-locked', handleSessionLocked);
     return () => window.removeEventListener('saleplan-session-locked', handleSessionLocked);
   }, []);
+
+  // Task 2: Auto-blokada - przed lockSession() wykonaj flush niezapisanych zmian
+  useEffect(() => {
+    setBeforeLockHook(async () => {
+      if (!storageReadyRef.current || isLocked) return;
+      try {
+        const saved = await persistAppStateAndSchedWithConflictCheck(
+          stateRef.current.appState,
+          stateRef.current.schedData
+        );
+        if (saved) {
+          await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+          setSaveStatus('saved');
+        }
+      } catch (err) {
+        console.warn('Flush przed blokadą nie powiódł się:', err);
+      }
+    });
+    return () => {
+      setBeforeLockHook(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- beforeLockHook registrations are managed by lock state
+  }, [isLocked]);
 
   const handleUnlocked = async () => {
     setIsLocked(false);
@@ -289,11 +428,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!storageReady.current || isLocked) return;
-    setStorageItem(STORAGE_KEYS.HISTORY_LOGS, historyLogs).catch((err: any) => {
+    if (!storageReady || isLocked) return;
+    setStorageItem(STORAGE_KEYS.HISTORY_LOGS, historyLogs).catch((err: unknown) => {
       console.warn('Nie udało się zapisać dziennika zdarzeń:', err);
     });
-  }, [historyLogs, isLocked]);
+  }, [historyLogs, storageReady, isLocked]);
 
   const addEventLog = (actionType: AppEventLog['actionType'], description: string, details?: string) => {
     const newLog: AppEventLog = {
@@ -336,7 +475,7 @@ export default function App() {
   };
 
   const pushAutosaveVersion = async (newAppState: AppState, newSchedData: SchedData) => {
-    if (!storageReady.current || isLocked) return;
+    if (!storageReadyRef.current || isLocked) return;
     try {
       const saved = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS) || autosaveVersions;
       let versions: AutosaveVersion[] = Array.isArray(saved) ? saved : [];
@@ -377,7 +516,7 @@ export default function App() {
 
   // Ensure default variant exists if storage was empty
   useEffect(() => {
-    if (!storageReady.current || isLocked) return;
+    if (!storageReady || isLocked) return;
     if (planVariants.length === 0 && appState.planLekcji) {
       const defaultVar: PlanVariant = {
         id: 'default_semestr_1',
@@ -408,11 +547,12 @@ export default function App() {
       setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, [defaultVar]).catch(() => {});
       setStorageItem(STORAGE_KEYS.ACTIVE_VARIANT_ID, defaultVar.id).catch(() => {});
     }
-  }, [storageReady.current, isLocked, appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Default variant creation only triggers upon initial storage readiness or core structural changes
+  }, [storageReady, isLocked, appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
 
   // Debounced auto-save of current working changes into the active variant
   useEffect(() => {
-    if (!storageReady.current || isLocked) return;
+    if (!storageReady || isLocked) return;
     if (!activeVariantId || planVariants.length === 0) return;
 
     const timer = setTimeout(() => {
@@ -442,7 +582,7 @@ export default function App() {
         };
         const copy = [...prev];
         copy[idx] = updatedVariant;
-        setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, copy).catch((e: any) => {
+        setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, copy).catch((e: unknown) => {
           setSaveStatus('error');
           notify('Błąd zapisu wariantu planu!', 'err');
         });
@@ -451,7 +591,8 @@ export default function App() {
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [storageReady.current, isLocked, appState.planLekcji.lessons, appState.planLekcji.assignments, appState.dyzury?.harmonogram, schedData, activeVariantId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Debounce auto-save only responds to substantive schedule data changes without thrashing on structural lengths
+  }, [storageReady, isLocked, appState.planLekcji.lessons, appState.planLekcji.assignments, appState.dyzury?.harmonogram, schedData, activeVariantId]);
 
   const handleSwitchVariant = (targetVariantId: string) => {
     const target = planVariants.find(v => v.id === targetVariantId);
@@ -555,8 +696,8 @@ export default function App() {
     });
 
     // 2. Synchronizacja planu sal (schedData) dla danej klasy
-    const sourceSched: any = sourceVar.data.schedData || {};
-    const targetSched: any = JSON.parse(JSON.stringify(targetVar.data.schedData || {}));
+    const sourceSched: Record<string, any> = (sourceVar.data.schedData || {}) as Record<string, any>;
+    const targetSched: Record<string, any> = JSON.parse(JSON.stringify(targetVar.data.schedData || {}));
 
     // Czyszczenie starej alokacji sal dla tej klasy
     Object.keys(targetSched).forEach(yK => {
@@ -612,7 +753,7 @@ export default function App() {
       data: {
         ...targetVar.data,
         lessons: newLessonsTo,
-        schedData: targetSched
+        schedData: targetSched as SchedData
       },
       updatedAt: new Date().toISOString()
     };
@@ -629,7 +770,7 @@ export default function App() {
           lessons: newLessonsTo
         }
       }));
-      setSchedData(targetSched);
+      setSchedData(targetSched as SchedData);
     }
 
     addEventLog('other', `Synchronizacja planu klasy i sal: ${targetClass.name}`, `Przeniesiono lekcje oraz przydziały sal z "${sourceVar.name}" do "${targetVar.name}".`);
@@ -711,7 +852,7 @@ export default function App() {
 
   // Dual Screen BroadcastChannel subscription for messages from companion
   useEffect(() => {
-    const unsub = dualScreenService.subscribe((msg: DualScreenMessage) => {
+    const unsub = dualScreenService.subscribe((msg: DualScreenMessage<any>) => {
       if (msg.type === 'HANDSHAKE' || msg.type === 'PING') {
         setIsCompanionActive(true);
         const now = Date.now();
@@ -825,6 +966,7 @@ export default function App() {
     });
 
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Subscription to companion window messages
   }, [appState, schedData, activeVariant, planVariants, currentTab]);
 
   // Automatyczna synchronizacja zmiany widoku (zakładki) w oknie głównym na Ekran 2
@@ -855,7 +997,7 @@ export default function App() {
         timestamp: now
       });
     }
-  }, [appState, schedData, activeVariant, planVariants, isCompanionActive]);
+  }, [appState, schedData, activeVariant, planVariants, currentTab, isCompanionActive]);
 
   const handleToggleDualScreen = async () => {
     if (isCompanionActive) {
@@ -881,7 +1023,7 @@ export default function App() {
       // 1. Sprawdzenie akceptacji regulaminu i licencji (wymagane przy 1. uruchomieniu)
       let needsTerms = false;
       try {
-        const termsData = await getStorageItem<any>(STORAGE_KEYS.TERMS_ACCEPTED) || getStorageItemSync<any>(STORAGE_KEYS.TERMS_ACCEPTED);
+        const termsData = await getStorageItem<{ accepted?: boolean }>(STORAGE_KEYS.TERMS_ACCEPTED) || getStorageItemSync<{ accepted?: boolean }>(STORAGE_KEYS.TERMS_ACCEPTED);
         if (!termsData || !termsData.accepted) {
           setShowTermsModal(true);
           needsTerms = true;
@@ -986,6 +1128,7 @@ export default function App() {
     }, 6000);
 
     return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Watchdog timer triggers specifically on restoration start
   }, [isRestoring]);
 
   const handleRollbackToLastValid = async (reason?: string) => {
@@ -1067,8 +1210,8 @@ export default function App() {
   };
 
   // ── LOCALSTORAGE / INDEXEDDB PERSISTENCE EFFECTS (DEBOUNCED) ──
-  const isInitialMount = React.useRef(true);
   const stateRef = React.useRef({ appState, schedData });
+  stateRef.current = { appState, schedData };
 
   // Update stateRef on edits to ensure the latest values are captured 
   useEffect(() => {
@@ -1081,8 +1224,8 @@ export default function App() {
     localRevision: number;
     incomingRevision: number;
     incomingTabId: string;
-    dbAppState: any;
-    dbSchedData?: any;
+    dbAppState: AppState;
+    dbSchedData?: SchedData;
   } | null>(null);
 
   const [showRefreshBanner, setShowRefreshBanner] = useState<boolean>(false);
@@ -1107,42 +1250,23 @@ export default function App() {
     targetSchedData: SchedData,
     forceOverwrite: boolean = false
   ): Promise<boolean> => {
-    if (!storageReady.current || isLocked) return false;
+    if (!storageReadyRef.current || isLocked) return false;
 
-    const currentLocalRev = multiTabStateService.getLocalRevision();
-
-    if (!forceOverwrite) {
-      const conflict = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, currentLocalRev);
-      if (conflict.hasConflict) {
-        let conflictingSched: any = null;
-        try {
-          conflictingSched = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
-        } catch {}
-
+    return persistWithConflictCheck(targetAppState, targetSchedData, {
+      forceOverwrite,
+      baseRevision: conflictData?.incomingRevision,
+      onConflict: (conflict, conflictingSched) => {
         setConflictData({
           localRevision: conflict.localRevision,
           incomingRevision: conflict.dbRevision,
           incomingTabId: conflict.dbTabId,
-          dbAppState: conflict.dbRecord,
-          dbSchedData: conflictingSched
+          dbAppState: conflict.dbRecord as unknown as AppState,
+          dbSchedData: conflictingSched || undefined
         });
         setShowConflictModal(true);
         setSaveStatus('dirty');
-        return false;
       }
-    }
-
-    const baseRev = Math.max(currentLocalRev, conflictData?.incomingRevision || 0);
-    const nextRev = baseRev + 1;
-    const enrichedState = multiTabStateService.enrichWithRevision(targetAppState, nextRev);
-    const enrichedSched = multiTabStateService.enrichWithRevision(targetSchedData, nextRev);
-
-    await setStorageItem(STORAGE_KEYS.APP_STATE, enrichedState);
-    await setStorageItem(STORAGE_KEYS.SCHED_DATA, enrichedSched);
-    multiTabStateService.setLocalRevision(nextRev);
-    multiTabStateService.broadcastStateCommitted(STORAGE_KEYS.APP_STATE, nextRev);
-
-    return true;
+    });
   };
 
   const handleLoadIncomingFromConflict = async () => {
@@ -1150,7 +1274,7 @@ export default function App() {
       if (conflictData?.dbAppState) {
         setAppState(sortAppState(conflictData.dbAppState));
         if (conflictData.dbSchedData) {
-          setSchedData(conflictData.dbSchedData);
+          setSchedData(cleanSchedDataMeta(conflictData.dbSchedData));
         }
         multiTabStateService.setLocalRevision(conflictData.incomingRevision);
       } else {
@@ -1162,7 +1286,7 @@ export default function App() {
           multiTabStateService.setLocalRevision(rev);
         }
         if (freshSched) {
-          setSchedData(freshSched);
+          setSchedData(cleanSchedDataMeta(freshSched));
         }
       }
       setShowConflictModal(false);
@@ -1187,7 +1311,7 @@ export default function App() {
       name: `Kopia z innej karty (przed nadpisaniem) - Rewizja #${otherTabRev}`,
       createdAt: new Date().toISOString(),
       appState: conflictData.dbAppState,
-      schedData: conflictData.dbSchedData || {},
+      schedData: cleanSchedDataMeta(conflictData.dbSchedData || {}),
       comment: `Automatyczna kopia zapasowa utworzona podczas rozwiązywania konfliktu w wielu kartach. Karta "${otherTabId}" zapisała rewizję #${otherTabRev}, która została zastąpiona wersją z bieżącej karty.`,
       stats: {
         assignedLessonsCount: Object.keys(conflictData.dbAppState?.planLekcji?.lessons || {}).length,
@@ -1236,7 +1360,7 @@ export default function App() {
         multiTabStateService.setLocalRevision(rev);
       }
       if (freshSched) {
-        setSchedData(freshSched);
+        setSchedData(cleanSchedDataMeta(freshSched));
       }
       setShowRefreshBanner(false);
       setSaveStatus('saved');
@@ -1249,9 +1373,13 @@ export default function App() {
 
   // Unified debounced save effect for appState and schedData
   useEffect(() => {
-    if (!storageReady.current || isLocked) return;
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
+    if (!storageReady || isLocked) return;
+    // Skip changes where data references are identical to freshly hydrated state (Task 2)
+    if (
+      hydratedRef.current &&
+      hydratedRef.current.appState === appState &&
+      hydratedRef.current.schedData === schedData
+    ) {
       return;
     }
 
@@ -1271,10 +1399,10 @@ export default function App() {
             setSaveStatus('saved');
             refreshStorageStats();
           }
-        } catch (e: any) {
+        } catch (e: unknown) {
           console.error('Błąd zapisu autozapisu', e);
           setSaveStatus('error');
-          const isLockedErr = e instanceof StorageLockedError || e?.name === 'StorageLockedError';
+          const isLockedErr = e instanceof StorageLockedError || (e as { name?: string })?.name === 'StorageLockedError';
           notify(
             isLockedErr 
               ? 'Baza danych jest zablokowana. Wprowadź hasło, aby zapisać zmiany.' 
@@ -1288,7 +1416,8 @@ export default function App() {
     return () => {
       clearTimeout(handler);
     };
-  }, [appState, schedData, isLocked]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Debounced autosave effect triggers solely on substantive state/sched edits and storage status
+  }, [appState, schedData, storageReady, isLocked]);
 
   // Force instant save on tab switch (skips first render mount via isFirstTabMount)
   useEffect(() => {
@@ -1296,7 +1425,7 @@ export default function App() {
       isFirstTabMount.current = false;
       return;
     }
-    if (!storageReady.current || isLocked) return;
+    if (!storageReady || isLocked) return;
     
     const saveOnTabSwitch = async () => {
       try {
@@ -1311,10 +1440,10 @@ export default function App() {
           refreshStorageStats();
           addEventLog('other', 'Automatyczny zapis przy zmianie zakładki', `Zapisano stan programu w bazie IndexedDB przy przełączeniu na zakładkę "${currentTab}".`);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('Błąd natychmiastowego zapisu przy zmianie zakładki', e);
         setSaveStatus('error');
-        const isLockedErr = e instanceof StorageLockedError || e?.name === 'StorageLockedError';
+        const isLockedErr = e instanceof StorageLockedError || (e as { name?: string })?.name === 'StorageLockedError';
         notify(
           isLockedErr 
             ? 'Baza danych jest zablokowana. Zmiany nie zostały zapisane.' 
@@ -1324,15 +1453,36 @@ export default function App() {
       }
     };
     saveOnTabSwitch();
-  }, [currentTab, isLocked]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Instant save on tab switch triggers on currentTab transitions
+  }, [currentTab, storageReady, isLocked]);
 
-  // Unload fallback to secure any unsaved drafts instantly
+  // Unload fallback to secure any unsaved drafts instantly (Task 4)
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (!storageReady.current || isLocked) return;
+      if (!storageReadyRef.current || isLocked) return;
+      
+      // Synchronous mirror write to localStorage for fast unload resilience
       try {
-        setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
-        setStorageItem(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
+        const stateStr = JSON.stringify(stateRef.current.appState);
+        const schedStr = JSON.stringify(cleanSchedDataMeta(stateRef.current.schedData));
+        if (stateStr.length < 2.5 * 1024 * 1024) {
+          localStorage.setItem(STORAGE_KEYS.APP_STATE, stateStr);
+        }
+        if (schedStr.length < 2.5 * 1024 * 1024) {
+          localStorage.setItem(STORAGE_KEYS.SCHED_DATA, schedStr);
+        }
+      } catch (e) {
+        console.warn('Błąd synchronicznego zapisu localStorage przy zamykaniu:', e);
+      }
+
+      // Asynchronous persistence wrapped in Promise.allSettled with catch to avoid unhandled rejections
+      try {
+        Promise.allSettled([
+          setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState),
+          setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanSchedDataMeta(stateRef.current.schedData))
+        ]).catch((e) => {
+          console.warn('Błąd zapisu asynchronicznego przy beforeunload:', e);
+        });
       } catch (e) {
         console.error('Błąd zapisu przy opuszczeniu strony', e);
       }
@@ -1345,27 +1495,27 @@ export default function App() {
 
   // Sync archive immediately (low frequency, separate key)
   useEffect(() => {
-    if (!storageReady.current || isLocked) return;
+    if (!storageReady || isLocked) return;
     setStorageItem(STORAGE_KEYS.ARCHIVE, archive)
       .then(refreshStorageStats)
-      .catch((e: any) => {
+      .catch((e: unknown) => {
         console.error('Błąd zapisu archiwum', e);
         setSaveStatus('error');
         notify('Nie udało się zapisać archiwum w bazie danych!', 'err');
       });
-  }, [archive, isLocked]);
+  }, [archive, storageReady, isLocked]);
 
   // Sync snapshots immediately
   useEffect(() => {
-    if (!storageReady.current || isLocked) return;
+    if (!storageReady || isLocked) return;
     setStorageItem(STORAGE_KEYS.SNAPSHOTS, snapshots)
       .then(refreshStorageStats)
-      .catch((e: any) => {
+      .catch((e: unknown) => {
         console.error('Błąd zapisu punktów przywracania', e);
         setSaveStatus('error');
         notify('Nie udało się zapisać punktów przywracania!', 'err');
       });
-  }, [snapshots, isLocked]);
+  }, [snapshots, storageReady, isLocked]);
 
   // ── UNDO / REDO STATE HANDLERS ──
   const pushToUndo = (stateToSave: SchedData) => {
@@ -1378,23 +1528,23 @@ export default function App() {
     setSchedData(newSched);
   };
 
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
     const previous = undoStack[undoStack.length - 1];
     setRedoStack(prev => [...prev, JSON.parse(JSON.stringify(schedData))]);
     setSchedData(previous);
     setUndoStack(prev => prev.slice(0, -1));
     addEventLog('undo', 'Cofnięto zmianę planu (Undo)', 'Przywrócono poprzedni stan rozmieszczenia sal / dyżurów.');
-  };
+  }, [undoStack, schedData]);
 
-  const handleRedo = () => {
+  const handleRedo = useCallback(() => {
     if (redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
     setUndoStack(prev => [...prev, JSON.parse(JSON.stringify(schedData))]);
     setSchedData(next);
     setRedoStack(prev => prev.slice(0, -1));
     addEventLog('redo', 'Ponowiono zmianę planu (Redo)', 'Zastosowano ponownie uprzednio cofniętą operację.');
-  };
+  }, [redoStack, schedData]);
 
   // ── KEYBOARD SHORTCUTS FOR UNDO / REDO ──
   useEffect(() => {
@@ -1434,7 +1584,7 @@ export default function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [undoStack, redoStack, schedData, isPresentationMode]);
+  }, [handleUndo, handleRedo, isPresentationMode]);
 
   // ── BRIDGING/IMPORT SESSIONS FROM ETAP 1 TO ETAP 2 ──
   const handleImportFromPlanKlas = () => {
@@ -1587,7 +1737,7 @@ export default function App() {
   };
 
   // ── INTEGRITY VALIDATION & DATA SANITIZATION ──
-  const validateAndSanitizeDataIntegrity = (rawState: any, rawSched: any): { sanitizedState: AppState; sanitizedSched: SchedData } => {
+  const validateAndSanitizeDataIntegrity = (rawState: unknown, rawSched: unknown): { sanitizedState: AppState; sanitizedSched: SchedData } => {
     if (!rawState || typeof rawState !== 'object') {
       throw new Error('Nieprawidłowa struktura danych (obiekt stanu nie istnieje lub jest uszkodzony).');
     }
@@ -1611,7 +1761,7 @@ export default function App() {
       }
       return false;
     });
-    if (validClasses.length === 0 && Array.isArray(rawState.classes) && rawState.classes.length > 0) {
+    if (validClasses.length === 0 && Array.isArray((rawState as Record<string, unknown>).classes) && ((rawState as Record<string, unknown>).classes as unknown[]).length > 0) {
       throw new Error('Wykryto uszkodzone identyfikatory (ID) klas.');
     }
     pl.classes = validClasses;
@@ -1683,18 +1833,18 @@ export default function App() {
 
     // 6. SchedData integrity check
     const sanitizedSched: SchedData = {};
-    for (const [yearK, yData] of Object.entries(rawSched)) {
+    for (const [yearK, yData] of Object.entries(rawSched as Record<string, unknown>)) {
       if (!yData || typeof yData !== 'object') continue;
       sanitizedSched[yearK] = {};
-      for (const [dayK, dData] of Object.entries(yData as Record<string, any>)) {
+      for (const [dayK, dData] of Object.entries(yData as Record<string, unknown>)) {
         if (!dData || typeof dData !== 'object') continue;
         const dayIdx = parseInt(dayK, 10);
         if (isNaN(dayIdx)) continue;
         sanitizedSched[yearK][dayIdx] = {};
-        for (const [hourK, hData] of Object.entries(dData as Record<string, any>)) {
+        for (const [hourK, hData] of Object.entries(dData as Record<string, unknown>)) {
           if (!hData || typeof hData !== 'object') continue;
           sanitizedSched[yearK][dayIdx][hourK] = {};
-          for (const [colK, cellVal] of Object.entries(hData as Record<string, any>)) {
+          for (const [colK, cellVal] of Object.entries(hData as Record<string, SchedCell | SchedCell[]>)) {
             if (!cellVal) continue;
             sanitizedSched[yearK][dayIdx][hourK][colK] = cellVal;
           }
@@ -1760,7 +1910,7 @@ export default function App() {
         'Przywrócono plan z punktu przywracania',
         `Zaktualizowano całą konfigurację dla szkoły "${sanitizedState.school?.name || ''}" (${sanitizedState.yearLabel || ''}). Czas: ${duration.toFixed(2)} ms.`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Błąd podczas procedury przywracania punktu:', err);
       // Automatic rollback to preRestore state
       setAppState(sortAppState(preRestoreState));
@@ -1778,7 +1928,7 @@ export default function App() {
       ]);
       refreshStorageStats();
 
-      const errMsg = err?.message || 'Nieprawidłowa struktura danych lub brak spójności ID.';
+      const errMsg = (err as Error)?.message || 'Nieprawidłowa struktura danych lub brak spójności ID.';
       notify(`Błąd przywracania: ${errMsg} Automatycznie wycofano zmiany (Rollback).`, 'err');
       addEventLog('other', 'Wycofano przywracanie planu (Rollback)', `Wykryto problem: ${errMsg}`);
       throw err;
@@ -1795,7 +1945,7 @@ export default function App() {
   };
 
   const handleExecuteExport = async (options: ExportOptions) => {
-    let backupObj: any = {
+    let backupObj: ImportPayload = {
       version: CURRENT_VERSION,
       timestamp: new Date().toISOString()
     };
@@ -1819,7 +1969,7 @@ export default function App() {
     }
 
     let isAnonymized = false;
-    let anonSummary: any = null;
+    let anonSummary: AnonymizationSummary | null = null;
 
     if (options.anonymizeData) {
       const res = anonymizeBackupPayload(backupObj);
@@ -1936,7 +2086,7 @@ export default function App() {
         'Wieloosobowe scalanie i import danych (JSON)',
         `Wynik scalania: ${summaryText}`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Błąd podczas scalania i importu danych:', err);
       // Automatic rollback to previous stable state
       setAppState(sortAppState(preImportState));
@@ -1957,7 +2107,7 @@ export default function App() {
       setShowImportModal(false);
       setPendingImportFiles([]);
 
-      const errMsg = err?.message || 'Błąd spójności danych lub nieprawidłowe ID.';
+      const errMsg = (err as Error)?.message || 'Błąd spójności danych lub nieprawidłowe ID.';
       notify(`Błąd importu: ${errMsg} Automatycznie wycofano zmiany (Rollback).`, 'err');
       addEventLog('other', 'Wycofano scalanie i import (Rollback)', `Wykryto problem: ${errMsg}`);
     } finally {
@@ -2030,7 +2180,7 @@ export default function App() {
   }
 
   return (
-    <div className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden print:h-auto print:w-full print:overflow-visible print:block print:static ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
+    <div data-storage-ready={storageReady ? 'true' : 'false'} className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden print:h-auto print:w-full print:overflow-visible print:block print:static ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
       <SWUpdateBanner />
       <MultiTabRefreshBanner
         visible={showRefreshBanner}
@@ -2038,6 +2188,27 @@ export default function App() {
         onReload={handleReloadFromBanner}
         onDismiss={() => setShowRefreshBanner(false)}
       />
+
+      {storageInitError && (
+        <div 
+          data-testid="storage-init-error-banner"
+          className="bg-amber-600 text-white px-4 py-2.5 flex items-center justify-between shadow-md z-50 text-xs sm:text-sm font-medium border-b border-amber-700 shrink-0"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚠️</span>
+            <span>
+              <strong>Problem z wczytaniem danych:</strong> {storageInitError} Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => initStorage()}
+            className="px-3 py-1 bg-white text-amber-900 rounded font-semibold text-xs hover:bg-amber-100 transition shadow-xs cursor-pointer ml-3 shrink-0"
+          >
+            Spróbuj ponownie
+          </button>
+        </div>
+      )}
       
       {/* ── PODSTAWOWY NAGŁÓWEK SYSTEMOWY (ORGANIZACJA DWUPOZIOMOWA DLA TABLETÓW I DESKTOPU) ── */}
       {!isPresentationMode && (
@@ -2702,9 +2873,73 @@ export default function App() {
         />
       )}
 
+      {corruptDataModal && (
+        <div 
+          data-testid="corrupt-data-modal"
+          className="fixed inset-0 z-[10000] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 select-none"
+        >
+          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl p-6 shadow-2xl max-w-lg w-full text-slate-100 space-y-4">
+            <div className="flex items-center gap-3 text-amber-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="font-extrabold text-base">Wykryto uszkodzone dane w pamięci</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Klucz <code className="bg-slate-800 px-1.5 py-0.5 rounded text-amber-300 font-mono text-[11px]">{corruptDataModal.key}</code> istnieje w pamięci przeglądarki, ale nie przeszedł weryfikacji integralności i schematu.
+            </p>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Aby zapobiec utracie danych, <strong>program nie nadpisze ich stanem początkowym bez Twojej zgody</strong>. Możesz pobrać surową kopię awaryjną lub zdecydować o wyczyszczeniu.
+            </p>
+            <div className="bg-slate-950/80 p-3 rounded-lg border border-slate-800 max-h-36 overflow-y-auto font-mono text-[10px] text-slate-400 break-all select-all">
+              {corruptDataModal.rawContent.slice(0, 1000)}...
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 pt-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const blob = new Blob([corruptDataModal.rawContent], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `saleplan_corrupt_${corruptDataModal.key}_${Date.now()}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    notify('Pobrano kopię surowych danych.', 'ok');
+                  } catch {
+                    navigator.clipboard?.writeText(corruptDataModal.rawContent);
+                    notify('Skopiowano surowe dane do schowka.', 'info');
+                  }
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Download size={14} />
+                Eksportuj surowe dane
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (confirm('Czy na pewno chcesz zastąpić uszkodzone dane stanem początkowym? Ta operacja jest nieodwracalna.')) {
+                    setCorruptDataModal(null);
+                    setStorageInitError(null);
+                    storageReadyRef.current = true;
+                    setStorageReady(true);
+                    hydratedRef.current = { appState, schedData };
+                    await setStorageItem(corruptDataModal.key, corruptDataModal.key === STORAGE_KEYS.SCHED_DATA ? schedData : appState);
+                    notify('Zastąpiono uszkodzone dane stanem początkowym.', 'ok');
+                  }
+                }}
+                className="px-4 py-2 bg-rose-700 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                Zastąp nowym stanem
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isRestoring && (
         <div 
-          className="fixed inset-0 z-[9999] bg-slate-950/60 backdrop-blur-xs select-none flex flex-col items-center justify-center text-white"
+          className={`fixed inset-0 ${Z_INDEX_CLASSES.RESTORING_OVERLAY} bg-slate-950/60 backdrop-blur-xs select-none flex flex-col items-center justify-center text-white`}
           id="restoring-pointer-blocker"
         >
           <div className="bg-slate-900/95 border border-slate-700/80 rounded-2xl p-6 flex flex-col items-center shadow-2xl space-y-4 max-w-sm text-center">

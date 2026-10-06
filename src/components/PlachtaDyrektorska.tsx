@@ -323,7 +323,7 @@ export default function PlachtaDyrektorska({
         room: c.room,
         roomIdx: c.roomIdx
       });
-      cache.set(ck, c.room.name || c.room.num || 'Sala');
+      cache.set(ck, c.room.num || (c.room as any).name || 'Sala');
     });
     return (ck: string) => cache.get(ck) || '';
   }, [flatColumns]);

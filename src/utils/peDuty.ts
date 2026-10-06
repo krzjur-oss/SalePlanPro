@@ -1,4 +1,4 @@
-import { AppState, Subject, Przerwa } from '../types';
+import { AppState, Subject, Przerwa, SchedData, SchedCell } from '../types';
 import { getBreakDuration } from './adaptationDuty';
 
 export interface PESupervisionConflict {
@@ -72,7 +72,7 @@ export function isPESubject(
  * Checks whether a teacher has a PE lesson on a specific hour.
  */
 export function getTeacherLessonOnHour(
-  schedData: any,
+  schedData: SchedData,
   yearKey: string,
   dayIdx: number,
   hourNum: number,
@@ -97,8 +97,9 @@ export function getTeacherLessonOnHour(
       if (!c) continue;
       if (c.teacherAbbr === teacherAbbr) {
         let subjectObj: Subject | undefined;
-        if (c._bridgeMeta?.subjectId) {
-          subjectObj = subjects.find(s => s.id === c._bridgeMeta.subjectId);
+        const bridgeSubjectId = c._bridgeMeta?.subjectId;
+        if (bridgeSubjectId) {
+          subjectObj = subjects.find(s => s.id === bridgeSubjectId);
         }
         if (!subjectObj && c.subject) {
           subjectObj = subjects.find(s => s.name === c.subject || s.short === c.subject);
@@ -106,8 +107,8 @@ export function getTeacherLessonOnHour(
 
         const isPE = isPESubject(subjectObj || c.subject, customSubjectIds);
         const subjectName = subjectObj?.name || c.subject || 'Wychowanie fizyczne';
-        const className = c.className || c._bridgeMeta?.className;
-        const roomNum = c.roomNum || c.roomId;
+        const className = c.className || c._bridgeMeta?.classId;
+        const roomNum = c._bridgeMeta?.roomId || colKey;
 
         return {
           isPE,
@@ -126,7 +127,7 @@ export function getTeacherLessonOnHour(
  * Checks if teacher is bound to PE changing room / gym supervision on a specific break.
  */
 export function getTeacherPESupervision(
-  schedData: any,
+  schedData: SchedData,
   yearKey: string,
   dayIdx: number,
   breakNum: number,
@@ -201,7 +202,7 @@ export function getTeacherPESupervision(
  */
 export function calculatePESupervisionDuties(
   appState: AppState,
-  schedData: any
+  schedData: SchedData
 ): PESupervisionResult {
   const isEnabled = appState.dyzury.settings.peSupervisionDuty !== false;
 
@@ -243,7 +244,7 @@ export function calculatePESupervisionDuties(
     // Analyze subjects taught by teachers
     Object.keys(dayData).forEach(hourKey => {
       const hourData = dayData[hourKey] || {};
-      Object.values(hourData).forEach((rawCell: any) => {
+      Object.values(hourData).forEach((rawCell: SchedCell | SchedCell[]) => {
         const cells = Array.isArray(rawCell) ? rawCell : [rawCell];
         cells.forEach(c => {
           if (!c?.teacherAbbr) return;

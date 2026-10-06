@@ -14,14 +14,14 @@ export function sanitizeProtoPollution<T>(obj: T): T {
     return obj.map(item => sanitizeProtoPollution(item)) as unknown as T;
   }
 
-  const cleanObj: Record<string, any> = Object.create(null);
+  const cleanObj: Record<string, unknown> = Object.create(null);
 
   for (const key of Object.keys(obj)) {
     // Strictly block and drop prototype pollution keys
     if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
       continue;
     }
-    const val = (obj as Record<string, any>)[key];
+    const val = (obj as Record<string, unknown>)[key];
     cleanObj[key] = sanitizeProtoPollution(val);
   }
 
@@ -203,13 +203,13 @@ export const PlanLekcjiStateSchema = z.object({
   teachers: z.array(TeacherSchema).optional().default([]),
   rooms: z.array(RoomSchema).optional().default([]),
   subjects: z.array(SubjectSchema).optional().default([]),
-  schoolGroups: z.array(z.any()).optional().default([]),
+  schoolGroups: z.array(z.unknown()).optional().default([]),
   assignments: z.array(AssignmentSchema).optional().default([]),
   lessons: z.record(z.string(), LessonSchema).optional().default({}),
   specialStudents: z.array(SpecialStudentSchema).optional().default([]),
   specialAssignments: z.array(SpecialAssignmentSchema).optional().default([]),
-  specialLessons: z.record(z.string(), z.any()).optional().default({}),
-  specialAbsences: z.record(z.string(), z.any()).optional().default({}),
+  specialLessons: z.record(z.string(), z.unknown()).optional().default({}),
+  specialAbsences: z.record(z.string(), z.unknown()).optional().default({}),
 }).passthrough();
 
 export const AppStateSchema = z.object({
@@ -223,10 +223,10 @@ export const AppStateSchema = z.object({
   classes: z.array(ClassSchema).optional().default([]),
   teachers: z.array(TeacherSchema).optional().default([]),
   subjects: z.array(SubjectSchema).optional().default([]),
-  homerooms: z.record(z.string(), z.any()).optional().default({}),
+  homerooms: z.record(z.string(), z.unknown()).optional().default({}),
   planLekcji: PlanLekcjiStateSchema.optional(),
   dyzury: PlanDyzuryStateSchema.optional(),
-  generatorSettings: z.record(z.string(), z.any()).optional(),
+  generatorSettings: z.record(z.string(), z.unknown()).optional(),
   revision: z.number().optional(),
   tabId: z.string().optional(),
   _revision: z.number().optional(),
@@ -241,7 +241,7 @@ export const SchedCellSchema = z.object({
   subject: z.string().optional().default(''),
   note: z.string().optional(),
   locked: z.boolean().optional(),
-  _bridgeMeta: z.record(z.string(), z.any()).optional(),
+  _bridgeMeta: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 
 export const SchedDataSchema = z.record(
@@ -270,9 +270,9 @@ export const SnapshotEntrySchema = z.object({
   name: z.string(),
   createdAt: z.string(),
   appState: AppStateSchema,
-  schedData: z.record(z.string(), z.any()).optional().default({}),
+  schedData: z.record(z.string(), z.unknown()).optional().default({}),
   comment: z.string().optional(),
-  stats: z.record(z.string(), z.any()).optional(),
+  stats: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 
 export const AppEventLogSchema = z.object({
@@ -287,7 +287,7 @@ export const ImportPayloadSchema = z.object({
   version: z.string().optional(),
   timestamp: z.string().optional(),
   appState: AppStateSchema.optional(),
-  schedData: z.record(z.string(), z.any()).optional(),
+  schedData: z.record(z.string(), z.unknown()).optional(),
   archive: z.array(ArchiveEntrySchema).optional(),
   snapshots: z.array(SnapshotEntrySchema).optional(),
   historyLogs: z.array(AppEventLogSchema).optional(),
@@ -315,16 +315,17 @@ export function validateImportJson(rawInput: unknown): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   
-  let rawObj: any;
+  let rawObj: unknown;
 
   // 1. Safe JSON Parse if passed as string
   if (typeof rawInput === 'string') {
     try {
       rawObj = JSON.parse(rawInput);
-    } catch (parseErr: any) {
+    } catch (parseErr: unknown) {
+      const errMsg = parseErr instanceof Error ? parseErr.message : 'SyntaxError';
       return {
         isValid: false,
-        errors: [`Błąd składni JSON: Plik nie zawiera poprawnego formatu JSON (${parseErr?.message || 'SyntaxError'}).`],
+        errors: [`Błąd składni JSON: Plik nie zawiera poprawnego formatu JSON (${errMsg}).`],
         warnings: [],
         summary: { classesCount: 0, teachersCount: 0, roomsCount: 0, specialStudentsCount: 0, hasSchedData: false }
       };
@@ -343,14 +344,14 @@ export function validateImportJson(rawInput: unknown): ValidationResult {
   }
 
   // 2. Protect against Prototype Pollution
-  const sanitized = sanitizeProtoPollution(rawObj);
+  const sanitized = sanitizeProtoPollution(rawObj) as Record<string, unknown>;
 
   // 3. Unwrap wrapped payloads (e.g. data or state wrappers)
-  let targetPayload = sanitized;
+  let targetPayload: Record<string, unknown> = sanitized;
   if (sanitized.data && typeof sanitized.data === 'object') {
-    targetPayload = sanitized.data;
+    targetPayload = sanitized.data as Record<string, unknown>;
   } else if (sanitized.state && typeof sanitized.state === 'object') {
-    targetPayload = sanitized.state;
+    targetPayload = sanitized.state as Record<string, unknown>;
   }
 
   // If directly given an AppState (e.g. school, classes at root level), wrap it into ImportPayload
@@ -373,15 +374,16 @@ export function validateImportJson(rawInput: unknown): ValidationResult {
     });
   }
 
-  const validatedData = parseResult.success ? parseResult.data : targetPayload;
+  const validatedData = (parseResult.success ? parseResult.data : targetPayload) as Record<string, unknown>;
 
   // 5. Semantic checks & sanity warnings
-  const app = validatedData.appState;
-  const classes = app?.classes || app?.planLekcji?.classes || [];
-  const teachers = app?.teachers || app?.planLekcji?.teachers || [];
-  const rooms = app?.planLekcji?.rooms || [];
-  const specialStudents = app?.planLekcji?.specialStudents || [];
-  const hasSched = !!validatedData.schedData && Object.keys(validatedData.schedData).length > 0;
+  const app = validatedData.appState as Record<string, unknown> | undefined;
+  const classes = (app?.classes || (app?.planLekcji as Record<string, unknown> | undefined)?.classes || []) as unknown[];
+  const teachers = (app?.teachers || (app?.planLekcji as Record<string, unknown> | undefined)?.teachers || []) as unknown[];
+  const rooms = ((app?.planLekcji as Record<string, unknown> | undefined)?.rooms || []) as unknown[];
+  const specialStudents = ((app?.planLekcji as Record<string, unknown> | undefined)?.specialStudents || []) as unknown[];
+  const schedDataRec = validatedData.schedData as Record<string, unknown> | undefined;
+  const hasSched = !!schedDataRec && Object.keys(schedDataRec).length > 0;
 
   if (classes.length === 0 && teachers.length === 0 && !hasSched) {
     warnings.push('Plik nie zawiera żadnych oddziałów ani nauczycieli – import może być pusty.');
@@ -389,7 +391,7 @@ export function validateImportJson(rawInput: unknown): ValidationResult {
 
   return {
     isValid: errors.length === 0,
-    data: validatedData as ImportPayload,
+    data: validatedData as unknown as ImportPayload,
     errors,
     warnings,
     summary: {
@@ -406,17 +408,17 @@ export const AutosaveVersionSchema = z.object({
   id: z.string(),
   timestamp: z.string(),
   appState: AppStateSchema,
-  schedData: z.record(z.string(), z.any()),
+  schedData: z.record(z.string(), z.unknown()),
 }).passthrough();
 
 export const PlanVariantDataSchema = z.object({
   lessons: z.record(z.string(), LessonSchema),
-  schedData: z.record(z.string(), z.any()),
+  schedData: z.record(z.string(), z.unknown()),
   assignments: z.array(AssignmentSchema).optional(),
-  specialLessons: z.record(z.string(), z.any()).optional(),
-  specialAbsences: z.record(z.string(), z.any()).optional(),
-  spePlan: z.any().optional(),
-  dyzury: z.any().optional(),
+  specialLessons: z.record(z.string(), z.unknown()).optional(),
+  specialAbsences: z.record(z.string(), z.unknown()).optional(),
+  spePlan: z.unknown().optional(),
+  dyzury: z.unknown().optional(),
 }).passthrough();
 
 export const PlanVariantSchema = z.object({
@@ -432,7 +434,7 @@ export const PlanVariantSchema = z.object({
   color: z.string(),
   isDefault: z.boolean().optional(),
   data: PlanVariantDataSchema,
-  stats: z.record(z.string(), z.any()).optional(),
+  stats: z.record(z.string(), z.unknown()).optional(),
 }).passthrough();
 
 export const DualScreenMessageTypeSchema = z.enum([
@@ -462,12 +464,22 @@ export const DualScreenMessageSchema = z.object({
   version: z.number().optional(),
 }).passthrough();
 
+export const StateMetaSchema = z.object({
+  revision: z.number(),
+  tabId: z.string(),
+  updatedAt: z.string().optional(),
+}).passthrough();
+
+export type StateMeta = z.infer<typeof StateMetaSchema>;
+
 export function getStorageSchemaForKey(key: string): z.ZodTypeAny | null {
   switch (key) {
     case 'saleplan_v3_app_state':
       return AppStateSchema;
     case 'saleplan_v3_sched_data':
       return SchedDataSchema;
+    case 'saleplan_v3_state_meta':
+      return StateMetaSchema;
     case 'saleplan_v3_archive':
       return z.array(ArchiveEntrySchema);
     case 'saleplan_v3_snapshots':

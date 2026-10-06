@@ -9,6 +9,7 @@ import {
   Edit3, RefreshCw, X, Calendar, FileSpreadsheet, Upload, Search
 } from 'lucide-react';
 import { uid, genAbbr, ensureUniqueAbbr, subjectAbbr } from '../utils';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 import SioImport from './SioImport';
 import StructureTemplatesModal from './StructureTemplatesModal';
 import { Bookmark } from 'lucide-react';
@@ -4248,7 +4249,7 @@ export default function KreatorSzkoly({
                 const subjectsList = dict.subjects;
 
                 return (
-                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 z-[100] no-print">
+                  <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 ${Z_INDEX_CLASSES.MODAL} no-print`}>
                     <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
                       {/* Modal Header */}
                       <div className="bg-slate-900 text-white p-5 px-6 flex items-center justify-between border-b border-slate-800 shrink-0">
@@ -7620,7 +7621,7 @@ export default function KreatorSzkoly({
         const supportTeacherIds = student.supportTeacherIds || [];
 
         return (
-          <div className="fixed inset-0 z-[100] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4`}>
             <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-fade-in text-left">
               
               {/* Nagłówek modalu */}
@@ -7933,7 +7934,7 @@ export default function KreatorSzkoly({
 
       {/* Custom Confirmation Dialog Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4`}>
           <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden p-5 space-y-4">
             <div className="flex items-start gap-3.5">
               <div className="w-9 h-9 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">

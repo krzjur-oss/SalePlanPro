@@ -196,7 +196,7 @@ export default function CompanionWindowView({
     window.addEventListener('unload', handleUnload);
 
     // 2. Subscribe to incoming messages
-    const unsubscribe = dualScreenService.subscribe((msg: DualScreenMessage) => {
+    const unsubscribe = dualScreenService.subscribe((msg: DualScreenMessage<any>) => {
       // Etap 2: Odrzucanie nieaktualnych zmian (konflikt wersji/czasu)
       if (msg.timestamp && msg.timestamp < lastSyncTimestampRef.current) {
         console.warn('[CompanionWindow] Odrzucono przestarzałą wiadomość:', msg.type, msg.timestamp, '<', lastSyncTimestampRef.current);
@@ -336,7 +336,7 @@ export default function CompanionWindowView({
 
   // ── ROOMS & ASSIGNMENTS LOOKUPS ──
   const pl = appState?.planLekcji || { classes: [], teachers: [], subjects: [], rooms: [], assignments: [], lessons: {}, hours: [] };
-  const allRooms = pl.rooms || [];
+  const allRooms = useMemo(() => pl.rooms || [], [pl.rooms]);
   const hoursList: Hour[] = (pl.hours && pl.hours.length > 0) ? pl.hours : [
     { num: 1, start: '08:00', end: '08:45' },
     { num: 2, start: '08:55', end: '09:40' },

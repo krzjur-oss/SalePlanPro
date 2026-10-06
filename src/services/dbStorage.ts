@@ -63,6 +63,7 @@ export {
 export const STORAGE_KEYS = {
   APP_STATE: 'saleplan_v3_app_state',
   SCHED_DATA: 'saleplan_v3_sched_data',
+  STATE_META: 'saleplan_v3_state_meta',
   ARCHIVE: 'saleplan_v3_archive',
   SNAPSHOTS: 'saleplan_v3_snapshots',
   AUTOSAVE_VERSIONS: 'saleplan_v3_autosave_versions',
@@ -78,10 +79,47 @@ export const STORAGE_KEYS = {
   PRE_ENCRYPTION_BACKUP: 'saleplan_pre_encryption_backup',
 } as const;
 
-function isEncryptedObject(val: any): boolean {
+/**
+ * Checks if a SchedData record contains legacy or extraneous meta fields (revision, tabId, _revision, _tabId).
+ */
+export function hasSchedDataMeta(data: unknown): boolean {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  return 'revision' in data || 'tabId' in data || '_revision' in data || '_tabId' in data;
+}
+
+/**
+ * Strips revision, tabId, _revision, _tabId from the top level of SchedData.
+ * Guarantees SchedData passes strict SchedDataSchema validation without rejection.
+ */
+export function cleanSchedDataMeta<T = unknown>(data: T, key?: string): T {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return data;
+  }
+  const isSched = !key || key === STORAGE_KEYS.SCHED_DATA || key === 'saleplan_v3_sched_data';
+  if (!isSched) {
+    return data;
+  }
+
+  const obj = data as Record<string, unknown>;
+  if ('revision' in obj || 'tabId' in obj || '_revision' in obj || '_tabId' in obj) {
+    const cleaned: Record<string, unknown> = {};
+    for (const k of Object.keys(obj)) {
+      if (k !== 'revision' && k !== 'tabId' && k !== '_revision' && k !== '_tabId') {
+        cleaned[k] = obj[k];
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
+function isEncryptedObject(val: unknown): boolean {
   if (!val) return false;
-  if (typeof val === 'object' && (val.type === 'encrypted-v1' || val.type === 'encrypted-v2') && val.ciphertext) {
-    return true;
+  if (typeof val === 'object' && val !== null) {
+    const obj = val as Record<string, unknown>;
+    if ((obj.type === 'encrypted-v1' || obj.type === 'encrypted-v2') && !!obj.ciphertext) {
+      return true;
+    }
   }
   if (typeof val === 'string' && (val.includes('"type":"encrypted-v1"') || val.includes('"type":"encrypted-v2"'))) {
     try {
@@ -96,6 +134,25 @@ function isEncryptedObject(val: any): boolean {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 let isIndexedDBAvailable = true;
+let consecutiveIdbErrors = 0;
+const MAX_CONSECUTIVE_IDB_ERRORS = 3;
+
+/**
+ * Reset error counters and re-allow IndexedDB connection attempt
+ */
+export function resetIdbErrorCounter(): void {
+  consecutiveIdbErrors = 0;
+  isIndexedDBAvailable = true;
+  dbPromise = null;
+}
+
+export function getIsIndexedDBAvailable(): boolean {
+  return isIndexedDBAvailable;
+}
+
+export function getConsecutiveIdbErrors(): number {
+  return consecutiveIdbErrors;
+}
 
 /**
  * Open or initialize the IndexedDB database
@@ -120,18 +177,30 @@ function getDB(): Promise<IDBDatabase> {
       };
 
       request.onsuccess = (event) => {
+        consecutiveIdbErrors = 0;
+        isIndexedDBAvailable = true;
         const db = (event.target as IDBOpenDBRequest).result;
         resolve(db);
       };
 
       request.onerror = (event) => {
-        console.warn('IndexedDB open request error, falling back to localStorage:', event);
-        isIndexedDBAvailable = false;
-        reject((event.target as IDBOpenDBRequest).error);
+        consecutiveIdbErrors++;
+        dbPromise = null;
+        if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+          console.warn('IndexedDB open request error (repeated), falling back to localStorage:', event);
+          isIndexedDBAvailable = false;
+        } else {
+          console.warn(`IndexedDB open attempt failed (próba ${consecutiveIdbErrors}/${MAX_CONSECUTIVE_IDB_ERRORS}):`, event);
+        }
+        reject((event?.target as IDBOpenDBRequest)?.error || new Error('Nie udało się otworzyć bazy IndexedDB'));
       };
     } catch (err) {
-      console.warn('IndexedDB initialization failed:', err);
-      isIndexedDBAvailable = false;
+      consecutiveIdbErrors++;
+      dbPromise = null;
+      if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+        console.warn('IndexedDB initialization failed (repeated):', err);
+        isIndexedDBAvailable = false;
+      }
       reject(err);
     }
   });
@@ -142,11 +211,11 @@ function getDB(): Promise<IDBDatabase> {
 /**
  * Internal raw read without decryption (used for rollback, migration, and raw checks)
  */
-async function getRawItem<T = any>(key: string): Promise<T | null> {
+export async function getRawItem<T = unknown>(key: string): Promise<T | null> {
   if (isIndexedDBAvailable) {
     try {
       const db = await getDB();
-      const dbResult = await new Promise<any>((resolve) => {
+      const dbResult = await new Promise<unknown>((resolve) => {
         try {
           const tx = db.transaction(STORE_NAME, 'readonly');
           const store = tx.objectStore(STORE_NAME);
@@ -157,7 +226,7 @@ async function getRawItem<T = any>(key: string): Promise<T | null> {
           resolve(null);
         }
       });
-      if (dbResult !== null) return dbResult;
+      if (dbResult !== null) return dbResult as T;
     } catch {}
   }
 
@@ -172,7 +241,7 @@ async function getRawItem<T = any>(key: string): Promise<T | null> {
 /**
  * Internal raw write without encryption (used for rollback, pre-encryption backups, and metadata)
  */
-async function setRawItem(key: string, value: any): Promise<void> {
+async function setRawItem(key: string, value: unknown): Promise<void> {
   if (isIndexedDBAvailable) {
     try {
       const db = await getDB();
@@ -181,14 +250,29 @@ async function setRawItem(key: string, value: any): Promise<void> {
           const tx = db.transaction(STORE_NAME, 'readwrite');
           const store = tx.objectStore(STORE_NAME);
           const req = store.put(value, key);
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
+          req.onsuccess = () => {
+            consecutiveIdbErrors = 0;
+            resolve();
+          };
+          req.onerror = () => {
+            consecutiveIdbErrors++;
+            dbPromise = null;
+            if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+              isIndexedDBAvailable = false;
+            }
+            reject(req.error);
+          };
         } catch (err) {
+          consecutiveIdbErrors++;
+          dbPromise = null;
+          if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+            isIndexedDBAvailable = false;
+          }
           reject(err);
         }
       });
     } catch {
-      isIndexedDBAvailable = false;
+      // Do not permanently disable IDB on single error
     }
   }
 
@@ -199,23 +283,40 @@ async function setRawItem(key: string, value: any): Promise<void> {
 }
 
 /**
- * Internal raw remove
+ * Raw remove item from both IndexedDB and localStorage
  */
-async function removeRawItem(key: string): Promise<void> {
-  try {
-    const db = await getDB();
-    await new Promise<void>((resolve, reject) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.delete(key);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      } catch (err) {
-        reject(err);
-      }
-    });
-  } catch {}
+export async function removeRawItem(key: string): Promise<void> {
+  if (isIndexedDBAvailable) {
+    try {
+      const db = await getDB();
+      await new Promise<void>((resolve, reject) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.delete(key);
+          req.onsuccess = () => {
+            consecutiveIdbErrors = 0;
+            resolve();
+          };
+          req.onerror = () => {
+            consecutiveIdbErrors++;
+            dbPromise = null;
+            if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+              isIndexedDBAvailable = false;
+            }
+            reject(req.error);
+          };
+        } catch (err) {
+          consecutiveIdbErrors++;
+          dbPromise = null;
+          if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+            isIndexedDBAvailable = false;
+          }
+          reject(err);
+        }
+      });
+    } catch {}
+  }
 
   try {
     localStorage.removeItem(key);
@@ -228,11 +329,17 @@ async function removeRawItem(key: string): Promise<void> {
  * - Seamlessly decrypts 'encrypted-v1' payloads (100,000 iterations)
  * - Auto-migrates decrypted v1 items to 'encrypted-v2' once session is unlocked
  */
-async function processRetrievedValue<T>(rawVal: any, key?: string): Promise<T | null> {
+async function processRetrievedValue<T>(rawVal: unknown, key?: string): Promise<T | null> {
   if (rawVal === null || rawVal === undefined) return null;
 
   if (isEncryptedObject(rawVal)) {
-    const payload = typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal;
+    const payload = (typeof rawVal === 'string' ? JSON.parse(rawVal) : rawVal) as {
+      type?: string;
+      ciphertext?: string;
+      iv?: string;
+      salt?: string;
+      iterations?: number;
+    };
 
     let sessionKey = getSessionCryptoKey();
     const pwd = getSessionPassword();
@@ -254,7 +361,7 @@ async function processRetrievedValue<T>(rawVal: any, key?: string): Promise<T | 
           setSessionCryptoKey(sessionKey);
         }
 
-        if (sessionKey) {
+        if (sessionKey && payload.iv && payload.ciphertext) {
           decryptedStr = await decryptWithKey(payload.iv, payload.ciphertext, sessionKey);
         } else if (pwd) {
           decryptedStr = await decryptText(JSON.stringify(payload), pwd);
@@ -279,7 +386,14 @@ async function processRetrievedValue<T>(rawVal: any, key?: string): Promise<T | 
         }
       }
 
-      return JSON.parse(decryptedStr) as T;
+      let parsed = JSON.parse(decryptedStr);
+      if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(parsed)) {
+        parsed = cleanSchedDataMeta(parsed, key);
+        setTimeout(() => {
+          setStorageItem(STORAGE_KEYS.SCHED_DATA, parsed).catch(() => {});
+        }, 20);
+      }
+      return parsed as T;
     } catch (e) {
       console.warn('Failed to decrypt storage item:', e);
       return null;
@@ -292,10 +406,10 @@ async function processRetrievedValue<T>(rawVal: any, key?: string): Promise<T | 
 /**
  * Get an item from storage (tries IndexedDB first, falls back to localStorage or in-memory)
  */
-export async function getStorageItem<T = any>(key: string): Promise<T | null> {
+export async function getStorageItem<T = unknown>(key: string): Promise<T | null> {
   try {
     const db = await getDB();
-    const rawResult = await new Promise<any>((resolve) => {
+    const rawResult = await new Promise<unknown>((resolve) => {
       try {
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
@@ -346,8 +460,18 @@ export async function getStorageItem<T = any>(key: string): Promise<T | null> {
       }
     });
 
-    const val = await processRetrievedValue<T>(rawResult, key);
+    let val = await processRetrievedValue<T>(rawResult, key);
     if (val === null || val === undefined) return null;
+
+    // Backward migration & sanitization: remove revision/tabId/_revision/_tabId from SCHED_DATA before validation
+    if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
+      val = cleanSchedDataMeta(val, key);
+      // Persist cleaned version back to storage and localStorage mirror
+      try {
+        await setStorageItem(key, val);
+      } catch {}
+    }
+
     const schema = getStorageSchemaForKey(key);
     if (schema) {
       const parsed = schema.safeParse(val);
@@ -362,8 +486,17 @@ export async function getStorageItem<T = any>(key: string): Promise<T | null> {
     try {
       const valLocal = localStorage.getItem(key);
       const parsedLocal = valLocal ? JSON.parse(valLocal) : null;
-      const val = await processRetrievedValue<T>(parsedLocal, key);
+      let val = await processRetrievedValue<T>(parsedLocal, key);
       if (val === null || val === undefined) return null;
+
+      // Backward migration & sanitization: remove revision/tabId/_revision/_tabId from SCHED_DATA before validation
+      if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
+        val = cleanSchedDataMeta(val, key);
+        try {
+          await setStorageItem(key, val);
+        } catch {}
+      }
+
       const schema = getStorageSchemaForKey(key);
       if (schema) {
         const parsed = schema.safeParse(val);
@@ -384,7 +517,7 @@ export async function getStorageItem<T = any>(key: string): Promise<T | null> {
  * Synchronous read fallback for initial React render (reads from localStorage or returns null).
  * Returns null if the stored value is encrypted and requires async decryption.
  */
-export function getStorageItemSync<T = any>(key: string): T | null {
+export function getStorageItemSync<T = unknown>(key: string): T | null {
   try {
     const val = localStorage.getItem(key);
     if (val !== null) {
@@ -392,7 +525,14 @@ export function getStorageItemSync<T = any>(key: string): T | null {
         return null;
       }
       try {
-        return JSON.parse(val) as T;
+        let parsed = JSON.parse(val);
+        if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(parsed)) {
+          parsed = cleanSchedDataMeta(parsed, key);
+          try {
+            localStorage.setItem(key, JSON.stringify(parsed));
+          } catch {}
+        }
+        return parsed as T;
       } catch {
         return val as unknown as T;
       }
@@ -408,13 +548,23 @@ export class StorageLockedError extends Error {
   }
 }
 
+export class StorageWriteError extends Error {
+  constructor(message = 'Nie udało się zapisać danych w magazynie przeglądarki.') {
+    super(message);
+    this.name = 'StorageWriteError';
+  }
+}
+
 /**
  * Save an item to storage (persists to IndexedDB and syncs to localStorage when size permits).
  * If database encryption is active, encrypts data with AES-256 GCM using the session CryptoKey.
  * Eliminates PBKDF2 derivation overhead during normal writes.
  */
-export async function setStorageItem<T = any>(key: string, value: T): Promise<void> {
-  let valueToStore: any = value;
+export async function setStorageItem<T = unknown>(key: string, value: T): Promise<void> {
+  let valueToStore: unknown = value;
+  if (key === STORAGE_KEYS.SCHED_DATA) {
+    valueToStore = cleanSchedDataMeta(value, key);
+  }
 
   // Check if encryption is active and key should be encrypted
   if (
@@ -445,7 +595,7 @@ export async function setStorageItem<T = any>(key: string, value: T): Promise<vo
     }
 
     try {
-      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      const serialized = typeof valueToStore === 'string' ? valueToStore : JSON.stringify(valueToStore);
       // Fast non-blocking AES-256 GCM encryption using the pre-derived session CryptoKey
       // Random 12-byte IV for every write
       const { iv, ciphertext } = await encryptWithKey(serialized, sessionKey);
@@ -463,6 +613,8 @@ export async function setStorageItem<T = any>(key: string, value: T): Promise<vo
     }
   }
 
+  let idbWriteSucceeded = false;
+
   // Update IndexedDB if available
   if (isIndexedDBAvailable) {
     try {
@@ -473,25 +625,51 @@ export async function setStorageItem<T = any>(key: string, value: T): Promise<vo
           const store = tx.objectStore(STORE_NAME);
           const req = store.put(valueToStore, key);
 
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
+          req.onsuccess = () => {
+            consecutiveIdbErrors = 0;
+            idbWriteSucceeded = true;
+            resolve();
+          };
+          req.onerror = () => {
+            consecutiveIdbErrors++;
+            dbPromise = null;
+            if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+              isIndexedDBAvailable = false;
+            }
+            reject(req.error);
+          };
         } catch (err) {
+          consecutiveIdbErrors++;
+          dbPromise = null;
+          if (consecutiveIdbErrors >= MAX_CONSECUTIVE_IDB_ERRORS) {
+            isIndexedDBAvailable = false;
+          }
           reject(err);
         }
       });
     } catch (err) {
-      isIndexedDBAvailable = false;
-      console.warn(`Could not save "${key}" to IndexedDB, using localStorage:`, err);
+      console.warn(`Could not save "${key}" to IndexedDB:`, err);
     }
   }
 
   // Also maintain localStorage mirror for fast synchronous initial render if payload is reasonable
+  let localStorageSaved = false;
   try {
     const serialized = typeof valueToStore === 'string' ? valueToStore : JSON.stringify(valueToStore);
     if (serialized.length < 2.5 * 1024 * 1024) {
       localStorage.setItem(key, serialized);
+      localStorageSaved = true;
+    } else {
+      console.info(`Pominięto lustro localStorage dla "${key}" ze względu na rozmiar (${serialized.length} B >= 2.5 MB).`);
     }
-  } catch {}
+  } catch (err) {
+    console.warn(`Zapis lustra localStorage dla "${key}" nie powiódł się (np. QuotaExceeded):`, err);
+  }
+
+  // Task 1: Gdy zapis do IndexedDB się nie uda ORAZ lustro localStorage jest pominięte -> rzuć StorageWriteError
+  if (!idbWriteSucceeded && !localStorageSaved) {
+    throw new StorageWriteError(`Błąd zapisu: nie udało się zapisać danych dla klucza "${key}" ani w bazie IndexedDB, ani w pamięci podręcznej localStorage.`);
+  }
 }
 
 /**
@@ -505,6 +683,7 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
   const keysToEncrypt = [
     STORAGE_KEYS.APP_STATE,
     STORAGE_KEYS.SCHED_DATA,
+    STORAGE_KEYS.STATE_META,
     STORAGE_KEYS.ARCHIVE,
     STORAGE_KEYS.SNAPSHOTS,
     STORAGE_KEYS.AUTOSAVE_VERSIONS,
@@ -515,9 +694,16 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
   ];
 
   // 1. Collect all current plaintext data
-  const currentData: Record<string, any> = {};
+  const currentData: Record<string, unknown> = {};
   for (const k of keysToEncrypt) {
+    const rawRecord = await getRawItem(k);
     const val = await getStorageItem(k);
+
+    // Task 4: treat null from getStorageItem for physically existing key as critical error -> abort & rollback
+    if (rawRecord !== null && rawRecord !== undefined && (val === null || val === undefined)) {
+      throw new Error(`Klucz "${k}" fizycznie istnieje w bazie danych, ale nie mógł zostać poprawnie odczytany przez getStorageItem (błąd integralności lub walidacji schematu).`);
+    }
+
     if (val !== null && val !== undefined) {
       currentData[k] = JSON.parse(JSON.stringify(val));
     }
@@ -581,6 +767,7 @@ export async function disableDatabaseEncryption(password: string): Promise<boole
   const keysToDecrypt = [
     STORAGE_KEYS.APP_STATE,
     STORAGE_KEYS.SCHED_DATA,
+    STORAGE_KEYS.STATE_META,
     STORAGE_KEYS.ARCHIVE,
     STORAGE_KEYS.SNAPSHOTS,
     STORAGE_KEYS.AUTOSAVE_VERSIONS,
@@ -590,9 +777,13 @@ export async function disableDatabaseEncryption(password: string): Promise<boole
     STORAGE_KEYS.ACTIVE_VARIANT_ID,
   ];
 
-  const currentData: Record<string, any> = {};
+  const currentData: Record<string, unknown> = {};
   for (const k of keysToDecrypt) {
+    const rawRecord = await getRawItem(k);
     const val = await getStorageItem(k);
+    if (rawRecord !== null && rawRecord !== undefined && (val === null || val === undefined)) {
+      throw new Error(`Klucz "${k}" fizycznie istnieje w bazie danych, ale nie mógł zostać poprawnie odszyfrowany.`);
+    }
     if (val !== null && val !== undefined) {
       currentData[k] = val;
     }
@@ -619,6 +810,7 @@ export async function changeDatabaseEncryptionPassword(oldPass: string, newPass:
   const keys = [
     STORAGE_KEYS.APP_STATE,
     STORAGE_KEYS.SCHED_DATA,
+    STORAGE_KEYS.STATE_META,
     STORAGE_KEYS.ARCHIVE,
     STORAGE_KEYS.SNAPSHOTS,
     STORAGE_KEYS.AUTOSAVE_VERSIONS,
@@ -628,9 +820,13 @@ export async function changeDatabaseEncryptionPassword(oldPass: string, newPass:
     STORAGE_KEYS.ACTIVE_VARIANT_ID,
   ];
 
-  const currentData: Record<string, any> = {};
+  const currentData: Record<string, unknown> = {};
   for (const k of keys) {
+    const rawRecord = await getRawItem(k);
     const val = await getStorageItem(k);
+    if (rawRecord !== null && rawRecord !== undefined && (val === null || val === undefined)) {
+      throw new Error(`Klucz "${k}" fizycznie istnieje w bazie danych, ale nie mógł zostać poprawnie odczytany.`);
+    }
     if (val !== null && val !== undefined) {
       currentData[k] = val;
     }
@@ -659,6 +855,7 @@ export async function migrateAllStoredItemsToV2(): Promise<number> {
   const keys = [
     STORAGE_KEYS.APP_STATE,
     STORAGE_KEYS.SCHED_DATA,
+    STORAGE_KEYS.STATE_META,
     STORAGE_KEYS.ARCHIVE,
     STORAGE_KEYS.SNAPSHOTS,
     STORAGE_KEYS.AUTOSAVE_VERSIONS,
@@ -670,8 +867,8 @@ export async function migrateAllStoredItemsToV2(): Promise<number> {
 
   let migrated = 0;
   for (const k of keys) {
-    const raw = await getRawItem(k);
-    if (raw && (raw.type === 'encrypted-v1' || (typeof raw === 'string' && raw.includes('"type":"encrypted-v1"')))) {
+    const raw = await getRawItem<Record<string, unknown> | string>(k);
+    if (raw && ((typeof raw === 'object' && raw.type === 'encrypted-v1') || (typeof raw === 'string' && raw.includes('"type":"encrypted-v1"')))) {
       const val = await getStorageItem(k);
       if (val !== null) {
         await setStorageItem(k, val);
@@ -756,6 +953,7 @@ export async function migrateFromLocalStorage(): Promise<{ migratedCount: number
     const keysToMigrate = [
       STORAGE_KEYS.APP_STATE,
       STORAGE_KEYS.SCHED_DATA,
+      STORAGE_KEYS.STATE_META,
       STORAGE_KEYS.ARCHIVE,
       STORAGE_KEYS.SNAPSHOTS,
       STORAGE_KEYS.AUTOSAVE_VERSIONS,
@@ -769,10 +967,13 @@ export async function migrateFromLocalStorage(): Promise<{ migratedCount: number
       try {
         const raw = localStorage.getItem(key);
         if (raw !== null) {
-          let parsed: any = raw;
+          let parsed: unknown = raw;
           try {
             parsed = JSON.parse(raw);
           } catch {}
+          if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(parsed)) {
+            parsed = cleanSchedDataMeta(parsed, key);
+          }
           await setStorageItem(key, parsed);
           migratedCount++;
         }
@@ -812,7 +1013,7 @@ export async function getDetailedStorageStats(): Promise<StorageStatistics> {
   // 1. Calculate approximate size of stored data
   try {
     const db = await getDB();
-    const allData = await new Promise<any[]>((resolve) => {
+    const allData = await new Promise<unknown[]>((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();

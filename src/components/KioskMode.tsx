@@ -6,6 +6,7 @@ import {
   Eye, EyeOff, Volume2, Edit3, Check, ArrowRight, MessageSquare, RotateCcw
 } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey } from '../utils';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 
 export interface KioskModeProps {
   appState: AppState;
@@ -134,7 +135,7 @@ export default function KioskMode({
         room: c.room,
         roomIdx: c.roomIdx
       });
-      cache.set(ck, c.room.name || c.room.num || 'Sala');
+      cache.set(ck, c.room.num || (c.room as any).name || 'Sala');
     });
     return (ck: string) => cache.get(ck) || '';
   }, [flatColumns]);
@@ -532,7 +533,7 @@ export default function KioskMode({
 
   return (
     <div 
-      className={`fixed inset-0 z-[100] flex flex-col select-none overflow-hidden ${
+      className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} flex flex-col select-none overflow-hidden ${
         isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'
       }`}
     >
@@ -1398,7 +1399,7 @@ export default function KioskMode({
       {/* ── MODAL EDYCJI KOMUNIKATU SZKOŁY DLA TABLETÓW I EKRANÓW DOTYKOWYCH ── */}
       {showAnnouncementModal && (
         <div 
-          className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-150"
+          className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-150`}
           onClick={() => setShowAnnouncementModal(false)}
         >
           <div 

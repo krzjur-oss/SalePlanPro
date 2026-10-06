@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom, Class, SchoolGroup } from '../types';
 import { colKey, flattenColumns, esc, hexRgba, mergeClassNames, cleanFloorName } from '../utils';
 import { 
@@ -953,11 +953,11 @@ export default function PlanSal({
     return poolLessons.filter(l => l.hourKey === editingCell.hour);
   }, [poolLessons, editingCell]);
 
-  const isLessonAssignedElsewhere = (l: { className: string; rawClassName: string }) => {
+  const isLessonAssignedElsewhere = useCallback((l: { className: string; rawClassName: string }) => {
     const info = assignedLessonsMap.get(l.className.toUpperCase()) || 
                  assignedLessonsMap.get(l.rawClassName.toUpperCase());
     return !!(info && !info.isCurrentCell);
-  };
+  }, [assignedLessonsMap]);
 
   const getAssignedRoomName = (l: { className: string; rawClassName: string }) => {
     const info = assignedLessonsMap.get(l.className.toUpperCase()) || 
@@ -967,11 +967,11 @@ export default function PlanSal({
 
   const unassignedHourLessons = useMemo(() => {
     return hourLessons.filter(l => !isLessonAssignedElsewhere(l));
-  }, [hourLessons, assignedLessonsMap]);
+  }, [hourLessons, isLessonAssignedElsewhere]);
 
   const assignedHourLessons = useMemo(() => {
     return hourLessons.filter(l => isLessonAssignedElsewhere(l));
-  }, [hourLessons, assignedLessonsMap]);
+  }, [hourLessons, isLessonAssignedElsewhere]);
 
   const scheduledClasses = useMemo(() => {
     return Array.from(new Set(hourLessons.map(l => l.className))).sort();
@@ -1478,7 +1478,7 @@ export default function PlanSal({
       detected,       // key: "h|cKey", value: array of description strings
       slotConflicts   // key: "h|cKey|slotIdx", value: array of description strings
     };
-  }, [currentDayData, appState.hours, appState.floors, appState.buildings, roomsMap]);
+  }, [currentDayData, appState, activeDay, assignmentsMap, roomsMap]);
 
   // ── HANDLING MODAL ACTIONS ──
 

@@ -46,7 +46,14 @@ export default defineConfig(() => {
       },
     },
     build: {
+      chunkSizeWarningLimit: 650,
       rollupOptions: {
+        onwarn(warning, warn) {
+          if (warning.code === 'INVALID_ANNOTATION' || warning.message?.includes('@__PURE__')) {
+            return;
+          }
+          warn(warning);
+        },
         output: {
           manualChunks(id) {
             if (id.includes('node_modules/recharts')) {
@@ -57,6 +64,12 @@ export default defineConfig(() => {
             }
             if (id.includes('node_modules/motion')) {
               return 'vendor-motion';
+            }
+            if (id.includes('node_modules/@dnd-kit')) {
+              return 'vendor-dnd';
+            }
+            if (id.includes('node_modules/zod')) {
+              return 'vendor-zod';
             }
             if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
               return 'vendor-react';

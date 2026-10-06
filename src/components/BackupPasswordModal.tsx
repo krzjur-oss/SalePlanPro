@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, Unlock, Eye, EyeOff, ShieldAlert, Key, Download, Upload, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 
 interface BackupPasswordModalProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ export default function BackupPasswordModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} flex items-center justify-center p-4`}>
         {/* Backdrop overlay */}
         <motion.div
           initial={{ opacity: 0 }}

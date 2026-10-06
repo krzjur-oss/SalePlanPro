@@ -9,6 +9,7 @@ import {
   Clock, ArrowRight, RefreshCw, Layers, Check, Search, FileJson
 } from 'lucide-react';
 import { getStorageItem, setStorageItem, STORAGE_KEYS } from '../services/dbStorage';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 import { uid } from '../utils';
 
 interface StructureTemplatesModalProps {
@@ -846,7 +847,7 @@ export default function StructureTemplatesModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in">
+    <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fade-in`}>
       <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl max-w-5xl w-full h-[90vh] flex flex-col overflow-hidden">
         
         {/* MODAL HEADER */}

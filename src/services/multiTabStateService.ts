@@ -2,7 +2,9 @@
 // BroadcastChannel: 'saleplan-state' (separate from dual-screen channel)
 // Guarantees that two tabs editing the same plan do not silently overwrite changes.
 
-import { STORAGE_KEYS, getStorageItem } from './dbStorage';
+import { STORAGE_KEYS, getStorageItem, setStorageItem, cleanSchedDataMeta } from './dbStorage';
+import { AppState, SchedData } from '../types';
+import { StateMeta } from '../utils/validationSchemas';
 
 export const MULTI_TAB_STATE_CHANNEL = 'saleplan-state';
 
@@ -19,7 +21,7 @@ export interface ConflictCheckResult {
   localRevision: number;
   dbRevision: number;
   dbTabId: string;
-  dbRecord: any;
+  dbRecord: unknown;
 }
 
 class MultiTabStateService {
@@ -33,22 +35,27 @@ class MultiTabStateService {
     this.initChannel();
   }
 
+  private generateNewTabId(): string {
+    return 'tab_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+  }
+
   private initTabId() {
+    // Generate fresh tabId kept strictly in module memory (no sessionStorage to avoid duplicate ID on duplicate tab)
+    this.tabId = this.generateNewTabId();
+
     if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('saleplan_tab_id');
-        if (stored) {
-          this.tabId = stored;
-          return;
+      window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+          // Page was restored from bfcache - generate a new unique tabId
+          this.tabId = this.generateNewTabId();
         }
-      } catch {}
+      });
     }
-    this.tabId = 'tab_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
-    if (typeof window !== 'undefined') {
-      try {
-        sessionStorage.setItem('saleplan_tab_id', this.tabId);
-      } catch {}
-    }
+  }
+
+  public regenerateTabId(): string {
+    this.tabId = this.generateNewTabId();
+    return this.tabId;
   }
 
   private initChannel() {
@@ -82,43 +89,44 @@ class MultiTabStateService {
   }
 
   /**
-   * Enriches an object (AppState or SchedData) with revision counter and tabId.
+   * Enriches an object (e.g. AppState) with revision counter and tabId.
    */
   public enrichWithRevision<T extends object>(
     payload: T,
     revision: number,
     tabId?: string
-  ): T & { revision: number; tabId: string; _revision: number; _tabId: string } {
+  ): T & { revision: number; tabId: string } {
     const tid = tabId || this.getTabId();
     const rev = Math.max(1, Math.floor(revision));
     return {
       ...payload,
       revision: rev,
-      tabId: tid,
-      _revision: rev,
-      _tabId: tid
+      tabId: tid
     };
   }
 
   /**
-   * Extracts revision number from a stored record.
+   * Extracts revision number from a stored record or state meta.
    */
-  public extractRevision(record: any): number {
+  public extractRevision(record: unknown): number {
     if (!record || typeof record !== 'object') return 0;
-    const rev = record.revision ?? record._revision;
+    const rec = record as Record<string, unknown>;
+    const rev = rec.revision ?? rec._revision;
     return typeof rev === 'number' && !isNaN(rev) ? rev : 0;
   }
 
   /**
-   * Extracts tabId from a stored record.
+   * Extracts tabId from a stored record or state meta.
    */
-  public extractTabId(record: any): string {
+  public extractTabId(record: unknown): string {
     if (!record || typeof record !== 'object') return '';
-    return String(record.tabId ?? record._tabId ?? '');
+    const rec = record as Record<string, unknown>;
+    return String(rec.tabId ?? rec._tabId ?? '');
   }
 
   /**
    * Checks whether saving to IndexedDB would overwrite a newer version saved by another tab.
+   * Checks dedicated 'saleplan_v3_state_meta' record, falling back to dbRecord.
    * If db has a higher revision saved by a different tabId -> returns hasConflict: true.
    */
   public async checkSaveConflict(
@@ -126,10 +134,23 @@ class MultiTabStateService {
     localRev?: number
   ): Promise<ConflictCheckResult> {
     const localRevision = localRev !== undefined ? localRev : this.getLocalRevision(key);
-    let dbRecord: any = null;
+    let stateMeta: StateMeta | null = null;
+    let dbRecord: unknown = null;
 
     try {
-      dbRecord = await getStorageItem<any>(key);
+      stateMeta = await getStorageItem<StateMeta>(STORAGE_KEYS.STATE_META);
+      if (!stateMeta && typeof localStorage !== 'undefined') {
+        const localMetaRaw = localStorage.getItem(STORAGE_KEYS.STATE_META);
+        if (localMetaRaw) {
+          try { stateMeta = JSON.parse(localMetaRaw); } catch {}
+        }
+      }
+    } catch (e) {
+      console.warn('[multiTabStateService] Nie udało się odczytać STATE_META:', e);
+    }
+
+    try {
+      dbRecord = await getStorageItem<unknown>(key);
       if (!dbRecord && typeof localStorage !== 'undefined') {
         const localRaw = localStorage.getItem(key);
         if (localRaw) {
@@ -144,13 +165,19 @@ class MultiTabStateService {
       console.warn(`[multiTabStateService] Nie udało się odczytać bieżącego rekordu "${key}":`, e);
     }
 
-    const dbRevision = this.extractRevision(dbRecord);
-    const dbTabId = this.extractTabId(dbRecord);
+    const dbRevision = (stateMeta && typeof stateMeta.revision === 'number')
+      ? stateMeta.revision
+      : this.extractRevision(dbRecord);
+
+    const dbTabId = (stateMeta && typeof stateMeta.tabId === 'string' && stateMeta.tabId)
+      ? stateMeta.tabId
+      : this.extractTabId(dbRecord);
+
     const myTabId = this.getTabId();
 
-    // Conflict condition: DB record exists, has a different tabId, and has a strictly higher revision than local
+    // Conflict condition: DB record or stateMeta exists, has a different tabId, and has a strictly higher revision than local
     const hasConflict = Boolean(
-      dbRecord &&
+      (stateMeta || dbRecord) &&
       dbTabId &&
       dbTabId !== myTabId &&
       dbRevision > localRevision
@@ -194,10 +221,11 @@ class MultiTabStateService {
     };
   }
 
-  private handleIncoming(data: any) {
+  private handleIncoming(data: unknown) {
     if (!data || typeof data !== 'object') return;
-    if (data.tabId === this.getTabId()) return; // ignore self
-    if (data.type === 'STATE_COMMITTED') {
+    const msg = data as Partial<MultiTabStateMessage>;
+    if (msg.tabId === this.getTabId()) return; // ignore self
+    if (msg.type === 'STATE_COMMITTED') {
       this.subscribers.forEach(cb => {
         try {
           cb(data as MultiTabStateMessage);
@@ -206,6 +234,44 @@ class MultiTabStateService {
         }
       });
     }
+  }
+
+  /**
+   * Persists AppState and SchedData with multi-tab conflict checking.
+   * - SchedData is strictly saved raw / stripped of meta keys (cleanSchedDataMeta).
+   * - Revision and tabId are stored in AppState and in dedicated 'saleplan_v3_state_meta' key.
+   * - Saves strictly in sequential order: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META.
+   */
+  public async persistAppStateAndSchedWithConflictCheck(
+    targetAppState: AppState,
+    targetSchedData: SchedData,
+    forceOverwrite: boolean = false
+  ): Promise<boolean> {
+    const currentLocalRev = this.getLocalRevision(STORAGE_KEYS.APP_STATE);
+
+    if (!forceOverwrite) {
+      const conflict = await this.checkSaveConflict(STORAGE_KEYS.APP_STATE, currentLocalRev);
+      if (conflict.hasConflict) {
+        return false;
+      }
+    }
+
+    const nextRev = currentLocalRev + 1;
+    const enrichedState = this.enrichWithRevision(targetAppState, nextRev);
+    const cleanSched = cleanSchedDataMeta(targetSchedData);
+
+    // Save strictly in order: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META
+    await setStorageItem(STORAGE_KEYS.APP_STATE, enrichedState);
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanSched);
+    await setStorageItem(STORAGE_KEYS.STATE_META, {
+      revision: nextRev,
+      tabId: this.getTabId(),
+      updatedAt: new Date().toISOString()
+    });
+    this.setLocalRevision(nextRev, STORAGE_KEYS.APP_STATE);
+    this.broadcastStateCommitted(STORAGE_KEYS.APP_STATE, nextRev);
+
+    return true;
   }
 
   public destroy() {
@@ -218,3 +284,11 @@ class MultiTabStateService {
 }
 
 export const multiTabStateService = new MultiTabStateService();
+
+export const persistAppStateAndSchedWithConflictCheck = (
+  targetAppState: AppState,
+  targetSchedData: SchedData,
+  forceOverwrite: boolean = false
+): Promise<boolean> => {
+  return multiTabStateService.persistAppStateAndSchedWithConflictCheck(targetAppState, targetSchedData, forceOverwrite);
+};

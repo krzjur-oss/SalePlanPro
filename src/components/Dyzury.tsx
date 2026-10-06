@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState } from '../types';
+import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState, SchedData, SchedCell, Teacher } from '../types';
 import { esc, colKey, flattenColumns, uid } from '../utils';
 import { 
   Shield, Timer, RefreshCcw, Trash2, Edit3, Plus, Settings, Check, HelpCircle 
@@ -28,7 +28,7 @@ const getBreakDuration = (p: Przerwa): number => {
 interface DyzuryProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
-  schedData: any;
+  schedData: SchedData;
   presentationMode?: boolean;
 }
 
@@ -121,11 +121,13 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const yk = appState.yearKey;
     const yearData = schedData[yk] || {};
 
-    Object.values(yearData).forEach((dayData: any) => {
-      Object.values(dayData).forEach((hourData: any) => {
-        Object.values(hourData).forEach((cell: any) => {
-          const cells = Array.isArray(cell) ? cell : [cell];
-          cells.forEach((c: any) => {
+    Object.values(yearData).forEach((dayData) => {
+      if (!dayData || typeof dayData !== 'object') return;
+      Object.values(dayData).forEach((hourData) => {
+        if (!hourData || typeof hourData !== 'object') return;
+        Object.values(hourData).forEach((cell) => {
+          const cells: SchedCell[] = Array.isArray(cell) ? (cell as SchedCell[]) : (cell ? [cell as SchedCell] : []);
+          cells.forEach((c) => {
             if (c?.teacherAbbr) {
               hours[c.teacherAbbr] = (hours[c.teacherAbbr] || 0) + 1;
             }
@@ -591,7 +593,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       const cell = hourData[cKey];
       if (!cell) return false;
       const cells = Array.isArray(cell) ? cell : [cell];
-      return cells.some((c: any) => c?.teacherAbbr === abbr);
+      return cells.some((c: SchedCell) => c?.teacherAbbr === abbr);
     });
   };
 
@@ -599,7 +601,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     teacherAbbr: string,
     day: number,
     candidateBreakNum: number,
-    currentHarm: any,
+    currentHarm: Record<string, DyzurEntry>,
     miejsca: MiejsceDyzuru[],
     przerwy: Przerwa[]
   ): boolean => {
@@ -642,9 +644,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       const hNum = parseInt(hourKey);
       if (!isNaN(hNum)) {
         const hourData = dayData[hourKey] || {};
-        const hasClass = Object.values(hourData).some((cell: any) => {
+        const hasClass = Object.values(hourData).some((cell) => {
           const cells = Array.isArray(cell) ? cell : [cell];
-          return cells.some((c: any) => c?.teacherAbbr === abbr);
+          return cells.some((c: SchedCell) => c?.teacherAbbr === abbr);
         });
         if (hasClass) {
           activeHours.push(hNum);

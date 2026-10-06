@@ -72,7 +72,7 @@ export function base64ToArrayBuffer(base64: string): Uint8Array {
   if (typeof Buffer !== 'undefined') {
     return new Uint8Array(Buffer.from(base64, 'base64'));
   }
-  const binaryString = typeof atob === 'function' ? atob(base64) : (window as any).atob(base64);
+  const binaryString = typeof atob === 'function' ? atob(base64) : window.atob(base64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) {
@@ -206,7 +206,13 @@ export async function decryptText(encryptedJsonStr: string, password: string): P
     throw new Error('Password is required for decryption');
   }
 
-  let payload: any;
+  let payload: {
+    type?: string;
+    salt?: string;
+    iv?: string;
+    ciphertext?: string;
+    iterations?: number;
+  };
   try {
     payload = typeof encryptedJsonStr === 'string' ? JSON.parse(encryptedJsonStr) : encryptedJsonStr;
   } catch (e) {
@@ -329,10 +335,31 @@ export function isSessionUnlocked(): boolean {
   return inMemorySessionCryptoKey !== null || inMemoryMasterPassword !== null;
 }
 
+export type BeforeLockHook = () => Promise<void> | void;
+let beforeLockHook: BeforeLockHook | null = null;
+
 /**
- * Immediately locks the session: clears in-memory keys and notifies listeners.
+ * Registers an asynchronous hook to be executed before the session is locked.
+ * Used to flush pending in-memory state (stateRef) to storage while crypto keys are still available.
  */
-export function lockSession(): void {
+export function setBeforeLockHook(hook: BeforeLockHook | null): void {
+  beforeLockHook = hook;
+}
+
+/**
+ * Locks the session:
+ * 1. Executes registered beforeLockHook (flush of unsaved state).
+ * 2. Clears in-memory keys and cached password.
+ * 3. Emits 'saleplan-session-locked' event AFTER flush finishes.
+ */
+export async function lockSession(): Promise<void> {
+  if (beforeLockHook) {
+    try {
+      await beforeLockHook();
+    } catch (e) {
+      console.warn('Błąd podczas wykonywania flush przed zablokowaniem sesji:', e);
+    }
+  }
   inMemorySessionCryptoKey = null;
   inMemoryMasterPassword = null;
   if (typeof window !== 'undefined') {
@@ -390,9 +417,9 @@ export function resetAutoLockTimer(): void {
     return;
   }
 
-  autoLockTimer = setTimeout(() => {
+  autoLockTimer = setTimeout(async () => {
     if (isDatabaseEncryptionActive() && isSessionUnlocked()) {
-      lockSession();
+      await lockSession();
     }
   }, mins * 60 * 1000);
 }

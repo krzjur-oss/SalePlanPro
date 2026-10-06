@@ -7,9 +7,11 @@ import {
   Filter, CheckCircle2, AlertTriangle, ArrowRight, ShieldCheck, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 import { 
   AppState, 
   SchedData, 
+  SchedCell,
   ArchiveEntry, 
   SnapshotEntry, 
   AppEventLog 
@@ -256,12 +258,12 @@ export default function ImportModal({
       }));
       setJustDecryptedId(fileId);
       setTimeout(() => setJustDecryptedId(null), 5000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setFiles(prev => prev.map(f => {
         if (f.id === fileId) {
           return {
             ...f,
-            decryptError: err.message || 'Niepoprawne hasło lub błąd odszyfrowywania. Upewnij się, że wpisujesz hasło ustalone podczas eksportu.'
+            decryptError: (err instanceof Error ? err.message : '') || 'Niepoprawne hasło lub błąd odszyfrowywania. Upewnij się, że wpisujesz hasło ustalone podczas eksportu.'
           };
         }
         return f;
@@ -504,15 +506,15 @@ export default function ImportModal({
       let schedPlacements4_8 = 0;
       let schedTotal = 0;
 
-      Object.values(testSched || {}).forEach((year: any) => {
+      Object.values(testSched || {}).forEach((year: unknown) => {
         if (!year || typeof year !== 'object') return;
-        Object.values(year).forEach((day: any) => {
+        Object.values(year as Record<string, unknown>).forEach((day: unknown) => {
           if (!day || typeof day !== 'object') return;
-          Object.values(day).forEach((hour: any) => {
+          Object.values(day as Record<string, unknown>).forEach((hour: unknown) => {
             if (!hour || typeof hour !== 'object') return;
-            Object.values(hour).forEach((cell: any) => {
+            Object.values(hour as Record<string, unknown>).forEach((cell: unknown) => {
               if (cell) {
-                const cellsArr = Array.isArray(cell) ? cell : [cell];
+                const cellsArr = Array.isArray(cell) ? (cell as SchedCell[]) : [cell as SchedCell];
                 cellsArr.forEach(c => {
                   if (c) {
                     schedTotal++;
@@ -589,7 +591,7 @@ export default function ImportModal({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5">
+        <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} flex items-center justify-center p-3 sm:p-5`}>
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -1113,7 +1115,7 @@ export default function ImportModal({
                                   <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Nauczyciele:</label>
                                   <select
                                     value={activeConfig.teachersMode}
-                                    onChange={(e) => updateActiveConfig(c => ({ ...c, teachersMode: e.target.value as any }))}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, teachersMode: e.target.value as "none" | "merge_new" | "replace" }))}
                                     className="w-full text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
                                   >
                                     <option value="none">Nie importuj</option>
@@ -1127,7 +1129,7 @@ export default function ImportModal({
                                   <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Przedmioty:</label>
                                   <select
                                     value={activeConfig.subjectsMode}
-                                    onChange={(e) => updateActiveConfig(c => ({ ...c, subjectsMode: e.target.value as any }))}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, subjectsMode: e.target.value as "none" | "merge_new" | "replace" }))}
                                     className="w-full text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
                                   >
                                     <option value="none">Nie importuj</option>
@@ -1141,7 +1143,7 @@ export default function ImportModal({
                                   <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block">Oddziały (Klasy):</label>
                                   <select
                                     value={activeConfig.classesMode}
-                                    onChange={(e) => updateActiveConfig(c => ({ ...c, classesMode: e.target.value as any }))}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, classesMode: e.target.value as "none" | "merge_new" | "replace" }))}
                                     className="w-full text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
                                   >
                                     <option value="none">Nie importuj</option>
@@ -1455,7 +1457,7 @@ export default function ImportModal({
                                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">Zakres dyżurów:</label>
                                   <select
                                     value={activeConfig.dyzuryMode}
-                                    onChange={(e) => updateActiveConfig(c => ({ ...c, dyzuryMode: e.target.value as any }))}
+                                    onChange={(e) => updateActiveConfig(c => ({ ...c, dyzuryMode: e.target.value as "none" | "harmonogram_only" | "all" }))}
                                     className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
                                   >
                                     <option value="none">Nie importuj dyżurów</option>
@@ -1469,7 +1471,7 @@ export default function ImportModal({
                                     <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">Tryb łączenia dyżurów:</label>
                                     <select
                                       value={activeConfig.dyzuryStrategy}
-                                      onChange={(e) => updateActiveConfig(c => ({ ...c, dyzuryStrategy: e.target.value as any }))}
+                                      onChange={(e) => updateActiveConfig(c => ({ ...c, dyzuryStrategy: e.target.value as "merge" | "replace" }))}
                                       className="w-full text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2"
                                     >
                                       <option value="merge">✓ Dołącz / Scal z obecnymi dyżurami</option>

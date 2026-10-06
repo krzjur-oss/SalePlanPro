@@ -8,6 +8,7 @@ import PlachtaDyrektorska from './PlachtaDyrektorska';
 import KioskMode from './KioskMode';
 import { escapeHtml } from '../utils/sanitizer';
 import { generateDutiesHtml } from '../utils/dutiesPrintHtml';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 export { generateDutiesHtml };
 
 interface WydrukiProps {
@@ -443,7 +444,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const groupsMap = useMemo(() => new Map((pl.schoolGroups || []).map(g => [g.id, g])), [pl.schoolGroups]);
 
   // Helper to format subject short code cleanly (e.g. "ang", "mat", "pol")
-  const getSubjectShort = (subjectNameOrId: string, subjectObj?: any): string => {
+  const getSubjectShort = useCallback((subjectNameOrId: string, subjectObj?: any): string => {
     if (subjectObj && subjectObj.short && String(subjectObj.short).trim()) {
       return String(subjectObj.short).trim();
     }
@@ -484,11 +485,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     if (lower.includes('wiedza o społeczeństwie')) return 'WOS';
     if (lower.includes('historia i teraźniejszość')) return 'HIT';
     return name.slice(0, 4);
-  };
+  }, [pl.subjects, appState.subjects]);
 
   // Helper to format group short representation cleanly (e.g. "G1", "G2", "chł", "dz")
   // Filters out subject descriptors, religion, minority language notes to avoid repetitions in cells
-  const getGroupShort = (groupIdOrName?: string | null, subjectContext?: string): string => {
+  const getGroupShort = useCallback((groupIdOrName?: string | null, subjectContext?: string): string => {
     if (!groupIdOrName) return '';
     const trimmed = String(groupIdOrName).trim();
     if (!trimmed) return '';
@@ -545,7 +546,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     }
 
     return '';
-  };
+  }, [pl.schoolGroups]);
 
   // Resolve hours list
   const hoursList = useMemo(() => {
@@ -1017,7 +1018,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       seenTeacherLessonKey.add(key);
       return true;
     });
-  }, [scheduleVersion, appState.yearKey, schedData, pl.lessons, pl.assignments, pl.subjects, pl.classes, pl.schoolGroups, pl.rooms, subjectsMap, classesMap, groupsMap, roomsMap, resolveRoomFromColKey]);
+  }, [scheduleVersion, appState.yearKey, schedData, pl.lessons, pl.assignments, pl.subjects, pl.schoolGroups, pl.rooms, subjectsMap, classesMap, groupsMap, roomsMap, resolveRoomFromColKey, getGroupShort, getSubjectShort]);
 
   // Helper to resolve host information (class & teacher) for a classroom column
   const getRoomHostDisplay = useCallback((col: any) => {
@@ -1606,7 +1607,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       { id: 'individual', name: 'Nauczanie Indywidualne', icon: '', cols: roomsToPrintColumns.individual },
       { id: 'sport', name: 'Sale Sportowe', icon: '', cols: roomsToPrintColumns.sport }
     ].filter(c => c.cols.length > 0);
-  }, [roomsSplitMode, roomsSelectedFloor, roomsToPrintColumns, appState.floors, appState.buildings]);
+  }, [roomsSplitMode, roomsSelectedFloor, roomsToPrintColumns, appState.buildings]);
 
   if (isRoomsPrintFriendlyMode) {
     const daysToRender = roomsSelectedDay === 'all' ? [0, 1, 2, 3, 4] : [roomsSelectedDay];
@@ -1615,7 +1616,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
       : roomsPrintCategories.filter(c => c.id === roomsSelectedCategory);
 
     return (
-      <div id="rooms-print-overlay" className="fixed inset-0 bg-slate-100/90 backdrop-blur-md z-[100] overflow-y-auto p-4 md:p-8 font-sans text-slate-800">
+      <div id="rooms-print-overlay" className={`fixed inset-0 bg-slate-100/90 backdrop-blur-md ${Z_INDEX_CLASSES.MODAL} overflow-y-auto p-4 md:p-8 font-sans text-slate-800`}>
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
             header, footer, #restoring-pointer-blocker {
@@ -1980,7 +1981,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
   if (isPrintFriendlyWeeklyMode) {
     return (
-      <div id="weekly-print-overlay" className="fixed inset-0 bg-slate-100/90 backdrop-blur-md z-[100] overflow-y-auto p-4 md:p-8 font-sans text-slate-800">
+      <div id="weekly-print-overlay" className={`fixed inset-0 bg-slate-100/90 backdrop-blur-md ${Z_INDEX_CLASSES.MODAL} overflow-y-auto p-4 md:p-8 font-sans text-slate-800`}>
         <style dangerouslySetInnerHTML={{ __html: `
           @media print {
             /* Ukrywamy nagłówek i stopkę systemową */
@@ -3514,7 +3515,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
       {/* Dynamic Duties Print Preview and Verification Modal */}
       {isDutiesModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 md:p-8 z-[100] no-print">
+        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 md:p-8 ${Z_INDEX_CLASSES.MODAL} no-print`}>
           <div className="bg-white border border-slate-200 rounded-3xl max-w-7xl w-full h-full max-h-[92vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
             {/* Modal Header */}
             <div className="bg-slate-900 text-white p-5 px-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 shrink-0">

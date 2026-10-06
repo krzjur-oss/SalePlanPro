@@ -1,11 +1,11 @@
-import { AppState, SchedData, SchedCell, Floor, Class, Teacher, Subject, ClassRoom, Assignment } from './types';
+import { AppState, SchedData, SchedCell, Floor, Segment, Room, ClassRoom, Class, Teacher, Subject, Assignment } from './types';
 
 export function uid(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 }
 
-export function esc(str: any): string {
+export function esc(str: unknown): string {
   return String(str || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -39,7 +39,7 @@ export function colKey(col: { floorIdx: number; segIdx: number; room: { num: str
 }
 
 export function flattenColumns(floors: Floor[]) {
-  const cols: { floorIdx: number; segIdx: number; roomIdx: number; floor: any; seg: any; room: any }[] = [];
+  const cols: { floorIdx: number; segIdx: number; roomIdx: number; floor: Floor; seg: Segment; room: Room }[] = [];
   floors.forEach((floor, fi) =>
     floor.segments.forEach((seg, si) =>
       seg.rooms.forEach((room, ri) =>

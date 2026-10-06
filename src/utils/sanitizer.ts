@@ -119,7 +119,7 @@ export function sanitizeObjectStrings<T>(target: T): T {
   }
 
   if (typeof target === 'object') {
-    const result: Record<string, any> = {};
+    const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(target)) {
       // Skip prototype keys
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') {

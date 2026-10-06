@@ -15,6 +15,7 @@ import {
   setAutoLockMinutes,
   lockSession
 } from '../services/dbStorage';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 
 interface SecurityModalProps {
   isOpen: boolean;
@@ -121,7 +122,7 @@ export default function SecurityModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} flex items-center justify-center p-4`}>
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -225,8 +226,8 @@ export default function SecurityModal({
                       <>
                         <button
                           type="button"
-                          onClick={() => {
-                            lockSession();
+                          onClick={async () => {
+                            await lockSession();
                             onClose();
                           }}
                           className="py-2 px-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"

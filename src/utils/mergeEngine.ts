@@ -21,6 +21,7 @@ import {
   Przerwa, 
   DyzuryState,
   PlanDyzuryState,
+  PlanLekcjiState,
   Hour
 } from '../types';
 import { sanitizeProtoPollution } from './validationSchemas';
@@ -33,7 +34,7 @@ export interface ImportPayload {
   archive?: ArchiveEntry[];
   snapshots?: SnapshotEntry[];
   historyLogs?: AppEventLog[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type ClassScope = 'all' | 'grades_1_3' | 'grades_4_8' | 'custom';
@@ -82,10 +83,10 @@ export interface FileMergeConfig {
  * preventing any undefined property access in the UI or subcomponents,
  * and strictly protecting against Prototype Pollution attacks.
  */
-export function sanitizeAppState(rawInput: any): AppState {
-  const raw = sanitizeProtoPollution(rawInput) || {};
+export function sanitizeAppState(rawInput: unknown): AppState {
+  const raw = (sanitizeProtoPollution(rawInput) || {}) as Record<string, unknown>;
 
-  const rawSchool = raw.school || {};
+  const rawSchool = (raw.school || {}) as Record<string, unknown>;
   const school = {
     name: typeof rawSchool.name === 'string' ? rawSchool.name : 'Szkoła Podstawowa',
     short: typeof rawSchool.short === 'string' ? rawSchool.short : 'SP',
@@ -105,38 +106,38 @@ export function sanitizeAppState(rawInput: any): AppState {
   ];
 
   const timeslots: Hour[] = Array.isArray(raw.timeslots) && raw.timeslots.length > 0 
-    ? raw.timeslots 
+    ? (raw.timeslots as Hour[]) 
     : defaultHours;
 
   const hours: string[] = Array.isArray(raw.hours) && raw.hours.length > 0
-    ? raw.hours.map(String)
+    ? (raw.hours as unknown[]).map(String)
     : timeslots.map(h => String(h.num));
 
   const classes: Class[] = Array.isArray(raw.classes)
-    ? raw.classes.filter(Boolean).map((c: any, i: number) => ({
+    ? (raw.classes as Record<string, unknown>[]).filter(Boolean).map((c, i) => ({
         id: String(c.id || `c_${i}`),
         name: String(c.name || `Klasa ${i + 1}`),
         color: String(c.color || '#2563eb'),
         year: typeof c.year === 'number' ? c.year : undefined,
-        groupIds: Array.isArray(c.groupIds) ? c.groupIds : []
+        groupIds: Array.isArray(c.groupIds) ? (c.groupIds as string[]) : []
       }))
     : [];
 
   const teachers: Teacher[] = Array.isArray(raw.teachers)
-    ? raw.teachers.filter(Boolean).map((t: any, i: number) => ({
+    ? (raw.teachers as Record<string, unknown>[]).filter(Boolean).map((t, i) => ({
         id: String(t.id || `t_${i}`),
         first: String(t.first || ''),
         last: String(t.last || `Nauczyciel ${i + 1}`),
         abbr: String(t.abbr || `N${i + 1}`).toUpperCase(),
         maxHours: typeof t.maxHours === 'number' ? t.maxHours : 18,
         color: String(t.color || '#3b82f6'),
-        availability: Array.isArray(t.availability) ? t.availability : [],
-        preferredRooms: Array.isArray(t.preferredRooms) ? t.preferredRooms : []
+        availability: Array.isArray(t.availability) ? (t.availability as string[]) : [],
+        preferredRooms: Array.isArray(t.preferredRooms) ? (t.preferredRooms as string[]) : []
       }))
     : [];
 
   const subjects: Subject[] = Array.isArray(raw.subjects)
-    ? raw.subjects.filter(Boolean).map((s: any, i: number) => ({
+    ? (raw.subjects as Record<string, unknown>[]).filter(Boolean).map((s, i) => ({
         id: String(s.id || `s_${i}`),
         name: String(s.name || `Przedmiot ${i + 1}`),
         short: String(s.short || s.name || `P${i + 1}`).toUpperCase(),
@@ -146,13 +147,13 @@ export function sanitizeAppState(rawInput: any): AppState {
 
   const buildings: Building[] = Array.isArray(raw.buildings) ? raw.buildings : [];
   const floors: Floor[] = Array.isArray(raw.floors) ? raw.floors : [];
-  const homerooms: HomeroomState = (raw.homerooms && typeof raw.homerooms === 'object') ? raw.homerooms : {};
+  const homerooms: HomeroomState = (raw.homerooms && typeof raw.homerooms === 'object') ? (raw.homerooms as HomeroomState) : {};
 
-  const rawPlan = raw.planLekcji && typeof raw.planLekcji === 'object' ? raw.planLekcji : {};
-  const planLekcji = {
+  const rawPlan = (raw.planLekcji && typeof raw.planLekcji === 'object' ? raw.planLekcji : {}) as Record<string, any>;
+  const planLekcji: PlanLekcjiState = {
     meta: {
       schoolName: school.name,
-      year: raw.yearLabel || '2025/2026'
+      year: typeof raw.yearLabel === 'string' ? raw.yearLabel : '2025/2026'
     },
     hours: Array.isArray(rawPlan.hours) ? rawPlan.hours : timeslots,
     classes: Array.isArray(rawPlan.classes) ? rawPlan.classes : classes,
@@ -169,7 +170,7 @@ export function sanitizeAppState(rawInput: any): AppState {
     spePlan: (rawPlan.spePlan && typeof rawPlan.spePlan === 'object') ? rawPlan.spePlan : undefined
   };
 
-  const rawDyzury = raw.dyzury && typeof raw.dyzury === 'object' ? raw.dyzury : {};
+  const rawDyzury = (raw.dyzury && typeof raw.dyzury === 'object' ? raw.dyzury : {}) as Record<string, any>;
   const dyzury: PlanDyzuryState = {
     miejsca: Array.isArray(rawDyzury.miejsca) ? rawDyzury.miejsca : [],
     przerwy: Array.isArray(rawDyzury.przerwy) ? rawDyzury.przerwy : [],
@@ -190,7 +191,7 @@ export function sanitizeAppState(rawInput: any): AppState {
     }
   };
 
-  const rawGen = raw.generatorSettings && typeof raw.generatorSettings === 'object' ? raw.generatorSettings : {};
+  const rawGen = (raw.generatorSettings && typeof raw.generatorSettings === 'object' ? raw.generatorSettings : {}) as Record<string, any>;
   const generatorSettings = {
     maxGapsPerTeacher: typeof rawGen.maxGapsPerTeacher === 'number' ? rawGen.maxGapsPerTeacher : 2,
     obeyAvailability: rawGen.obeyAvailability !== false,
@@ -231,8 +232,8 @@ export function sanitizeAppState(rawInput: any): AppState {
  * Handles standard backup files, raw AppState files, snapshots, or wrapped objects.
  * Strips any potential Prototype Pollution attempts.
  */
-export function normalizeImportPayload(rawInput: any): ImportPayload {
-  const raw = sanitizeProtoPollution(rawInput);
+export function normalizeImportPayload(rawInput: unknown): ImportPayload {
+  const raw = sanitizeProtoPollution(rawInput) as Record<string, unknown> | null;
   if (!raw || typeof raw !== 'object') {
     return {
       version: '3.0',
@@ -245,26 +246,26 @@ export function normalizeImportPayload(rawInput: any): ImportPayload {
   // 1. Standard format or snapshot containing appState
   if (raw.appState && typeof raw.appState === 'object') {
     return {
-      version: raw.version || '3.0',
-      timestamp: raw.timestamp || raw.createdAt || new Date().toISOString(),
+      version: typeof raw.version === 'string' ? raw.version : '3.0',
+      timestamp: typeof raw.timestamp === 'string' ? raw.timestamp : (typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString()),
       appState: sanitizeAppState(raw.appState),
-      schedData: (raw.schedData && typeof raw.schedData === 'object') ? raw.schedData : {},
-      archive: Array.isArray(raw.archive) ? raw.archive : [],
-      snapshots: Array.isArray(raw.snapshots) ? raw.snapshots : [],
-      historyLogs: Array.isArray(raw.historyLogs) ? raw.historyLogs : []
+      schedData: (raw.schedData && typeof raw.schedData === 'object') ? (raw.schedData as SchedData) : {},
+      archive: Array.isArray(raw.archive) ? (raw.archive as ArchiveEntry[]) : [],
+      snapshots: Array.isArray(raw.snapshots) ? (raw.snapshots as SnapshotEntry[]) : [],
+      historyLogs: Array.isArray(raw.historyLogs) ? (raw.historyLogs as AppEventLog[]) : []
     };
   }
 
   // 2. Direct AppState object (e.g. user exported or saved state directly without wrapper)
   if (raw.school || raw.classes || raw.teachers || raw.planLekcji || raw.dyzury || raw.buildings || raw.floors) {
     return {
-      version: raw.version || '3.0',
+      version: typeof raw.version === 'string' ? raw.version : '3.0',
       timestamp: new Date().toISOString(),
       appState: sanitizeAppState(raw),
-      schedData: (raw.schedData && typeof raw.schedData === 'object') ? raw.schedData : {},
-      archive: Array.isArray(raw.archive) ? raw.archive : [],
-      snapshots: Array.isArray(raw.snapshots) ? raw.snapshots : [],
-      historyLogs: Array.isArray(raw.historyLogs) ? raw.historyLogs : []
+      schedData: (raw.schedData && typeof raw.schedData === 'object') ? (raw.schedData as SchedData) : {},
+      archive: Array.isArray(raw.archive) ? (raw.archive as ArchiveEntry[]) : [],
+      snapshots: Array.isArray(raw.snapshots) ? (raw.snapshots as SnapshotEntry[]) : [],
+      historyLogs: Array.isArray(raw.historyLogs) ? (raw.historyLogs as AppEventLog[]) : []
     };
   }
 
@@ -281,7 +282,7 @@ export function normalizeImportPayload(rawInput: any): ImportPayload {
     version: '3.0',
     timestamp: new Date().toISOString(),
     appState: sanitizeAppState(raw),
-    schedData: (raw.schedData && typeof raw.schedData === 'object') ? raw.schedData : {},
+    schedData: (raw.schedData && typeof raw.schedData === 'object') ? (raw.schedData as SchedData) : {},
     archive: [],
     snapshots: [],
     historyLogs: []

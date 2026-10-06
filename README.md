@@ -287,6 +287,27 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 
 ---
 
+## 📦 Środowisko i instalacja (Narzędzia deweloperskie)
+
+Projekt jako oficjalnego menedżera pakietów używa **npm** (ze spójnym plikiem blokady `package-lock.json`).
+
+```bash
+# Instalacja zależności
+npm ci
+
+# Uruchomienie serwera deweloperskiego
+npm run dev
+
+# Uruchomienie testów jednostkowych i integracyjnych
+npm test
+
+# Uruchomienie dedykowanego testu integracji trwałości bazy danych (E2E)
+npm run test:e2e
+
+# Kompilacja produkcyjna
+npm run build
+```
+
 ## 🛡️ Bezpieczeństwo i Prywatność (Zgodność z RODO)
 
 Program został zaprojektowany z zachowaniem najwyższych standardów ochrony danych osobowych (Privacy by Design):

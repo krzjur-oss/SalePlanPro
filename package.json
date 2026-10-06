@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit && eslint src",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "vitest run src/services/persistence.e2e.test.ts",
+    "prebuild": "npm run test:e2e"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

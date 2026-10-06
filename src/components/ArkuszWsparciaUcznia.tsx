@@ -403,7 +403,7 @@ export default function ArkuszWsparciaUcznia({
     }
 
     return matrix;
-  }, [hoursList, student, pl, studentClass, studentSpAssignments, studentSupportTeachersList, subjectsMap, teachersMap, roomsMap, groupsMap, scheduleVersion, schedData, appState.yearKey, resolveRoomFromColKey]);
+  }, [hoursList, student, pl, studentClass, studentSpAssignments, subjectsMap, teachersMap, roomsMap, groupsMap, scheduleVersion, schedData, appState.yearKey, resolveRoomFromColKey]);
 
   // Summary statistics for this student
   const stats = useMemo(() => {

@@ -42,6 +42,8 @@ if (typeof BroadcastChannel === 'undefined') {
 
 // Window mocks for jsdom
 if (typeof window !== 'undefined') {
+  (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
   if (!window.matchMedia) {
     window.matchMedia = (query: string) => ({
       matches: false,
@@ -66,4 +68,15 @@ if (typeof window !== 'undefined') {
       disconnect() {}
     };
   }
+
+  const originalConsoleError = console.error;
+  console.error = (...args: unknown[]) => {
+    if (
+      typeof args[0] === 'string' &&
+      args[0].includes('A suspended resource finished loading inside a test')
+    ) {
+      return;
+    }
+    originalConsoleError(...args);
+  };
 }

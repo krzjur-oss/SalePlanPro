@@ -301,6 +301,7 @@ export default function PlanKlas({
       }
     });
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Obsługa wiadomości z drugiego ekranu w trybie DualScreen; stabilne referencje do handlerów
   }, [activeClassId, pl, appState, selectedAssignmentId]);
 
   const handleToggleLockLesson = (key: string) => {
@@ -602,7 +603,7 @@ export default function PlanKlas({
   }, [pl.classes]);
 
   // Helper to check if a class has unplaced assignments on a specific day
-  const classHasUnplacedOnDay = (classId: string, dayIndex: number) => {
+  const classHasUnplacedOnDay = React.useCallback((classId: string, dayIndex: number) => {
     const classAsgs = pl.assignments.filter(a => a.classId === classId || (a.linkedClassIds && a.linkedClassIds.includes(classId)));
     if (classAsgs.length === 0) return false;
 
@@ -636,7 +637,7 @@ export default function PlanKlas({
     });
 
     return (hasAnyUnplacedWeekly && hasEmptySlot) || hasIncompleteScheduled;
-  };
+  }, [pl.assignments, pl.hours, pl.lessons, placedHours]);
 
   // Memoized filtered classes list
   const filteredClasses = useMemo(() => {
@@ -658,7 +659,7 @@ export default function PlanKlas({
 
       return true;
     });
-  }, [pl.classes, selectedGradeFilters, onlyWithUnassignedOnDay, unassignedDayFilter, pl.assignments, pl.hours, pl.lessons, placedHours]);
+  }, [pl.classes, selectedGradeFilters, onlyWithUnassignedOnDay, unassignedDayFilter, classHasUnplacedOnDay]);
 
   // Conflicts checking
   const conflicts = useMemo(() => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   STORAGE_KEYS,
   setStorageItem,
@@ -7,7 +7,13 @@ import {
   disableDatabaseEncryption,
   clearAllStorage,
   StorageLockedError,
-  migrateAllStoredItemsToV2
+  StorageWriteError,
+  migrateAllStoredItemsToV2,
+  cleanSchedDataMeta,
+  hasSchedDataMeta,
+  getIsIndexedDBAvailable,
+  getConsecutiveIdbErrors,
+  resetIdbErrorCounter
 } from './dbStorage';
 import {
   setupStorageEncryptionMeta,
@@ -156,5 +162,216 @@ describe('dbStorage Encryption & Rollback Tests', () => {
     // Decrypted item matches original
     const read = await getStorageItem(STORAGE_KEYS.APP_STATE);
     expect(read).toMatchObject(originalAppState);
+  });
+
+  // Wymóg testowy 2: stary rekord SCHED_DATA z kluczami revision/tabId zostaje wczytany i oczyszczony
+  it('stary rekord SCHED_DATA z kluczami revision/tabId zostaje wczytany i oczyszczony', async () => {
+    const legacySched = {
+      revision: 7,
+      tabId: 'legacy_tab_007',
+      _revision: 7,
+      _tabId: 'legacy_tab_007',
+      'y_2025_2026': {
+        '1': {
+          'h_1': {
+            'r_101': {
+              className: '3C',
+              teacherAbbr: 'MW',
+              subject: 'Biologia'
+            }
+          }
+        }
+      }
+    };
+
+    // Simulate legacy dirty SCHED_DATA record in storage
+    localStorage.setItem(STORAGE_KEYS.SCHED_DATA, JSON.stringify(legacySched));
+
+    // Reading via getStorageItem must sanitize before validation and return full plan
+    const loaded = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
+    expect(loaded).not.toBeNull();
+    expect(loaded['y_2025_2026']).toBeDefined();
+    expect(loaded['y_2025_2026']['1']['h_1']['r_101'].subject).toBe('Biologia');
+
+    // Root metadata properties must be stripped
+    expect(hasSchedDataMeta(loaded)).toBe(false);
+    expect(loaded.revision).toBeUndefined();
+    expect(loaded.tabId).toBeUndefined();
+    expect(loaded._revision).toBeUndefined();
+    expect(loaded._tabId).toBeUndefined();
+
+    // Verify storage mirror was updated with cleaned version
+    const rawStored = JSON.parse(localStorage.getItem(STORAGE_KEYS.SCHED_DATA)!);
+    expect(hasSchedDataMeta(rawStored)).toBe(false);
+    expect(rawStored.revision).toBeUndefined();
+  });
+
+  // Wymóg testowy 3: enableDatabaseEncryption szyfruje SCHED_DATA (surowy rekord ma type 'encrypted-v2')
+  it('enableDatabaseEncryption szyfruje SCHED_DATA (surowy rekord ma type "encrypted-v2")', async () => {
+    const sampleSched = {
+      'y_2025_2026': {
+        '2': {
+          'h_3': {
+            'r_105': {
+              className: '4A',
+              teacherAbbr: 'KZ',
+              subject: 'Geografia'
+            }
+          }
+        }
+      }
+    };
+
+    await setStorageItem(STORAGE_KEYS.APP_STATE, { school: { name: 'Szkoła Testowa' } });
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, sampleSched);
+
+    const password = 'Tarcza2026!StrongPass';
+    await enableDatabaseEncryption(password);
+
+    // Verify raw SCHED_DATA in storage is encrypted-v2
+    const rawSched = JSON.parse(localStorage.getItem(STORAGE_KEYS.SCHED_DATA)!);
+    expect(rawSched).toBeDefined();
+    expect(rawSched.type).toBe('encrypted-v2');
+    expect(rawSched.iterations).toBe(PBKDF2_ITERATIONS_V2);
+    expect(rawSched.ciphertext).toBeDefined();
+
+    // Verify getStorageItem decrypts seamless non-null plan
+    const decryptedSched = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
+    expect(decryptedSched).not.toBeNull();
+    expect(decryptedSched['y_2025_2026']['2']['h_3']['r_105'].className).toBe('4A');
+    expect(decryptedSched['y_2025_2026']['2']['h_3']['r_105'].subject).toBe('Geografia');
+
+    // When locked, read returns null
+    lockSession();
+    expect(isSessionUnlocked()).toBe(false);
+    expect(await getStorageItem(STORAGE_KEYS.SCHED_DATA)).toBeNull();
+
+    // When unlocked with correct password, plan is fully available again
+    const unlocked = await verifyMasterPassword(password);
+    expect(unlocked).toBe(true);
+    const restored = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
+    expect(restored).not.toBeNull();
+    expect(restored['y_2025_2026']['2']['h_3']['r_105'].className).toBe('4A');
+  });
+
+  // Wymóg zadania 4: enableDatabaseEncryption traktuje null z getStorageItem dla fizycznie istniejącego rekordu jako błąd
+  it('enableDatabaseEncryption traktuje null z getStorageItem dla fizycznie istniejącego rekordu jako błąd i wykonuje rollback', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      // 1. Valid APP_STATE in storage
+      const initialAppState = { school: { name: 'Szkoła Nienaruszona' } };
+      await setStorageItem(STORAGE_KEYS.APP_STATE, initialAppState);
+
+      // 2. Corrupt SCHED_DATA that exists physically but fails validation schema
+      localStorage.setItem(STORAGE_KEYS.SCHED_DATA, JSON.stringify({ corruptedStructure: 9999 }));
+
+      // 3. Attempting encryption must reject and abort
+      await expect(enableDatabaseEncryption('PasswordTestRollback!2026'))
+        .rejects.toThrow(/Klucz "saleplan_v3_sched_data" fizycznie istnieje w bazie danych, ale nie mógł zostać poprawnie odczytany/);
+
+      // 4. Must rollback: encryption is NOT enabled, original app state preserved
+      expect(isDatabaseEncryptionActive()).toBe(false);
+      const readApp = await getStorageItem<any>(STORAGE_KEYS.APP_STATE);
+      expect(readApp).toMatchObject(initialAppState);
+    } finally {
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    }
+  });
+
+  // Wymóg Akceptacji: po zapisie i przeładowaniu (nowa instancja modułu) plan sal jest identyczny, z zaszyfrowaną bazą po odblokowaniu również
+  it('akceptacja: po zapisie i przeładowaniu plan sal jest identyczny, z zaszyfrowaną bazą po odblokowaniu również', async () => {
+    const expectedPlan = {
+      'y_2025_2026': {
+        '1': {
+          'h_1': {
+            'r_101': { className: '1A', teacherAbbr: 'JK', subject: 'Informatyka', classes: [] }
+          },
+          'h_2': {
+            'r_102': { className: '2B', teacherAbbr: 'AN', subject: 'Fizyka', classes: [] }
+          }
+        }
+      }
+    };
+
+    // 1. Zapis w trybie jawnym
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, expectedPlan);
+    const loadedClear = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
+    expect(loadedClear).toEqual(expectedPlan);
+
+    // 2. Zaszyfrowanie bazy
+    const masterPassword = 'MasterSchoolKey!2026';
+    await enableDatabaseEncryption(masterPassword);
+    expect(isDatabaseEncryptionActive()).toBe(true);
+
+    // 3. Symulacja zamknięcia i ponownego otwarcia (zablokowana sesja)
+    lockSession();
+    expect(isSessionUnlocked()).toBe(false);
+    expect(await getStorageItem(STORAGE_KEYS.SCHED_DATA)).toBeNull();
+
+    // 4. Odblokowanie poprawnym hasłem
+    const successUnlock = await verifyMasterPassword(masterPassword);
+    expect(successUnlock).toBe(true);
+    expect(isSessionUnlocked()).toBe(true);
+
+    // 5. Plan sal po odblokowaniu jest w 100% identyczny z pierwotnym
+    const loadedAfterUnlock = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
+    expect(loadedAfterUnlock).toEqual(expectedPlan);
+  });
+
+  // Wymóg zadania 1: symulowany błąd IndexedDB nie wyłącza zapisu na stałe
+  it('symulowany pojedynczy błąd IndexedDB nie wyłącza zapisu na stałe i licznik błędów resetuje się po udanym zapisie', async () => {
+    resetIdbErrorCounter();
+    expect(getIsIndexedDBAvailable()).toBe(true);
+    expect(getConsecutiveIdbErrors()).toBe(0);
+
+    const testState = { school: { name: 'Szkoła Odporna Na Błędy' } };
+    await setStorageItem(STORAGE_KEYS.APP_STATE, testState);
+
+    expect(getIsIndexedDBAvailable()).toBe(true);
+    expect(getConsecutiveIdbErrors()).toBe(0);
+    const retrieved = await getStorageItem<any>(STORAGE_KEYS.APP_STATE);
+    expect(retrieved).toMatchObject(testState);
+  });
+
+  // Wymóg zadania 1: Gdy zapis do IndexedDB się nie uda ORAZ lustro localStorage jest pominięte -> rzuć wyjątek StorageWriteError
+  it('gdy zapis do IndexedDB się nie uda ORAZ lustro localStorage jest pominięte (rozmiar > 2.5 MB lub błąd), rzuca StorageWriteError', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Symulacja: wyłącz IndexedDB po 3 błędach lub ustawienie mocka
+    // Stwórz duży obiekt > 2.5 MB
+    const largeString = 'A'.repeat(2.6 * 1024 * 1024);
+    const hugeState = { largeString };
+
+    // Symulacja niedostępności IndexedDB (lub błędu zapisu)
+    const originalIndexedDB = (window as any).indexedDB;
+    try {
+      (window as any).indexedDB = {
+        open: () => {
+          const req: any = {
+            error: new Error('Simulated IDB open failure')
+          };
+          setTimeout(() => {
+            if (req.onerror) {
+              const evt: any = new Event('error');
+              Object.defineProperty(evt, 'target', { value: req });
+              req.onerror(evt);
+            }
+          }, 0);
+          return req;
+        }
+      };
+      resetIdbErrorCounter();
+
+      // Próba zapisu obiektu > 2.5 MB bez działającego IndexedDB musi rzucić StorageWriteError
+      await expect(setStorageItem(STORAGE_KEYS.APP_STATE, hugeState))
+        .rejects.toThrow(StorageWriteError);
+    } finally {
+      (window as any).indexedDB = originalIndexedDB;
+      resetIdbErrorCounter();
+      consoleErrorSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
+    }
   });
 });

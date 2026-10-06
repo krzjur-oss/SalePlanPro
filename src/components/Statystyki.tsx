@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { AppState, SchedData, AppEventLog, DyzurEntry, AppErrorLog } from '../types';
+import { AppState, SchedData, AppEventLog, DyzurEntry, AppErrorLog, Przerwa, MiejsceDyzuru, SchedCell } from '../types';
 import { 
   BarChart as LucideBarChart, Users, BookOpen, MapPin, Building, Shield, AlertTriangle, AlertCircle, CheckCircle, TrendingUp, Info, HelpCircle,
   Clock, History, Search, Trash2, Activity, Camera, Upload, Undo2, Redo2, RotateCcw, RefreshCw, XCircle, ShieldAlert
@@ -17,7 +17,9 @@ interface StatystykiProps {
   onClearHistoryLogs?: () => void;
 }
 
-  export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs }: StatystykiProps) {
+const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
+
+export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs }: StatystykiProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps' | 'audit' | 'history' | 'errors'>('audit');
   const [isScanning, setIsScanning] = useState(false);
   const [logSearch, setLogSearch] = useState('');
@@ -130,8 +132,6 @@ interface StatystykiProps {
       console.error("Export failed:", e);
     }
   };
-
-  const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
   const getHourLabel = (hIdx: number) => {
     const h = pl.hours[hIdx];
@@ -516,7 +516,7 @@ interface StatystykiProps {
 
     const minutesMap: { [abbr: string]: number } = {};
 
-    const getBreakDurationLocal = (p: any): number => {
+    const getBreakDurationLocal = (p: Przerwa): number => {
       if (!p || !p.start || !p.end) return 0;
       const [sh, sm] = p.start.split(':').map(Number);
       const [eh, em] = p.end.split(':').map(Number);
@@ -562,7 +562,7 @@ interface StatystykiProps {
     const miejsca = dyzury.miejsca || [];
     const harmonogram = dyzury.harmonogram || {};
 
-    const checkPlaceActive = (miejsce: any, dayIdx: number, przerwa: any): boolean => {
+    const checkPlaceActive = (miejsce: MiejsceDyzuru, dayIdx: number, przerwa: Przerwa): boolean => {
       if (!dyzury.settings?.skipDutyIfNoClassesOnCorridor) return true;
 
       const yk = appState.yearKey;
@@ -587,11 +587,11 @@ interface StatystykiProps {
           const hasAnyLessonInSchool = 
             Object.values(hourBeforeData).some(cell => {
               const cells = Array.isArray(cell) ? cell : [cell];
-              return cells.some((c: any) => c?.teacherAbbr);
+              return cells.some((c: SchedCell) => c?.teacherAbbr);
             }) ||
             Object.values(hourAfterData).some(cell => {
               const cells = Array.isArray(cell) ? cell : [cell];
-              return cells.some((c: any) => c?.teacherAbbr);
+              return cells.some((c: SchedCell) => c?.teacherAbbr);
             });
           return hasAnyLessonInSchool;
         }
@@ -608,14 +608,14 @@ interface StatystykiProps {
         const cell = hourBeforeData[cKey];
         if (!cell) return false;
         const cells = Array.isArray(cell) ? cell : [cell];
-        return cells.some((c: any) => c?.teacherAbbr);
+        return cells.some((c: SchedCell) => c?.teacherAbbr);
       });
 
       const hasClassAfter = targetColKeys.some(cKey => {
         const cell = hourAfterData[cKey];
         if (!cell) return false;
         const cells = Array.isArray(cell) ? cell : [cell];
-        return cells.some((c: any) => c?.teacherAbbr);
+        return cells.some((c: SchedCell) => c?.teacherAbbr);
       });
 
       return hasClassBefore || hasClassAfter;
@@ -677,27 +677,29 @@ interface StatystykiProps {
     return { totalDemand, totalAssigned, deficit, coverage, peakBreakName };
   }, [breakDemandStats]);
 
-  const CustomChartTooltip = ({ active, payload, label }: any) => {
+  const CustomChartTooltip = ({ active, payload }: { active?: boolean; payload?: { payload?: { name?: string; demand?: number; assigned?: number; deficit?: number; occupancyRatio?: string } }[]; label?: string }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      if (!data) return null;
+      const deficit = data.deficit ?? 0;
       return (
         <div className="bg-slate-900 border border-slate-850 text-white rounded-xl p-3 shadow-lg space-y-1.5 max-w-xs text-xs">
-          <p className="font-extrabold text-indigo-300 uppercase tracking-wide border-b border-slate-800 pb-1">{data.name}</p>
+          <p className="font-extrabold text-indigo-300 uppercase tracking-wide border-b border-slate-800 pb-1">{data.name || ''}</p>
           <div className="space-y-1">
             <div className="flex justify-between gap-6">
               <span className="text-slate-400">Wymagane dyżury:</span>
-              <span className="font-mono font-bold text-white">{data.demand}</span>
+              <span className="font-mono font-bold text-white">{data.demand ?? 0}</span>
             </div>
             <div className="flex justify-between gap-6">
               <span className="text-slate-400">Obsadzone dyżury:</span>
               <span className="font-mono font-bold text-emerald-400">
-                {data.assigned} <span className="text-[10px] text-slate-500">({data.occupancyRatio}%)</span>
+                {data.assigned ?? 0} <span className="text-[10px] text-slate-500">({data.occupancyRatio ?? '0'}%)</span>
               </span>
             </div>
             <div className="flex justify-between gap-6 border-t border-slate-800 pt-1 mt-1">
               <span className="text-slate-400">Brakująca obsada:</span>
-              <span className={`font-mono font-bold ${data.deficit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {data.deficit}
+              <span className={`font-mono font-bold ${deficit > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {deficit}
               </span>
             </div>
           </div>
@@ -2586,9 +2588,11 @@ interface StatystykiProps {
                   onClick={() => {
                     try {
                       throw new Error("Testowy błąd wygenerowany ręcznie przez użytkownika w celach diagnostycznych.");
-                    } catch (e: any) {
-                      if ((window as any).__addAppError) {
-                        (window as any).__addAppError(e.message, e.stack, 'manual');
+                    } catch (e: unknown) {
+                      const err = e instanceof Error ? e : new Error(String(e));
+                      const win = window as unknown as { __addAppError?: (msg: string, stack?: string, type?: string) => void };
+                      if (win.__addAppError) {
+                        win.__addAppError(err.message, err.stack, 'manual');
                       }
                     }
                   }}

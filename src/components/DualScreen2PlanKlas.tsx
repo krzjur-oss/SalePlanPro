@@ -69,7 +69,7 @@ export default function DualScreen2PlanKlas({
   useEffect(() => {
     const unsub = dualScreenService.subscribe((msg: DualScreenMessage) => {
       if (msg.type === 'SELECT_LESSON_POOL' && msg.payload) {
-        setSelectedPoolLesson(msg.payload);
+        setSelectedPoolLesson(msg.payload as any);
       }
     });
     return () => unsub();

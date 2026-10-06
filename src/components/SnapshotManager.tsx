@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { downloadFile, formatBytes } from '../utils';
 import { removeStorageItem, STORAGE_KEYS } from '../services/dbStorage';
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
 
 interface SnapshotManagerProps {
   isOpen: boolean;
@@ -72,7 +73,7 @@ export default function SnapshotManager(props: SnapshotManagerProps) {
   return (
     <SafeErrorBoundary
       fallback={(error, resetError) => (
-        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4`}>
           <div className="bg-white border border-red-200 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden leading-normal text-slate-800">
             <div className="p-4 bg-red-600 text-white flex items-center gap-2 select-none">
               <AlertTriangle size={18} />
@@ -617,7 +618,7 @@ function SnapshotManagerInner({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className={`fixed inset-0 ${Z_INDEX_CLASSES.MODAL} bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4`}>
       <div 
         className={`relative bg-white border border-slate-200 rounded-2xl shadow-2xl w-full ${
           selectedSnapshot && showLessonComparison ? 'max-w-4xl font-semibold' : 'max-w-2xl'

@@ -17,7 +17,32 @@ export interface ScreenInteractionPayload {
   isDragging?: boolean;
 }
 
-export interface DualScreenMessage {
+interface ExtendedScreen extends Screen {
+  isExtended?: boolean;
+}
+
+interface ScreenDetailed {
+  isPrimary?: boolean;
+  availLeft?: number;
+  availTop?: number;
+  availWidth?: number;
+  availHeight?: number;
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+}
+
+interface ScreenDetails {
+  screens: ScreenDetailed[];
+  currentScreen?: ScreenDetailed;
+}
+
+interface WindowManagementWindow extends Window {
+  getScreenDetails?: () => Promise<ScreenDetails>;
+}
+
+export interface DualScreenMessage<T = any> {
   type: 
     | 'HANDSHAKE'
     | 'HANDSHAKE_ACK'
@@ -36,7 +61,7 @@ export interface DualScreenMessage {
     | 'CLEAR_ROOM_SCHEDULE'
     | 'PING'
     | 'PONG';
-  payload?: Record<string, any> | any;
+  payload?: T;
   timestamp: number;
   version?: number;
 }
@@ -72,7 +97,7 @@ class DualScreenManager {
     // Listen to screen change events if supported
     if (window.screen && 'addEventListener' in window.screen) {
       try {
-        (window.screen as any).addEventListener('change', () => this.updateMultiScreenStatus());
+        (window.screen as unknown as EventTarget).addEventListener('change', () => this.updateMultiScreenStatus());
       } catch (e) {}
     }
 
@@ -91,7 +116,7 @@ class DualScreenManager {
     // 1. Hardware detection via screen.isExtended (Chromium 100+)
     let detected = false;
     if (window.screen && 'isExtended' in window.screen) {
-      detected = Boolean((window.screen as any).isExtended);
+      detected = Boolean((window.screen as ExtendedScreen).isExtended);
     }
 
     // 2. Heuristic check: desktop width spanning multiple monitors
@@ -122,9 +147,10 @@ class DualScreenManager {
     if (typeof window === 'undefined') return false;
 
     // 1. Try modern getScreenDetails()
-    if ('getScreenDetails' in window) {
+    const win = window as WindowManagementWindow;
+    if (typeof win.getScreenDetails === 'function') {
       try {
-        const details = await (window as any).getScreenDetails();
+        const details = await win.getScreenDetails();
         if (details && details.screens && details.screens.length > 1) {
           this.isMultiScreenDetected = true;
           return true;
@@ -135,9 +161,9 @@ class DualScreenManager {
     }
 
     // 2. Try permission query
-    if (navigator.permissions && (navigator.permissions as any).query) {
+    if (navigator.permissions && typeof navigator.permissions.query === 'function') {
       try {
-        const status = await (navigator.permissions as any).query({ name: 'window-management' });
+        const status = await navigator.permissions.query({ name: 'window-management' as PermissionName });
         if (status.state === 'granted') {
           this.updateMultiScreenStatus();
           return this.isMultiScreenDetected;
@@ -190,11 +216,12 @@ class DualScreenManager {
     let targetHeight = 900;
 
     // Attempt Window Management API to target second screen
-    if ('getScreenDetails' in window) {
+    const wmWindow = window as WindowManagementWindow;
+    if (typeof wmWindow.getScreenDetails === 'function') {
       try {
-        const screenDetails = await (window as any).getScreenDetails();
+        const screenDetails = await wmWindow.getScreenDetails();
         if (screenDetails && screenDetails.screens && screenDetails.screens.length > 1) {
-          const secondary = screenDetails.screens.find((s: any) => !s.isPrimary) || screenDetails.screens[1];
+          const secondary = screenDetails.screens.find(s => !s.isPrimary) || screenDetails.screens[1];
           if (secondary) {
             targetLeft = secondary.availLeft ?? 1920;
             targetTop = secondary.availTop ?? 0;
