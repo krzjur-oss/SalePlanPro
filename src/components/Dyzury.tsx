@@ -43,6 +43,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     }
   }, [presentationMode, activeTab]);
   const [activeDay, setActiveDay] = useState<number>(0);
+  const [showStatsSidebar, setShowStatsSidebar] = useState<boolean>(true);
   const [draggedTeacher, setDraggedTeacher] = useState<{ miejsceId: string; przerwa: number } | null>(null);
 
   // Edit / Add forms
@@ -1144,7 +1145,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   };
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden px-0 mx-0" id="page-dyzury">
+    <div className="flex flex-col flex-1 overflow-hidden h-full min-h-0 min-w-0 px-0 mx-0" id="page-dyzury">
       {/* ── PASEK KONTROLI / ZAKŁADKI KRAJOWE ── */}
       <div className="bg-white border-b border-slate-200 p-4 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
         <div className="flex items-center gap-1">
@@ -1189,16 +1190,31 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
         )}
 
         {!presentationMode && (
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            {activeTab === 'roster' && (
+              <button
+                type="button"
+                onClick={() => setShowStatsSidebar(!showStatsSidebar)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
+                  showStatsSidebar 
+                    ? 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200' 
+                    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 shadow-xs'
+                }`}
+                title={showStatsSidebar ? 'Ukryj boczny panel bilansu, aby powiększyć harmonogram' : 'Pokaż boczny panel bilansu dyżurów'}
+              >
+                <span>📊</span>
+                <span>{showStatsSidebar ? 'Zwiń bilans' : 'Pokaż bilans'}</span>
+              </button>
+            )}
             <button 
               onClick={handleAutoSuggest}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center gap-1"
+              className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center gap-1 cursor-pointer"
             >
               <RefreshCcw size={14} /> Auto-sugestia dyżurów
             </button>
             <button 
               onClick={handleClearDuties}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition cursor-pointer"
             >
               Wyczyść Wszystko
             </button>
@@ -1206,93 +1222,100 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
         )}
       </div>
 
-      <div className="flex-1 overflow-auto bg-slate-50 p-4 md:p-5">
+      <div className="flex-1 overflow-auto bg-slate-50 p-4 md:p-5 min-h-0 min-w-0 custom-scrollbar">
         {/* ── INTERAKTYWNY HARMONOGRAM ── */}
         {activeTab === 'roster' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start">
-            <div className={`bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden p-4 min-w-[500px] ${
-              presentationMode ? 'lg:col-span-4' : 'lg:col-span-3'
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start min-w-0 w-full">
+            <div className={`bg-white border border-slate-200 rounded-xl shadow-sm p-4 min-w-0 w-full ${
+              presentationMode || !showStatsSidebar ? 'lg:col-span-4' : 'lg:col-span-3'
             }`}>
               {dyz.miejsca.length > 0 ? (
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="p-3 text-left text-xs font-bold text-slate-500 w-48">Godzina / Przerwa</th>
-                      {dyz.miejsca.map(place => (
-                        <th key={place.id} className="p-3 text-center text-xs font-bold text-slate-600">
-                          <span className="block text-slate-700 font-bold">{place.name}</span>
-                          {place.floor && <span className="block text-[9px] text-slate-400 font-medium mt-0.5">{place.floor}</span>}
+                <div className="overflow-x-auto w-full custom-scrollbar pb-3 rounded-lg border border-slate-200/80 bg-white">
+                  <table 
+                    className="w-full border-collapse text-xs"
+                    style={{ minWidth: `${Math.max(680, dyz.miejsca.length * 160 + 200)}px` }}
+                  >
+                    <thead>
+                      <tr className="bg-slate-100/90 border-b border-slate-200 sticky top-0 z-20">
+                        <th className="p-3 text-left text-xs font-bold text-slate-600 w-48 min-w-[190px] sticky left-0 z-30 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.12)]">
+                          Godzina / Przerwa
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dyz.przerwy.map(p => (
-                      <tr key={p.num} className="hover:bg-slate-50/50 border-b border-slate-100 last:border-b-0">
-                        <td className="p-3 select-none">
-                          <div className="font-bold text-xs text-slate-800">{p.name}</div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">{p.start}–{p.end}</div>
-                        </td>
-                        {dyz.miejsca.map(place => {
-                          const key = `${place.id}|${activeDay}|${p.num}`;
-                          const duty = dyz.harmonogram[key];
-                          const t = duty?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === duty.teacherAbbr) : null;
-                          const isActive = isPlaceActiveForBreak(place, activeDay, p);
-
-                          return (
-                            <td 
-                              key={place.id} 
-                              className={`p-1.5 text-center align-middle transition-colors duration-150 ${!isActive ? 'bg-slate-50/40' : ''}`}
-                              onDragOver={(e) => e.preventDefault()}
-                              onDrop={() => handleDropOnSlot(place.id, p.num)}
-                            >
-                              {duty?.teacherAbbr ? (
-                                <div 
-                                  draggable={!presentationMode}
-                                  onDragStart={() => handleDragStart(place.id, p.num)}
-                                  onClick={() => openDirectAssign(place.id, p.num)}
-                                  className={`p-2.5 rounded-lg border-l-4 shadow-sm transition relative flex flex-col justify-center items-center ${
-                                    presentationMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:shadow'
-                                  } ${
-                                    duty.locked 
-                                      ? 'bg-slate-50 border-slate-600 text-slate-900 font-bold'
-                                      : 'bg-emerald-50/50 border-emerald-500 text-emerald-950 font-semibold'
-                                  } ${!isActive ? 'opacity-75 border-slate-300' : ''}`}
-                                >
-                                  <span className="text-xs tracking-wider font-mono">{duty.teacherAbbr}</span>
-                                  <span className="text-[9px] text-slate-400 truncate max-w-[80px] font-medium mt-0.5">
-                                    {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
-                                  </span>
-                                  {!isActive && <span className="absolute bottom-1 right-1 text-[8px] opacity-75" title="Brak lekcji na tym korytarzu">💤</span>}
-                                  {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
-                                  {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
-                                </div>
-                              ) : presentationMode ? (
-                                <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>
-                              ) : !isActive ? (
-                                <button 
-                                  onClick={() => openDirectAssign(place.id, p.num)}
-                                  className="w-full py-1 border border-dashed border-slate-150 bg-slate-50/30 hover:border-blue-200 hover:bg-blue-50/20 rounded-lg text-slate-300 hover:text-blue-500 transition cursor-pointer text-[9px] flex flex-col items-center justify-center min-h-[42px]"
-                                  title="Na tym korytarzu nie odbywają się teraz lekcje (dyżur niewymagany)"
-                                >
-                                  <span className="font-bold text-slate-300 leading-none">+</span>
-                                  <span className="text-[7px] text-slate-400 font-semibold leading-none mt-0.5">wolne</span>
-                                </button>
-                              ) : (
-                                <button 
-                                  onClick={() => openDirectAssign(place.id, p.num)}
-                                  className="w-full py-2.5 border border-dashed border-slate-200 hover:border-blue-300 hover:text-blue-500 rounded-lg text-slate-300 text-sm font-light transition"
-                                >
-                                  +
-                                </button>
-                              )}
-                            </td>
-                          );
-                        })}
+                        {dyz.miejsca.map(place => (
+                          <th key={place.id} className="p-3 text-center text-xs font-bold text-slate-700 min-w-[150px] border-l border-slate-200/60">
+                            <span className="block text-slate-800 font-bold truncate max-w-[180px] mx-auto" title={place.name}>{place.name}</span>
+                            {place.floor && <span className="block text-[9px] text-slate-400 font-medium mt-0.5 truncate">{place.floor}</span>}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {dyz.przerwy.map(p => (
+                        <tr key={p.num} className="hover:bg-slate-50/70 border-b border-slate-100 last:border-b-0 transition-colors">
+                          <td className="p-3 select-none sticky left-0 z-10 bg-white shadow-[2px_0_5px_-2px_rgba(0,0,0,0.12)] border-r border-slate-200/80">
+                            <div className="font-bold text-xs text-slate-800">{p.name}</div>
+                            <div className="text-[10px] text-slate-500 font-mono mt-0.5 font-semibold">{p.start}–{p.end}</div>
+                          </td>
+                          {dyz.miejsca.map(place => {
+                            const key = `${place.id}|${activeDay}|${p.num}`;
+                            const duty = dyz.harmonogram[key];
+                            const t = duty?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === duty.teacherAbbr) : null;
+                            const isActive = isPlaceActiveForBreak(place, activeDay, p);
+
+                            return (
+                              <td 
+                                key={place.id} 
+                                className={`p-1.5 text-center align-middle transition-colors duration-150 min-w-[150px] border-l border-slate-100 ${!isActive ? 'bg-slate-50/40' : ''}`}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={() => handleDropOnSlot(place.id, p.num)}
+                              >
+                                {duty?.teacherAbbr ? (
+                                  <div 
+                                    draggable={!presentationMode}
+                                    onDragStart={() => handleDragStart(place.id, p.num)}
+                                    onClick={() => openDirectAssign(place.id, p.num)}
+                                    className={`p-2 rounded-lg border-l-4 shadow-xs transition relative flex flex-col justify-center items-center min-h-[50px] ${
+                                      presentationMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:shadow-md hover:scale-[1.02]'
+                                    } ${
+                                      duty.locked 
+                                        ? 'bg-slate-50 border-slate-600 text-slate-900 font-bold'
+                                        : 'bg-emerald-50/60 border-emerald-500 text-emerald-950 font-semibold'
+                                    } ${!isActive ? 'opacity-75 border-slate-300' : ''}`}
+                                  >
+                                    <span className="text-xs tracking-wider font-mono font-bold">{duty.teacherAbbr}</span>
+                                    <span className="text-[10px] text-slate-500 truncate max-w-[125px] font-medium mt-0.5" title={t ? `${t.first} ${t.last}` : undefined}>
+                                      {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
+                                    </span>
+                                    {!isActive && <span className="absolute bottom-1 right-1 text-[8px] opacity-75" title="Brak lekcji na tym korytarzu">💤</span>}
+                                    {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
+                                    {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
+                                  </div>
+                                ) : presentationMode ? (
+                                  <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>
+                                ) : !isActive ? (
+                                  <button 
+                                    onClick={() => openDirectAssign(place.id, p.num)}
+                                    className="w-full py-1 border border-dashed border-slate-200 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/30 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer text-[9px] flex flex-col items-center justify-center min-h-[46px]"
+                                    title="Na tym korytarzu nie odbywają się teraz lekcje (dyżur niewymagany)"
+                                  >
+                                    <span className="font-bold text-slate-400 leading-none">+</span>
+                                    <span className="text-[7.5px] text-slate-400 font-semibold leading-none mt-0.5">wolne</span>
+                                  </button>
+                                ) : (
+                                  <button 
+                                    onClick={() => openDirectAssign(place.id, p.num)}
+                                    className="w-full py-2.5 border border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/20 hover:text-blue-600 rounded-lg text-slate-400 text-sm font-light transition cursor-pointer min-h-[46px] flex items-center justify-center"
+                                  >
+                                    +
+                                  </button>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <div className="p-8 text-center text-slate-400 text-xs">Brak zdefiniowanych miejsc dyżurowania. Przejdź do zakładki „Miejsca Dyżurowania”, aby dodać pierwsze punkty.</div>
               )}
@@ -1473,12 +1496,25 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
             </div>
 
             {/* Panel statystyk dyżurów */}
-            {!presentationMode && (
-              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 select-none">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">📊 Bilans dyżurów nauczycielskich</h3>
+            {!presentationMode && showStatsSidebar && (
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 select-none min-w-0 w-full lg:col-span-1 sticky top-0 self-start">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <span>📊</span>
+                    <span>Bilans dyżurów</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowStatsSidebar(false)}
+                    className="text-slate-400 hover:text-slate-600 text-xs p-1 rounded transition cursor-pointer"
+                    title="Zwiń panel bilansu"
+                  >
+                    ✕
+                  </button>
+                </div>
                 <p className="text-[11px] text-slate-400 leading-normal">Poniższa lista prezentuje sumaryczną liczbę i czas dyżurów w bieżącym tygodniu zbalansowaną proporcjonalnie do wymiaru godzin lekcyjnych nauczyciela.</p>
                 
-                <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto pr-1">
+                <div className="divide-y divide-slate-100 max-h-[calc(100vh-230px)] min-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
                   {appState.teachers.map(t => {
                     const dc = teacherDutyCounts[t.abbr] || 0;
                     const dm = teacherDutyMinutes[t.abbr] || 0;
@@ -1662,11 +1698,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
               </form>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl shadow-sm md:col-span-2 overflow-hidden">
+            <div className="bg-white border border-slate-200 rounded-xl shadow-sm md:col-span-2 overflow-hidden min-w-0">
               <div className="p-4 border-b border-slate-100">
                 <h3 className="text-sm font-bold text-slate-900 select-none">🚪 Skonfigurowane punkty dyżurów</h3>
               </div>
-              <table className="min-w-full border-collapse">
+              <div className="overflow-x-auto w-full custom-scrollbar">
+                <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-400">
                     <th className="p-3 text-left text-xs font-bold uppercase tracking-wider">Lokalizacja</th>
@@ -1728,6 +1765,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         )}

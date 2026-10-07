@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.8',
+      date: 'Październik 2026',
+      title: 'Naprawa Przewijania Tabeli Dyżurów w Poziomie i Pionie oraz Responsywności Etapu 3',
+      description: 'Rozwiązanie problemu wychodzenia tabeli dyżurów poza ekran przy dużej liczbie punktów dyżurów i przypisanych osób. Wprowadzenie dedykowanego przewijania horyzontalnego i wertykalnego z przypiętą kolumną przerw, optymalizacja flex/grid min-width/height oraz możliwość zwijania bocznego panelu bilansu.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'fix', text: 'Dedykowany kontener przewijania poziomego (overflow-x-auto): Tabela harmonogramu dyżurów została umieszczona w niezależnym obszarze przewijania z minimalną szerokością kolumn (min-w-[150px]), dzięki czemu duża liczba stanowisk i nauczycieli nigdy nie obcina widoku ani nie wypycha elementów poza ekran monitora.', badgeText: 'Przewijanie w poziomie' },
+        { type: 'fix', text: 'Odblokowanie przewijania pionowego (min-h-0 / flex overflow): Dodano właściwości min-h-0 i min-w-0 do nadrzędnych kontenerów flexbox i grid w Etapie 3, eliminując blokadę suwaka przy długich listach przerw, dyżurach adaptacyjnych i nadzorze szatni WF.', badgeText: 'Przewijanie w pionie' },
+        { type: 'improvement', text: 'Przypięta kolumna „Godzina / Przerwa” (sticky left-0): Podczas przewijania poziomego w prawo pierwsza kolumna z numerem i godzinami przerwy pozostaje zawsze widoczna i czytelna na ekranie.', badgeText: 'Sticky Column' },
+        { type: 'feature', text: 'Przełącznik widoku bocznego panelu bilansu: Dodano przycisk „Zwiń bilans / Pokaż bilans”, umożliwiający rozciągnięcie siatki dyżurów na pełną szerokość ekranu dla szkół o rozbudowanej strukturze korytarzy.', badgeText: 'Tryb pełnoekranowy' },
+        { type: 'improvement', text: 'Stylowanie scrollbarów custom-scrollbar: Płynne, estetyczne suwaki o szerokości 8px na wszystkich urządzeniach i przeglądarkach.', badgeText: 'UX & Ergonomia' }
+      ]
+    },
+    {
       version: 'v3.9.7',
       date: 'Październik 2026',
       title: 'Naprawa Walidacji Schematów Pokoje/Segmenty i Zabezpieczenie UX przed Fałszywym Uszkodzeniem Danych',
       description: 'Precyzyjne dostosowanie schematów walidacji Zod (SegmentRoomSchema, SegmentSchema, FloorSchema, BuildingSchema) do struktur modelu danych types.ts, wyeliminowanie fałszywych alarmów uszkodzenia danych bazy oraz dodanie bezpiecznej auto-normalizacji i kopii awaryjnej.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'fix', text: 'Dedykowany schemat SegmentRoomSchema: Pokoje w kondygnacjach i segmentach (floors[].segments[].rooms[]) walidowane są schematem SegmentRoomSchema z polem "num" (zgodnie z modelem Room z types.ts) zamiast RoomSchema wymagającego "name".', badgeText: 'SegmentRoomSchema' },
         { type: 'improvement', text: 'Tolerancyjne rzutowanie numeru pokoju: Obsługa "num" jako string i number z automatyczną transformacją, a w przypadku starszych zapisów z polem "name" automatyczne mapowanie na "num" za pomocą z.preprocess.', badgeText: 'Zgodność wsteczna' },
