@@ -24,7 +24,7 @@ export interface ConflictCheckResult {
   dbRecord: unknown;
 }
 
-class MultiTabStateService {
+export class MultiTabStateService {
   private channel: BroadcastChannel | null = null;
   private tabId: string = '';
   private localRevisions: Map<string, number> = new Map();
@@ -59,12 +59,15 @@ class MultiTabStateService {
   }
 
   private initChannel() {
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    const BC = (typeof window !== 'undefined' && (window as any).BroadcastChannel) ||
+               (typeof globalThis !== 'undefined' && (globalThis as any).BroadcastChannel);
+    if (BC) {
       try {
-        this.channel = new BroadcastChannel(MULTI_TAB_STATE_CHANNEL);
-        this.channel.onmessage = (event) => {
+        const ch = new BC(MULTI_TAB_STATE_CHANNEL);
+        ch.onmessage = (event: MessageEvent) => {
           this.handleIncoming(event.data);
         };
+        this.channel = ch;
       } catch (e) {
         console.warn('Nie można zainicjalizować BroadcastChannel saleplan-state:', e);
       }

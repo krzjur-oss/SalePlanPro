@@ -12,6 +12,7 @@ import {
   setStorageItem,
   STORAGE_KEYS
 } from '../services/dbStorage';
+import { persistAppStateAndSchedWithConflictCheck } from '../services/persistence';
 import { decryptText, isEncryptedBackup } from '../lib/crypto';
 import { sanitizeAppState } from '../utils/mergeEngine';
 
@@ -161,8 +162,7 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
       const restoredArchive = Array.isArray(parsed.archive) ? parsed.archive : [];
       const restoredSnapshots = Array.isArray(parsed.snapshots) ? parsed.snapshots : [];
 
-      await setStorageItem(STORAGE_KEYS.APP_STATE, restoredState);
-      await setStorageItem(STORAGE_KEYS.SCHED_DATA, restoredSched);
+      await persistAppStateAndSchedWithConflictCheck(restoredState, restoredSched, { forceOverwrite: true });
       await setStorageItem(STORAGE_KEYS.ARCHIVE, restoredArchive);
       await setStorageItem(STORAGE_KEYS.SNAPSHOTS, restoredSnapshots);
 
@@ -172,6 +172,25 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
       setRestoreError(err.message || 'Nie udało się przywrócić danych z pliku kopii.');
     } finally {
       setIsRestoring(false);
+    }
+  };
+
+  const handleQuickReset = async () => {
+    if (window.confirm('Czy na pewno chcesz usunąć hasło blokady i otworzyć program z danymi demonstracyjnymi (demo)?')) {
+      setIsResetting(true);
+      try {
+        removeStorageEncryptionMeta();
+        await clearAllStorage();
+        if (onResetDatabase) {
+          await onResetDatabase();
+        } else {
+          window.location.reload();
+        }
+      } catch (e) {
+        console.error('Błąd podczas resetowania:', e);
+      } finally {
+        setIsResetting(false);
+      }
     }
   };
 
@@ -303,18 +322,31 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
         </form>
 
         {/* Footer links */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setShowHelpModal(true);
-              setActiveHelpTab('info');
-            }}
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <HelpCircle size={13} />
-            <span>Nie pamiętam hasła</span>
-          </button>
+        <div className="mt-6 pt-5 border-t border-slate-800/80 flex flex-col items-center gap-2.5">
+          <div className="flex items-center justify-center gap-3 text-xs font-semibold flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setShowHelpModal(true);
+                setActiveHelpTab('info');
+              }}
+              className="text-indigo-400 hover:text-indigo-300 transition hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <HelpCircle size={13} />
+              <span>Nie pamiętam hasła</span>
+            </button>
+            <span className="text-slate-600">•</span>
+            <button
+              type="button"
+              onClick={handleQuickReset}
+              disabled={isResetting}
+              className="text-rose-400 hover:text-rose-300 transition hover:underline flex items-center gap-1 cursor-pointer font-bold"
+              title="Usuwa hasło bazy i uruchamia program ze świeżymi danymi demonstracyjnymi"
+            >
+              <Trash2 size={13} />
+              <span>{isResetting ? 'Resetowanie...' : 'Zresetuj blokadę i wejdź (Demo)'}</span>
+            </button>
+          </div>
           <span className="text-[10px] text-slate-500">
             Dane zaszyfrowane lokalnie w pamięci przeglądarki kluczem AES-256 GCM.
           </span>

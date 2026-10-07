@@ -456,4 +456,162 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
     const finalMeta = await finalPersistence.getStorageItem<any>(finalPersistence.STORAGE_KEYS.STATE_META);
     expect(finalMeta?.revision).toBe(4);
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SCENARIUSZ D: Przedwczesne zamknięcie strony / beforeunload przy aktywnym szyfrowaniu
+  // Wymóg: wywołanie handlera beforeunload nie powoduje, że w localStorage[APP_STATE]
+  // i [SCHED_DATA] pojawia się jawny tekst (np. nazwa szkoły), a w IndexedDB rekord
+  // nadal ma type 'encrypted-v2'.
+  // ─────────────────────────────────────────────────────────────────────────────
+  it('Scenariusz D: przy aktywnym szyfrowaniu wywołanie handlera beforeunload nie zapisuje jawnego tekstu do localStorage, a w IndexedDB rekord ma type "encrypted-v2"', async () => {
+    const cryptoModule = await import('../lib/crypto');
+    const masterPassword = 'MasterE2EPassword!2026';
+    await cryptoModule.setupStorageEncryptionMeta(masterPassword);
+
+    expect(cryptoModule.isDatabaseEncryptionActive()).toBe(true);
+    expect(cryptoModule.isSessionUnlocked()).toBe(true);
+
+    const persistence = await import('./persistence');
+    const secretSchoolName = 'Liceum Ogólnokształcące Ściśle Tajne';
+    const testAppState = createSampleAppState(secretSchoolName);
+    const testSchedData = createSampleSchedData();
+
+    // 1. Zapis początkowy
+    const initialSaved = await persistence.persistAppStateAndSchedWithConflictCheck(testAppState, testSchedData);
+    expect(initialSaved).toBe(true);
+
+    // 2. Bezpośrednie wywołanie writeSyncMirror musi zostać odrzucone
+    const mirrorStateRes = persistence.writeSyncMirror(persistence.STORAGE_KEYS.APP_STATE, testAppState);
+    const mirrorSchedRes = persistence.writeSyncMirror(persistence.STORAGE_KEYS.SCHED_DATA, testSchedData);
+    expect(mirrorStateRes).toBe(false);
+    expect(mirrorSchedRes).toBe(false);
+
+    // 3. Symulacja handlera beforeunload z App.tsx:
+    // - Sprawdza czy szyfrowanie jest aktywne -> NIE zapisuje do localStorage jawnego tekstu
+    // - Wykonuje asynchroniczny zapis persistAppStateAndSchedWithConflictCheck(..., { forceOverwrite: false })
+    if (!cryptoModule.isDatabaseEncryptionActive()) {
+      persistence.writeSyncMirror(persistence.STORAGE_KEYS.APP_STATE, testAppState);
+      persistence.writeSyncMirror(persistence.STORAGE_KEYS.SCHED_DATA, testSchedData);
+    }
+
+    const unloadSaveSuccess = await persistence.persistAppStateAndSchedWithConflictCheck(
+      testAppState,
+      testSchedData,
+      { forceOverwrite: false }
+    );
+    expect(unloadSaveSuccess).toBe(true);
+
+    // 4. Weryfikacja localStorage: ŻADEN jawny tekst (nazwa szkoły, przedmioty) nie może tam trafić
+    const localAppState = localStorage.getItem(persistence.STORAGE_KEYS.APP_STATE);
+    const localSchedData = localStorage.getItem(persistence.STORAGE_KEYS.SCHED_DATA);
+
+    if (localAppState !== null) {
+      expect(localAppState).not.toContain(secretSchoolName);
+      const parsedLocalState = JSON.parse(localAppState);
+      expect(parsedLocalState.type).toBe('encrypted-v2');
+      expect(parsedLocalState.ciphertext).toBeDefined();
+    }
+    if (localSchedData !== null) {
+      expect(localSchedData).not.toContain('Matematyka');
+      const parsedLocalSched = JSON.parse(localSchedData);
+      expect(parsedLocalSched.type).toBe('encrypted-v2');
+      expect(parsedLocalSched.ciphertext).toBeDefined();
+    }
+
+    // 5. Weryfikacja IndexedDB: rekord w bazie danych ma nadal type 'encrypted-v2' i nie zawiera jawnego tekstu
+    const rawIdbState = await persistence.getRawItem<any>(persistence.STORAGE_KEYS.APP_STATE);
+    expect(rawIdbState).not.toBeNull();
+    expect(rawIdbState.type).toBe('encrypted-v2');
+    expect(rawIdbState.ciphertext).toBeDefined();
+    expect(JSON.stringify(rawIdbState)).not.toContain(secretSchoolName);
+
+    const rawIdbSched = await persistence.getRawItem<any>(persistence.STORAGE_KEYS.SCHED_DATA);
+    expect(rawIdbSched).not.toBeNull();
+    expect(rawIdbSched.type).toBe('encrypted-v2');
+    expect(rawIdbSched.ciphertext).toBeDefined();
+    expect(JSON.stringify(rawIdbSched)).not.toContain('Matematyka');
+
+    // 6. Odczyt po odszyfrowaniu zwraca pełne, poprawne dane
+    const decryptedState = await persistence.getStorageItem<AppState>(persistence.STORAGE_KEYS.APP_STATE);
+    expect(decryptedState?.school?.name).toBe(secretSchoolName);
+
+    const decryptedSched = await persistence.getStorageItem<any>(persistence.STORAGE_KEYS.SCHED_DATA);
+    expect(decryptedSched['y_2025_2026']['0']['h_0']['r_101'].subject).toBe('Matematyka');
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SCENARIUSZ E: Import planu w karcie A -> karta B dostaje baner odświeżenia
+  // Wymóg: Ścieżka importu/przywracania używa persistAppStateAndSchedWithConflictCheck
+  // z { forceOverwrite: true }, co inkrementuje rewizję, aktualizuje STATE_META
+  // i rozgłasza komunikat STATE_COMMITTED przez BroadcastChannel 'saleplan-state'.
+  // Karta B z niższą rewizją otrzymuje powiadomienie i włącza baner odświeżenia (showRefreshBanner).
+  // ─────────────────────────────────────────────────────────────────────────────
+  it('Scenariusz E: import planu w karcie A -> karta B dostaje baner odświeżenia', async () => {
+    // 1. Inicjalizacja Karta B (otwarta karta z lokalną rewizją 1)
+    const { MultiTabStateService } = await import('./multiTabStateService');
+    const persistence = await import('./persistence');
+
+    const tabBService = new MultiTabStateService();
+    tabBService.setLocalRevision(1);
+    expect(tabBService.getLocalRevision()).toBe(1);
+
+    // Karta B subskrybuje zdarzenia z magistrali 'saleplan-state' tak jak w App.tsx (useEffect)
+    let showRefreshBannerInTabB = false;
+    let remoteRevisionInTabB = 0;
+
+    const unsubTabB = tabBService.subscribe((msg) => {
+      if (msg.type === 'STATE_COMMITTED') {
+        const localRev = tabBService.getLocalRevision();
+        if (msg.revision > localRev) {
+          remoteRevisionInTabB = msg.revision;
+          showRefreshBannerInTabB = true;
+        }
+      }
+    });
+
+    // Przed importem baner nie jest widoczny
+    expect(showRefreshBannerInTabB).toBe(false);
+
+    // 2. Karta A wykonuje import planu (z { forceOverwrite: true })
+    const importedSchoolName = 'Liceum Ogólnokształcące Po Nowym Imporcie';
+    const importedAppState = createSampleAppState(importedSchoolName);
+    const importedSchedData = createSampleSchedData();
+
+    importedSchedData['y_2025_2026']['0']['h_2'] = {
+      r_105: {
+        className: '4A',
+        teacherAbbr: 'MN',
+        subject: 'Informatyka',
+        classes: []
+      }
+    };
+
+    const importSuccess = await persistence.persistAppStateAndSchedWithConflictCheck(
+      importedAppState,
+      importedSchedData,
+      { forceOverwrite: true }
+    );
+    expect(importSuccess).toBe(true);
+
+    // Oczekiwanie na rozgłoszenie wiadomości przez BroadcastChannel
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 3. Weryfikacja: Karta B dostała powiadomienie i włączyła baner odświeżenia!
+    expect(showRefreshBannerInTabB).toBe(true);
+    expect(remoteRevisionInTabB).toBeGreaterThan(1);
+
+    // 4. Weryfikacja bazy danych: rewizja i STATE_META zostały zaktualizowane
+    const stateMeta = await persistence.getStorageItem<any>(persistence.STORAGE_KEYS.STATE_META);
+    expect(stateMeta).not.toBeNull();
+    expect(stateMeta.revision).toBe(remoteRevisionInTabB);
+
+    // 5. Karta B może teraz kliknąć „Wczytaj” i pobrać zaktualizowany plan bez żadnych strat
+    const loadedState = await persistence.getStorageItem<AppState>(persistence.STORAGE_KEYS.APP_STATE);
+    const loadedSched = await persistence.getStorageItem<any>(persistence.STORAGE_KEYS.SCHED_DATA);
+
+    expect(loadedState?.school?.name).toBe(importedSchoolName);
+    expect(loadedSched['y_2025_2026']['0']['h_2']['r_105'].subject).toBe('Informatyka');
+
+    unsubTabB();
+  });
 });

@@ -7,6 +7,7 @@ import {
   getStorageItem,
   getRawItem,
   cleanSchedDataMeta,
+  writeSyncMirror,
   StorageLockedError,
   StorageWriteError
 } from './dbStorage';
@@ -87,6 +88,7 @@ export {
   getStorageItem,
   getRawItem,
   cleanSchedDataMeta,
+  writeSyncMirror,
   StorageLockedError,
   StorageWriteError
 };

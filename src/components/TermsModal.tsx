@@ -11,7 +11,7 @@ interface TermsModalProps {
 
 export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onClose }: TermsModalProps) {
   const [activeTab, setActiveTab] = useState<'regulamin' | 'licencja'>('regulamin');
-  const [acceptedCheckbox, setAcceptedCheckbox] = useState(false);
+  const [acceptedCheckbox, setAcceptedCheckbox] = useState(true);
 
   if (!isOpen) return null;
 
@@ -44,15 +44,19 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
               </div>
             </div>
 
-            {isReviewMode && onClose && (
-              <button
-                onClick={onClose}
-                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition cursor-pointer"
-                title="Zamknij"
-              >
-                ✕
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (isReviewMode && onClose) {
+                  onClose();
+                } else {
+                  onAccept();
+                }
+              }}
+              className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition cursor-pointer"
+              title={isReviewMode ? 'Zamknij' : 'Akceptuj i przejdź do programu'}
+            >
+              ✕
+            </button>
           </div>
 
           {/* 3 KROKI BEZPIECZEŃSTWA / HIGHLIGHTS */}
@@ -260,13 +264,8 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
                 </p>
                 <button
                   type="button"
-                  disabled={!acceptedCheckbox}
                   onClick={onAccept}
-                  className={`w-full sm:w-auto px-7 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                    acceptedCheckbox
-                      ? 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-indigo-500/25 scale-[1.01]'
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                  }`}
+                  className="w-full sm:w-auto px-7 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white hover:shadow-indigo-500/25 scale-[1.01]"
                 >
                   <CheckCircle2 size={16} />
                   <span>Akceptuję i przechodzę do programu</span>

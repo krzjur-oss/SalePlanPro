@@ -27,17 +27,57 @@ if (typeof sessionStorage === 'undefined') {
 }
 
 // Mock BroadcastChannel if missing in test environment
-if (typeof BroadcastChannel === 'undefined') {
+if (typeof BroadcastChannel === 'undefined' || !(globalThis as any).BroadcastChannel) {
+  const channelRegistry = new Map<string, Set<any>>();
   class MockBroadcastChannel {
     name: string;
     onmessage: ((event: any) => void) | null = null;
+    private listeners: ((event: any) => void)[] = [];
     constructor(name: string) {
       this.name = name;
+      if (!channelRegistry.has(name)) {
+        channelRegistry.set(name, new Set());
+      }
+      channelRegistry.get(name)!.add(this);
     }
-    postMessage(_data: any) {}
-    close() {}
+    postMessage(data: any) {
+      const set = channelRegistry.get(this.name);
+      if (set) {
+        set.forEach(ch => {
+          if (ch !== this) {
+            const ev = { data };
+            if (typeof ch.onmessage === 'function') {
+              try { ch.onmessage(ev); } catch (e) { console.error(e); }
+            }
+            ch.listeners.forEach((l: any) => {
+              try { l(ev); } catch (e) { console.error(e); }
+            });
+          }
+        });
+      }
+    }
+    addEventListener(type: string, listener: any) {
+      if (type === 'message') {
+        this.listeners.push(listener);
+      }
+    }
+    removeEventListener(type: string, listener: any) {
+      if (type === 'message') {
+        this.listeners = this.listeners.filter(l => l !== listener);
+      }
+    }
+    close() {
+      channelRegistry.get(this.name)?.delete(this);
+    }
   }
   (globalThis as any).BroadcastChannel = MockBroadcastChannel;
+  if (typeof window !== 'undefined') {
+    (window as any).BroadcastChannel = MockBroadcastChannel;
+  }
+}
+
+if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined' && !(window as any).BroadcastChannel) {
+  (window as any).BroadcastChannel = (globalThis as any).BroadcastChannel;
 }
 
 // Window mocks for jsdom

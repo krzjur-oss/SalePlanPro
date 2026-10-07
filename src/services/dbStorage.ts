@@ -77,6 +77,7 @@ export const STORAGE_KEYS = {
   ACTIVE_VARIANT_ID: 'saleplan_v3_active_variant_id',
   STORAGE_ENC_META: STORAGE_ENC_META_KEY,
   PRE_ENCRYPTION_BACKUP: 'saleplan_pre_encryption_backup',
+  PENDING_CHANGES_BACKUP: 'saleplan_v3_pending_changes_backup',
 } as const;
 
 /**
@@ -111,6 +112,34 @@ export function cleanSchedDataMeta<T = unknown>(data: T, key?: string): T {
     return cleaned as T;
   }
   return data;
+}
+
+/**
+ * Synchronous mirror write to localStorage for fast initial render and unload resilience.
+ * - Prohibits plaintext writes if database encryption is active.
+ * - Strips revision/metadata if key is SchedData.
+ * - Enforces the < 2.5 MB maximum payload size threshold.
+ * 
+ * @returns true if written to localStorage, false if skipped or rejected.
+ */
+export function writeSyncMirror(key: string, value: unknown): boolean {
+  if (isDatabaseEncryptionActive()) {
+    return false;
+  }
+  try {
+    const cleaned = cleanSchedDataMeta(value, key);
+    const serialized = typeof cleaned === 'string' ? cleaned : JSON.stringify(cleaned);
+    if (serialized.length < 2.5 * 1024 * 1024) {
+      localStorage.setItem(key, serialized);
+      return true;
+    } else {
+      console.info(`Pominięto lustro localStorage dla "${key}" ze względu na rozmiar (${serialized.length} B >= 2.5 MB).`);
+      return false;
+    }
+  } catch (err) {
+    console.warn(`Błąd synchronicznego zapisu lustra localStorage dla "${key}":`, err);
+    return false;
+  }
 }
 
 function isEncryptedObject(val: unknown): boolean {

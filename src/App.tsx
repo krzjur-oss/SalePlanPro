@@ -9,7 +9,7 @@ import {
   STORAGE_KEYS, getStorageItem, getStorageItemSync, setStorageItem, removeStorageItem,
   clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics,
   isDatabaseEncryptionActive, isSessionUnlocked, StorageLockedError, removeStorageEncryptionMeta,
-  migrateAllStoredItemsToV2, cleanSchedDataMeta, getRawItem, removeRawItem
+  migrateAllStoredItemsToV2, cleanSchedDataMeta, writeSyncMirror, getRawItem, removeRawItem
 } from './services/dbStorage';
 import { persistAppStateAndSchedWithConflictCheck as persistWithConflictCheck } from './services/persistence';
 import UnlockScreen from './components/UnlockScreen';
@@ -220,6 +220,31 @@ export default function App() {
     rawContent: string;
   } | null>(null);
 
+  // ── MULTI-TAB BROADCASTCHANNEL 'saleplan-state' & CONFLICT RESOLUTION ──
+  const [showConflictModal, setShowConflictModal] = useState<boolean>(false);
+  const [conflictData, setConflictData] = useState<{
+    localRevision: number;
+    incomingRevision: number;
+    incomingTabId: string;
+    dbAppState: AppState;
+    dbSchedData?: SchedData;
+  } | null>(null);
+
+  const [showRefreshBanner, setShowRefreshBanner] = useState<boolean>(false);
+  const [remoteRevision, setRemoteRevision] = useState<number>(1);
+
+  const notify = (msg: string, type: 'ok' | 'err' | 'info' = 'ok') => {
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg ${Z_INDEX_CLASSES.TOAST} ${
+      type === 'ok' ? 'border-emerald-500' : type === 'info' ? 'border-amber-500' : 'border-red-500'
+    }`;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+    }, 3000);
+  };
+
   // Hydrated state references for detecting genuine user edits (Task 2)
   const hydratedRef = useRef<{ appState: AppState; schedData: SchedData } | null>(null);
   const isFirstTabMount = useRef<boolean>(true);
@@ -404,6 +429,14 @@ export default function App() {
         if (saved) {
           await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
           setSaveStatus('saved');
+        } else {
+          // Gdy persistAppStateAndSchedWithConflictCheck zwróci false,
+          // zapisz bieżący stan do klucza kopii awaryjnej (zaszyfrowany)
+          await setStorageItem(STORAGE_KEYS.PENDING_CHANGES_BACKUP, {
+            appState: stateRef.current.appState,
+            schedData: stateRef.current.schedData,
+            timestamp: Date.now()
+          });
         }
       } catch (err) {
         console.warn('Flush przed blokadą nie powiódł się:', err);
@@ -419,12 +452,45 @@ export default function App() {
     setIsLocked(false);
     await initStorage();
     migrateAllStoredItemsToV2().catch(() => {});
+
+    // Sprawdzenie czy przed zablokowaniem wykryto konflikt z ostatniej chwili
+    try {
+      const pendingBackup = await getStorageItem<{ appState: AppState; schedData: SchedData; timestamp: number }>(
+        STORAGE_KEYS.PENDING_CHANGES_BACKUP
+      );
+      if (pendingBackup) {
+        notify('Zmiany z ostatniej chwili wykryły konflikt – wybierz wersję', 'err');
+        setConflictData(prev => {
+          if (prev) return prev;
+          return {
+            localRevision: multiTabStateService.getLocalRevision(),
+            incomingRevision: multiTabStateService.getLocalRevision() + 1,
+            incomingTabId: 'inna_karta',
+            dbAppState: pendingBackup.appState,
+            dbSchedData: pendingBackup.schedData
+          };
+        });
+        setShowConflictModal(true);
+      }
+    } catch (e) {
+      console.warn('Błąd sprawdzania kopii awaryjnej po odblokowaniu:', e);
+    }
   };
 
   const handleEmergencyReset = async () => {
     removeStorageEncryptionMeta();
     await clearAllStorage();
-    window.location.reload();
+    setIsLocked(false);
+    setStorageReady(false);
+    handleUpdateAppState(getDemoAppState());
+    setSchedData({});
+    await setStorageItem(STORAGE_KEYS.APP_STATE, getDemoAppState());
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, {});
+    refreshStorageStats();
+    notify('Zresetowano blokadę bazy danych i wczytano dane demonstracyjne.', 'ok');
+    try {
+      window.location.reload();
+    } catch {}
   };
 
   useEffect(() => {
@@ -917,7 +983,13 @@ export default function App() {
         const { schedData: newSched } = msg.payload || {};
         if (newSched) {
           setSchedData(newSched);
-          setStorageItem(STORAGE_KEYS.SCHED_DATA, newSched);
+          persistAppStateAndSchedWithConflictCheck(
+            stateRef.current.appState,
+            newSched,
+            { forceOverwrite: true }
+          ).catch((e) => {
+            console.warn('Błąd zapisu planu z UPDATE_SCHED_DATA:', e);
+          });
         }
       } else if (msg.type === 'UPDATE_DUTIES') {
         const { dyzury, appState: incomingState } = msg.payload || {};
@@ -1023,10 +1095,24 @@ export default function App() {
       // 1. Sprawdzenie akceptacji regulaminu i licencji (wymagane przy 1. uruchomieniu)
       let needsTerms = false;
       try {
-        const termsData = await getStorageItem<{ accepted?: boolean }>(STORAGE_KEYS.TERMS_ACCEPTED) || getStorageItemSync<{ accepted?: boolean }>(STORAGE_KEYS.TERMS_ACCEPTED);
-        if (!termsData || !termsData.accepted) {
-          setShowTermsModal(true);
-          needsTerms = true;
+        const localDirect = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.TERMS_ACCEPTED) : null;
+        if (localDirect) {
+          try {
+            const parsed = JSON.parse(localDirect);
+            if (parsed && parsed.accepted) {
+              needsTerms = false;
+            } else {
+              needsTerms = true;
+            }
+          } catch {
+            needsTerms = true;
+          }
+        } else {
+          const termsData = await getStorageItem<{ accepted?: boolean }>(STORAGE_KEYS.TERMS_ACCEPTED) || getStorageItemSync<{ accepted?: boolean }>(STORAGE_KEYS.TERMS_ACCEPTED);
+          if (!termsData || !termsData.accepted) {
+            setShowTermsModal(true);
+            needsTerms = true;
+          }
         }
       } catch (e) {
         console.warn('Weryfikacja akceptacji regulaminu:', e);
@@ -1056,6 +1142,9 @@ export default function App() {
       version: CURRENT_VERSION
     };
     try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.TERMS_ACCEPTED, JSON.stringify(payload));
+      }
       await setStorageItem(STORAGE_KEYS.TERMS_ACCEPTED, payload);
     } catch (e) {
       console.error('Błąd zapisu akceptacji regulaminu:', e);
@@ -1142,8 +1231,7 @@ export default function App() {
         setHistoryLogs(backup.historyLogs);
 
         await Promise.all([
-          setStorageItem(STORAGE_KEYS.APP_STATE, backup.appState),
-          setStorageItem(STORAGE_KEYS.SCHED_DATA, backup.schedData),
+          persistAppStateAndSchedWithConflictCheck(backup.appState, backup.schedData, { forceOverwrite: true }),
           setStorageItem(STORAGE_KEYS.ARCHIVE, backup.archive),
           setStorageItem(STORAGE_KEYS.SNAPSHOTS, backup.snapshots),
           setStorageItem(STORAGE_KEYS.HISTORY_LOGS, backup.historyLogs)
@@ -1218,19 +1306,7 @@ export default function App() {
     stateRef.current = { appState, schedData };
   }, [appState, schedData]);
 
-  // ── MULTI-TAB BROADCASTCHANNEL 'saleplan-state' & CONFLICT RESOLUTION ──
-  const [showConflictModal, setShowConflictModal] = useState<boolean>(false);
-  const [conflictData, setConflictData] = useState<{
-    localRevision: number;
-    incomingRevision: number;
-    incomingTabId: string;
-    dbAppState: AppState;
-    dbSchedData?: SchedData;
-  } | null>(null);
-
-  const [showRefreshBanner, setShowRefreshBanner] = useState<boolean>(false);
-  const [remoteRevision, setRemoteRevision] = useState<number>(1);
-
+  // ── MULTI-TAB BROADCASTCHANNEL 'saleplan-state' SUBSCRIPTION ──
   // Subscribe to BroadcastChannel 'saleplan-state' (odrębny od trybu 2 ekranów)
   useEffect(() => {
     const unsub = multiTabStateService.subscribe((msg) => {
@@ -1248,9 +1324,12 @@ export default function App() {
   const persistAppStateAndSchedWithConflictCheck = async (
     targetAppState: AppState,
     targetSchedData: SchedData,
-    forceOverwrite: boolean = false
+    forceOverwriteOrOptions: boolean | { forceOverwrite?: boolean } = false
   ): Promise<boolean> => {
     if (!storageReadyRef.current || isLocked) return false;
+    const forceOverwrite = typeof forceOverwriteOrOptions === 'boolean'
+      ? forceOverwriteOrOptions
+      : (forceOverwriteOrOptions?.forceOverwrite ?? false);
 
     return persistWithConflictCheck(targetAppState, targetSchedData, {
       forceOverwrite,
@@ -1293,6 +1372,7 @@ export default function App() {
       setShowRefreshBanner(false);
       setConflictData(null);
       setSaveStatus('saved');
+      removeStorageItem(STORAGE_KEYS.PENDING_CHANGES_BACKUP).catch(() => {});
       notify('Wczytano najnowszą wersję planu z innej karty.', 'ok');
     } catch (e) {
       console.error('Błąd wczytywania zmian z innej karty:', e);
@@ -1341,6 +1421,7 @@ export default function App() {
         setShowConflictModal(false);
         setShowRefreshBanner(false);
         setConflictData(null);
+        removeStorageItem(STORAGE_KEYS.PENDING_CHANGES_BACKUP).catch(() => {});
         notify('Zachowano Twoją wersję planu. Kopia z innej karty została bezpiecznie zapisana w Punktach Przywracania.', 'ok');
       }
     } catch (e) {
@@ -1461,26 +1542,23 @@ export default function App() {
     const handleBeforeUnload = () => {
       if (!storageReadyRef.current || isLocked) return;
       
-      // Synchronous mirror write to localStorage for fast unload resilience
-      try {
-        const stateStr = JSON.stringify(stateRef.current.appState);
-        const schedStr = JSON.stringify(cleanSchedDataMeta(stateRef.current.schedData));
-        if (stateStr.length < 2.5 * 1024 * 1024) {
-          localStorage.setItem(STORAGE_KEYS.APP_STATE, stateStr);
+      // 1 & 2. Synchroniczne lustro do localStorage tylko gdy szyfrowanie NIE jest aktywne
+      if (!isDatabaseEncryptionActive()) {
+        try {
+          writeSyncMirror(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
+          writeSyncMirror(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
+        } catch (e) {
+          console.warn('Błąd synchronicznego zapisu lustra przy zamykaniu:', e);
         }
-        if (schedStr.length < 2.5 * 1024 * 1024) {
-          localStorage.setItem(STORAGE_KEYS.SCHED_DATA, schedStr);
-        }
-      } catch (e) {
-        console.warn('Błąd synchronicznego zapisu localStorage przy zamykaniu:', e);
       }
 
-      // Asynchronous persistence wrapped in Promise.allSettled with catch to avoid unhandled rejections
+      // 3. Asynchroniczny zapis przez persistAppStateAndSchedWithConflictCheck (z forceOverwrite: false)
       try {
-        Promise.allSettled([
-          setStorageItem(STORAGE_KEYS.APP_STATE, stateRef.current.appState),
-          setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanSchedDataMeta(stateRef.current.schedData))
-        ]).catch((e) => {
+        persistAppStateAndSchedWithConflictCheck(
+          stateRef.current.appState,
+          stateRef.current.schedData,
+          { forceOverwrite: false }
+        ).catch((e) => {
           console.warn('Błąd zapisu asynchronicznego przy beforeunload:', e);
         });
       } catch (e) {
@@ -1491,6 +1569,7 @@ export default function App() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Unload fallback runs on window beforeunload using stateRef
   }, [isLocked]);
 
   // Sync archive immediately (low frequency, separate key)
@@ -1881,10 +1960,7 @@ export default function App() {
       handleUpdateAppState(sanitizedState);
       setSchedData(sanitizedSched);
 
-      await Promise.all([
-        setStorageItem(STORAGE_KEYS.APP_STATE, sanitizedState),
-        setStorageItem(STORAGE_KEYS.SCHED_DATA, sanitizedSched)
-      ]);
+      await persistAppStateAndSchedWithConflictCheck(sanitizedState, sanitizedSched, { forceOverwrite: true });
 
       refreshStorageStats();
 
@@ -2056,8 +2132,7 @@ export default function App() {
       setHistoryLogs(result.mergedLogs);
 
       await Promise.all([
-        setStorageItem(STORAGE_KEYS.APP_STATE, sanitizedState),
-        setStorageItem(STORAGE_KEYS.SCHED_DATA, sanitizedSched),
+        persistAppStateAndSchedWithConflictCheck(sanitizedState, sanitizedSched, { forceOverwrite: true }),
         setStorageItem(STORAGE_KEYS.ARCHIVE, result.mergedArchive),
         setStorageItem(STORAGE_KEYS.SNAPSHOTS, result.mergedSnapshots),
         setStorageItem(STORAGE_KEYS.HISTORY_LOGS, result.mergedLogs)
@@ -2096,8 +2171,7 @@ export default function App() {
       setHistoryLogs(preImportLogs);
 
       await Promise.all([
-        setStorageItem(STORAGE_KEYS.APP_STATE, preImportState),
-        setStorageItem(STORAGE_KEYS.SCHED_DATA, preImportSched),
+        persistAppStateAndSchedWithConflictCheck(preImportState, preImportSched, { forceOverwrite: true }),
         setStorageItem(STORAGE_KEYS.ARCHIVE, preImportArchive),
         setStorageItem(STORAGE_KEYS.SNAPSHOTS, preImportSnapshots),
         setStorageItem(STORAGE_KEYS.HISTORY_LOGS, preImportLogs)
@@ -2132,18 +2206,6 @@ export default function App() {
       'Zresetowano konfigurację i wyczyszczono plan (Baza IndexedDB)',
       'Wycofano wszystkie dane do stanu demonstracyjnego (demo).'
     );
-  };
-
-  const notify = (msg: string, type: 'ok' | 'err' | 'info' = 'ok') => {
-    const toast = document.createElement('div');
-    toast.className = `fixed bottom-10 right-10 bg-slate-800 text-white font-semibold text-xs px-4 py-2.5 rounded-lg border-l-4 shadow-lg ${Z_INDEX_CLASSES.TOAST} ${
-      type === 'ok' ? 'border-emerald-500' : type === 'info' ? 'border-amber-500' : 'border-red-500'
-    }`;
-    toast.textContent = msg;
-    document.body.appendChild(toast);
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
   };
 
   // If database encryption is active and session is locked, render exclusively the UnlockScreen gate

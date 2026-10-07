@@ -8,6 +8,7 @@ import {
 import { 
   STORAGE_KEYS, getStorageItemSync, setStorageItem 
 } from '../services/dbStorage';
+import { persistAppStateAndSchedWithConflictCheck } from '../services/persistence';
 import { 
   isSportsFacility 
 } from '../utils/roomUtils';
@@ -122,7 +123,9 @@ export default function CompanionWindowView({
 
   const handleChangeSchedData = (newSched: SchedData) => {
     setSchedData(newSched);
-    setStorageItem(STORAGE_KEYS.SCHED_DATA, newSched);
+    persistAppStateAndSchedWithConflictCheck(appState, newSched, { forceOverwrite: true }).catch((err) => {
+      console.warn('Błąd zapisu planu sal w oknie towarzyszącym:', err);
+    });
     const now = Date.now();
     lastSyncTimestampRef.current = now;
     dualScreenService.sendMessage({
