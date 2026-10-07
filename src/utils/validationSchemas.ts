@@ -38,7 +38,7 @@ export const SchoolSchema = z.object({
 }).passthrough();
 
 export const HourSchema = z.object({
-  num: z.number(),
+  num: z.union([z.number(), z.string()]).transform(Number),
   start: z.string(),
   end: z.string(),
   label: z.string().optional(),
@@ -63,9 +63,11 @@ export const TeacherSchema = z.object({
   abbr: z.string(),
   maxHours: z.number().optional().default(18),
   color: z.string().optional().default('#3b82f6'),
+  overtimeHours: z.number().optional(),
   availability: z.array(z.string()).optional().default([]),
   inactive: z.boolean().optional().default(false),
   inactiveComment: z.string().optional(),
+  substitutions: z.array(z.string()).optional().default([]),
   preferredRooms: z.array(z.string()).optional().default([]),
   isAdministrative: z.boolean().optional(),
   administrativeRole: z.string().optional(),
@@ -76,33 +78,66 @@ export const SubjectSchema = z.object({
   name: z.string(),
   short: z.string(),
   color: z.string().optional().default('#2563eb'),
+  defaultGroupPattern: z.string().optional(),
 }).passthrough();
 
 export const RoomSchema = z.object({
   id: z.string(),
   name: z.string(),
+  desc: z.string().optional(),
+  type: z.string().optional(),
   capacity: z.number().optional().default(30),
   color: z.string().optional(),
   isLab: z.boolean().optional(),
+  isGrade1_3: z.boolean().optional(),
+  singleClassLimit: z.boolean().optional(),
 }).passthrough();
 
+export const SegmentRoomSchema = z.preprocess(
+  (val: unknown) => {
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const obj = { ...(val as Record<string, unknown>) };
+      if (obj.num === undefined && obj.name !== undefined) {
+        obj.num = obj.name;
+      }
+      if (obj.id === undefined && obj.num !== undefined) {
+        obj.id = `room_${obj.num}`;
+      }
+      return obj;
+    }
+    return val;
+  },
+  z.object({
+    id: z.union([z.string(), z.number()]).transform(String),
+    num: z.union([z.string(), z.number()]).transform(String),
+    sub: z.string().optional(),
+  }).passthrough()
+);
+
 export const SegmentSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().optional(),
-  rooms: z.array(RoomSchema).optional().default([]),
+  id: z.string().optional().default(() => Math.random().toString(36).substring(2, 9)),
+  name: z.string().optional().default(''),
+  rooms: z.array(SegmentRoomSchema).optional().default([]),
 }).passthrough();
 
 export const FloorSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().optional(),
-  buildingIdx: z.number().optional().default(0),
+  id: z.string().optional().default(() => Math.random().toString(36).substring(2, 9)),
+  name: z.string().optional().default(''),
+  color: z.string().optional().default('#3b82f6'),
+  buildingIdx: z.union([z.number(), z.string()]).transform(v => typeof v === 'number' ? v : (parseInt(v, 10) || 0)).optional().default(0),
   segments: z.array(SegmentSchema).optional().default([]),
 }).passthrough();
 
 export const BuildingSchema = z.object({
   id: z.string().optional(),
   name: z.string(),
+  address: z.string().optional(),
   color: z.string().optional(),
+  multi: z.boolean().optional(),
+  singleClassLimit: z.boolean().optional(),
+  hasCustomStructure: z.boolean().optional(),
+  customFloors: z.array(z.string()).optional(),
+  customSegments: z.array(z.string()).optional(),
 }).passthrough();
 
 export const AssignmentSchema = z.object({

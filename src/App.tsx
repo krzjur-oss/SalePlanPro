@@ -19,7 +19,7 @@ import SecurityModal from './components/SecurityModal';
 import TermsModal from './components/TermsModal';
 import ErrorBoundary from './components/ErrorBoundary';
 import { sanitizeAppState, ImportPayload } from './utils/mergeEngine';
-import { StateMeta } from './utils/validationSchemas';
+import { StateMeta, AppStateSchema, SchedDataSchema } from './utils/validationSchemas';
 import { anonymizeBackupPayload, AnonymizationSummary } from './utils/anonymization';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
@@ -262,27 +262,93 @@ export default function App() {
         const rawAppState = await getRawItem(STORAGE_KEYS.APP_STATE);
         const parsedAppState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
         if (rawAppState !== null && rawAppState !== undefined && parsedAppState === null) {
-          setCorruptDataModal({
-            key: STORAGE_KEYS.APP_STATE,
-            rawContent: typeof rawAppState === 'string' ? rawAppState : JSON.stringify(rawAppState, null, 2)
-          });
-          setStorageInitError('Wykryto uszkodzone dane konfiguracji (APP_STATE). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
-          storageReadyRef.current = false;
-          setStorageReady(false);
-          return;
+          let parsedRaw: unknown = rawAppState;
+          if (typeof rawAppState === 'string') {
+            try {
+              parsedRaw = JSON.parse(rawAppState);
+            } catch {
+              parsedRaw = null;
+            }
+          }
+
+          let migratedSuccessfully = false;
+          if (parsedRaw && typeof parsedRaw === 'object' && !Array.isArray(parsedRaw)) {
+            const zodCheck = AppStateSchema.safeParse(parsedRaw);
+            if (!zodCheck.success) {
+              console.warn('[App initStorage] Walidacja schematu APP_STATE nie powiodła się. Błędy Zod (parsed.error.issues):', zodCheck.error.issues);
+            }
+
+            try {
+              const normalized = sanitizeAppState(parsedRaw);
+              const normalizedCheck = AppStateSchema.safeParse(normalized);
+              if (normalizedCheck.success) {
+                const backupKey = `${STORAGE_KEYS.APP_STATE}_recovery_backup_${Date.now()}`;
+                await setStorageItem(backupKey, rawAppState).catch(() => {});
+                await setStorageItem(STORAGE_KEYS.APP_STATE, normalizedCheck.data);
+                console.info('[App initStorage] Pomyślnie znormalizowano i zmigrowano strukturę APP_STATE. Kopia zapasowa:', backupKey);
+                migratedSuccessfully = true;
+              }
+            } catch (migErr) {
+              console.warn('[App initStorage] Próba automatycznej normalizacji APP_STATE nie powiodła się:', migErr);
+            }
+          }
+
+          if (!migratedSuccessfully) {
+            setCorruptDataModal({
+              key: STORAGE_KEYS.APP_STATE,
+              rawContent: typeof rawAppState === 'string' ? rawAppState : JSON.stringify(rawAppState, null, 2)
+            });
+            setStorageInitError('Wykryto uszkodzone dane konfiguracji (APP_STATE). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+            storageReadyRef.current = false;
+            setStorageReady(false);
+            return;
+          }
         }
 
         const rawSched = await getRawItem(STORAGE_KEYS.SCHED_DATA);
         const parsedSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
         if (rawSched !== null && rawSched !== undefined && parsedSched === null) {
-          setCorruptDataModal({
-            key: STORAGE_KEYS.SCHED_DATA,
-            rawContent: typeof rawSched === 'string' ? rawSched : JSON.stringify(rawSched, null, 2)
-          });
-          setStorageInitError('Wykryto uszkodzone dane planu sal (SCHED_DATA). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
-          storageReadyRef.current = false;
-          setStorageReady(false);
-          return;
+          let parsedRawSched: unknown = rawSched;
+          if (typeof rawSched === 'string') {
+            try {
+              parsedRawSched = JSON.parse(rawSched);
+            } catch {
+              parsedRawSched = null;
+            }
+          }
+
+          let schedMigratedSuccessfully = false;
+          if (parsedRawSched && typeof parsedRawSched === 'object') {
+            const zodSchedCheck = SchedDataSchema.safeParse(parsedRawSched);
+            if (!zodSchedCheck.success) {
+              console.warn('[App initStorage] Walidacja schematu SCHED_DATA nie powiodła się. Błędy Zod (parsed.error.issues):', zodSchedCheck.error.issues);
+            }
+
+            try {
+              const cleanedSched = cleanSchedDataMeta(parsedRawSched as SchedData);
+              const cleanedCheck = SchedDataSchema.safeParse(cleanedSched);
+              if (cleanedCheck.success) {
+                const backupKey = `${STORAGE_KEYS.SCHED_DATA}_recovery_backup_${Date.now()}`;
+                await setStorageItem(backupKey, rawSched).catch(() => {});
+                await setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanedCheck.data);
+                console.info('[App initStorage] Pomyślnie znormalizowano i zmigrowano strukturę SCHED_DATA. Kopia zapasowa:', backupKey);
+                schedMigratedSuccessfully = true;
+              }
+            } catch (migErr) {
+              console.warn('[App initStorage] Próba automatycznej normalizacji SCHED_DATA nie powiodła się:', migErr);
+            }
+          }
+
+          if (!schedMigratedSuccessfully) {
+            setCorruptDataModal({
+              key: STORAGE_KEYS.SCHED_DATA,
+              rawContent: typeof rawSched === 'string' ? rawSched : JSON.stringify(rawSched, null, 2)
+            });
+            setStorageInitError('Wykryto uszkodzone dane planu sal (SCHED_DATA). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+            storageReadyRef.current = false;
+            setStorageReady(false);
+            return;
+          }
         }
       }
       
@@ -1086,7 +1152,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.9.6';
+  const CURRENT_VERSION = '3.9.7';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 

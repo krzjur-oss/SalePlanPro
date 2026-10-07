@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.7',
+      date: 'Październik 2026',
+      title: 'Naprawa Walidacji Schematów Pokoje/Segmenty i Zabezpieczenie UX przed Fałszywym Uszkodzeniem Danych',
+      description: 'Precyzyjne dostosowanie schematów walidacji Zod (SegmentRoomSchema, SegmentSchema, FloorSchema, BuildingSchema) do struktur modelu danych types.ts, wyeliminowanie fałszywych alarmów uszkodzenia danych bazy oraz dodanie bezpiecznej auto-normalizacji i kopii awaryjnej.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'fix', text: 'Dedykowany schemat SegmentRoomSchema: Pokoje w kondygnacjach i segmentach (floors[].segments[].rooms[]) walidowane są schematem SegmentRoomSchema z polem "num" (zgodnie z modelem Room z types.ts) zamiast RoomSchema wymagającego "name".', badgeText: 'SegmentRoomSchema' },
+        { type: 'improvement', text: 'Tolerancyjne rzutowanie numeru pokoju: Obsługa "num" jako string i number z automatyczną transformacją, a w przypadku starszych zapisów z polem "name" automatyczne mapowanie na "num" za pomocą z.preprocess.', badgeText: 'Zgodność wsteczna' },
+        { type: 'fix', text: 'Pełna zgodność FloorSchema i BuildingSchema: Dodano obsługę kolorów pięter (color) oraz dodatkowych atrybutów budynków (address, multi, singleClassLimit, hasCustomStructure, customFloors, customSegments).', badgeText: 'Zgodność types.ts' },
+        { type: 'security', text: 'Bezpieczna auto-normalizacja w initStorage: W przypadku wystąpienia niekrytycznych niezgodności schematu przy poprawnym formacie JSON, system automatycznie normalizuje strukturę danych (sanitizeAppState), zapisuje kopię awaryjną w osobnym kluczu i kontynuuje pracę bez blokowania użytkownika fałszywym modalem.', badgeText: 'Auto-Recovery' },
+        { type: 'improvement', text: 'Szczegółowa diagnostyka w konsoli: Wszelkie błędy walidacji schematów logują dokładną ścieżkę i opis niezgodności (parsed.error.issues), ułatwiając szybką identyfikację ewentualnych problemów z formatem danych.', badgeText: 'Logi Zod' }
+      ]
+    },
+    {
       version: 'v3.9.6',
       date: 'Październik 2026',
       title: 'Tarcza Bezpieczeństwa RODO v2, Wielokartowa Synchronizacja i Pełny Pakiet Testów Jakościowych CI',
       description: 'Kompleksowa modernizacja silnika bezpieczeństwa bazy danych (AES-256-GCM z derywacją PBKDF2 600 000 iteracji i Single-Session CryptoKey w RAM), wdrożenie niezależnej magistrali wielu kart (BroadcastChannel saleplan-state) z detekcją konfliktów i ochroną przed nadpisaniem, a także wdrożenie automatycznych testów jednostkowych i integracyjnych z weryfikacją w GitHub Actions CI.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'security', text: 'Tarcza Bezpieczeństwa RODO v2 (Format "encrypted-v2"): Przejście na podwyższoną derywację klucza PBKDF2 (600 000 iteracji wg najnowszych zaleceń OWASP/NIST) z unikalną solą kryptograficzną dla każdego wpisu w IndexedDB.', badgeText: '600k Iteracji PBKDF2' },
         { type: 'security', text: 'Single-Session CryptoKey (Derywacja ONCE w RAM): Klucz kryptograficzny CryptoKey wyliczany jest jednorazowo przy odblokowaniu i bezpiecznie cache’owany wyłącznie w pamięci operacyjnej sesji (RAM), co zapewnia błyskawiczny zapis i odczyt (< 1 s dla baz > 5 MB) oraz całkowicie eliminuje jawne hasło z sessionStorage.', badgeText: 'Klucz w RAM' },
