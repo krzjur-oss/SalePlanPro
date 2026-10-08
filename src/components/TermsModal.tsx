@@ -29,7 +29,7 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/20 font-mono">
-                    SalePlan Pro v3.9.7
+                    SalePlan Pro v3.9.8
                   </span>
                   <span className="text-[10px] uppercase font-bold text-slate-400">
                     {isReviewMode ? 'Podgląd dokumentów prawnych' : 'Wymagana akceptacja warunków'}
