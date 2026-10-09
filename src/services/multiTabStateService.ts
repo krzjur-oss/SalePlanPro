@@ -14,6 +14,10 @@ export interface MultiTabStateMessage {
   revision: number;
   tabId: string;
   timestamp: number;
+  tabLabel?: string;
+  activeSection?: string;
+  activeSectionName?: string;
+  changeSummary?: string[];
 }
 
 export interface ConflictCheckResult {
@@ -22,6 +26,10 @@ export interface ConflictCheckResult {
   dbRevision: number;
   dbTabId: string;
   dbRecord: unknown;
+  stateMeta?: StateMeta | null;
+  incomingTabLabel?: string;
+  incomingSectionName?: string;
+  incomingUpdatedAt?: string;
 }
 
 export class MultiTabStateService {
@@ -29,6 +37,9 @@ export class MultiTabStateService {
   private tabId: string = '';
   private localRevisions: Map<string, number> = new Map();
   private subscribers: ((msg: MultiTabStateMessage) => void)[] = [];
+  private currentSection: string = 'kreator';
+  private currentSectionName: string = 'Kreator Szkoły';
+  private customTabLabel: string = '';
 
   constructor() {
     this.initTabId();
@@ -79,6 +90,21 @@ export class MultiTabStateService {
       this.initTabId();
     }
     return this.tabId;
+  }
+
+  public setTabContext(section: string, sectionName: string, label?: string) {
+    if (section) this.currentSection = section;
+    if (sectionName) this.currentSectionName = sectionName;
+    if (label) this.customTabLabel = label;
+  }
+
+  public getTabContext() {
+    return {
+      section: this.currentSection,
+      sectionName: this.currentSectionName,
+      tabLabel: this.customTabLabel || `Karta: ${this.currentSectionName}`,
+      tabId: this.getTabId()
+    };
   }
 
   public getLocalRevision(key: string = STORAGE_KEYS.APP_STATE): number {
@@ -186,26 +212,42 @@ export class MultiTabStateService {
       dbRevision > localRevision
     );
 
+    const incomingTabLabel = (stateMeta && typeof stateMeta.tabLabel === 'string') ? stateMeta.tabLabel : '';
+    const incomingSectionName = (stateMeta && typeof stateMeta.activeSectionName === 'string') ? stateMeta.activeSectionName : '';
+    const incomingUpdatedAt = (stateMeta && typeof stateMeta.updatedAt === 'string') ? stateMeta.updatedAt : '';
+
     return {
       hasConflict,
       localRevision,
       dbRevision,
       dbTabId,
-      dbRecord
+      dbRecord,
+      stateMeta,
+      incomingTabLabel,
+      incomingSectionName,
+      incomingUpdatedAt
     };
   }
 
   /**
    * Broadcasts a notification that this tab has successfully committed a new revision.
    */
-  public broadcastStateCommitted(key: string, revision: number) {
+  public broadcastStateCommitted(
+    key: string,
+    revision: number,
+    meta?: { tabLabel?: string; activeSection?: string; activeSectionName?: string }
+  ) {
     if (!this.channel) return;
+    const ctx = this.getTabContext();
     const msg: MultiTabStateMessage = {
       type: 'STATE_COMMITTED',
       key,
       revision,
       tabId: this.getTabId(),
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      tabLabel: meta?.tabLabel || ctx.tabLabel,
+      activeSection: meta?.activeSection || ctx.section,
+      activeSectionName: meta?.activeSectionName || ctx.sectionName
     };
     try {
       this.channel.postMessage(msg);
@@ -248,7 +290,12 @@ export class MultiTabStateService {
   public async persistAppStateAndSchedWithConflictCheck(
     targetAppState: AppState,
     targetSchedData: SchedData,
-    forceOverwrite: boolean = false
+    forceOverwrite: boolean = false,
+    options?: {
+      tabLabel?: string;
+      activeSection?: string;
+      activeSectionName?: string;
+    }
   ): Promise<boolean> {
     const currentLocalRev = this.getLocalRevision(STORAGE_KEYS.APP_STATE);
 
@@ -263,16 +310,28 @@ export class MultiTabStateService {
     const enrichedState = this.enrichWithRevision(targetAppState, nextRev);
     const cleanSched = cleanSchedDataMeta(targetSchedData);
 
+    const ctx = this.getTabContext();
+    const tabLabel = options?.tabLabel || ctx.tabLabel;
+    const activeSection = options?.activeSection || ctx.section;
+    const activeSectionName = options?.activeSectionName || ctx.sectionName;
+
     // Save strictly in order: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META
     await setStorageItem(STORAGE_KEYS.APP_STATE, enrichedState);
     await setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanSched);
     await setStorageItem(STORAGE_KEYS.STATE_META, {
       revision: nextRev,
       tabId: this.getTabId(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      tabLabel,
+      activeSection,
+      activeSectionName
     });
     this.setLocalRevision(nextRev, STORAGE_KEYS.APP_STATE);
-    this.broadcastStateCommitted(STORAGE_KEYS.APP_STATE, nextRev);
+    this.broadcastStateCommitted(STORAGE_KEYS.APP_STATE, nextRev, {
+      tabLabel,
+      activeSection,
+      activeSectionName
+    });
 
     return true;
   }

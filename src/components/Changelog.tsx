@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.10',
+      date: 'Październik 2026',
+      title: 'Szczegółowa Identyfikacja Karty i Podgląd Zmian w Oknie Równoległej Edycji (Konflikt Kart)',
+      description: 'Rozszerzenie okna dialogowego wykrywania równoległej edycji w wielu kartach o precyzyjne wskazanie karty dokonującej zapisu (nazwa modułu, etykieta karty, dokładny czas) oraz zaawansowany silnik różnicowy pokazujący bilans i szczegółową listę wprowadzonych zmian (lekcje, dyżury, obsada, nauczyciele, klasy, sale i plan sal).',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Wskazanie karty dokonującej zmian: Okno konfliktu precyzyjnie informuje, w której karcie zapisano nowszą wersję (np. Karta: Dyżury Nauczycielskie, Karta: Plan Klas, Karta: Kreator Szkoły), z jakim modułem, czasem zapisu (np. „15 s temu”) oraz porównaniem rewizji.', badgeText: 'Identyfikacja karty' },
+        { type: 'feature', text: 'Zaawansowany silnik różnicowy (Conflict Diff): Obliczanie i prezentacja dokładnych różnic pomiędzy bieżącą kartą a wersją zapisaną w bazie (z podziałem na pigułki bilansu: lekcje, dyżury, nauczyciele, oddziały, sale, uczniowie SPE).', badgeText: 'Silnik różnicowy' },
+        { type: 'feature', text: 'Kategoryzowana lista wprowadzonych zmian: Filtry (Lekcje, Dyżury, Struktura, Plan Sal) oraz szczegółowe wpisy z plakietkami (+ Dodano w innej karcie, ~ Zmiana przydziału, - Usunięto) z czytelnym podaniem klasy, terminu, sali i nauczyciela.', badgeText: 'Przegląd zmian' },
+        { type: 'improvement', text: 'Informacyjny baner aktualizacji: Pasek powiadomienia w górnej części ekranu MultiTabRefreshBanner wyświetla nazwę karty źródłowej dokonującej zapisu.', badgeText: 'Powiadomienia w tle' },
+        { type: 'improvement', text: 'Zapis metadanych karty w STATE_META: Usługa multiTabStateService i warstwa persistence rejestrują etykietę karty oraz aktywny moduł podczas każdego zapisu z pełnym pokryciem testami jednostkowymi.', badgeText: 'Metadane sesji' }
+      ]
+    },
+    {
       version: 'v3.9.9',
       date: 'Październik 2026',
       title: 'Miejsce Realizacji Nauczania Indywidualnego: Oznaczenie Zajęć w Szkole oraz w Domu Ucznia',
       description: 'Wprowadzenie możliwości określenia miejsca realizacji zajęć w ramach nauczania indywidualnego (NI) – w budynku szkoły (sala/gabinet) lub w domu ucznia (poza szkołą). Funkcjonalność zintegrowana w Kreatorze Szkoły, Planie Klas, Arkuszu Wsparcia Ucznia, module Wydruków oraz walidacji bazy danych.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Przełącznik „Zajęcia realizowane w szkole / w domu” w Kreatorze Szkoły (Krok 8): Podczas dodawania lub edycji ucznia z pulą nauczania indywidualnego (NI) użytkownik może wybrać, czy zajęcia odbywają się w budynku szkoły czy w domu ucznia.', badgeText: 'Kreator Szkoły' },
         { type: 'feature', text: 'Konfiguracja miejsca zajęć w Planie Klas: Zarówno w formularzu szybkiego dodawania ucznia SPE, jak i w profilu ucznia dodano dedykowaną kontrolkę wyboru lokalizacji NI (🏫 W szkole / 🏠 W domu).', badgeText: 'Plan Klas' },

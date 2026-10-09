@@ -504,6 +504,10 @@ export const StateMetaSchema = z.object({
   revision: z.number(),
   tabId: z.string(),
   updatedAt: z.string().optional(),
+  tabLabel: z.string().optional(),
+  activeSection: z.string().optional(),
+  activeSectionName: z.string().optional(),
+  changeSummary: z.array(z.string()).optional(),
 }).passthrough();
 
 export type StateMeta = z.infer<typeof StateMetaSchema>;

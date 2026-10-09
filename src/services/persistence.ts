@@ -21,6 +21,9 @@ export interface PersistOptions {
   forceOverwrite?: boolean;
   baseRevision?: number;
   onConflict?: (conflict: ConflictCheckResult, conflictingSched: SchedData | null) => void;
+  tabLabel?: string;
+  activeSection?: string;
+  activeSectionName?: string;
 }
 
 /**
@@ -66,17 +69,29 @@ export async function persistAppStateAndSchedWithConflictCheck(
   const enrichedState = multiTabStateService.enrichWithRevision(targetAppState, nextRev);
   const cleanSched = cleanSchedDataMeta(targetSchedData);
 
+  const ctx = multiTabStateService.getTabContext();
+  const tabLabel = opts.tabLabel || ctx.tabLabel;
+  const activeSection = opts.activeSection || ctx.section;
+  const activeSectionName = opts.activeSectionName || ctx.sectionName;
+
   // Save strictly in order: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META
   await setStorageItem(STORAGE_KEYS.APP_STATE, enrichedState);
   await setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanSched);
   await setStorageItem(STORAGE_KEYS.STATE_META, {
     revision: nextRev,
     tabId: multiTabStateService.getTabId(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    tabLabel,
+    activeSection,
+    activeSectionName
   });
 
   multiTabStateService.setLocalRevision(nextRev, STORAGE_KEYS.APP_STATE);
-  multiTabStateService.broadcastStateCommitted(STORAGE_KEYS.APP_STATE, nextRev);
+  multiTabStateService.broadcastStateCommitted(STORAGE_KEYS.APP_STATE, nextRev, {
+    tabLabel,
+    activeSection,
+    activeSectionName
+  });
 
   return true;
 }

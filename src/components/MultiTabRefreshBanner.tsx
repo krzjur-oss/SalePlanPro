@@ -5,6 +5,8 @@ import { Z_INDEX_CLASSES } from '../styles/zIndex';
 interface MultiTabRefreshBannerProps {
   visible: boolean;
   remoteRevision: number;
+  incomingTabName?: string;
+  incomingSectionName?: string;
   onReload: () => void;
   onDismiss: () => void;
 }
@@ -12,10 +14,14 @@ interface MultiTabRefreshBannerProps {
 export function MultiTabRefreshBanner({
   visible,
   remoteRevision,
+  incomingTabName,
+  incomingSectionName,
   onReload,
   onDismiss
 }: MultiTabRefreshBannerProps) {
   if (!visible) return null;
+
+  const tabSource = incomingTabName || incomingSectionName || 'Inna karta';
 
   return (
     <div className={`relative ${Z_INDEX_CLASSES.STICKY} bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-800 text-white px-4 py-2.5 shadow-md flex items-center justify-between gap-3 text-xs select-none animate-fadeIn border-b border-indigo-500/50`}>
@@ -29,7 +35,7 @@ export function MultiTabRefreshBanner({
             Aktualizacja z innej karty:
           </span>
           <span className="text-indigo-100 truncate">
-            Plan lekcji został zapisany w innej karcie przeglądarki (Rewizja #{remoteRevision}).
+            Zapisano nowszą wersję w: <strong className="text-white bg-indigo-900/60 px-1.5 py-0.5 rounded border border-indigo-400/40">{tabSource}</strong> (Rewizja #{remoteRevision}).
           </span>
         </div>
       </div>

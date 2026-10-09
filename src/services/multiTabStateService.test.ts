@@ -246,4 +246,29 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
     const finalSched = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
     expect(finalSched['y_2025_2026']['1']['h_2']['r_102'].className).toBe('2B');
   });
+
+  it('zapisuje kontekst karty (tabLabel, activeSectionName, updatedAt) i zwraca go w checkSaveConflict', async () => {
+    const tabBId = 'tab_other_dyzury_333';
+    multiTabStateService.setLocalRevision(1, STORAGE_KEYS.APP_STATE);
+
+    // Karta B zapisuje stan z informacją o module i etykiecie karty
+    const appStateB = { school: { name: 'Szkoła B' }, revision: 2, tabId: tabBId };
+    await setStorageItem(STORAGE_KEYS.APP_STATE, appStateB);
+    await setStorageItem(STORAGE_KEYS.STATE_META, {
+      revision: 2,
+      tabId: tabBId,
+      tabLabel: 'Karta: Dyżury Nauczycielskie',
+      activeSection: 'dyzury',
+      activeSectionName: 'Dyżury Nauczycielskie',
+      updatedAt: '2026-10-09T08:30:00.000Z'
+    });
+
+    const conflict = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, 1);
+    expect(conflict.hasConflict).toBe(true);
+    expect(conflict.dbRevision).toBe(2);
+    expect(conflict.dbTabId).toBe(tabBId);
+    expect(conflict.incomingTabLabel).toBe('Karta: Dyżury Nauczycielskie');
+    expect(conflict.incomingSectionName).toBe('Dyżury Nauczycielskie');
+    expect(conflict.incomingUpdatedAt).toBe('2026-10-09T08:30:00.000Z');
+  });
 });

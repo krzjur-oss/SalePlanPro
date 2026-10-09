@@ -47,6 +47,17 @@ import {
   Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database, Monitor
 } from 'lucide-react';
 
+export const APP_TAB_NAMES: Record<string, string> = {
+  kreator: 'Kreator Szkoły',
+  plan_klas: 'Plan Klas',
+  plan_sal: 'Plan Sal',
+  dyzury: 'Dyżury Nauczycielskie',
+  wydruki: 'Wydruki i Raporty',
+  statystyki: 'Statystyki i Analiza',
+  o_programie: 'O programie',
+  ustawienia_generatorow: 'Ustawienia generatorów'
+};
+
 function sortAppState(rawInput: unknown): AppState {
   // Always sanitize first to ensure completely valid schema defaults
   const resolved = sanitizeAppState(rawInput);
@@ -226,12 +237,16 @@ export default function App() {
     localRevision: number;
     incomingRevision: number;
     incomingTabId: string;
+    incomingTabName?: string;
+    incomingSectionName?: string;
+    incomingUpdatedAt?: string;
     dbAppState: AppState;
     dbSchedData?: SchedData;
   } | null>(null);
 
   const [showRefreshBanner, setShowRefreshBanner] = useState<boolean>(false);
   const [remoteRevision, setRemoteRevision] = useState<number>(1);
+  const [remoteTabInfo, setRemoteTabInfo] = useState<{ tabName?: string; sectionName?: string } | null>(null);
 
   const notify = (msg: string, type: 'ok' | 'err' | 'info' = 'ok') => {
     const toast = document.createElement('div');
@@ -965,6 +980,11 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'instructions' | 'changelog'>('info');
 
+  useEffect(() => {
+    const sName = APP_TAB_NAMES[currentTab] || currentTab;
+    multiTabStateService.setTabContext(currentTab, sName, `Karta: ${sName}`);
+  }, [currentTab]);
+
   // ── DUAL SCREEN (DWA EKRANY) STATE & SYNC ──
   const [isMultiScreenAvailable, setIsMultiScreenAvailable] = useState<boolean>(() => dualScreenService.getIsMultiScreenAvailable());
   const [isCompanionActive, setIsCompanionActive] = useState<boolean>(() => dualScreenService.isCompanionWindowActive());
@@ -1152,7 +1172,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.9.9';
+  const CURRENT_VERSION = '3.9.10';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -1380,6 +1400,10 @@ export default function App() {
         const localRev = multiTabStateService.getLocalRevision();
         if (msg.revision > localRev) {
           setRemoteRevision(msg.revision);
+          setRemoteTabInfo({
+            tabName: msg.tabLabel,
+            sectionName: msg.activeSectionName
+          });
           setShowRefreshBanner(true);
         }
       }
@@ -1397,14 +1421,21 @@ export default function App() {
       ? forceOverwriteOrOptions
       : (forceOverwriteOrOptions?.forceOverwrite ?? false);
 
+    const sName = APP_TAB_NAMES[currentTab] || currentTab;
     return persistWithConflictCheck(targetAppState, targetSchedData, {
       forceOverwrite,
       baseRevision: conflictData?.incomingRevision,
+      tabLabel: `Karta: ${sName}`,
+      activeSection: currentTab,
+      activeSectionName: sName,
       onConflict: (conflict, conflictingSched) => {
         setConflictData({
           localRevision: conflict.localRevision,
           incomingRevision: conflict.dbRevision,
           incomingTabId: conflict.dbTabId,
+          incomingTabName: conflict.incomingTabLabel || (conflict.incomingSectionName ? `Karta: ${conflict.incomingSectionName}` : undefined),
+          incomingSectionName: conflict.incomingSectionName,
+          incomingUpdatedAt: conflict.incomingUpdatedAt,
           dbAppState: conflict.dbRecord as unknown as AppState,
           dbSchedData: conflictingSched || undefined
         });
@@ -2313,6 +2344,8 @@ export default function App() {
       <MultiTabRefreshBanner
         visible={showRefreshBanner}
         remoteRevision={remoteRevision}
+        incomingTabName={remoteTabInfo?.tabName}
+        incomingSectionName={remoteTabInfo?.sectionName}
         onReload={handleReloadFromBanner}
         onDismiss={() => setShowRefreshBanner(false)}
       />
@@ -2996,6 +3029,14 @@ export default function App() {
           localRevision={conflictData.localRevision}
           incomingRevision={conflictData.incomingRevision}
           incomingTabId={conflictData.incomingTabId}
+          incomingTabName={conflictData.incomingTabName}
+          incomingSectionName={conflictData.incomingSectionName}
+          incomingUpdatedAt={conflictData.incomingUpdatedAt}
+          localAppState={appState}
+          incomingAppState={conflictData.dbAppState}
+          localSchedData={schedData}
+          incomingSchedData={conflictData.dbSchedData}
+          localTabName={APP_TAB_NAMES[currentTab] || currentTab}
           onLoadIncoming={handleLoadIncomingFromConflict}
           onKeepLocal={handleKeepLocalFromConflict}
         />
@@ -3117,9 +3158,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.9!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.10!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Oznaczanie miejsca realizacji nauczania indywidualnego (w szkole vs w domu) w profilach uczniów, harmonogramie i wydrukach.
+                  Szczegółowa identyfikacja karty oraz podgląd i bilans zmian w oknie wykrywania równoległej edycji.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

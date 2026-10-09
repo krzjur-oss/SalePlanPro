@@ -286,7 +286,8 @@ export default function Instrukcje() {
           description: 'Centralny rejestr orzeczeń poradni psychologiczno-pedagogicznych:',
           points: [
             'Wprowadź podstawę orzeczenia, numer dokumentu i okres ważności (etap edukacyjny lub dany rok szkolny).',
-            'Określ szczegółowe formy wsparcia: nauczyciel wspomagający w klasie, nauczanie indywidualne w gabinecie (NI), rewalidacja.',
+            'Określ szczegółowe formy wsparcia: nauczyciel wspomagający w klasie, nauczanie indywidualne (NI), rewalidacja.',
+            'Lokalizacja nauczania indywidualnego: określ, czy zajęcia NI odbywają się w szkole (gabinet/sala) czy w domu ucznia (poza szkołą), co automatycznie uwzględniane jest w profilach, arkuszu wsparcia i wydrukach.',
             'Zdefiniuj wymiar godzin specjalistycznych: zajęcia logopedyczne, psychologiczne, pedagogiczne oraz korekcyjno-kompensacyjne.'
           ]
         },
@@ -481,12 +482,13 @@ export default function Instrukcje() {
         },
         {
           title: 'Praca w wielu kartach przeglądarki bez utraty zmian (saleplan-state)',
-          description: 'Ochrona przed przypadkowym nadpisaniem planu lekcji przy otwarciu programu w kilku kartach:',
+          description: 'Zaawansowana ochrona przed konfliktami równoległej edycji planu w kilku kartach:',
           points: [
-            'Magistrala BroadcastChannel "saleplan-state" śledzi numery rewizji (revision) oraz identyfikator karty (tabId).',
-            'Gdy jedna karta zapisze nowszą wersję, pozostałe karty otrzymują powiadomienie i wyświetlają baner odświeżenia.',
-            'Jeśli spróbujesz zapisać starszy stan z innej karty, system zablokuje ciche nadpisanie i wyświetli modal: Wczytaj zmiany / Zachowaj moją wersję.',
-            'Wybór opcji zachowania własnej wersji automatycznie archiwizuje wersję z drugiej karty w Punktach Przywracania, uniemożliwiając utratę jakichkolwiek danych.'
+            'Magistrala BroadcastChannel "saleplan-state" śledzi numery rewizji (revision), identyfikator karty (tabId), aktywny moduł i czas zapisu.',
+            'Identyfikacja karty źródłowej: w oknie konfliktu program precyzyjnie wskazuje, w której karcie dokonano zmian (np. Karta: Dyżury Nauczycielskie, Plan Klas, Kreator Szkoły) oraz ile czasu temu nastąpił zapis.',
+            'Silnik różnicowy zmian (Conflict Diff): okno dialogowe prezentuje szczegółowy bilans i kategoryzowaną listę zmian (lekcje, dyżury, nauczyciele, sale, oddziały) przed podjęciem decyzji o wczytaniu lub nadpisaniu.',
+            'Ochrona przed cichym nadpisaniem: wybór opcji „Zachowaj moją wersję” automatycznie zabezpiecza wersję z drugiej karty w kopiach awaryjnych (Snapshots), zapobiegając utracie jakichkolwiek danych.',
+            'Informacyjny baner aktualizacji: pozostałe otwarte karty otrzymują powiadomienie z nazwą karty źródłowej i możliwością szybkiego odświeżenia widoku.'
           ]
         },
         {
