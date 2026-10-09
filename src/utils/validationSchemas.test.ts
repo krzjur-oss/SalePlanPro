@@ -5,7 +5,8 @@ import {
   SegmentRoomSchema, 
   SegmentSchema, 
   FloorSchema, 
-  BuildingSchema 
+  BuildingSchema,
+  SpecialStudentSchema
 } from './validationSchemas';
 
 describe('ValidationSchemas - SegmentRoomSchema & AppStateSchema Integrity', () => {
@@ -128,5 +129,45 @@ describe('ValidationSchemas - SegmentRoomSchema & AppStateSchema Integrity', () 
       expect(floorResult.data.color).toBe('#10b981');
       expect(floorResult.data.buildingIdx).toBe(0);
     }
+  });
+
+  it('obsługuje pole homeTeachingInSchool w SpecialStudentSchema oraz AppStateSchema', () => {
+    const studentWithSchool = {
+      id: 'stud_1',
+      firstName: 'Adam',
+      lastName: 'Nowak',
+      type: 'ni',
+      supportTypes: ['ni'],
+      supportHours: { ni: 10 },
+      homeTeachingInSchool: true
+    };
+
+    const studentWithHome = {
+      id: 'stud_2',
+      firstName: 'Kacper',
+      lastName: 'Kowalski',
+      type: 'ni',
+      supportTypes: ['ni'],
+      supportHours: { ni: 8 },
+      homeTeachingInSchool: false
+    };
+
+    const parsed1 = SpecialStudentSchema.safeParse(studentWithSchool);
+    expect(parsed1.success).toBe(true);
+    if (parsed1.success) {
+      expect(parsed1.data.homeTeachingInSchool).toBe(true);
+    }
+
+    const parsed2 = SpecialStudentSchema.safeParse(studentWithHome);
+    expect(parsed2.success).toBe(true);
+    if (parsed2.success) {
+      expect(parsed2.data.homeTeachingInSchool).toBe(false);
+    }
+
+    // Sprawdź także w pełnym AppState
+    const demo = getDemoAppState();
+    demo.planLekcji.specialStudents = [parsed1.data as any, parsed2.data as any];
+    const appResult = AppStateSchema.safeParse(demo);
+    expect(appResult.success).toBe(true);
   });
 });

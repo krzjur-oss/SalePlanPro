@@ -1152,7 +1152,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.9.8';
+  const CURRENT_VERSION = '3.9.9';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -3117,9 +3117,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.8!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.9!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Płynne przewijanie tabeli dyżurów w pionie i poziomie, przypięta kolumna przerw i responsywny panel boczny.
+                  Oznaczanie miejsca realizacji nauczania indywidualnego (w szkole vs w domu) w profilach uczniów, harmonogramie i wydrukach.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

@@ -36,6 +36,7 @@ export interface StudentScheduleSlot {
   withClass?: boolean;
   isGroup?: boolean;
   groupName?: string;
+  inSchool?: boolean;
 }
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
@@ -243,7 +244,8 @@ export default function ArkuszWsparciaUcznia({
               modeDescription: groupTitle,
               withClass: false,
               isGroup,
-              groupName: spAsg.groupName
+              groupName: spAsg.groupName,
+              inSchool: rawType === 'ni' ? (student.homeTeachingInSchool !== false) : true
             });
           }
         });
@@ -537,6 +539,17 @@ export default function ArkuszWsparciaUcznia({
                   <span>Zalecenia orzeczenia: <strong>{sanitizeStudentNotes(student.note)}</strong></span>
                 </div>
               )}
+
+              {declaredSupportTypes.includes('ni') && (
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border font-extrabold ${
+                  student.homeTeachingInSchool !== false
+                    ? 'bg-purple-100 text-purple-950 border-purple-300'
+                    : 'bg-amber-100 text-amber-950 border-amber-300'
+                }`}>
+                  <span>{student.homeTeachingInSchool !== false ? '🏫' : '🏠'}</span>
+                  <span>Nauczanie indywidualne: <strong>{student.homeTeachingInSchool !== false ? 'W szkole (gabinet)' : 'W domu (poza szkołą)'}</strong></span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -763,14 +776,18 @@ export default function ArkuszWsparciaUcznia({
                                       )}
                                     </div>
 
-                                    {/* Sala / Gabinet */}
+                                    {/* Sala / Gabinet lub informacja o nauczaniu domowym */}
                                     <div className="flex items-center justify-between text-[8px] font-bold text-purple-800 pt-0.5">
-                                      <span>Zajęcia gabinetowe (1:1)</span>
-                                      {slot.roomName && (
+                                      <span>{slot.supportTypeCode === 'ni' && slot.inSchool === false ? '🏠 Nauczanie w domu' : 'Zajęcia gabinetowe (1:1)'}</span>
+                                      {slot.roomName && slot.inSchool !== false ? (
                                         <span className="bg-white/80 border border-purple-200 px-1 rounded text-purple-900 font-semibold">
                                           gab. {slot.roomName}
                                         </span>
-                                      )}
+                                      ) : slot.supportTypeCode === 'ni' && slot.inSchool === false ? (
+                                        <span className="bg-amber-100 border border-amber-300 px-1 rounded text-amber-900 font-black">
+                                          poza szkołą
+                                        </span>
+                                      ) : null}
                                     </div>
                                   </div>
                                 );

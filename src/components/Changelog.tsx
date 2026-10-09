@@ -24,11 +24,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.9',
+      date: 'Październik 2026',
+      title: 'Miejsce Realizacji Nauczania Indywidualnego: Oznaczenie Zajęć w Szkole oraz w Domu Ucznia',
+      description: 'Wprowadzenie możliwości określenia miejsca realizacji zajęć w ramach nauczania indywidualnego (NI) – w budynku szkoły (sala/gabinet) lub w domu ucznia (poza szkołą). Funkcjonalność zintegrowana w Kreatorze Szkoły, Planie Klas, Arkuszu Wsparcia Ucznia, module Wydruków oraz walidacji bazy danych.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Przełącznik „Zajęcia realizowane w szkole / w domu” w Kreatorze Szkoły (Krok 8): Podczas dodawania lub edycji ucznia z pulą nauczania indywidualnego (NI) użytkownik może wybrać, czy zajęcia odbywają się w budynku szkoły czy w domu ucznia.', badgeText: 'Kreator Szkoły' },
+        { type: 'feature', text: 'Konfiguracja miejsca zajęć w Planie Klas: Zarówno w formularzu szybkiego dodawania ucznia SPE, jak i w profilu ucznia dodano dedykowaną kontrolkę wyboru lokalizacji NI (🏫 W szkole / 🏠 W domu).', badgeText: 'Plan Klas' },
+        { type: 'improvement', text: 'Widoczne oznaczenia na kartach i listach uczniów: Dodano etykiety lokalizacji NI na liście uczniów w Kreatorze Szkoły, nagłówku ucznia oraz na bocznej liście uczniów w Planie Klas.', badgeText: 'Etykiety statusu' },
+        { type: 'improvement', text: 'Wizualizacja w Arkuszu Wsparcia Ucznia i Wydrukach: Arkusz wsparcia prezentuje oznaczenie lokalizacji w nagłówku orzeczenia oraz w komórkach lekcji (wskazanie gabinetu dla zajęć w szkole lub oznaczenie „poza szkołą” dla zajęć domowych), a lista wyboru uczniów w Wydrukach informuje o trybie NI.', badgeText: 'Wydruki & Arkusz' },
+        { type: 'improvement', text: 'Rozszerzenie modelu danych i walidacji Zod: Pole homeTeachingInSchool zostało włączone do typu SpecialStudent w types.ts, schematu SpecialStudentSchema w validationSchemas.ts z pełnym pokryciem testami jednostkowymi.', badgeText: 'Spójność schematów' }
+      ]
+    },
+    {
       version: 'v3.9.8',
       date: 'Październik 2026',
       title: 'Naprawa Przewijania Tabeli Dyżurów w Poziomie i Pionie oraz Responsywności Etapu 3',
       description: 'Rozwiązanie problemu wychodzenia tabeli dyżurów poza ekran przy dużej liczbie punktów dyżurów i przypisanych osób. Wprowadzenie dedykowanego przewijania horyzontalnego i wertykalnego z przypiętą kolumną przerw, optymalizacja flex/grid min-width/height oraz możliwość zwijania bocznego panelu bilansu.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'fix', text: 'Dedykowany kontener przewijania poziomego (overflow-x-auto): Tabela harmonogramu dyżurów została umieszczona w niezależnym obszarze przewijania z minimalną szerokością kolumn (min-w-[150px]), dzięki czemu duża liczba stanowisk i nauczycieli nigdy nie obcina widoku ani nie wypycha elementów poza ekran monitora.', badgeText: 'Przewijanie w poziomie' },
         { type: 'fix', text: 'Odblokowanie przewijania pionowego (min-h-0 / flex overflow): Dodano właściwości min-h-0 i min-w-0 do nadrzędnych kontenerów flexbox i grid w Etapie 3, eliminując blokadę suwaka przy długich listach przerw, dyżurach adaptacyjnych i nadzorze szatni WF.', badgeText: 'Przewijanie w pionie' },

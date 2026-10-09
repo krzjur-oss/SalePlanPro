@@ -27,6 +27,8 @@ describe('App Smoke & Security State Tests', () => {
     lockSession();
     await clearAllStorage();
     vi.restoreAllMocks();
+    localStorage.setItem(STORAGE_KEYS.TERMS_ACCEPTED, JSON.stringify({ accepted: true, version: '3.9.9' }));
+    localStorage.setItem(STORAGE_KEYS.LAST_SEEN_VERSION, '3.9.9');
   });
 
   it('renders App cleanly in unencrypted mode (smoke test)', async () => {

@@ -162,6 +162,7 @@ export default function PlanKlas({
   const [specLastName, setSpecLastName] = useState<string>('');
   const [specType, setSpecType] = useState<'ni' | 'rewa' | 'wsp'>('wsp');
   const [specClassId, setSpecClassId] = useState('');
+  const [specHomeTeachingInSchool, setSpecHomeTeachingInSchool] = useState<boolean>(true);
   const [activeStudentId, setActiveStudentId] = useState<string | null>(initialStudentId || null);
   const [speSubTab, setSpeSubTab] = useState<'schedule' | 'profile'>('schedule');
 
@@ -1668,7 +1669,8 @@ export default function PlanKlas({
       lastName: specLastName.trim(),
       classId: specClassId || null,
       type: specType,
-      supportTeacherIds: []
+      supportTeacherIds: [],
+      homeTeachingInSchool: specHomeTeachingInSchool
     };
 
     onChangeAppState({
@@ -1682,6 +1684,7 @@ export default function PlanKlas({
     setSpecFirstName('');
     setSpecLastName('');
     setSpecClassId('');
+    setSpecHomeTeachingInSchool(true);
     setActiveStudentId(newStudent.id);
   };
 
@@ -2558,6 +2561,22 @@ export default function PlanKlas({
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
+                    {specType === 'ni' && (
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input 
+                            type="checkbox"
+                            checked={specHomeTeachingInSchool}
+                            onChange={(e) => setSpecHomeTeachingInSchool(e.target.checked)}
+                            className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                          />
+                          <span className="font-bold text-slate-700 text-[11px]">Realizacja w szkole</span>
+                        </label>
+                        <span className={`text-[9.5px] font-black px-1.5 py-0.2 rounded border ${specHomeTeachingInSchool ? 'bg-purple-100 text-purple-900 border-purple-200' : 'bg-amber-50 text-amber-900 border-amber-200'}`}>
+                          {specHomeTeachingInSchool ? '🏫 W szkole' : '🏠 W domu'}
+                        </span>
+                      </div>
+                    )}
                     <button type="submit" className="w-full py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition cursor-pointer">
                       Dodaj Ucznia
                     </button>
@@ -2632,6 +2651,15 @@ export default function PlanKlas({
                                 {(typeLabels as Record<string, string>)[s.type] || s.type.toUpperCase()}
                               </span>
                               <span className="truncate font-bold text-slate-800">{s.lastName} {s.firstName}</span>
+                              {s.type === 'ni' && (
+                                <span className={`text-[8.5px] font-bold px-1 py-0.2 rounded shrink-0 border ${
+                                  s.homeTeachingInSchool !== false 
+                                    ? 'bg-purple-50 text-purple-800 border-purple-200' 
+                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                }`}>
+                                  {s.homeTeachingInSchool !== false ? '🏫 Szkoła' : '🏠 Dom'}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {studentClass && (
@@ -5382,6 +5410,45 @@ export default function PlanKlas({
                               </select>
                             </div>
                           </div>
+
+                          {/* Miejsce realizacji nauczania indywidualnego (W szkole vs W domu) */}
+                          {(currentStudent.type === 'ni' || (currentStudent.supportTypes && currentStudent.supportTypes.includes('ni')) || (currentStudent.supportHours?.ni && currentStudent.supportHours.ni > 0)) && (
+                            <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl flex items-center justify-between gap-3 flex-wrap">
+                              <div>
+                                <span className="text-xs font-black text-purple-950 block">
+                                  📍 Miejsce realizacji nauczania indywidualnego (NI)
+                                </span>
+                                <span className="text-[10px] text-purple-800 font-medium">
+                                  Zaznacz, czy uczeń realizuje zajęcia na terenie szkoły (np. w gabinecie/sali), czy w domu (poza budynkiem szkoły).
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <label className="flex items-center gap-2 cursor-pointer select-none bg-white px-3 py-1.5 rounded-lg border border-purple-200 shadow-2xs">
+                                  <input 
+                                    type="checkbox"
+                                    checked={currentStudent.homeTeachingInSchool !== false}
+                                    onChange={(e) => {
+                                      handleUpdateSpecialStudent({
+                                        ...currentStudent,
+                                        homeTeachingInSchool: e.target.checked
+                                      });
+                                    }}
+                                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-purple-300 cursor-pointer"
+                                  />
+                                  <span className="text-xs font-bold text-slate-800">
+                                    Zajęcia realizowane w szkole
+                                  </span>
+                                </label>
+                                <span className={`text-[10px] font-black px-2 py-1 rounded-lg border uppercase ${
+                                  currentStudent.homeTeachingInSchool !== false 
+                                    ? 'bg-purple-100 text-purple-900 border-purple-300' 
+                                    : 'bg-amber-100 text-amber-900 border-amber-300'
+                                }`}>
+                                  {currentStudent.homeTeachingInSchool !== false ? '🏫 W szkole' : '🏠 W domu'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
 
                           {/* Pula godzin z orzeczenia (Wymiar wsparcia) */}
                           <div className="pt-3 border-t border-slate-100 space-y-2">

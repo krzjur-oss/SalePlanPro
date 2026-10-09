@@ -97,6 +97,7 @@ export interface SpecialStudent {
   };
   note?: string;
   supportTeacherIds?: string[]; // Multiple support teachers on regular lessons
+  homeTeachingInSchool?: boolean; // Czy nauczanie indywidualne jest realizowane w szkole (true) czy w domu (false/undefined)
 }
 
 export interface SpecialAssignment {

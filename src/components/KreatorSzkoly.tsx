@@ -2198,6 +2198,7 @@ export default function KreatorSzkoly({
     psycholog: 1,
     pedagog: 1
   });
+  const [newStudHomeTeachingInSchool, setNewStudHomeTeachingInSchool] = useState<boolean>(true);
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
 
   // Memoized current active student information for high performance
@@ -2217,6 +2218,7 @@ export default function KreatorSzkoly({
   const [editStudFirstName, setEditStudFirstName] = useState('');
   const [editStudLastName, setEditStudLastName] = useState('');
   const [editStudClassId, setEditStudClassId] = useState('');
+  const [editStudHomeTeachingInSchool, setEditStudHomeTeachingInSchool] = useState<boolean>(true);
   const [editStudSupportTypes, setEditStudSupportTypes] = useState<Record<string, boolean>>({
     ni: true,
     wsp: false,
@@ -2271,7 +2273,8 @@ export default function KreatorSzkoly({
       type: activeTypes[0] || 'ni',
       supportTypes: activeTypes,
       supportHours: activeHours,
-      supportTeacherIds: []
+      supportTeacherIds: [],
+      homeTeachingInSchool: newStudHomeTeachingInSchool
     };
 
     onChangeAppState({
@@ -2285,6 +2288,7 @@ export default function KreatorSzkoly({
     setNewStudFirstName('');
     setNewStudLastName('');
     setNewStudClassId('');
+    setNewStudHomeTeachingInSchool(true);
     setNewStudSupportTypes({
       ni: true,
       wsp: false,
@@ -2405,6 +2409,7 @@ export default function KreatorSzkoly({
     setEditStudFirstName(student.firstName);
     setEditStudLastName(student.lastName);
     setEditStudClassId(student.classId || '');
+    setEditStudHomeTeachingInSchool(student.homeTeachingInSchool !== false);
     
     const initialTypes: Record<string, boolean> = {
       ni: false,
@@ -2475,7 +2480,8 @@ export default function KreatorSzkoly({
           classId: editStudClassId || null,
           type: activeTypes[0] || s.type || 'ni',
           supportTypes: activeTypes,
-          supportHours: activeHours
+          supportHours: activeHours,
+          homeTeachingInSchool: editStudHomeTeachingInSchool
         };
       }
       return s;
@@ -5698,14 +5704,14 @@ export default function KreatorSzkoly({
                             const hours = newStudSupportHours[cat.key] ?? cat.defaultHours;
 
                             return (
-                              <div 
-                                key={cat.key}
-                                className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 ${
-                                  isChecked 
-                                    ? cat.bgActive 
-                                    : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
-                                }`}
-                              >
+                              <div key={cat.key} className="space-y-1.5">
+                                <div 
+                                  className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2 ${
+                                    isChecked 
+                                      ? cat.bgActive 
+                                      : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
                                 <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0 select-none">
                                   <input 
                                     type="checkbox"
@@ -5754,7 +5760,27 @@ export default function KreatorSzkoly({
                                   <span className="text-[10px] font-bold text-slate-500">h</span>
                                 </div>
                               </div>
-                            );
+
+                              {cat.key === 'ni' && isChecked && (
+                                <div className="mt-1.5 pl-6 pr-2.5 py-1.5 bg-purple-50/80 border border-purple-200 rounded-lg flex items-center justify-between text-[10px]">
+                                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input 
+                                      type="checkbox"
+                                      checked={newStudHomeTeachingInSchool}
+                                      onChange={(e) => setNewStudHomeTeachingInSchool(e.target.checked)}
+                                      className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-purple-300 cursor-pointer"
+                                    />
+                                    <span className="font-bold text-purple-950">
+                                      Zajęcia realizowane w szkole
+                                    </span>
+                                  </label>
+                                  <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${newStudHomeTeachingInSchool ? 'bg-purple-200 text-purple-900' : 'bg-amber-100 text-amber-900'}`}>
+                                    {newStudHomeTeachingInSchool ? '🏫 W szkole' : '🏠 W domu'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
                           })}
                         </div>
                       </div>
@@ -5822,6 +5848,16 @@ export default function KreatorSzkoly({
                                     </span>
                                   );
                                 })}
+
+                                {types.includes('ni') && (
+                                  <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded uppercase border shrink-0 ${
+                                    student.homeTeachingInSchool !== false
+                                      ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                                  }`}>
+                                    {student.homeTeachingInSchool !== false ? '🏫 W szkole' : '🏠 W domu'}
+                                  </span>
+                                )}
 
                                 {totalHours !== undefined && totalHours > 0 && types.length > 1 && (
                                   <span className="bg-slate-800 text-white px-1.5 py-0.2 rounded text-[9px] font-black shrink-0">
@@ -5892,8 +5928,17 @@ export default function KreatorSzkoly({
                                 <Edit3 size={11} /> Edytuj w modalu
                               </button>
                             </h3>
-                            <p className="text-[11px] text-slate-500 font-medium mt-1">
-                              Klasa macierzysta: <strong className="text-slate-800">{cls ? `Klasa ${cls.name}` : 'Brak przypisania'}</strong>
+                            <p className="text-[11px] text-slate-500 font-medium mt-1 flex items-center gap-2 flex-wrap">
+                              <span>Klasa macierzysta: <strong className="text-slate-800">{cls ? `Klasa ${cls.name}` : 'Brak przypisania'}</strong></span>
+                              {types.includes('ni') && (
+                                <span className={`text-[9.5px] font-black px-2 py-0.5 rounded-md border ${
+                                  student.homeTeachingInSchool !== false 
+                                    ? 'bg-purple-100 text-purple-900 border-purple-300' 
+                                    : 'bg-amber-100 text-amber-900 border-amber-300'
+                                }`}>
+                                  {student.homeTeachingInSchool !== false ? '🏫 Realizacja w szkole' : '🏠 Realizacja w domu (poza szkołą)'}
+                                </span>
+                              )}
                             </p>
                           </div>
                           <span className="bg-blue-50 text-blue-700 border border-blue-100 rounded-xl px-2.5 py-1 text-xs font-bold font-mono">
@@ -7321,6 +7366,15 @@ export default function KreatorSzkoly({
                                           Tok indywidualny
                                         </span>
                                       )}
+                                      {studentSupportTypes.includes('ni') && (
+                                        <span className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded border ${
+                                          stud.homeTeachingInSchool !== false
+                                            ? 'text-purple-700 bg-purple-100/70 border-purple-200'
+                                            : 'text-amber-800 bg-amber-50 border-amber-200'
+                                        }`}>
+                                          {stud.homeTeachingInSchool !== false ? '🏫 W szkole' : '🏠 W domu'}
+                                        </span>
+                                      )}
                                     </div>
                                     <p className="text-[9.5px] text-purple-800 font-semibold mt-0.5">
                                       Pule orzeczeniowe: {studentSupportTypes.map(t => {
@@ -7696,14 +7750,14 @@ export default function KreatorSzkoly({
                       const hours = editStudSupportHours[cat.key] ?? cat.defaultHours;
 
                       return (
-                        <div 
-                          key={cat.key}
-                          className={`p-2 rounded-xl border transition-all flex items-center justify-between gap-2 ${
-                            isChecked 
-                              ? cat.bgActive 
-                              : 'bg-white border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
+                        <div key={cat.key} className={cat.key === 'ni' && isChecked ? "sm:col-span-2 space-y-1.5" : "space-y-1.5"}>
+                          <div 
+                            className={`p-2 rounded-xl border transition-all flex items-center justify-between gap-2 ${
+                              isChecked 
+                                ? cat.bgActive 
+                                : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
                           <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0 select-none">
                             <input 
                               type="checkbox"
@@ -7752,7 +7806,27 @@ export default function KreatorSzkoly({
                             <span className="text-[10px] font-bold text-slate-500">h</span>
                           </div>
                         </div>
-                      );
+
+                        {cat.key === 'ni' && isChecked && (
+                          <div className="mt-1.5 pl-6 pr-2.5 py-1.5 bg-purple-50/80 border border-purple-200 rounded-lg flex items-center justify-between text-[10px]">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input 
+                                type="checkbox"
+                                checked={editStudHomeTeachingInSchool}
+                                onChange={(e) => setEditStudHomeTeachingInSchool(e.target.checked)}
+                                className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-purple-300 cursor-pointer"
+                              />
+                              <span className="font-bold text-purple-950">
+                                Zajęcia realizowane w budynku szkoły
+                              </span>
+                            </label>
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${editStudHomeTeachingInSchool ? 'bg-purple-200 text-purple-900' : 'bg-amber-100 text-amber-900'}`}>
+                              {editStudHomeTeachingInSchool ? '🏫 W szkole' : '🏠 W domu'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
                     })}
                   </div>
                 </div>

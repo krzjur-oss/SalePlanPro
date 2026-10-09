@@ -2793,9 +2793,11 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                   <option value="all">Wszyscy uczniowie objęci wsparciem (SPE)</option>
                   {(pl.specialStudents || []).map(s => {
                     const cName = s.classId ? (classesMap.get(s.classId)?.name || s.classId) : 'Tok Indywidualny';
+                    const isNI = s.type === 'ni' || (s.supportTypes && s.supportTypes.includes('ni'));
+                    const niTag = isNI ? (s.homeTeachingInSchool !== false ? ' • NI w szkole' : ' • NI w domu') : '';
                     return (
                       <option key={s.id} value={s.id}>
-                        {s.lastName} {s.firstName} (kl. {cName})
+                        {s.lastName} {s.firstName} (kl. {cName}){niTag}
                       </option>
                     );
                   })}

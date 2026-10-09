@@ -169,6 +169,7 @@ export const SpecialStudentSchema = z.object({
   supportHours: z.record(z.string(), z.number().optional()).optional(),
   note: z.string().optional(),
   supportTeacherIds: z.array(z.string()).optional().default([]),
+  homeTeachingInSchool: z.boolean().optional(),
 }).passthrough();
 
 export const SpecialAssignmentSchema = z.object({
