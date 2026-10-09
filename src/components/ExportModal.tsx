@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Kreator Eksportu Danych (ExportModal)
+ * Opis: Eksport bazy danych szkoły, planu lekcji i sal do plików JSON, zaszyfrowanych archiwów lub arkuszy.
+ */
+
 import React, { useState } from 'react';
 import { 
   Lock, Key, Download, X, Eye, EyeOff, CheckSquare, Square, 
@@ -52,7 +58,7 @@ export default function ExportModal({
 
   if (!isOpen) return null;
 
-  // Calculate approximate stats
+  // Kalkulacja przybliżonych statystyk pliku
   const activeYearKey = appState.yearKey || 'default';
   const yearData = schedData[activeYearKey] || {};
   let totalAssignedLessons = 0;

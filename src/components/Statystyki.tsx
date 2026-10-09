@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Statystyki, Higiena Planu i Analiza Pensum (Statystyki)
+ * Opis: Weryfikacja okienek kadry, bilansu godzin nauczycieli, obciążenia sal oraz automatyczny audyt higieny planu.
+ */
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { AppState, SchedData, AppEventLog, DyzurEntry, AppErrorLog, Przerwa, MiejsceDyzuru, SchedCell } from '../types';
 import { 
@@ -41,7 +47,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
       const customEvent = e as CustomEvent<AppErrorLog>;
       if (customEvent.detail) {
         setErrorLogs(prev => {
-          // Avoid duplicate errors if already present
+          // Unikanie duplikowania błędów
           if (prev.some(err => err.id === customEvent.detail.id)) return prev;
           return [customEvent.detail, ...prev];
         });
@@ -261,7 +267,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
       hasExcessiveGaps: boolean;
     }> = [];
 
-    // 1. Check Classes for gaps
+    // 1. Weryfikacja okienek w oddziałach klasowych
     pl.classes.forEach(c => {
       for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
         const dayHours: Record<number, boolean> = {};
@@ -297,7 +303,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
       }
     });
 
-    // 2. Check Teachers for gaps and aggregate per teacher
+    // 2. Weryfikacja okienek nauczycieli i agregacja wyników
     const teacherGapSummaries: Record<string, {
       teacherId: string;
       teacherName: string;
@@ -402,7 +408,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
   const teacherStats = useMemo(() => {
     const hoursScheduled: Record<string, number> = {};
     
-    // Initialise all teachers to 0
+    // Inicjalizacja liczników wszystkich nauczycieli wartością 0
     pl.teachers.forEach(t => {
       hoursScheduled[t.id] = 0;
     });
@@ -444,7 +450,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
 
   // --- Calculation: Room Occupancy ---
   const roomStats = useMemo(() => {
-    // Theoretical maximum capacity is 5 days * number of timeslots
+    // Teoretyczna maksymalna pojemność wynosi 5 dni * liczba slotów lekcyjnych
     const timeslotsCount = hoursList.length || 5;
     const maxCapacity = 5 * timeslotsCount;
     
@@ -655,7 +661,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
     }).sort((a, b) => a.id - b.id);
   }, [appState.dyzury, appState.floors, appState.yearKey, schedData, selectedDayFilter]);
 
-  // Stats for the select filter
+  // Statystyki dla filtrów wyboru
   const chartSummary = useMemo(() => {
     let totalDemand = 0;
     let totalAssigned = 0;
@@ -729,7 +735,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
 
     Object.entries(groups).forEach(([key, list]) => {
       if (list.length > 1) {
-        // Group lessons that belong to the same joint/inter-class assignment
+        // Grupowanie lekcji należących do tego samego przydziału łączonego międzyoddziałowego
         const distinctAssignmentGroups: typeof scheduledLessonsList[] = [];
         list.forEach(item => {
           const matchingGroup = distinctAssignmentGroups.find(grp =>
@@ -746,7 +752,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
           }
         });
 
-        // A conflict exists ONLY if the teacher is assigned to 2 or more distinct unlinked assignments at the same time
+        // Kolizja występuje TYLKO wtedy, gdy nauczyciel ma 2 lub więcej niepowiązanych przydziałów w tym samym czasie
         if (distinctAssignmentGroups.length > 1) {
           const parts = key.split('|');
           const teacherId = parts[0];
@@ -887,7 +893,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
 
     Object.entries(groups).forEach(([key, list]) => {
       if (list.length > 1) {
-        // If lessons have distinct non-null groups (e.g. G1 vs G2), it's a valid split
+        // Jeśli lekcje mają różne grupy (np. gr1 vs gr2), podział jest poprawny
         const distinctAssignments = Array.from(new Set(list.map(l => l.assignmentId)));
         const allHaveDistinctGroups = distinctAssignments.length > 1 && 
           list.every(l => l.groupId) && 
@@ -939,7 +945,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
 
     Object.entries(groups).forEach(([key, list]) => {
       if (list.length > 1) {
-        // Group lessons that belong to the same joint/inter-class assignment
+        // Grupowanie lekcji należących do tego samego przydziału łączonego międzyoddziałowego
         const distinctAssignmentGroups: typeof scheduledLessonsList[] = [];
         list.forEach(item => {
           const matchingGroup = distinctAssignmentGroups.find(grp =>

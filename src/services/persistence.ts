@@ -1,5 +1,8 @@
-// Unified Persistence & Multi-Tab State Synchronization Service
-// Handles atomic-like persistence of AppState and SchedData with conflict detection
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Zunifikowana Warstwa Trwałości Danych (Persistence Layer)
+ * Opis: Sekwencyjny i bezpieczny zapis AppState oraz SchedData z detekcją konfliktów równoległej edycji.
+ */
 
 import {
   STORAGE_KEYS,
@@ -27,13 +30,13 @@ export interface PersistOptions {
 }
 
 /**
- * Persists AppState and SchedData to storage with multi-tab conflict verification.
- * - SchedData is strictly cleaned of any metadata (_revision, _tabId, etc.).
- * - AppState is enriched with revision counter and tabId.
- * - Sequential write order: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META.
- * - Broadcasts committed state to other tabs.
+ * Zapisuje AppState oraz SchedData do bazy danych z weryfikacją konfliktów wielu kart.
+ * - SchedData jest oczyszczana z wszelkich metadanych (_revision, _tabId itp.).
+ * - AppState otrzymuje rosnący numer rewizji oraz identyfikator karty tabId.
+ * - Ścisła kolejność zapisu: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META.
+ * - Rozgłasza zatwierdzony stan do pozostałych otwartych kart.
  *
- * @returns true if saved successfully, false if conflict was detected and not forced.
+ * @returns true w przypadku sukcesu zapisu, false jeśli wykryto konflikt.
  */
 export async function persistAppStateAndSchedWithConflictCheck(
   targetAppState: AppState,

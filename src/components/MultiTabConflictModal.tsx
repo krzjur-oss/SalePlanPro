@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Okno Rozwiązywania Konfliktów Wielu Kart (MultiTabConflictModal)
+ * Opis: Wskazanie karty dokonującej zapisu, porównanie rewizji oraz zaawansowany podgląd bilansu różnic (Conflict Diff).
+ */
+
 import React, { useMemo, useState } from 'react';
 import { 
   AlertTriangle, Download, ShieldCheck, Clock, ArrowRight, Layers, 

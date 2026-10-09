@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Szablony Wydruku Harmonogramu Dyżurów (Duties Print HTML)
+ * Opis: Generowanie czystych dokumentów HTML/CSS do druku dyżurów nauczycielskich.
+ */
 import { AppState, SchedData } from '../types';
 import { calculateAdaptationDuties } from './adaptationDuty';
 import { escapeHtml } from './sanitizer';

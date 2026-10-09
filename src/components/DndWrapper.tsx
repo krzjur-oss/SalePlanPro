@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Adapter Obsługi Przeciągania (DndWrapper)
+ * Opis: Integracja biblioteki @dnd-kit z obsługą przeciągania kafelków lekcji i przydziałów w siatce planu.
+ */
+
 import React from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 

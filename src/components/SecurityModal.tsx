@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Panel Bezpieczeństwa RODO i Szyfrowania (SecurityModal)
+ * Opis: Zarządzanie hasłem głównym bazy danych, aktywacja szyfrowania AES-256-GCM oraz konfiguracja auto-blokady.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { 
   Shield, Lock, Unlock, Key, CheckCircle2, AlertTriangle, X, ShieldAlert,
@@ -246,7 +252,7 @@ export default function SecurityModal({
                     )}
                   </div>
 
-                  {/* Auto-lock Settings (visible when encryption is enabled) */}
+                  {/* Ustawienia automatycznej blokady sesji (widoczne przy aktywnym szyfrowaniu) */}
                   {isEncrypted && (
                     <div className="p-3 bg-slate-100/80 dark:bg-slate-900/80 rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                       <div className="flex items-center gap-2">

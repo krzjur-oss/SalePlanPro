@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Płachta Dyrektorska A3/A2 (PlachtaDyrektorska)
+ * Opis: Wielkoformatowy arkusz organizacyjny całej szkoły dla oddziałów, kadry i gabinetów z podziałem wielostronicowym.
+ */
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, PlanVariant } from '../types';
 import { 
@@ -56,7 +62,7 @@ const getSubjectCategoryColor = (subjectName: string = '', shortName: string = '
   if (s.includes('rewa') || s.includes('terap') || s.includes('wsp') || s.includes('logop') || s.includes('psych') || s.includes('pedag') || s.includes('dor.zaw') || s.includes('wdż')) {
     return { bg: '#fdf2f8', text: '#9d174d', border: '#fbcfe8' }; // Pink
   }
-  // General fallback
+  // Wartość domyślna
   return { bg: '#f8fafc', text: '#334155', border: '#e2e8f0' }; // Slate
 };
 
@@ -171,7 +177,7 @@ export default function PlachtaDyrektorska({
         };
       }
 
-      // Standard Polish educational abbreviations if not explicitly defined in pl.subjects
+      // Standardowe skróty przedmiotów, jeśli nie zdefiniowano w pl.subjects
       const standardPolishAbbrs: Record<string, string> = {
         'język polski': 'JP',
         'matematyka': 'MAT',
@@ -264,7 +270,7 @@ export default function PlachtaDyrektorska({
     return list;
   }, [pl.classes, selectedClassStage]);
 
-  // Filtered teachers list (active and sorted by last name)
+  // Lista aktywnych nauczycieli posortowana według nazwisk
   const filteredTeachers = useMemo(() => {
     return [...pl.teachers].filter(t => !t.inactive).sort((a, b) => 
       (a.last || '').localeCompare(b.last || '', 'pl', { sensitivity: 'base' })
@@ -294,7 +300,7 @@ export default function PlachtaDyrektorska({
     return baseEntities;
   }, [baseEntities, columnSplitMode]);
 
-  // Days list to render in print / full preview
+  // Lista dni tygodnia do wydruku i pełnego podglądu
   const daysToRender = useMemo(() => {
     if (printLayoutMode === 'single_day') {
       return [singleDaySelection];
@@ -392,7 +398,7 @@ export default function PlachtaDyrektorska({
   const comprehensiveSubjectsList = useMemo(() => {
     const listMap = new Map<string, { id: string; name: string; short: string; color: string; count: number }>();
 
-    // 1. Seed with all subjects from the Creator
+    // 1. Wypełnienie wszystkimi przedmiotami z Kreatora Szkoły
     pl.subjects.forEach(s => {
       const shortName = (s.short && s.short.trim()) ? s.short.trim() : (s.name.length > 5 ? s.name.substring(0, 4).toUpperCase() : s.name.toUpperCase());
       listMap.set(s.id, {
@@ -460,7 +466,7 @@ export default function PlachtaDyrektorska({
     return Array.from(listMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'pl'));
   }, [pl.subjects, pl.assignments, pl.lessons, schedData, appState.yearKey, scheduleVersion, resolveSubjectInfo]);
 
-  // Helper to extract lesson cell contents for a given entity, day, hour
+  // Pobranie zawartości komórki lekcji dla danej encji, dnia i godziny
   const getCellEntries = (
     entityId: string,
     dayIdx: number,
@@ -674,7 +680,7 @@ export default function PlachtaDyrektorska({
     return `calc((100% - ${fixedWidth}px) / ${activeEntities.length})`;
   }, [activeEntities.length, printLayoutMode]);
 
-  // Execute system print (ensures all 5 days + legend are in DOM when printing full Plachta)
+  // Wywołanie drukowania systemowego (gwarantuje obecność 5 dni i legendy w DOM)
   const handlePrint = (mode: 'all' | 'current' | React.SyntheticEvent = 'all') => {
     const targetMode = mode === 'current' ? 'current' : 'all';
     if (targetMode === 'all' && previewDayTab !== 'all') {

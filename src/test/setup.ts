@@ -1,7 +1,11 @@
-// Test setup for Vitest with fake-indexeddb and DOM mocks
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Konfiguracja środowiska testowego (Vitest Setup)
+ * Opis: Przygotowanie mocków środowiska DOM, fake-indexeddb, localStorage, sessionStorage oraz BroadcastChannel.
+ */
 import 'fake-indexeddb/auto';
 
-// Ensure localStorage & sessionStorage exist in Node/vitest
+// Zapewnienie obecności localStorage i sessionStorage w środowisku Node / Vitest
 if (typeof localStorage === 'undefined') {
   const store: Record<string, string> = {};
   (globalThis as any).localStorage = {
@@ -26,7 +30,7 @@ if (typeof sessionStorage === 'undefined') {
   };
 }
 
-// Mock BroadcastChannel if missing in test environment
+// Atrapa (mock) BroadcastChannel, jeśli nie występuje natywnie w środowisku testowym
 if (typeof BroadcastChannel === 'undefined' || !(globalThis as any).BroadcastChannel) {
   const channelRegistry = new Map<string, Set<any>>();
   class MockBroadcastChannel {
@@ -80,7 +84,7 @@ if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined' && 
   (window as any).BroadcastChannel = (globalThis as any).BroadcastChannel;
 }
 
-// Window mocks for jsdom
+// Atrapy (mocki) obiektu Window dla środowiska jsdom
 if (typeof window !== 'undefined') {
   (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 

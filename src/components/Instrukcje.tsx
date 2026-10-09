@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Podręcznik Użytkownika i Instrukcje Obsługi (Instrukcje)
+ * Opis: Interaktywny przewodnik krok po kroku po wszystkich funkcjonalnościach i etapach pracy w programie.
+ */
+
 import React, { useState, useMemo } from 'react';
 import { 
   BookOpen, Search, CheckCircle2, ChevronRight, ChevronDown, 
@@ -541,7 +547,7 @@ export default function Instrukcje() {
     }
   ], []);
 
-  // Filter sections and steps based on search query
+  // Filtrowanie sekcji i kroków na podstawie wpisanego hasła
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) return sections;
     const q = searchQuery.toLowerCase().trim();
@@ -717,7 +723,7 @@ export default function Instrukcje() {
               <div className="space-y-4">
                 {activeSection.steps.map((step, idx) => {
                   const stepKey = `${activeSection.id}-${idx}`;
-                  const isExpanded = expandedSteps[stepKey] !== false; // default expanded
+                  const isExpanded = expandedSteps[stepKey] !== false; // domyślnie rozwinięte
 
                   return (
                     <div 

@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Dyżury Adaptacyjne i Odprowadzające w Klasach 1 (Adaptation Duty)
+ * Opis: Generowanie i harmonogramowanie opieki wychowawców w salach oraz odprowadzania uczniów klas pierwszych.
+ */
 import { AppState, Class, Przerwa, AdaptationDutySlot, SchedData } from '../types';
 import { flattenColumns, colKey } from '../utils';
 
@@ -99,7 +104,7 @@ export function calculateAdaptationDuties(appState: AppState, schedData: SchedDa
     const dayData = schedData?.[yk]?.[dayIdx] || {};
 
     for (const targetClass of eligibleClasses) {
-      // Find all lessons of this class on this day
+      // Wyszukanie wszystkich lekcji tej klasy w danym dniu
       // Map hourNum -> { teacherAbbr, roomNum }
       const classLessonsByHour: Record<number, { teacherAbbr: string; roomNum: string }> = {};
 
@@ -116,7 +121,7 @@ export function calculateAdaptationDuties(appState: AppState, schedData: SchedDa
           for (const c of cells) {
             if (!c?.teacherAbbr) continue;
 
-            // Check if this lesson belongs to targetClass
+            // Sprawdzenie, czy ta lekcja należy do wybranej klasy
             const matchesClass = 
               c.className === targetClass.name ||
               c._bridgeMeta?.classId === targetClass.id ||
@@ -134,7 +139,7 @@ export function calculateAdaptationDuties(appState: AppState, schedData: SchedDa
         }
       });
 
-      // Also check appState.planLekcji.lessons as fallback if schedData is empty
+      // Sprawdzenie appState.planLekcji.lessons w przypadku braku danych w schedData
       if (Object.keys(classLessonsByHour).length === 0 && appState.planLekcji?.lessons) {
         Object.entries(appState.planLekcji.lessons).forEach(([key, lesson]) => {
           const [cId, dIdxStr, hIdxStr, assignId] = key.split('|');
@@ -197,7 +202,7 @@ export function calculateAdaptationDuties(appState: AppState, schedData: SchedDa
             classroomDutiesCount++;
           }
         } else {
-          // 2. Escort duty after the last lesson of Grade 1
+          // 2. Dyżur odprowadzający po ostatniej lekcji klasy pierwszej
           const teacherInfo = classLessonsByHour[lastHourNum];
           const lastSlot = timeslots.find(t => t.num === lastHourNum);
           

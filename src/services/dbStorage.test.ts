@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Magazynu IndexedDB i Blokad (dbStorage Tests)
+ * Opis: Weryfikacja operacji odczytu/zapisu, obsługi błędów oraz zachowania zablokowanej bazy.
+ */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   STORAGE_KEYS,
@@ -29,7 +34,7 @@ import {
 
 describe('dbStorage Encryption & Rollback Tests', () => {
   beforeEach(async () => {
-    // Mock minimal localStorage & sessionStorage in Node environment if missing
+    // Atrapa localStorage i sessionStorage w środowisku Node / Vitest
     if (typeof localStorage === 'undefined') {
       const store: Record<string, string> = {};
       (globalThis as any).localStorage = {
@@ -82,7 +87,7 @@ describe('dbStorage Encryption & Rollback Tests', () => {
     const retrieved = await getStorageItem(STORAGE_KEYS.APP_STATE);
     expect(retrieved).toMatchObject(testState);
 
-    // When locked, read returns null and write throws StorageLockedError
+    // Gdy baza jest zablokowana, odczyt zwraca null and write throws StorageLockedError
     lockSession();
     expect(isSessionUnlocked()).toBe(false);
 
@@ -241,12 +246,12 @@ describe('dbStorage Encryption & Rollback Tests', () => {
     expect(decryptedSched['y_2025_2026']['2']['h_3']['r_105'].className).toBe('4A');
     expect(decryptedSched['y_2025_2026']['2']['h_3']['r_105'].subject).toBe('Geografia');
 
-    // When locked, read returns null
+    // Gdy baza jest zablokowana, odczyt zwraca null
     lockSession();
     expect(isSessionUnlocked()).toBe(false);
     expect(await getStorageItem(STORAGE_KEYS.SCHED_DATA)).toBeNull();
 
-    // When unlocked with correct password, plan is fully available again
+    // Po odblokowaniu poprawnym hasłem plan jest ponownie w pełni dostępny
     const unlocked = await verifyMasterPassword(password);
     expect(unlocked).toBe(true);
     const restored = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);

@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Synchronizacji Wielu Kart (MultiTabStateService Tests)
+ * Opis: Weryfikacja detekcji konfliktów rewizji oraz komunikacji przez BroadcastChannel.
+ */
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   multiTabStateService,
@@ -45,7 +50,7 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
     expect(multiTabStateService.extractRevision(enriched)).toBe(5);
     expect(multiTabStateService.extractTabId(enriched)).toBe('tab_custom_1');
 
-    // Legacy fallback tolerance
+    // Tolerancja wsteczna dla starszych wpisów
     expect(multiTabStateService.extractRevision({ _revision: 9 })).toBe(9);
     expect(multiTabStateService.extractTabId({ _tabId: 'legacy_tab' })).toBe('legacy_tab');
   });
@@ -160,7 +165,7 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
     const saved = await persistAppStateAndSchedWithConflictCheck(sampleAppState as unknown as AppState, sampleSchedData as unknown as SchedData);
     expect(saved).toBe(true);
 
-    // getStorageItem for SCHED_DATA must return full non-null object passing SchedDataSchema
+    // getStorageItem dla SCHED_DATA musi zwrócić poprawny obiekt zgodny ze schematem SchedDataSchema
     const retrievedSched = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
     expect(retrievedSched).not.toBeNull();
     expect(retrievedSched['y_2025_2026']).toBeDefined();

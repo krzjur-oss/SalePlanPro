@@ -1,5 +1,9 @@
-// Conflict Difference Engine for Multi-Tab Parallel Edits in SalePlan Pro
-// Accurately computes human-readable metrics and granular change lists between local and database states.
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Silnik Różnicowy Konfliktów Równoległej Edycji (Conflict Difference Engine)
+ * Opis: Precyzyjne wyliczanie metryk ilościowych oraz szczegółowej listy zmian
+ * pomiędzy stanem lokalnym danej karty a stanem zapisanym w bazie danych przez inną kartę.
+ */
 
 import { AppState, SchedData, Lesson, DyzurEntry } from '../types';
 
@@ -61,7 +65,7 @@ export function computeConflictDiff(
   const local = localState || ({} as Partial<AppState>);
   const incoming = incomingState || ({} as Partial<AppState>);
 
-  // Build entity lookup maps merging local and incoming for maximum accuracy
+  // Budowanie map encji (nauczyciele, klasy, sale) łączących stan lokalny i przychodzący
   const teachersMap = new Map<string, { first: string; last: string; abbr: string }>();
   (local.teachers || []).concat(local.planLekcji?.teachers || []).forEach(t => {
     if (t?.id) teachersMap.set(t.id, { first: t.first || '', last: t.last || '', abbr: t.abbr || '' });
@@ -94,7 +98,7 @@ export function computeConflictDiff(
     if (r?.id) roomsMap.set(r.id, { name: r.name || '' });
   });
 
-  // Collect assignments map
+  // Mapa przydziałów lekcyjnych
   const assignmentsMap = new Map<string, { classId: string; teacherId: string | null; subjectId: string; roomId: string | null }>();
   (local.planLekcji?.assignments || []).forEach(a => {
     if (a?.id) assignmentsMap.set(a.id, a);
@@ -103,10 +107,10 @@ export function computeConflictDiff(
     if (a?.id) assignmentsMap.set(a.id, a);
   });
 
-  // Hours / Timeslots
+  // Godziny i siatki lekcyjne
   const timeslots = incoming.timeslots || local.timeslots || [];
 
-  // 1. LESSONS DIFF
+  // 1. RÓŻNICE W LEKCJACH (PLAN KLAS)
   const localLessons = (local.planLekcji?.lessons || {}) as Record<string, Lesson>;
   const incomingLessons = (incoming.planLekcji?.lessons || {}) as Record<string, Lesson>;
   const allLessonKeys = Array.from(new Set([...Object.keys(localLessons), ...Object.keys(incomingLessons)]));
@@ -184,7 +188,7 @@ export function computeConflictDiff(
     }
   });
 
-  // 2. DUTIES DIFF
+  // 2. RÓŻNICE W HARMONOGRAMIE DYŻURÓW
   const localDuties = (local.dyzury?.harmonogram || {}) as Record<string, DyzurEntry>;
   const incomingDuties = (incoming.dyzury?.harmonogram || {}) as Record<string, DyzurEntry>;
   const allDutyKeys = Array.from(new Set([...Object.keys(localDuties), ...Object.keys(incomingDuties)]));
@@ -251,7 +255,7 @@ export function computeConflictDiff(
     }
   });
 
-  // 3. TEACHERS DIFF
+  // 3. RÓŻNICE W LIŚCIE NAUCZYCIELI
   const localTeachersList = local.planLekcji?.teachers || local.teachers || [];
   const incTeachersList = incoming.planLekcji?.teachers || incoming.teachers || [];
   const localTeacherIds = new Set(localTeachersList.map(t => t.id));
@@ -287,7 +291,7 @@ export function computeConflictDiff(
     }
   });
 
-  // 4. CLASSES DIFF
+  // 4. RÓŻNICE W ODZDZIAŁACH KLASOWYCH
   const localClassesList = local.planLekcji?.classes || local.classes || [];
   const incClassesList = incoming.planLekcji?.classes || incoming.classes || [];
   const localClassIds = new Set(localClassesList.map(c => c.id));
@@ -323,7 +327,7 @@ export function computeConflictDiff(
     }
   });
 
-  // 5. ROOMS DIFF
+  // 5. RÓŻNICE W SALACH LEKCYJNYCH
   const localRoomsList = local.planLekcji?.rooms || [];
   const incRoomsList = incoming.planLekcji?.rooms || [];
   const localRoomIds = new Set(localRoomsList.map(r => r.id));
@@ -359,7 +363,7 @@ export function computeConflictDiff(
     }
   });
 
-  // 6. SPECIAL STUDENTS DIFF
+  // 6. RÓŻNICE W UCZNIACH ZE SPE I NI
   const localStudentsList = local.planLekcji?.specialStudents || [];
   const incStudentsList = incoming.planLekcji?.specialStudents || [];
   const localStudentIds = new Set(localStudentsList.map(s => s.id));
@@ -414,7 +418,7 @@ export function computeConflictDiff(
     }
   });
 
-  // 7. SCHED DATA (PLAN SAL) DIFF
+  // 7. RÓŻNICE W PRZYDZIAŁACH SAL (PLAN SAL)
   if (localSched || incomingSched) {
     const countSlots = (sched?: SchedData | null) => {
       if (!sched || typeof sched !== 'object') return 0;
@@ -454,7 +458,7 @@ export function computeConflictDiff(
     }
   }
 
-  // 8. METRICS OVERVIEW
+  // 8. ZESTAWIENIE METRYK BILANSU
   const localLessonsCount = Object.keys(localLessons).length;
   const incomingLessonsCount = Object.keys(incomingLessons).length;
 

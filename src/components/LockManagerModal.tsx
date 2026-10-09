@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Menedżer Blokad Lekcji (LockManagerModal)
+ * Opis: Zarządzanie zamrożonymi slotami w planie lekcji, zapobiegającymi przesuwaniu wybranych zajęć przez autogenerator.
+ */
+
 import React, { useState, useMemo } from 'react';
 import { 
   Lock, Unlock, Shield, ShieldCheck, X, Search, CheckCircle, 
@@ -96,7 +102,7 @@ export default function LockManagerModal({
   const totalLessonsInPlan = Object.keys(pl.lessons).length;
   const totalLockedLessons = Object.values(pl.lessons).filter(l => l.locked).length;
 
-  // Filtered lists
+  // Przefiltrowane listy elementów
   const filteredClasses = classLockStats.filter(item => 
     item.class.name.toLowerCase().includes(search.toLowerCase())
   );

@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Menedżer Migawek i Punktów Przywracania (SnapshotManager)
+ * Opis: Zarządzanie automatycznymi i ręcznymi kopiami bezpieczeństwa z możliwością natychmiastowego cofnięcia zmian.
+ */
+
 import React, { useState, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { AppState, SchedData, SnapshotEntry, AutosaveVersion } from '../types';
 import { 
@@ -32,7 +38,7 @@ interface SafeErrorBoundaryState {
   error: Error | null;
 }
 
-// Custom Error Boundary to capture rendering failures inside the Snapshot Manager
+// Granica błędów dla modułu Menedżera Migawek
 class SafeErrorBoundary extends React.Component<SafeErrorBoundaryProps, SafeErrorBoundaryState> {
   props!: SafeErrorBoundaryProps;
   state!: SafeErrorBoundaryState;
@@ -235,7 +241,7 @@ function SnapshotManagerInner({
   const [comparisonSearchQuery, setComparisonSearchQuery] = useState('');
   const [managerTab, setManagerTab] = useState<'manual' | 'autosave'>('manual');
 
-  // Reset comparison state when chosen snapshot changes
+  // Reset stanu porównania przy zmianie wybranej migawki
   React.useEffect(() => {
     setComparisonSearchQuery('');
   }, [selectedSnapshotId]);
@@ -260,7 +266,7 @@ function SnapshotManagerInner({
     return snapshots.find(s => s && s.id === selectedSnapshotId) || null;
   }, [snapshots, selectedSnapshotId, autosaveVersions]);
 
-  // Helper function to count occupied lessons in schedData
+  // Zliczanie zaplanowanych lekcji w schedData
   const countLessons = (sData: SchedData): number => {
     let count = 0;
     try {
@@ -585,7 +591,7 @@ function SnapshotManagerInner({
         }
 
         if (targetSnap && targetSnap.appState && targetSnap.schedData) {
-          // Generate new ID to prevent overlaps
+          // Generowanie nowego unikalnego ID
           targetSnap.id = `snap-imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           onChangeSnapshots([targetSnap, ...snapshots]);
           setAlertConfig({
@@ -610,7 +616,7 @@ function SnapshotManagerInner({
     e.target.value = '';
   };
 
-  // Calculate approximate snapshots memory impact
+  // Obliczenie przybliżonego rozmiaru pamięci zajmowanego przez migawki
   const approximateSize = useMemo(() => {
     return JSON.stringify(snapshots).length;
   }, [snapshots]);

@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Kreator Importu z Systemu SIO (SioImport)
+ * Opis: Pobieranie i mapowanie danych struktury kadry i oddziałów ze szkolnych zestawień Systemu Informacji Oświatowej.
+ */
+
 import React, { useState, useMemo, useRef } from 'react';
 import { 
   Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, ArrowRight, ArrowLeft, 
@@ -81,11 +87,11 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
     return result;
   };
 
-  // Helper to trigger file reading and autodetect structure
+  // Odczyt pliku i automatyczne rozpoznanie struktury SIO
   const handleFileContent = (text: string) => {
     setRawText(text);
 
-    // Detect delimiter: count semicolons vs commas in the first 3 lines
+    // Wykrywanie separatora: zliczanie średników i przecinków w pierwszych liniach
     const firstLines = text.split('\n').slice(0, 3).join('\n');
     const semicolons = (firstLines.match(/;/g) || []).length;
     const commas = (firstLines.match(/,/g) || []).length;
@@ -205,7 +211,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
 
     const dataRows = hasHeader ? parsedRows.slice(1) : parsedRows;
 
-    // Helper unique structures
+    // Unikalne struktury oddziałów
     const rawTeachers = new Map<string, { first: string; last: string; rawName: string }>();
     const rawClasses = new Set<string>();
     const rawSubjects = new Set<string>();
@@ -255,7 +261,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
       let teacherLast = '';
 
       if (rawTeacherRaw) {
-        // Check if we split name
+        // Podział imienia i nazwiska
         if (rawTeacherFirst) {
           teacherFirst = rawTeacherFirst;
           teacherLast = rawTeacherRaw;
@@ -307,7 +313,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
         countHighHours++;
       }
 
-      // Check duplicate in existing assignments
+      // Sprawdzenie duplikatów wśród istniejących przydziałów
       let isDuplicate = false;
       if (rawClass && rawSubject) {
         const foundExisting = appState.planLekcji.assignments.some(a => {
@@ -427,7 +433,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
 
   // Handle setting all select-checkbox states on first transition to preview
   const handleProceedToPreview = () => {
-    // Select all teachers, classes, subjects, and assignments without errors by default
+    // Domyślne zaznaczenie poprawnych nauczycieli, klas, przedmiotów i przydziałów
     const newTeachersSel: Record<string, boolean> = {};
     validationData.teachers.forEach(t => {
       newTeachersSel[`${t.last}|${t.first}`] = true;
@@ -445,7 +451,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
 
     const newAsgSel: Record<number, boolean> = {};
     validationData.assignments.forEach(a => {
-      newAsgSel[a.index] = a.isValid && !a.isDuplicate; // skip duplicates by default, let user enable them
+      newAsgSel[a.index] = a.isValid && !a.isDuplicate; // domyślne pomijanie duplikatów z możliwością włączenia przez użytkownika
     });
 
     setSelectedTeachers(newTeachersSel);

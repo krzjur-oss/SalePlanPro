@@ -1,3 +1,10 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Główny Komponent Aplikacji (App.tsx)
+ * Opis: Centralny stan programu, nawigacja modułowa, automatyczny zapis z detekcją konfliktów wielu kart,
+ * obsługa szyfrowania bazy danych oraz synchronizacja trybu dwuekranowego.
+ */
+
 import React, { useState, useEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { 
   AppState, SchedData, ArchiveEntry, SnapshotEntry, SchedCell, Assignment, Teacher, Subject, ClassRoom, AppEventLog, AutosaveVersion, Lesson, PlanVariant
@@ -271,7 +278,7 @@ export default function App() {
     try {
       await migrateFromLocalStorage();
 
-      // Guard: when database is NOT encrypted, verify if physically present records are corrupted
+      // Zabezpieczenie: gdy baza NIE jest zaszyfrowana, sprawdź czy fizycznie obecne rekordy nie są uszkodzone
       const isEncrypted = isDatabaseEncryptionActive();
       if (!isEncrypted) {
         const rawAppState = await getRawItem(STORAGE_KEYS.APP_STATE);
@@ -367,11 +374,11 @@ export default function App() {
         }
       }
       
-      // Task 4: Check and handle PRE_ENCRYPTION_BACKUP
+      // Sprawdzenie i obsługa kopii zapasowej przed szyfrowaniem (PRE_ENCRYPTION_BACKUP)
       const preBackup = await getRawItem<Record<string, any>>(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
       if (preBackup && typeof preBackup === 'object' && preBackup.data) {
         if (isDatabaseEncryptionActive()) {
-          // Encryption active: check if all keys in backup can be cleanly read and decrypted
+          // Szyfrowanie aktywne: sprawdzenie czy wszystkie klucze w kopii dają się poprawnie odczytać i odszyfrować
           if (isSessionUnlocked()) {
             let allKeysReadable = true;
             const keysToCheck = Array.isArray(preBackup.keys) ? preBackup.keys : Object.keys(preBackup.data);
@@ -627,7 +634,7 @@ export default function App() {
       const saved = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS) || autosaveVersions;
       let versions: AutosaveVersion[] = Array.isArray(saved) ? saved : [];
 
-      // Check if state actually changed from the last version
+      // Sprawdzenie, czy stan faktycznie uległ zmianie względem ostatniej wersji
       if (versions.length > 0) {
         const last = versions[0];
         const currentHash = JSON.stringify({ appState: newAppState, schedData: newSchedData });
@@ -658,10 +665,10 @@ export default function App() {
     return planVariants.find(v => v.id === activeVariantId) || planVariants[0] || null;
   }, [planVariants, activeVariantId]);
 
-  // Check if current browser window is opened as Companion Screen (mode=companion)
+  // Sprawdzenie, czy bieżące okno przeglądarki zostało otwarte jako Ekran Towarzyszący (mode=companion)
   const isCompanionMode = useMemo(() => dualScreenService.isCompanionInstance(), []);
 
-  // Ensure default variant exists if storage was empty
+  // Zapewnienie domyślnego wariantu planu, jeśli magazyn był pusty
   useEffect(() => {
     if (!storageReady || isLocked) return;
     if (planVariants.length === 0 && appState.planLekcji) {
@@ -697,7 +704,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Default variant creation only triggers upon initial storage readiness or core structural changes
   }, [storageReady, isLocked, appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
 
-  // Debounced auto-save of current working changes into the active variant
+  // Opóźniony automatyczny zapis zmian roboczych do aktywnego wariantu
   useEffect(() => {
     if (!storageReady || isLocked) return;
     if (!activeVariantId || planVariants.length === 0) return;
@@ -1096,7 +1103,7 @@ export default function App() {
           if (targetClassId) {
             setAppState(prev => {
               const pl = prev.planLekcji;
-              // Find matching lesson key
+              // Wyszukanie pasującego klucza lekcji
               const matchEntry = Object.entries(pl.lessons).find(([k]) => {
                 const parts = k.split('|');
                 return parts[0] === targetClassId && parseInt(parts[1], 10) === dayIdx && parseInt(parts[2], 10) === hourIdx;
@@ -1265,7 +1272,7 @@ export default function App() {
   const [showSnapshotManager, setShowSnapshotManager] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  // Reference holding the last verified working application snapshot for instant rollback
+  // Referencja przechowująca ostatnią zweryfikowaną migawkę do natychmiastowego cofnięcia
   const lastValidBackupRef = React.useRef<{
     appState: AppState;
     schedData: SchedData;
@@ -1794,7 +1801,7 @@ export default function App() {
 
         const colKeyCells = nextSchedData[yearKey][day][hourKey];
 
-        // Find all lessons for this day and hour in Plan Klas
+        // Wyszukanie wszystkich lekcji dla tego dnia i godziny w Planie Klas
         const currentHIdx = pl.hours.findIndex(h => String(h.num) === hourKey);
         pl.classes.forEach(cls => {
           const matchingLessons = (Object.entries(pl.lessons) as [string, Lesson | undefined][]).filter(([k]) => {
@@ -1832,7 +1839,7 @@ export default function App() {
               });
             });
 
-            // Fallback to first empty room of appropriate type if room specified but no strict match, or if any is free
+            // Przypisanie pierwszej wolnej sali odpowiedniego typu w przypadku braku ścisłego dopasowania
             if (!assignedColKey) {
               for (let fi = 0; fi < appState.floors.length; fi++) {
                 const floor = appState.floors[fi];
@@ -1888,7 +1895,7 @@ export default function App() {
                 }
               };
 
-              // If already occupied, accumulate into an array to preserve both for conflict detection
+              // Gdy sala jest już zajęta, zgromadź w tablicy w celu detekcji kolizji
               const existing = colKeyCells[assignedColKey];
               if (existing) {
                 const existingArr = Array.isArray(existing) ? existing : [existing];
@@ -1971,12 +1978,12 @@ export default function App() {
       if (!a || typeof a.id !== 'string' || !a.id.trim()) {
         continue;
       }
-      // If referenced class does not exist, ignore orphaned assignment gracefully
+      // Jeśli wskazana klasa nie istnieje, zignoruj osierocony przydział
       if (!classIdSet.has(a.classId)) {
         console.warn(`[Integrity Check] Pominięto przydział "${a.id}" dla nieistniejącej klasy: "${a.classId}"`);
         continue;
       }
-      // If referenced subject does not exist, fallback to first available subject if possible
+      // Jeśli wskazany przedmiot nie istnieje, użyj pierwszego dostępnego przedmiotu
       if (!subjectIdSet.has(a.subjectId)) {
         if (validSubjects.length > 0) {
           a.subjectId = validSubjects[0].id;
@@ -1984,7 +1991,7 @@ export default function App() {
           continue;
         }
       }
-      // If referenced teacher does not exist, reset teacherId to empty string/null rather than crashing
+      // Jeśli wskazany nauczyciel nie istnieje, zresetuj identyfikator nauczyciela
       if (a.teacherId && !teacherIdSet.has(a.teacherId)) {
         a.teacherId = '';
       }
@@ -2305,7 +2312,7 @@ export default function App() {
     );
   };
 
-  // If database encryption is active and session is locked, render exclusively the UnlockScreen gate
+  // Gdy szyfrowanie bazy jest aktywne a sesja zablokowana, wyświetl wyłącznie ekran odblokowania
   if (isLocked) {
     return (
       <UnlockScreen
@@ -2315,7 +2322,7 @@ export default function App() {
     );
   }
 
-  // If running in companion window mode (?mode=companion), render CompanionWindowView directly
+  // W trybie okna towarzyszącego (?mode=companion) renderuj bezpośrednio CompanionWindowView
   if (isCompanionMode) {
     return (
       <>

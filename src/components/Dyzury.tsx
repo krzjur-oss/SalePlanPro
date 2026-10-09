@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Harmonogram Dyżurów Nauczycielskich (Dyzury)
+ * Opis: Układanie, automatyczna optymalizacja i kontrola dyżurów na przerwach, nadzór szatni WF oraz ochrona klas pierwszych.
+ */
+
 import React, { useState, useMemo } from 'react';
 import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState, SchedData, SchedCell, Teacher } from '../types';
 import { esc, colKey, flattenColumns, uid } from '../utils';
@@ -178,7 +184,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return mins;
   }, [dyz.harmonogram, dyz.przerwy]);
 
-  // Current total duty allocation minutes per teacher (including adaptation duty and PE supervision if enabled)
+  // Łączna liczba minut dyżurów nauczyciela (w tym dyżury adaptacyjne i szatnie WF)
   const teacherDutyMinutes = useMemo(() => {
     const mins: { [abbr: string]: number } = { ...teacherCorridorMinutes };
     if (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false && adaptationDuties.totalTeacherMinutes) {
@@ -208,7 +214,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     if (sumProportions === 0) sumProportions = 1;
 
-    // Calculate total required minutes
+    // Obliczenie wymaganej sumy minut dyżurów
     let totalRequiredDutyMinutes = 0;
     for (let day = 0; day < 5; day++) {
       for (const przerwa of dyz.przerwy) {
@@ -390,7 +396,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       handleCancelEditPlace();
     }
 
-    // Filter harmonogram
+    // Filtrowanie harmonogramu dyżurów
     const nextHarm = { ...dyz.harmonogram };
     Object.keys(nextHarm).forEach((key) => {
       if (key.startsWith(id + '|')) {
@@ -682,7 +688,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const breakEndMins = toMins(przerwa.end);
 
     if (dyz.settings.excludeAfterLastLesson) {
-      // Exclude break if it starts at or after their last class ends
+      // Wykluczenie przerwy, jeśli rozpoczyna się po zakończeniu ostatniej lekcji
       if (breakStartMins >= dayEndMins) {
         return false;
       }
@@ -712,7 +718,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     let roomsToCheck: string[] = miejsce.connectedRooms || [];
 
-    // If transitional, or if there are no connected rooms, fallback to floor rooms
+    // Dla stref przejściowych lub bez przypisanych sal, użyj sal z danego piętra
     if (miejsce.isTransitional || roomsToCheck.length === 0) {
       if (miejsce.floor) {
         const cols = flattenColumns(appState.floors);
@@ -721,7 +727,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
           .map(col => col.room.num);
       }
       
-      // If still no rooms to check, we check if there is ANY lesson in the school
+      // Jeśli brak przypisanych sal, sprawdź czy trwa JAKAKOLWIEK lekcja w szkole
       if (roomsToCheck.length === 0) {
         const hasAnyLessonInSchool = 
           Object.values(hourBeforeData).some(cell => {
@@ -787,7 +793,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     if (sumProportions === 0) sumProportions = 1;
 
-    // Calculate total duty slots needed for the week and their duration
+    // Obliczenie łącznej liczby slotów dyżurów w tygodniu oraz ich czasu trwania
     let totalRequiredDutyMinutes = 0;
     for (let day = 0; day < 5; day++) {
       for (const przerwa of dyz.przerwy) {
@@ -803,7 +809,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const teacherMaxMinutes: { [abbr: string]: number } = {};
     const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
     eligibleTeachers.forEach(t => {
-      // Set a baseline minimum of at least 15 mins so they can be assigned at least once if needed
+      // Ustawienie minimalnego progu 15 minut, aby umożliwić przydział co najmniej jednego dyżuru
       if (dyz.settings.autoBalance !== false) {
         teacherMaxMinutes[t.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * teacherProportions[t.abbr])));
       } else {
@@ -844,17 +850,17 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       }
     });
 
-    // Helper to check if teacher can be assigned to a break
+    // Sprawdzenie, czy nauczyciel może objąć dyżur na danej przerwie
     const canAssignTeacher = (
       t: any,
       day: number,
       przerwa: Przerwa,
       allowedMinutesBuffer: number
     ): boolean => {
-      // Check if they are active on this day and during this break
+      // Sprawdzenie obecności w szkole w danym dniu i na przerwie
       if (!isTeacherAvailableForBreak(t.abbr, day, przerwa)) return false;
 
-      // Check if teacher is busy with grade 1 adaptation duty during this break (classroom or escort)
+      // Sprawdzenie, czy nauczyciel pełni dyżur adaptacyjny w klasie pierwszej
       if (dyz.settings.firstGradeAdaptationDuty !== false) {
         const busyWithAdaptation = getTeacherAdaptationDuty(adaptationDuties.byDay, t.abbr, day, przerwa.num);
         if (busyWithAdaptation) {
@@ -862,7 +868,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
         }
       }
 
-      // Check if teacher is busy with PE locker room / gym supervision during this break
+      // Sprawdzenie, czy nauczyciel pełni nadzór nad szatnią WF
       if (dyz.settings.peSupervisionDuty !== false) {
         const busyWithPE = getTeacherPESupervision(
           schedData,
@@ -878,17 +884,17 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
         }
       }
 
-      // Check if they have already hit their limit (with buffer)
+      // Sprawdzenie limitu minut dyżurów nauczyciela
       const dur = getBreakDuration(przerwa);
       if (assignedMinutes[t.abbr] + dur > teacherMaxMinutes[t.abbr] + allowedMinutesBuffer) return false;
 
-      // Check if already assigned in this identical break (to another place)
+      // Sprawdzenie, czy nauczyciel nie ma już dyżuru w innym miejscu na tej przerwie
       const alreadyAssignedInBreak = dyz.miejsca.some(m => 
         nextHarm[`${m.id}|${day}|${przerwa.num}`]?.teacherAbbr === t.abbr
       );
       if (alreadyAssignedInBreak) return false;
 
-      // Check consecutive duties rule
+      // Kontrola zasady unikania dyżurów na bezpośrednio sąsiadujących przerwach
       if (wouldViolateConsecutiveDutiesRule(t.abbr, day, przerwa.num, nextHarm, dyz.miejsca, dyz.przerwy)) {
         return false;
       }

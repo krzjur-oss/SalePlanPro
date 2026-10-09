@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Centrum Wydruków i Publikacji PDF (Wydruki)
+ * Opis: Generowanie czystych arkuszy A4 i A3: plany oddziałów, nauczycieli, sal, dyżurów, arkusze SPE oraz eksport iCal.
+ */
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, SpecialStudent } from '../types';
 import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink, HeartHandshake, Sparkles, BookOpen, Clock, Award, FileSpreadsheet, Tv } from 'lucide-react';
@@ -217,7 +223,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
   const pl = appState.planLekcji;
 
-  // --- Map and parse yearLabel to auto-preset start/end dates of the school year ---
+  // --- Mapowanie roku szkolnego na daty rozpoczęcia i zakończenia ---
   const defaultDates = useMemo(() => {
     const label = appState.yearLabel || '';
     const match = label.match(/(\d{4})/);
@@ -242,13 +248,13 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [endDateInput, setEndDateInput] = useState(defaultDates.end);
   const [nameFormat, setNameFormat] = useState('[Przedmiot] - [Klasa] [Sala]');
 
-  // Keep date values in sync with state in case the school year changes in the parent component
+  // Synchronizacja dat w przypadku zmiany roku szkolnego
   useEffect(() => {
     setStartDateInput(defaultDates.start);
     setEndDateInput(defaultDates.end);
   }, [defaultDates]);
 
-  // Help calculate the first date corresponding to dayIdx (0 = Monday, ..., 4 = Friday) on or after startDateInput
+  // Wyliczenie daty odpowiadającej danemu dniowi tygodnia
   const getFirstOccurrence = (startDateStr: string, dayIdx: number) => {
     const start = new Date(startDateStr);
     const targetDay = dayIdx + 1; // 1 = Monday, 5 = Friday
@@ -443,7 +449,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const roomsMap = useMemo(() => new Map(pl.rooms.map(r => [r.id, r])), [pl.rooms]);
   const groupsMap = useMemo(() => new Map((pl.schoolGroups || []).map(g => [g.id, g])), [pl.schoolGroups]);
 
-  // Helper to format subject short code cleanly (e.g. "ang", "mat", "pol")
+  // Formatowanie czytelnego skrótu przedmiotu
   const getSubjectShort = useCallback((subjectNameOrId: string, subjectObj?: any): string => {
     if (subjectObj && subjectObj.short && String(subjectObj.short).trim()) {
       return String(subjectObj.short).trim();
@@ -516,7 +522,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     if (name.toLowerCase() === 'chłopcy' || name.toLowerCase() === 'chlopcy') return 'chł';
     if (name.toLowerCase() === 'dziewczęta' || name.toLowerCase() === 'dziewczeta') return 'dz';
 
-    // If name is actually a subject qualifier or subject description, NOT a group index
+    // Gdy nazwa jest dopiskiem do przedmiotu a nie indeksem grupy
     const lowerName = name.toLowerCase();
     if (
       lowerName.includes('relig') ||
@@ -605,7 +611,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     return '';
   }, [colKeyToRoomMap, appState.floors, pl.rooms]);
 
-  // Helper: check if a lesson from SchedData (Etap 2) belongs to a specific class, teacher, or room
+  // Sprawdzenie, czy lekcja z SchedData (Etap 2) należy do danej klasy, nauczyciela lub sali
   // schedData structure: yearKey -> dayIdx -> hourKey -> colKey -> SchedCell | SchedCell[]
   const etap2Schedule = useMemo(() => {
     const yearKey = appState.yearKey;
@@ -638,7 +644,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 
                 classMap[clsId][dayIdx][hourKey].push({
                   ...cell,
-                  note: actualRoomName // Store the actual room name in note for downstream rendering
+                  note: actualRoomName // Zapis rzeczywistej nazwy sali w notatce do renderowania widoku
                 });
               });
             } else if (cell.className) {

@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Granica Błędów Wykonawczych (ErrorBoundary)
+ * Opis: Przechwytywanie krytycznych wyjątków renderowania React z opcją bezpiecznego restartu i zachowania kopii roboczej.
+ */
+
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, RotateCcw, Trash2, Wrench } from 'lucide-react';
 import { clearAllStorage, STORAGE_KEYS, removeStorageItem } from '../services/dbStorage';
@@ -56,7 +62,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   private handleEmergencyRepair = async () => {
     this.setState({ isRepairing: true });
     try {
-      // Clear potentially corrupt cached state while preserving snapshots/backups if possible
+      // Czyszczenie pamięci podręcznej z zachowaniem kopii zapasowych i migawek
       await removeStorageItem(STORAGE_KEYS.APP_STATE);
       await removeStorageItem(STORAGE_KEYS.SCHED_DATA);
       localStorage.removeItem(STORAGE_KEYS.APP_STATE);

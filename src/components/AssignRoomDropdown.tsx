@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Szybki Przydział Sali Lekcyjnej (AssignRoomDropdown)
+ * Opis: Komponent listy rozwijanej umożliwiający natychmiastowe przypisanie lub zmianę gabinetu w widoku planu lekcji.
+ */
+
 import React, { useState, useMemo } from 'react';
 import { ClassRoom, PlanLekcjiState } from '../types';
 import { ArrowUpDown, CheckCircle2, AlertCircle, Filter } from 'lucide-react';
@@ -44,7 +50,7 @@ export const AssignRoomDropdown: React.FC<AssignRoomDropdownProps> = ({
 }) => {
   const [sortMode, setSortMode] = useState<RoomSortMode>('free_first');
 
-  // Compute availability for every room at the specified time slot and weekly
+  // Kalkulacja dostępności dla każdej sali w danym slocie czasowym i tygodniowo
   const roomsAnalysis = useMemo<RoomAvailabilityInfo[]>(() => {
     const pl: PlanLekcjiState = planLekcji || {
       meta: { schoolName: '', year: '' },
@@ -82,7 +88,7 @@ export const AssignRoomDropdown: React.FC<AssignRoomDropdownProps> = ({
       let occupantText: string | undefined = undefined;
       const occupiedSlotSet = new Set<string>(); // "day-hour"
 
-      // 1. Check regular lessons
+      // 1. Sprawdzenie lekcji ogólnych
       Object.entries(pl.lessons || {}).forEach(([key, lesson]) => {
         if (!lesson || !lesson.assignmentId) return;
         if (currentAssignmentId && lesson.assignmentId === currentAssignmentId) return;
@@ -109,7 +115,7 @@ export const AssignRoomDropdown: React.FC<AssignRoomDropdownProps> = ({
         }
       });
 
-      // 2. Check special lessons (studentId|day|hour|specialAssignmentId)
+      // 2. Sprawdzenie zajęć specjalnych
       Object.entries(pl.specialLessons || {}).forEach(([key, spLesson]) => {
         if (!spLesson || !spLesson.assignmentId) return;
         if (currentAssignmentId && spLesson.assignmentId === currentAssignmentId) return;
@@ -129,7 +135,7 @@ export const AssignRoomDropdown: React.FC<AssignRoomDropdownProps> = ({
         }
       });
 
-      // 3. Check spePlan slotAssignments
+      // 3. Sprawdzenie przydziałów w spePlan
       if (pl.spePlan?.slotAssignments) {
         pl.spePlan.slotAssignments.forEach(slot => {
           if (slot.roomId === room.id && slot.id !== currentAssignmentId) {

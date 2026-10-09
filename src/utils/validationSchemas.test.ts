@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Schematów Walidacji Zod (Validation Schemas Tests)
+ * Opis: Weryfikacja poprawności formatów danych, importu, eksportu oraz normalizacji.
+ */
 import { describe, it, expect } from 'vitest';
 import { getDemoAppState } from '../utils';
 import { 

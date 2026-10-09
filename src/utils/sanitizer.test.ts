@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Sanityzacji i Ochrony XSS (Sanitizer Tests)
+ * Opis: Weryfikacja usuwania znaków kontrolnych i ochrony szablonów HTML przed wstrzykiwaniem kodu.
+ */
 import { describe, it, expect } from 'vitest';
 import { 
   sanitizeText, 

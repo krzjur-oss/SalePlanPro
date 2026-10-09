@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Ekran Odblokowania Zaszyfrowanej Bazy (UnlockScreen)
+ * Opis: Monit o hasło główne przy zablokowanej sesji chroniący dane osobowe uczniów i nauczycieli przed niepowołanym dostępem.
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Shield, Lock, Unlock, Key, Eye, EyeOff, AlertTriangle, 
@@ -50,7 +56,7 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus input on mount or when lockout clears
+  // Automatyczne ustawienie fokusu na polu hasła
   useEffect(() => {
     if (lockoutSeconds === 0 && !showHelpModal) {
       inputRef.current?.focus();

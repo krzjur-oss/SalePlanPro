@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Baner Powiadomień o Aktualizacji z Innej Karty (MultiTabRefreshBanner)
+ * Opis: Dyskretny pasek informujący o zapisaniu nowszej wersji planu w innej karcie z opcją natychmiastowego odświeżenia.
+ */
+
 import React from 'react';
 import { RefreshCw, X, Radio } from 'lucide-react';
 import { Z_INDEX_CLASSES } from '../styles/zIndex';

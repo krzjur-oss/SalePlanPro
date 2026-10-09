@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Asystent Szybkiej Zamiany Lekcji (SwapAssistantModal)
+ * Opis: Inteligentne podpowiedzi bezkolizyjnych zamian godzin pomiędzy nauczycielami lub klasami.
+ */
+
 import React from 'react';
 import { 
   ArrowLeftRight, CheckCircle2, AlertTriangle, X, ShieldAlert, DoorClosed, 
@@ -178,7 +184,7 @@ export default function SwapAssistantModal({
             </div>
           </div>
 
-          {/* CONFLICT CHECK RESULTS */}
+          {/* WYNIKI WERYFIKACJI KOLIZJI I ZAMIANY */}
           <div className="rounded-xl border p-4 transition-all">
             {totalConflicts === 0 ? (
               <div className="flex items-start gap-3 text-emerald-800 bg-emerald-50/80 border border-emerald-200 p-3.5 rounded-xl">

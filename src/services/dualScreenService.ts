@@ -1,6 +1,9 @@
-// Dual-Screen Management Service for SalePlan Pro
-// Supports Multi-Screen Detection (Window Management API / screen.isExtended)
-// and instant two-way synchronization via BroadcastChannel.
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Usługa Zarządzania Trybem Dwóch Ekranów (Dual-Screen Service)
+ * Opis: Wykrywanie konfiguracji wielomonitorowej (Window Management API / screen.isExtended)
+ * oraz dwukierunkowa synchronizacja okien roboczych przez BroadcastChannel.
+ */
 
 import { DualScreenMessageSchema } from '../utils/validationSchemas';
 
@@ -94,17 +97,17 @@ class DualScreenManager {
   private setupListeners() {
     if (typeof window === 'undefined') return;
 
-    // Listen to screen change events if supported
+    // Nasłuchiwanie zmian konfiguracji ekranów, jeśli API jest wspierane
     if (window.screen && 'addEventListener' in window.screen) {
       try {
         (window.screen as unknown as EventTarget).addEventListener('change', () => this.updateMultiScreenStatus());
       } catch (e) {}
     }
 
-    // Window resize / orientation change as heuristic
+    // Heurystyczna detekcja przy zmianie rozmiaru okna lub orientacji
     window.addEventListener('resize', () => this.updateMultiScreenStatus());
 
-    // Periodic check for screen connection/disconnection
+    // Okresowe sprawdzanie podłączenia lub odłączenia zewnętrznego monitora
     this.checkInterval = setInterval(() => {
       this.updateMultiScreenStatus();
     }, 4000);
@@ -113,13 +116,13 @@ class DualScreenManager {
   public updateMultiScreenStatus(): boolean {
     if (typeof window === 'undefined') return false;
 
-    // 1. Hardware detection via screen.isExtended (Chromium 100+)
+    // 1. Detekcja sprzętowa za pomocą screen.isExtended (Chromium 100+)
     let detected = false;
     if (window.screen && 'isExtended' in window.screen) {
       detected = Boolean((window.screen as ExtendedScreen).isExtended);
     }
 
-    // 2. Heuristic check: desktop width spanning multiple monitors
+    // 2. Detekcja heurystyczna: szerokość pulpitu obejmująca wiele monitorów
     if (!detected && window.screen) {
       if ((window.screen.availWidth && window.screen.availWidth >= 2560) || 
           (window.screen.width && window.screen.width >= 2560)) {
@@ -127,7 +130,7 @@ class DualScreenManager {
       }
     }
 
-    // 3. Fallback check for manually forced / simulation mode in settings
+    // 3. Sprawdzenie trybu wymuszenia lub symulacji 2 ekranów w ustawieniach
     try {
       const forced = localStorage.getItem(FORCE_DUAL_SCREEN_KEY) === 'true';
       if (forced) {
@@ -146,7 +149,7 @@ class DualScreenManager {
   public async requestScreenPermission(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
 
-    // 1. Try modern getScreenDetails()
+    // 1. Próba użycia nowoczesnego API getScreenDetails()
     const win = window as WindowManagementWindow;
     if (typeof win.getScreenDetails === 'function') {
       try {
@@ -160,7 +163,7 @@ class DualScreenManager {
       }
     }
 
-    // 2. Try permission query
+    // 2. Próba zapytania o uprawnienia Window Management
     if (navigator.permissions && typeof navigator.permissions.query === 'function') {
       try {
         const status = await navigator.permissions.query({ name: 'window-management' as PermissionName });
@@ -215,7 +218,7 @@ class DualScreenManager {
     let targetWidth = 1440;
     let targetHeight = 900;
 
-    // Attempt Window Management API to target second screen
+    // Próba pozycjonowania okna na drugim ekranie za pomocą Window Management API
     const wmWindow = window as WindowManagementWindow;
     if (typeof wmWindow.getScreenDetails === 'function') {
       try {
@@ -230,7 +233,7 @@ class DualScreenManager {
           }
         }
       } catch (err) {
-        // User denied permission or API not available, proceed with standard window features
+        // Brak uprawnień lub API niedostępne – otwarcie okna ze standardowymi parametrami
       }
     }
 

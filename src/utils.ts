@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Funkcje narzędziowe i dane demonstracyjne (Core Utilities)
+ * Opis: Generatory identyfikatorów, skrótów przedmiotów i nazwisk, konwertery kolorów oraz zestaw danych demonstracyjnych.
+ */
+
 import { AppState, SchedData, SchedCell, Floor, Segment, Room, ClassRoom, Class, Teacher, Subject, Assignment } from './types';
 
 export function uid(): string {
@@ -216,7 +222,7 @@ export function getStorageSize(): number {
 }
 
 // ================================================================
-//  DEMO DATABASE POPULATOR
+//  GENERATOR DEMONSTRACYJNEJ BAZY DANYCH
 // ================================================================
 export function getDemoAppState(): AppState {
   const baseClasses: Class[] = [
@@ -261,14 +267,14 @@ export function getDemoAppState(): AppState {
   ];
 
   const lessons: { [key: string]: { assignmentId: string; locked: boolean } } = {
-    'c1|0|1': { assignmentId: 'a1', locked: false }, // Mon 1st hour MAT -> 1A
-    'c1|0|2': { assignmentId: 'a1', locked: false }, // Mon 2nd hour MAT -> 1A
-    'c1|1|1': { assignmentId: 'a2', locked: false }, // Tue 1st hour POL -> 1A
-    'c2|0|1': { assignmentId: 'a3', locked: false }, // Mon 1st hour MAT -> 1B (Conflict! Same teacher t1 as 1A)
-    'c2|0|3': { assignmentId: 'a4', locked: false }, // Mon 3rd hour ANG -> 1B
-    'c3|1|1': { assignmentId: 'a5', locked: false }, // Tue 1st hour POL -> 2A
-    'c3|1|2': { assignmentId: 'a6', locked: false }, // Tue 2nd hour MAT -> 2A
-    'c4|0|2': { assignmentId: 'a7', locked: false }, // Mon 2nd hour WF -> 2B
+    'c1|0|1': { assignmentId: 'a1', locked: false }, // Poniedziałek, lekcja 1: MAT -> 1A
+    'c1|0|2': { assignmentId: 'a1', locked: false }, // Poniedziałek, lekcja 2: MAT -> 1A
+    'c1|1|1': { assignmentId: 'a2', locked: false }, // Wtorek, lekcja 1: POL -> 1A
+    'c2|0|1': { assignmentId: 'a3', locked: false }, // Poniedziałek, lekcja 1: MAT -> 1B (Kolizja! Ten sam nauczyciel t1 co w 1A)
+    'c2|0|3': { assignmentId: 'a4', locked: false }, // Poniedziałek, lekcja 3: ANG -> 1B
+    'c3|1|1': { assignmentId: 'a5', locked: false }, // Wtorek, lekcja 1: POL -> 2A
+    'c3|1|2': { assignmentId: 'a6', locked: false }, // Wtorek, lekcja 2: MAT -> 2A
+    'c4|0|2': { assignmentId: 'a7', locked: false }, // Poniedziałek, lekcja 2: WF -> 2B
   };
 
   const defaultHours = [
@@ -410,16 +416,16 @@ export function getDemoAppState(): AppState {
 export function getDemoSchedData(): SchedData {
   return {
     'y_2025_2026': {
-      0: { // Monday
+      0: { // Poniedziałek
         '1': {
           'f0_s0_101': { teacherAbbr: 'JKOW', classes: ['1A'], className: '1A', subject: 'Matematyka', note: '(sugestia: 101)' },
-          'f0_s0_102': { teacherAbbr: 'JKOW', classes: ['1B'], className: '1B', subject: 'Matematyka', note: 'Kolizja!' }, // Same teacher
+          'f0_s0_102': { teacherAbbr: 'JKOW', classes: ['1B'], className: '1B', subject: 'Matematyka', note: 'Kolizja!' }, // Ten sam nauczyciel (kolizja)
         },
         '2': {
           'f0_s0_101': { teacherAbbr: 'JKOW', classes: ['1A'], className: '1A', subject: 'Matematyka', note: '(sugestia: 101)' },
         },
       },
-      1: { // Tuesday
+      1: { // Wtorek
         '1': {
           'f0_s0_101': { teacherAbbr: 'mzIE', classes: ['2A'], className: '2A', subject: 'Polski', note: '' },
         },

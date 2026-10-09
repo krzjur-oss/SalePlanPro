@@ -1,14 +1,15 @@
 /**
- * High-Security Cryptographic Engine for SalePlan Pro.
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Silnik Kryptograficzny Wysokiego Bezpieczeństwa (Crypto Engine)
  * 
- * Complies with Art. 32 GDPR (Security of Processing) for local educational databases.
- * - PBKDF2 with SHA-256 (600,000 iterations by default in 'encrypted-v2')
- * - AES-256 GCM authenticated encryption with unique 12-byte IV for every record
- * - In-memory CryptoKey (extractable=false) derived ONCE per session
- * - Zero storage of cleartext passwords in sessionStorage/localStorage
- * - Fast chunked Base64 encoding for massive 5MB+ payloads
- * - Full backward compatibility with 'encrypted-v1' payloads and automatic v2 migration
- * - Inactivity auto-lock mechanism
+ * Zgodność z art. 32 RODO (Bezpieczeństwo przetwarzania) dla lokalnych baz danych:
+ * - PBKDF2 z SHA-256 (domyślnie 600 000 iteracji w formacie 'encrypted-v2')
+ * - Szyfrowanie AES-256 GCM z unikalnym 12-bajtowym wektorem IV dla każdego rekordu
+ * - Klucz sesyjny CryptoKey (extractable=false) derywowany JEDNOKROTNIE na sesję w pamięci RAM
+ * - Całkowity brak przechowywania haseł w sessionStorage/localStorage
+ * - Szybkie kodowanie Base64 porcjami dla dużych obiektów (> 5 MB)
+ * - Pełna wsteczna kompatybilność z ładunkiem 'encrypted-v1' i migracja do v2
+ * - Mechanizm automatycznej blokady sesji przy bezczynności (auto-lock)
  */
 
 export const PBKDF2_ITERATIONS_V1 = 100000;
@@ -16,17 +17,17 @@ export const PBKDF2_ITERATIONS_V2 = 600000;
 
 export interface EncryptedBackupPayloadV1 {
   type: 'encrypted-v1';
-  salt: string;       // Base64
-  iv: string;         // Base64
-  ciphertext: string; // Base64
+  salt: string;       // Format Base64
+  iv: string;         // Format Base64
+  ciphertext: string; // Format Base64
 }
 
 export interface EncryptedBackupPayloadV2 {
   type: 'encrypted-v2';
-  iterations: number; // e.g. 600000
-  salt: string;       // Base64
-  iv: string;         // Base64
-  ciphertext: string; // Base64
+  iterations: number; // np. 600000
+  salt: string;       // Format Base64
+  iv: string;         // Format Base64
+  ciphertext: string; // Format Base64
 }
 
 export type EncryptedBackupPayload = EncryptedBackupPayloadV1 | EncryptedBackupPayloadV2;
@@ -42,11 +43,11 @@ function getCrypto(): Crypto {
 }
 
 /**
- * Fast Base64 encoding without 1-by-1 char concatenation.
- * Uses chunked String.fromCharCode.apply (32KB chunks) for extreme performance on multi-MB buffers.
+ * Szybkie kodowanie Base64 porcjami bez konkatenacji znak po znaku.
+ * Używa String.fromCharCode.apply w blokach 32KB dla maksymalnej wydajności.
  */
 export function arrayBufferToBase64(buffer: Uint8Array): string {
-  const CHUNK_SIZE = 0x8000; // 32768 bytes
+  const CHUNK_SIZE = 0x8000; // 32768 bajtów
   const len = buffer.byteLength;
   const chunks: string[] = [];
 
@@ -66,7 +67,7 @@ export function arrayBufferToBase64(buffer: Uint8Array): string {
 }
 
 /**
- * Fast Base64 decoding into Uint8Array.
+ * Szybkie dekodowanie Base64 do tablicy Uint8Array.
  */
 export function base64ToArrayBuffer(base64: string): Uint8Array {
   if (typeof Buffer !== 'undefined') {
@@ -82,8 +83,8 @@ export function base64ToArrayBuffer(base64: string): Uint8Array {
 }
 
 /**
- * Derives a non-extractable AES-256 GCM CryptoKey from a password and salt using PBKDF2.
- * Done ONCE per session to eliminate CPU overhead during normal storage read/writes.
+ * Derywuje niewyodrębnialny klucz AES-256 GCM CryptoKey z hasła i soli przy użyciu PBKDF2.
+ * Wykonywane JEDNOKROTNIE na sesję, eliminując narzut procesora przy zapisie/odczycie.
  */
 export async function deriveCryptoKeyFromPassword(
   password: string,
@@ -114,14 +115,14 @@ export async function deriveCryptoKeyFromPassword(
     },
     passwordKey,
     { name: 'AES-GCM', length: 256 },
-    false, // extractable = false (key cannot be exported from Crypto engine)
+    false, // extractable = false (klucz nie może zostać wyeksportowany z silnika Web Crypto)
     ['encrypt', 'decrypt']
   );
 }
 
 /**
- * High-speed AES-256 GCM encryption using an already derived CryptoKey.
- * Generates a fresh, cryptographically secure 12-byte IV for every invocation.
+ * Błyskawiczne szyfrowanie AES-256 GCM przy użyciu zdedukowanego klucza CryptoKey.
+ * Generuje świeży, 12-bajtowy wektor IV dla każdego wywołania.
  */
 export async function encryptWithKey(
   text: string,
@@ -147,7 +148,7 @@ export async function encryptWithKey(
 }
 
 /**
- * High-speed AES-256 GCM decryption using an already derived CryptoKey.
+ * Błyskawiczne deszyfrowanie AES-256 GCM przy użyciu zdedukowanego klucza CryptoKey.
  */
 export async function decryptWithKey(
   ivB64: string,
@@ -171,7 +172,7 @@ export async function decryptWithKey(
 }
 
 /**
- * Encrypts cleartext using a password for standalone backup files (defaults to encrypted-v2).
+ * Szyfruje tekst jawny hasłem dla plików kopii zapasowej (domyślnie encrypted-v2).
  */
 export async function encryptText(
   text: string,
@@ -199,7 +200,7 @@ export async function encryptText(
 }
 
 /**
- * Decrypts a payload string (supports both 'encrypted-v1' and 'encrypted-v2') using a password.
+ * Odszyfrowuje ciąg ładunku (wspiera encrypted-v1 oraz encrypted-v2) przy użyciu hasła.
  */
 export async function decryptText(encryptedJsonStr: string, password: string): Promise<string> {
   if (!password) {
@@ -238,7 +239,7 @@ export async function decryptText(encryptedJsonStr: string, password: string): P
 }
 
 /**
- * Checks whether a given raw string looks like an encrypted backup or storage payload.
+ * Sprawdza, czy podany surowy ciąg znaków jest zaszyfrowanym ładunkiem kopii zapasowej lub bazy.
  */
 export function isEncryptedBackup(rawText: string): boolean {
   try {
@@ -249,12 +250,12 @@ export function isEncryptedBackup(rawText: string): boolean {
   }
 }
 
-// ── LOCAL STORAGE / DATABASE ENCRYPTION ENGINE (AES-256 GCM) ──
+// ── SILNIK SZYFROWANIA LOKALNEJ BAZY DANYCH (AES-256 GCM) ──
 
 export const STORAGE_ENC_META_KEY = 'saleplan_v3_storage_enc_meta';
 const VERIFICATION_MAGIC = 'SALEPLAN_MASTER_UNLOCK_VALID_V2';
 
-// Pure in-memory state: NO PASSWORD IN SESSIONSTORAGE!
+// Stan w pamięci RAM: CAŁKOWITY BRAK HASEŁ W SESSIONSTORAGE!
 let inMemorySessionCryptoKey: CryptoKey | null = null;
 let inMemoryMasterPassword: string | null = null;
 
@@ -262,15 +263,15 @@ export interface StorageEncMeta {
   enabled: boolean;
   version: 'v1' | 'v2';
   iterations: number;
-  salt: string;               // Base64 master salt for database key derivation
-  verificationToken: string;  // Serialized EncryptedBackupPayload
-  autoLockMinutes?: number;   // 0 = disabled, default 15
+  salt: string;               // Format Base64 master salt for database key derivation
+  verificationToken: string;  // Zserializowany token weryfikacyjny EncryptedBackupPayload
+  autoLockMinutes?: number;   // 0 = wyłączone, domyślnie 15 minut
   createdAt: string;
   updatedAt: string;
 }
 
 /**
- * Checks if local database encryption is currently activated on disk.
+ * Sprawdza, czy szyfrowanie lokalnej bazy danych jest aktywne na dysku.
  */
 export function isDatabaseEncryptionActive(): boolean {
   try {
@@ -284,7 +285,7 @@ export function isDatabaseEncryptionActive(): boolean {
 }
 
 /**
- * Returns current StorageEncMeta or null.
+ * Zwraca aktualne metadane szyfrowania StorageEncMeta lub null.
  */
 export function getStorageEncryptionMeta(): StorageEncMeta | null {
   try {
@@ -297,21 +298,21 @@ export function getStorageEncryptionMeta(): StorageEncMeta | null {
 }
 
 /**
- * In-memory setter for session CryptoKey.
+ * Ustawia klucz sesyjny CryptoKey w pamięci RAM.
  */
 export function setSessionCryptoKey(key: CryptoKey | null): void {
   inMemorySessionCryptoKey = key;
 }
 
 /**
- * In-memory getter for session CryptoKey.
+ * Pobiera klucz sesyjny CryptoKey z pamięci RAM.
  */
 export function getSessionCryptoKey(): CryptoKey | null {
   return inMemorySessionCryptoKey;
 }
 
 /**
- * Sets session password in memory only (never written to sessionStorage or disk).
+ * Zapisuje hasło sesyjne wyłącznie w pamięci RAM (brak zapisu na dysk lub sessionStorage).
  */
 export function setSessionPassword(password: string | null): void {
   inMemoryMasterPassword = password;
@@ -321,14 +322,14 @@ export function setSessionPassword(password: string | null): void {
 }
 
 /**
- * Retrieves session password from memory.
+ * Pobiera hasło sesyjne z pamięci RAM.
  */
 export function getSessionPassword(): string | null {
   return inMemoryMasterPassword;
 }
 
 /**
- * Checks if the current session is unlocked and ready to read/write encrypted data.
+ * Sprawdza, czy bieżąca sesja jest odblokowana i gotowa do operacji na zaszyfrowanych danych.
  */
 export function isSessionUnlocked(): boolean {
   if (!isDatabaseEncryptionActive()) return true;
@@ -339,18 +340,18 @@ export type BeforeLockHook = () => Promise<void> | void;
 let beforeLockHook: BeforeLockHook | null = null;
 
 /**
- * Registers an asynchronous hook to be executed before the session is locked.
- * Used to flush pending in-memory state (stateRef) to storage while crypto keys are still available.
+ * Rejestruje asynchroniczny hak wykonywany przed zablokowaniem sesji.
+ * Używany do natychmiastowego zapisu pamięci (flush) do bazy przed zablokowaniem klucza.
  */
 export function setBeforeLockHook(hook: BeforeLockHook | null): void {
   beforeLockHook = hook;
 }
 
 /**
- * Locks the session:
- * 1. Executes registered beforeLockHook (flush of unsaved state).
- * 2. Clears in-memory keys and cached password.
- * 3. Emits 'saleplan-session-locked' event AFTER flush finishes.
+ * Blokuje sesję programu:
+ * 1. Wykonuje zarejestrowany hak przed blokadą (zapis niezapisanych zmian).
+ * 2. Czyści klucze sesyjne i hasło z pamięci RAM.
+ * 3. Emituje zdarzenie 'saleplan-session-locked' PO zakończeniu zapisu.
  */
 export async function lockSession(): Promise<void> {
   if (beforeLockHook) {
@@ -369,7 +370,7 @@ export async function lockSession(): Promise<void> {
   }
 }
 
-// ── INACTIVITY AUTO-LOCK MECHANISM ──
+// ── MECHANIZM AUTOMATYCZNEJ BLOKADY SESJI PRZY BEZCZYNNOŚCI (AUTO-LOCK) ──
 
 let autoLockTimer: ReturnType<typeof setTimeout> | null = null;
 let autoLockListenersInitialized = false;
@@ -385,7 +386,7 @@ export function getAutoLockMinutes(): number {
       return Number(saved);
     }
   } catch {}
-  return 15; // default 15 minutes
+  return 15; // Domyślnie 15 minut bezczynności
 }
 
 export function setAutoLockMinutes(minutes: number): void {
@@ -413,7 +414,7 @@ export function resetAutoLockTimer(): void {
 
   const mins = getAutoLockMinutes();
   if (mins <= 0) {
-    // Auto-lock disabled
+    // Automatyczna blokada wyłączona
     return;
   }
 
@@ -425,7 +426,7 @@ export function resetAutoLockTimer(): void {
 }
 
 /**
- * Initializes global user activity listeners for inactivity auto-lock.
+ * Inicjalizuje globalne nasłuchiwacze aktywności na potrzeby automatycznej blokady.
  */
 export function initAutoLockListeners(): void {
   if (autoLockListenersInitialized || typeof window === 'undefined') return;
@@ -443,14 +444,14 @@ export function initAutoLockListeners(): void {
   resetAutoLockTimer();
 }
 
-// Initialize on module load if in browser
+// Inicjalizacja przy załadowaniu modułu w przeglądarce
 if (typeof window !== 'undefined') {
   initAutoLockListeners();
 }
 
 /**
- * Verifies a password against the stored encryption metadata.
- * Upon success, derives and sets the non-extractable session CryptoKey in module memory.
+ * Weryfikuje hasło z zapisanymi metadanymi szyfrowania bazy.
+ * Po sukcesie derywuje i zapisuje klucz CryptoKey w pamięci RAM sesji.
  */
 export async function verifyMasterPassword(password: string): Promise<boolean> {
   const meta = getStorageEncryptionMeta();
@@ -458,7 +459,7 @@ export async function verifyMasterPassword(password: string): Promise<boolean> {
   if (!password) return false;
 
   try {
-    // 1. If meta contains master salt & version v2, derive key with 600,000 iterations
+    // 1. Jeśli metadane zawierają sól główną i wersję v2, derywuj klucz z 600 000 iteracji
     if (meta.salt) {
       const salt = base64ToArrayBuffer(meta.salt);
       const iterations = meta.iterations || PBKDF2_ITERATIONS_V2;
@@ -484,7 +485,7 @@ export async function verifyMasterPassword(password: string): Promise<boolean> {
       }
     }
 
-    // 2. Fallback for legacy v1 metadata
+    // 2. Ścieżka awaryjna dla starszych metadanych v1 (100 000 iteracji)
     const decrypted = await decryptText(meta.verificationToken, password);
     if (decrypted === VERIFICATION_MAGIC || decrypted === 'SALEPLAN_MASTER_UNLOCK_VALID_V1') {
       setSessionPassword(password);
@@ -499,8 +500,8 @@ export async function verifyMasterPassword(password: string): Promise<boolean> {
 }
 
 /**
- * Sets up and stores the database encryption metadata in 'encrypted-v2' format.
- * Generates master salt, derives CryptoKey, and creates verification token.
+ * Konfiguruje i zapisuje metadane szyfrowania bazy w formacie 'encrypted-v2'.
+ * Generuje sól główną, derywuje klucz CryptoKey i tworzy token weryfikacyjny.
  */
 export async function setupStorageEncryptionMeta(
   password: string,
@@ -510,7 +511,7 @@ export async function setupStorageEncryptionMeta(
   const salt = cryptoObj.getRandomValues(new Uint8Array(16));
   const saltB64 = arrayBufferToBase64(salt);
 
-  // Derive master CryptoKey once with 600,000 iterations
+  // Derywuje główny klucz CryptoKey jednokrotnie z 600 000 iteracji
   const key = await deriveCryptoKeyFromPassword(password, salt, PBKDF2_ITERATIONS_V2);
   const { iv, ciphertext } = await encryptWithKey(VERIFICATION_MAGIC, key);
 
@@ -542,7 +543,7 @@ export async function setupStorageEncryptionMeta(
 }
 
 /**
- * Disables database encryption and clears metadata and in-memory session keys.
+ * Wyłącza szyfrowanie bazy danych, czyści metadane oraz usuwa sesyjne klucze z pamięci RAM.
  */
 export function removeStorageEncryptionMeta(): void {
   try {

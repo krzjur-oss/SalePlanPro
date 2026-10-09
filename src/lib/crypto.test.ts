@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Jednostkowe Silnika Kryptograficznego (Crypto Engine Tests)
+ * Opis: Weryfikacja szyfrowania AES-256-GCM, derywacji PBKDF2 600k oraz formatów v1 i v2.
+ */
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   encryptText,
@@ -24,7 +29,7 @@ import {
 
 describe('Cryptographic Engine v2 & Session Key Cache Tests', () => {
   beforeEach(() => {
-    // Mock minimal localStorage & sessionStorage in Node environment if missing
+    // Atrapa localStorage i sessionStorage w środowisku Node / Vitest
     if (typeof localStorage === 'undefined') {
       const store: Record<string, string> = {};
       (globalThis as any).localStorage = {
@@ -134,7 +139,7 @@ describe('Cryptographic Engine v2 & Session Key Cache Tests', () => {
       const enc = await encryptText(cleartext, password, PBKDF2_ITERATIONS_V2);
       const parsed = JSON.parse(enc);
 
-      // Corrupt the ciphertext bytes
+      // Celowe uszkodzenie bajtów szyfrogramu do testu odrzucenia
       const rawCipher = base64ToArrayBuffer(parsed.ciphertext);
       const corruptedBytes = new Uint8Array(rawCipher);
       corruptedBytes[0] ^= 0xff; // flip bits
@@ -157,7 +162,7 @@ describe('Cryptographic Engine v2 & Session Key Cache Tests', () => {
       const sessionKey = await deriveCryptoKeyFromPassword(password, salt, PBKDF2_ITERATIONS_V2);
       expect(sessionKey.extractable).toBe(false);
 
-      // Generate 5 MB of realistic application JSON data
+      // Wygenerowanie 5 MB realistycznych danych aplikacji w formacie JSON
       const fiveMbString = JSON.stringify({
         schoolName: 'Szkoła Podstawowa nr 15 z Oddziałami Integracyjnymi w Katowicach',
         notes: 'A'.repeat(5 * 1024 * 1024) // 5 MB payload
@@ -189,7 +194,7 @@ describe('Cryptographic Engine v2 & Session Key Cache Tests', () => {
       expect(isDatabaseEncryptionActive()).toBe(true);
       expect(isSessionUnlocked()).toBe(true);
 
-      // CRITICAL CHECK: sessionStorage must NOT contain the password
+      // KRYTYCZNY TEST: sessionStorage nie może zawierać hasła
       expect(sessionStorage.getItem('saleplan_session_pwd_v1')).toBeNull();
       expect(sessionStorage.getItem('saleplan_session_password')).toBeNull();
 

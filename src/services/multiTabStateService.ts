@@ -1,6 +1,9 @@
-// Multi-Tab State Synchronization & Conflict Detection Service for SalePlan Pro
-// BroadcastChannel: 'saleplan-state' (separate from dual-screen channel)
-// Guarantees that two tabs editing the same plan do not silently overwrite changes.
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Synchronizacja Stanu Wielu Kart i Wykrywanie Konfliktów (MultiTabStateService)
+ * Kanał BroadcastChannel: 'saleplan-state' (niezależny od magistrali trybu 2 ekranów)
+ * Opis: Gwarantuje, że karty edytujące ten sam plan nie nadpiszą cicho swoich zmian.
+ */
 
 import { STORAGE_KEYS, getStorageItem, setStorageItem, cleanSchedDataMeta } from './dbStorage';
 import { AppState, SchedData } from '../types';
@@ -51,13 +54,13 @@ export class MultiTabStateService {
   }
 
   private initTabId() {
-    // Generate fresh tabId kept strictly in module memory (no sessionStorage to avoid duplicate ID on duplicate tab)
+    // Generowanie świeżego tabId przechowywanego wyłącznie w pamięci RAM (brak sessionStorage)
     this.tabId = this.generateNewTabId();
 
     if (typeof window !== 'undefined') {
       window.addEventListener('pageshow', (event) => {
         if (event.persisted) {
-          // Page was restored from bfcache - generate a new unique tabId
+          // Strona przywrócona z bfcache – wygenerowanie nowego unikalnego tabId
           this.tabId = this.generateNewTabId();
         }
       });
@@ -204,7 +207,7 @@ export class MultiTabStateService {
 
     const myTabId = this.getTabId();
 
-    // Conflict condition: DB record or stateMeta exists, has a different tabId, and has a strictly higher revision than local
+    // Warunek konfliktu: rekord w bazie istnieje, pochodzi z innej karty i ma wyższą rewizję niż lokalna
     const hasConflict = Boolean(
       (stateMeta || dbRecord) &&
       dbTabId &&
@@ -269,7 +272,7 @@ export class MultiTabStateService {
   private handleIncoming(data: unknown) {
     if (!data || typeof data !== 'object') return;
     const msg = data as Partial<MultiTabStateMessage>;
-    if (msg.tabId === this.getTabId()) return; // ignore self
+    if (msg.tabId === this.getTabId()) return; // Ignorowanie komunikatów z własnej karty
     if (msg.type === 'STATE_COMMITTED') {
       this.subscribers.forEach(cb => {
         try {
@@ -315,7 +318,7 @@ export class MultiTabStateService {
     const activeSection = options?.activeSection || ctx.section;
     const activeSectionName = options?.activeSectionName || ctx.sectionName;
 
-    // Save strictly in order: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META
+    // Zapis w ścisłej kolejności: 1. APP_STATE, 2. SCHED_DATA, 3. STATE_META
     await setStorageItem(STORAGE_KEYS.APP_STATE, enrichedState);
     await setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanSched);
     await setStorageItem(STORAGE_KEYS.STATE_META, {

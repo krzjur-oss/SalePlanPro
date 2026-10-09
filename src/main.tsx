@@ -1,10 +1,16 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Główny punkt wejścia aplikacji (Application Entry Point)
+ * Opis: Inicjalizacja drzewa React, globalne przechwytywanie błędów wykonawczych oraz rejestracja Service Workera (PWA).
+ */
+
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import './index.css';
 
-// Early global error tracking function (safe from personal data)
+// Globalne śledzenie błędów środowiskowych (bezpieczne, bez danych osobowych)
 const addGlobalError = (message: string, stack?: string, type: 'runtime' | 'promise' | 'manual' | 'sw' = 'runtime') => {
   try {
     const saved = localStorage.getItem('saleplan_v3_error_logs');
@@ -27,17 +33,17 @@ const addGlobalError = (message: string, stack?: string, type: 'runtime' | 'prom
     logs.unshift(newError);
     localStorage.setItem('saleplan_v3_error_logs', JSON.stringify(logs.slice(0, 100)));
     
-    // Dispatch custom event to notify React when active
+    // Emitowanie zdarzenia informującego komponenty React o nowym błędzie
     window.dispatchEvent(new CustomEvent('app-error-added', { detail: newError }));
   } catch (e) {
     console.warn('Failed to save error log:', e);
   }
 };
 
-// Expose on window object
+// Udostępnienie funkcji pomocniczej w obiekcie window
 (window as any).__addAppError = addGlobalError;
 
-// Listeners for global unhandled errors
+// Nasłuchiwanie nieobsłużonych wyjątków środowiska wykonawczego
 window.addEventListener('error', (event) => {
   const msg = event.message || 'Unknown runtime error';
   const stack = event.error ? event.error.stack : '';

@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Integracyjne Aplikacji (App Smoke & Security Tests)
+ * Opis: Weryfikacja zachowania aplikacji, odblokowania sesji, blokady bazy danych i migracji.
+ */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
@@ -39,7 +44,7 @@ describe('App Smoke & Security State Tests', () => {
   });
 
   it('przełączenie zakładki nie zapisuje przy zablokowanej bazie', async () => {
-    // 1. Setup active encryption and then lock the session
+    // 1. Konfiguracja aktywnego szyfrowania i zablokowanie sesji
     const password = 'TestMasterPassword2026!';
     await setupStorageEncryptionMeta(password);
     lockSession();
@@ -50,7 +55,7 @@ describe('App Smoke & Security State Tests', () => {
     // Spy on setStorageItem to verify NO state persistence occurs while locked
     const setStorageSpy = vi.spyOn(dbStorage, 'setStorageItem');
 
-    // 2. Render App in locked state
+    // 2. Renderowanie aplikacji w stanie zablokowanym
     render(<App />);
 
     // 3. UnlockScreen gate should be displayed
@@ -241,7 +246,7 @@ describe('App Smoke & Security State Tests', () => {
 
     expect(sessionLockedEventFired).toBe(true);
 
-    // Wait for the locked screen to be rendered in the DOM
+    // Oczekiwanie na wyrenderowanie ekranu blokady w DOM
     await waitFor(() => {
       expect(screen.getByText(/Baza danych jest zablokowana/i)).toBeDefined();
     });

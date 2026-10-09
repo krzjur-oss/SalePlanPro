@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Historia Zmian i Wersje (Changelog)
+ * Opis: Prezentacja wydań systemu SalePlan Pro z podziałem na nowości, ulepszenia, poprawki i zabezpieczenia RODO.
+ */
+
 import React, { useState } from 'react';
 import { 
   Calendar, Tag, Sparkles, CheckCircle2, AlertTriangle, ArrowUpCircle, Info, HelpCircle, ChevronRight, Activity, Filter

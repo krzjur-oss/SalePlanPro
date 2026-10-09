@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Arkusz Wsparcia Ucznia ze SPE i NI
+ * Opis: Kompleksowy widok profilu ucznia ze specjalnymi potrzebami, orzeczenia, IPET, WOPFU oraz siatki zajęć indywidualnych i terapeutycznych.
+ */
+
 import React, { useMemo } from 'react';
 import { AppState, SchedData, SpecialStudent, Hour, Subject, Class, Teacher, ClassRoom, SchoolGroup } from '../types';
 import { User, Users, HeartHandshake, BookOpen, Clock, Shield, CheckCircle, FileText, Award, Sparkles, MapPin } from 'lucide-react';
@@ -135,7 +141,7 @@ export default function ArkuszWsparciaUcznia({
     return ids.map(id => teachersMap.get(id) || pl.teachers.find(t => t.id === id)).filter(Boolean) as Teacher[];
   }, [student.supportTeacherIds, teachersMap, pl.teachers]);
 
-  // Weekly timetable matrix computation for this student
+  // Obliczanie tygodniowej siatki godzin dla tego ucznia
   const timetableMatrix = useMemo(() => {
     const matrix: Record<number, Record<number, StudentScheduleSlot[]>> = {};
 
@@ -151,7 +157,7 @@ export default function ArkuszWsparciaUcznia({
         // 1. Check for Individual Special Lessons (1 na 1 / SPE / Rewalidacja / NI)
         const specialLessonsMatches: Array<{ assignmentId: string }> = [];
 
-        // Check spePlan slotAssignments for individual and group slots
+        // Sprawdzenie slotów indywidualnych i grupowych w spePlan
         if (pl.spePlan?.slotAssignments && Array.isArray(pl.spePlan.slotAssignments)) {
           pl.spePlan.slotAssignments.forEach(slotAsg => {
             if (slotAsg.studentId === student.id && slotAsg.dayIdx === dayIdx && slotAsg.hourIdx === hIdx && (!slotAsg.withClass || slotAsg.mode === 'group_special')) {
@@ -250,7 +256,7 @@ export default function ArkuszWsparciaUcznia({
           }
         });
 
-        // 2. Check Class Lessons (if student belongs to a class and no individual lesson is overriding, or alongside)
+        // 2. Sprawdzenie lekcji oddziału (jeśli uczeń jest przypisany do klasy)
         if (student.classId) {
           if (scheduleVersion === 'etap1') {
             const classLessons = Object.entries(pl.lessons || {}).filter(([k]) => {
@@ -267,7 +273,7 @@ export default function ArkuszWsparciaUcznia({
               const subjectName = subjObj?.name || 'Przedmiot';
               const leadTeacherObj = asg.teacherId ? (teachersMap.get(asg.teacherId) || pl.teachers.find(t => t.id === asg.teacherId)) : null;
 
-              // Check for explicit support teacher assigned to this specific slot
+              // Wyszukanie nauczyciela wspomagającego przypisanego do tego slotu
               let suppTeacherObj: Teacher | null = null;
               
               // A: Explicit support teacher in lesson object
@@ -275,7 +281,7 @@ export default function ArkuszWsparciaUcznia({
                 suppTeacherObj = teachersMap.get(lesson.supportTeacherId) || pl.teachers.find(t => t.id === lesson.supportTeacherId) || null;
               }
 
-              // B: Check spePlan slotAssignments for this student & slot
+              // B: Sprawdzenie przypisań w spePlan dla tego ucznia i slotu
               if (!suppTeacherObj && pl.spePlan?.slotAssignments) {
                 const speSlot = pl.spePlan.slotAssignments.find(
                   sa => sa.studentId === student.id && sa.dayIdx === dayIdx && sa.hourIdx === hIdx && sa.withClass
@@ -355,7 +361,7 @@ export default function ArkuszWsparciaUcznia({
               
               let suppTeacherObj = cell.supportTeacherAbbr ? (pl.teachers.find(t => t.abbr === cell.supportTeacherAbbr) || (cell._bridgeMeta?.supportTeacherId ? teachersMap.get(cell._bridgeMeta.supportTeacherId) : null)) : null;
 
-              // Check spePlan slot assignments if not embedded directly in cell
+              // Sprawdzenie przypisań w spePlan, jeśli nie są osadzone bezpośrednio w komórce
               if (!suppTeacherObj && pl.spePlan?.slotAssignments) {
                 const speSlot = pl.spePlan.slotAssignments.find(
                   sa => sa.studentId === student.id && sa.dayIdx === dayIdx && sa.hourIdx === hIdx && sa.withClass
@@ -407,7 +413,7 @@ export default function ArkuszWsparciaUcznia({
     return matrix;
   }, [hoursList, student, pl, studentClass, studentSpAssignments, subjectsMap, teachersMap, roomsMap, groupsMap, scheduleVersion, schedData, appState.yearKey, resolveRoomFromColKey]);
 
-  // Summary statistics for this student
+  // Podsumowanie statystyk godzin dla tego ucznia
   const stats = useMemo(() => {
     let coTaughtHours = 0;
     let individualHours = 0;

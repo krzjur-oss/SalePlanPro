@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Okno Hasła Kopii Zapasowej (BackupPasswordModal)
+ * Opis: Modal wprowadzania i potwierdzania hasła szyfrowania plików eksportu i importu bazy danych.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { Lock, Unlock, Eye, EyeOff, ShieldAlert, Key, Download, Upload, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -42,7 +48,7 @@ export default function BackupPasswordModal({
       return;
     }
     if (mode === 'export' && !password.trim()) {
-      // If submitted with empty password on export, treat as skip/unencrypted
+      // W przypadku pustego hasła przy eksporcie zapisz plik w postaci niezaszyfrowanej
       if (onSkip) onSkip();
       return;
     }

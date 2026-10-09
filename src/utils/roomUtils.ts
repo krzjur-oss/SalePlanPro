@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Narzędzia Geometrii i Numeracji Sal Lekcyjnych (Room Utils)
+ * Opis: Generowanie i parsowanie etykiet sal, kondygnacji i segmentów budynku szkolnego.
+ */
 import { ClassRoom } from '../types';
 
 /**

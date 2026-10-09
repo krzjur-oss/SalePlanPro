@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Kreator Szkoły i Konfiguracja Wstępna (KreatorSzkoly)
+ * Opis: Konfiguracja roku szkolnego, przedmiotów, oddziałów, nauczycieli, sal, uczniów SPE oraz przydziałów lekcyjnych.
+ */
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Building, MiejsceDyzuru, Floor, Hour, Przerwa, ArchiveEntry, PlanDyzuryState,
@@ -95,7 +101,7 @@ const getDynamicSchoolYears = (extraYears: (string | undefined)[] = []): string[
   const currentYear = new Date().getFullYear();
   const yearsSet = new Set<string>();
   
-  // Generate school years from currentYear - 3 to currentYear + 6
+  // Generowanie lat szkolnych od bieżącego roku - 3 do + 6
   for (let i = -3; i <= 6; i++) {
     yearsSet.add(`${currentYear + i}/${currentYear + i + 1}`);
   }
@@ -599,7 +605,7 @@ export default function KreatorSzkoly({
         end: endHourStr
       });
       
-      // Calculate next start time
+      // Obliczenie godziny rozpoczęcia kolejnej lekcji
       if (i < count) {
         const currentBreak = (i === longBreakAfter) ? longBreakMin : breakMin;
         let nextTotalMins = totalMins + currentBreak;
@@ -780,7 +786,7 @@ export default function KreatorSzkoly({
         return b;
       });
 
-      // Update associated standard floor name if it exists (for compatibility)
+      // Aktualizacja nazwy piętra dla zachowania zgodności
       const bldIdx = appState.buildings.findIndex(b => b.id === editingBldId);
       const nextFloors = appState.floors.map(f => {
         if (f.buildingIdx === bldIdx && f.id === 'f_bld_' + editingBldId) {
@@ -925,7 +931,7 @@ export default function KreatorSzkoly({
     }
   }, [newRoomBldIdx, appState.buildings]);
 
-  // Helper to resolve room's floor & segment details for display
+  // Rozpoznanie piętra i segmentu danej sali do wyświetlenia
   const getRoomLocationInfo = (roomName: string) => {
     for (let fi = 0; fi < appState.floors.length; fi++) {
       const floor = appState.floors[fi];
@@ -1386,7 +1392,7 @@ export default function KreatorSzkoly({
     setSelectedDictKey(key);
     const dict = SCHOOL_TYPES_DICTIONARIES[key];
     if (dict) {
-      // Pre-select all subjects by default that aren't already added to prevent overlap
+      // Domyślne zaznaczenie wszystkich przedmiotów, które nie zostały jeszcze dodane
       const initialSelected: Record<string, boolean> = {};
       const existingShorts = new Set(appState.subjects.map(s => s.short.toUpperCase()));
       dict.subjects.forEach(s => {
@@ -1640,7 +1646,7 @@ export default function KreatorSzkoly({
     setNewTIsAdministrative(t.isAdministrative || false);
     setNewTAdministrativeRole(t.administrativeRole || '');
 
-    // Load or generate list of available slots
+    // Wczytanie lub wygenerowanie listy dostępnych slotów
     if (t.availability) {
       setNewTAvailability(t.availability);
     } else {
@@ -1696,7 +1702,7 @@ export default function KreatorSzkoly({
 
     const formattedAbbr = newTAbbr.trim().toUpperCase();
 
-    // Check for unique abbr
+    // Weryfikacja unikalności skrótu
     if (appState.teachers.some(t => t.id !== editingTeacherId && t.abbr.toUpperCase() === formattedAbbr)) {
       showNoti('Ten skrót nauczyciela jest już zajęty!', 'info');
       return;
@@ -1927,7 +1933,7 @@ export default function KreatorSzkoly({
   const [newAsgRoom, setNewAsgRoom] = useState('');
   const [newAsgGroup, setNewAsgGroup] = useState('');
   const [newAsgHours, setNewAsgHours] = useState<number | ''>(2);
-  const [newAsgBlockSize, setNewAsgBlockSize] = useState<number>(1); // default single 1h
+  const [newAsgBlockSize, setNewAsgBlockSize] = useState<number>(1); // domyślnie pojedyncza lekcja 1h
   const [newAsgLinkedClasses, setNewAsgLinkedClasses] = useState<string[]>([]);
   const [editingAsgId, setEditingAsgId] = useState<string | null>(null);
   const [assignmentFormMode, setAssignmentFormMode] = useState<'class' | 'teacher' | 'uspe'>('class');

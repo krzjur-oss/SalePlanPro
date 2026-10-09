@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Plan Sal – Przypisanie Gabinetów Lekcyjnych (PlanSal)
+ * Opis: Weryfikacja obłożenia pracowni przedmiotowych, wykrywanie kolizji sal oraz automatyczny optymalizator gabinetów.
+ */
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { AppState, SchedData, SchedCell, Floor, Room, Building, Assignment, Teacher, Subject, ClassRoom, Class, SchoolGroup } from '../types';
 import { colKey, flattenColumns, esc, hexRgba, mergeClassNames, cleanFloorName } from '../utils';
@@ -7,7 +13,7 @@ import {
 import { DndContext, DragEndEvent, useSensor, useSensors, PointerSensor, TouchSensor, MouseSensor } from '@dnd-kit/core';
 import { DraggableItem, DroppableCell } from './DndWrapper';
 
-// Helper to parse class entries with possible group specifications like "5A (gr1)" or "5A"
+// Parsowanie wpisu klasy z ewentualnym oznaczeniem grupy (np. "5A (gr1)")
 function parseClassWithGroup(raw: string): { baseClass: string; groupName: string | null; display: string }[] {
   if (!raw) return [];
   const parts = raw.split(/\s*\+\s*|\s+i\s+/i);
@@ -73,7 +79,7 @@ export default function PlanSal({
 
   const sensors = useSensors(mouseSensor, touchSensor);
 
-  // States for the D&D Pool sidebar
+  // Stany zasobnika bocznego Drag & Drop
   const [showPoolSidebar, setShowPoolSidebar] = useState<boolean>(true);
   const [poolFilter, setPoolFilter] = useState<'all' | 'unassigned'>('unassigned');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -108,7 +114,7 @@ export default function PlanSal({
   const [genClearExisting, setGenClearExisting] = useState<boolean>(() => appState.generatorSettings?.genClearExisting ?? true);
   const [teacherSearch, setTeacherSearch] = useState<string>('');
 
-  // List of all classrooms from columns in the layout
+  // Wykaz wszystkich sal lekcyjnych z kolumn układu
   const allRoomsList = useMemo(() => {
     const rawCols = flattenColumns(appState.floors);
     return rawCols.map(col => {
@@ -415,11 +421,11 @@ export default function PlanSal({
                 score += 300;
               }
 
-              // Teacher's consecutive lessons: if advisor taught in this colKey at the previous hour, stay in same room
+              // Ciągłość lekcji nauczyciela: zachowanie tej samej sali na kolejnej lekcji
               if (hourIdx > 0 && lesson.teacherId) {
                 const prevHourKey = appState.hours[hourIdx - 1];
                 const prevColKeyCells = nextSchedData[yearKey][day][prevHourKey] || {};
-                const prevCell = prevColKeyCells[key]; // key is the colKey of the room candidate
+                const prevCell = prevColKeyCells[key]; // klucz colKey kandydującej sali
                 if (prevCell) {
                   const cellsList = Array.isArray(prevCell) ? prevCell : [prevCell];
                   const hasSameTeacher = cellsList.some(cell => {
@@ -452,7 +458,7 @@ export default function PlanSal({
               
               const isPEOrInf = lesson.isPE || isINFSubject(lesson.subjectId);
               
-              // Find if this classroom is registered as this class's homeroom
+              // Sprawdzenie, czy sala jest zarejestrowana jako sala lekcyjna tej klasy
               const isClassHomeroom = hr && hr.className && (
                 hr.className.toUpperCase().trim() === lesson.className.toUpperCase().trim() ||
                 (hr.className2 && hr.className2.toUpperCase().trim() === lesson.className.toUpperCase().trim())
@@ -490,7 +496,7 @@ export default function PlanSal({
               const capacity = meta?.capacity || 30; // standard room defaults to 30
               
               if (isWholeClass) {
-                // If taking whole class, prefer larger rooms
+                // Dla całego oddziału preferuj większe sale lekcyjne
                 if (capacity >= 25) {
                   score += capacity * 30; // e.g. up to +1500 score bonus for large capacity
                 } else {

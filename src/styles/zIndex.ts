@@ -1,14 +1,16 @@
 /**
- * Global Z-Index scale for SalePlan Pro.
- * Enforces unified layering across the application:
- * - Base content: 0
- * - Sticky headers: 20
- * - Toasts / floating notifications: 60
- * - Dropdowns / popovers / menus: 70
- * - Standard Modals / dialogs: 100
- * - TermsModal / critical legal gates: 110 (strictly above toasts and standard modals)
- * - Processing blocker / heavy background tasks: 200
- * - Critical disaster recovery overlay (isRestoring): 9999 (allowed exception)
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Globalna skala indeksów warstw (Z-Index)
+ * 
+ * Zapewnia spójną hierarchię nakładania warstw interfejsu w całej aplikacji:
+ * - Zawartość bazowa: 0
+ * - Przyklejone nagłówki (Sticky headers): 20
+ * - Pływające powiadomienia (Toasts / notyfikacje): 60
+ * - Listy rozwijane / menu / popovery: 70
+ * - Standardowe okna modalne / dialogi: 100
+ * - TermsModal / bramka akceptacji regulaminu: 110 (powyżej toastów i standardowych modali)
+ * - Blokada przetwarzania w tle: 200
+ * - Krytyczna nakładka przywracania awaryjnego (isRestoring): 9999 (dozwolony wyjątek)
  */
 
 export const Z_INDEX = {

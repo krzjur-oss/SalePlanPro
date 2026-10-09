@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Trwałości Bazy Danych E2E (Persistence Tests)
+ * Opis: Weryfikacja zapisu i odczytu konfiguracji szkoły, planu klas i sal lekcyjnych.
+ */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { AppState, SchedData, PlanVariant, SnapshotEntry } from '../types';

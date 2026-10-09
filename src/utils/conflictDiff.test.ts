@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Silnika Różnicowego (Conflict Diff Tests)
+ * Opis: Weryfikacja obliczania bilansu różnic pomiędzy kartami dla lekcji, dyżurów i sal.
+ */
 import { describe, it, expect } from 'vitest';
 import { computeConflictDiff } from './conflictDiff';
 import type { AppState, SchedData } from '../types';

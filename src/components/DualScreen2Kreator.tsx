@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Towarzyszący Podgląd Kreatora (DualScreen2Kreator)
+ * Opis: Widok pomocniczy na drugim ekranie dla modułu Kreatora Szkoły (struktura, pule i sale).
+ */
+
 import React, { useState } from 'react';
 import { AppState, SchedData, PlanVariant, PlanVariantTag } from '../types';
 import { uid } from '../utils';

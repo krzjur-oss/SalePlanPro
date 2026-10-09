@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Definicje typów danych (TypeScript Types & Interfaces)
+ * Opis: Centralny model domenowy struktur szkoły, planu lekcji, planu sal, dyżurów, uczniów SPE oraz wariantów.
+ */
+
 export interface School {
   name: string;
   short: string;
@@ -18,7 +24,7 @@ export interface ClassRoom {
   type?: string;
   capacity?: number;
   isGrade1_3?: boolean;
-  singleClassLimit?: boolean; // If true for sports room/gym, only 1 class is allowed at a time (strict limit)
+  singleClassLimit?: boolean; // Gdy true dla sali sportowej/gimnastycznej, dozwolona jest tylko 1 klasa naraz (ścisły limit)
 }
 
 export interface Subject {
@@ -40,8 +46,8 @@ export interface Teacher {
   availability?: string[]; // format: "dayIndex-hourNum" (np. "0-1")
   inactive?: boolean;
   inactiveComment?: string;
-  substitutions?: string[]; // entries format: "inactiveTeacherId|dayIndex|hourNum" or similar representing assigned substitutions
-  preferredRooms?: string[]; // list of preferred room column keys (e.g. ["f0_s0_104"])
+  substitutions?: string[]; // Format wpisów: "nieaktywnyNauczycielId|indeksDnia|nrLekcji" oznaczający przypisane zastępstwa
+  preferredRooms?: string[]; // Lista preferowanych kluczy kolumn sal (np. ["f0_s0_104"])
   isAdministrative?: boolean;
   administrativeRole?: string;
 }
@@ -96,7 +102,7 @@ export interface SpecialStudent {
     [key: string]: number | undefined;
   };
   note?: string;
-  supportTeacherIds?: string[]; // Multiple support teachers on regular lessons
+  supportTeacherIds?: string[]; // Wielu nauczycieli wspomagających na lekcji ogólnej
   homeTeachingInSchool?: boolean; // Czy nauczanie indywidualne jest realizowane w szkole (true) czy w domu (false/undefined)
 }
 
@@ -134,7 +140,7 @@ export interface Building {
   name: string;
   address?: string;
   multi?: boolean;
-  singleClassLimit?: boolean; // If true for sports/external building, enforces single class per time slot
+  singleClassLimit?: boolean; // Gdy true dla obiektów sportowych, wymusza pojedynczą klasę w danym oknie czasowym
   hasCustomStructure?: boolean;
   customFloors?: string[];
   customSegments?: string[];
@@ -218,7 +224,7 @@ export interface Class {
 export type SPESlotMode = 'class_regular' | 'class_support' | 'individual' | 'group_special' | 'exempt';
 
 export interface SPESlotAssignment {
-  id: string; // e.g. "studentId|day|hour"
+  id: string; // np. "studentId|dzien|godzina"
   studentId: string;
   dayIdx: number;
   hourIdx: number;
@@ -351,14 +357,14 @@ export interface GeneratorSettings {
 export interface AppState {
   yearKey: string;
   yearLabel: string;
-  hours: string[]; // Plan Sal hours (keys of time slots)
-  timeslots: Hour[]; // start, end, label
+  hours: string[]; // Godziny w Planie Sal (klucze slotów czasowych)
+  timeslots: Hour[]; // Godziny lekcyjne: początek, koniec, etykieta
   school: School;
   buildings: Building[];
   floors: Floor[];
-  classes: Class[]; // Plan Sal classes
-  teachers: Teacher[]; // Plan Sal teachers
-  subjects: Subject[]; // Plan Sal subjects
+  classes: Class[]; // Klasy w Planie Sal
+  teachers: Teacher[]; // Nauczyciele w Planie Sal
+  subjects: Subject[]; // Przedmioty w Planie Sal
   homerooms: HomeroomState;
   planLekcji: PlanLekcjiState;
   dyzury: PlanDyzuryState;
@@ -402,7 +408,7 @@ export interface UndoEntry {
   yearKey: string;
   day: number;
   scope: 'day' | 'year';
-  snapshot: any; // schedData state snapshot
+  snapshot: any; // Migawka stanu schedData
 }
 
 export interface AppEventLog {

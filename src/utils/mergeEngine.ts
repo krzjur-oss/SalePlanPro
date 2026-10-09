@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Centrum Scalania Planów (Multi-User Merge Engine)
+ * Opis: Zaawansowane łączenie wielu plików planów lekcji, sal i dyżurów od różnych autorów w jedną spójną bazę.
+ */
 import { 
   AppState, 
   SchedData, 
@@ -277,7 +282,7 @@ export function normalizeImportPayload(rawInput: unknown): ImportPayload {
     return normalizeImportPayload(raw.state);
   }
 
-  // Fallback
+  // Wartość domyślna
   return {
     version: '3.0',
     timestamp: new Date().toISOString(),
@@ -441,7 +446,7 @@ export function createDefaultFileMergeConfig(
   const payload = normalizeImportPayload(rawPayload);
   const stats = inspectFilePayload(payload, fileName);
   
-  // Defaults based on role
+  // Wartości domyślne na podstawie roli
   let planLekcjiScope: ClassScope = 'all';
   let planSalScope: ClassScope | 'custom_rooms' = 'all';
   let dyzuryMode: 'none' | 'harmonogram_only' | 'all' = stats.dutyEntries > 0 ? 'all' : 'none';
@@ -587,7 +592,7 @@ export function applyFileMergeToState(
             nextState.teachers.push(JSON.parse(JSON.stringify(incT)));
             addedCount++;
           } else {
-            // Update attributes if missing
+            // Aktualizacja brakujących atrybutów
             if (incT.availability && (!existing.availability || existing.availability.length === 0)) {
               existing.availability = JSON.parse(JSON.stringify(incT.availability));
             }
@@ -762,7 +767,7 @@ export function applyFileMergeToState(
           nextState.dyzury = JSON.parse(JSON.stringify(incomingState.dyzury));
           report.push(`Plan dyżurów (całość: miejsca, przerwy i harmonogram)`);
         } else {
-          // Merge places and breaks if not existing
+          // Scalenie miejsc i przerw w przypadku ich braku
           const existingMiejscaIds = new Set((nextState.dyzury.miejsca || []).map(m => m?.id).filter(Boolean));
           const newMiejsca = (incomingState.dyzury.miejsca || []).filter(m => m && !existingMiejscaIds.has(m.id));
           nextState.dyzury.miejsca = [...(nextState.dyzury.miejsca || []), ...JSON.parse(JSON.stringify(newMiejsca))];
@@ -841,7 +846,7 @@ export function applyFileMergeToState(
             if (!nextSched[yearKey][dayIdx][hourKey]) nextSched[yearKey][dayIdx][hourKey] = {};
             const destHourObj = nextSched[yearKey][dayIdx][hourKey];
 
-            // If merging specific scope, first remove existing cells matching this scope from destHourObj
+            // Usunięcie istniejących komórek z docelowego slotu pasujących do scalanej dziedziny
             if (targetScope === 'grades_1_3' || targetScope === 'grades_4_8' || targetScope === 'custom') {
               Object.keys(destHourObj).forEach(colKey => {
                 if (colKey === '__proto__' || colKey === 'constructor' || colKey === 'prototype') return;

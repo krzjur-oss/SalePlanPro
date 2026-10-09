@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Kreator Importu Danych (ImportModal)
+ * Opis: Wczytywanie i scalanie plików planów, weryfikacja integralności schematów Zod oraz ochrona przed nadpisaniem.
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Upload, Key, Lock, Unlock, Eye, EyeOff, CheckSquare, Square, 
@@ -118,7 +124,7 @@ export default function ImportModal({
     extra: false
   });
 
-  // Initialize files on open or when initialRawFiles change
+  // Inicjalizacja plików przy otwarciu lub zmianie parametrów wejściowych
   useEffect(() => {
     if (isOpen && initialRawFiles && initialRawFiles.length > 0) {
       const loaded: LoadedFileItem[] = initialRawFiles.map((rf, idx) => {
@@ -479,7 +485,7 @@ export default function ImportModal({
     }));
   };
 
-  // Calculate live preview of combined merge
+  // Generowanie podglądu na żywo połączonego scalenia
   const previewSummary = useMemo(() => {
     if (!isOpen || files.length === 0) return null;
     try {
@@ -1264,7 +1270,7 @@ export default function ImportModal({
                                 </div>
                               </div>
 
-                              {/* Custom Classes Checklist if custom scope is selected */}
+                              {/* Lista wyboru klas przy niestandardowym zakresie scalania */}
                               {activeConfig.planLekcjiScope === 'custom' && (
                                 <div className="p-3 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2 mt-2">
                                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 dark:text-slate-300">

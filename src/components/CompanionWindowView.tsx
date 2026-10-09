@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Okno Towarzyszące Drugiego Ekranu (CompanionWindowView)
+ * Opis: Niezależny pulpit roboczy na drugim monitorze wyświetlający matrycę sal, rzut budynku oraz podgląd obciążeń.
+ */
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   AppState, SchedData, ClassRoom, PlanVariant, Hour 
@@ -224,7 +230,7 @@ export default function CompanionWindowView({
         case 'TAB_CHANGE':
           setIsConnectedToMaster(true);
           setLastHeartbeat(Date.now());
-          // Auto-adapt companion view to the active tab in main window
+          // Automatyczne dostosowanie widoku towarzyszącego do aktywnej karty w oknie głównym
           if (msg.payload?.tab) {
             setActiveCompanionTab(msg.payload.tab as any);
           }
@@ -325,7 +331,7 @@ export default function CompanionWindowView({
     }
   };
 
-  // Re-read storage manually if requested
+  // Ręczne ponowne odczytanie bazy danych na żądanie
   const handleManualRefresh = () => {
     const savedState = getStorageItemSync<AppState>(STORAGE_KEYS.APP_STATE);
     const savedSched = getStorageItemSync<SchedData>(STORAGE_KEYS.SCHED_DATA);
@@ -376,7 +382,7 @@ export default function CompanionWindowView({
     return { general, sport, ni };
   }, [allRooms]);
 
-  // Filtered rooms based on active toggles and search query:
+  // Sale przefiltrowane na podstawie aktywnych przełączników i wyszukiwania:
   // 1. Sale ogólne, 2. Sale nauczania indywidualnego / wsparcia, 3. Sale sportowe
   const filteredRooms = useMemo(() => {
     let list: (ClassRoom & { categoryType: 'general' | 'sport' | 'ni' })[] = [];
@@ -497,7 +503,7 @@ export default function CompanionWindowView({
     return map;
   }, [pl.lessons, schedData, assignmentsMap, classesMap, subjectsMap, teachersMap, allRooms, appState?.yearLabel]);
 
-  // Handle assigning room to the currently active slot in Window 1
+  // Obsługa przypisania sali do aktywnego slotu w Oknie 1
   const handleAssignRoomToActiveSlot = (room: ClassRoom) => {
     if (!highlightedSlot || highlightedSlot.dayIdx === undefined || highlightedSlot.hourIdx === undefined) {
       alert('W Oknie 1 najpierw wskaż lub wybierz slot lekcyjny w planie klasy.');

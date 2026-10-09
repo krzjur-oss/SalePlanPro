@@ -1,5 +1,7 @@
 /**
- * Sanitization utility for user-generated textual content in SalePlan Pro.
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Sanityzacja i Ochrona Danych Tekstowych (Sanitizer Utility)
+ * Opis: Zabezpiecza szablony wydruków, eksportowane pliki oraz komponenty interfejsu przed wstrzykiwaniem HTML/skryptów (XSS).
  * Protects print templates, exported files, and UI components from HTML/Script injection
  * and malformed control characters while preserving Polish diacritics, dates, and formulas.
  */
@@ -33,10 +35,10 @@ export function sanitizeText(input: unknown): string {
   
   let str = String(input);
 
-  // 1. Remove dangerous control characters (preserve normal whitespace: newline, return, tab)
+  // 1. Usunięcie znaków kontrolnych z zachowaniem białych znaków (nowa linia, tabulator)
   str = str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 
-  // 2. Normalize whitespace (collapse multiple horizontal spaces/tabs, keep linebreaks)
+  // 2. Normalizacja spacji poziomych
   str = str.replace(/[^\S\r\n]+/g, ' ');
 
   return str.trim();
@@ -54,12 +56,12 @@ export function sanitizeUrl(input: unknown): string {
   const url = String(input).trim().replace(/[\x00-\x1F\x7F]/g, '');
   if (!url) return '';
 
-  // Allowed absolute protocols
+  // Dozwolone protokoły bezwzględne
   if (/^(?:https?:|mailto:)/i.test(url)) {
     return url;
   }
 
-  // If it contains a colon before any path/query/fragment delimiter (/ ? #), it is an unknown/unsafe protocol
+  // Jeśli dwukropek występuje przed separatorem ścieżki, uznaj protokół za niebezpieczny
   const firstColon = url.indexOf(':');
   if (firstColon !== -1) {
     const firstSlash = url.indexOf('/');
@@ -75,7 +77,7 @@ export function sanitizeUrl(input: unknown): string {
     }
   }
 
-  // Allow safe relative URLs
+  // Zezwolenie na bezpieczne adresy względne
   return url;
 }
 
@@ -95,7 +97,7 @@ export function sanitizePrintMetric(input: unknown): string {
 export function sanitizeStudentNotes(note: unknown): string {
   if (!note) return '';
   const clean = sanitizeText(note);
-  // Truncate extreme length if payload exceeds reasonable limits (e.g. 10 000 chars)
+  // Przycięcie ekstremalnej długości ciągu (> 10 000 znaków)
   return clean.slice(0, 10000);
 }
 
@@ -110,7 +112,7 @@ export function sanitizeObjectStrings<T>(target: T): T {
   }
 
   if (typeof target === 'string') {
-    // Only strip non-printable control characters, preserving semantic values intact
+    // Usunięcie znaków kontrolnych z zachowaniem wartości semantycznej
     return target.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') as unknown as T;
   }
 
@@ -121,7 +123,7 @@ export function sanitizeObjectStrings<T>(target: T): T {
   if (typeof target === 'object') {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(target)) {
-      // Skip prototype keys
+      // Pominięcie kluczy prototypu obiektu
       if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
         continue;
       }

@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Baner Aktualizacji Aplikacji PWA (SWUpdateBanner)
+ * Opis: Powiadomienie o dostępności nowej wersji kodu w Service Workerze z możliwością szybkiego przeładowania.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, X, Sparkles } from 'lucide-react';
 

@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Główny Przełącznik Widoków Okna Towarzyszącego (DualScreenMasterView)
+ * Opis: Router drugiego ekranu wybierający odpowiedni widok pomocniczy na podstawie aktywnego modułu planisty.
+ */
+
 import React, { useState, useMemo } from 'react';
 import { 
   AppState, SchedData, PlanVariant, Class, Teacher, Subject, ClassRoom, Assignment, Lesson 

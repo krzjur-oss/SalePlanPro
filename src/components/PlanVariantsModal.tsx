@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Warianty i Semestry Planu (PlanVariantsModal)
+ * Opis: Tworzenie, porównywanie i przełączanie alternatywnych scenariuszy planu lekcji oraz planów semestralnych.
+ */
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { 
   AppState, SchedData, PlanVariant, PlanVariantTag, PlanDiffItem, Lesson, Class, Teacher, ClassRoom 
@@ -77,7 +83,7 @@ export default function PlanVariantsModal({
   // Editing modal state
   const [editingVariant, setEditingVariant] = useState<PlanVariant | null>(null);
 
-  // Helper for validity schedule status
+  // Funkcja pomocnicza sprawdzająca ważność harmonogramu
   const getVariantScheduleStatus = (v: PlanVariant) => {
     const today = new Date().toISOString().slice(0, 10);
     if (!v.validFrom && !v.validTo) {
@@ -103,7 +109,7 @@ export default function PlanVariantsModal({
 
   const pl = appState.planLekcji;
 
-  // Initialize comparison targets when opening or changing variants
+  // Inicjalizacja celów porównania przy zmianie wariantów
   React.useEffect(() => {
     if (planVariants.length > 0) {
       if (!diffVariantAId || !planVariants.some(v => v.id === diffVariantAId)) {
@@ -118,7 +124,7 @@ export default function PlanVariantsModal({
     }
   }, [planVariants, activeVariantId, diffVariantAId, diffVariantBId]);
 
-  // Set default selected class for diff
+  // Ustawienie domyślnej klasy dla podglądu różnic
   React.useEffect(() => {
     if (pl.classes.length > 0 && !diffSelectedClassId) {
       setDiffSelectedClassId(pl.classes[0].id);
@@ -143,7 +149,7 @@ export default function PlanVariantsModal({
     return planVariants.find(v => v.id === diffVariantBId);
   }, [planVariants, diffVariantBId]);
 
-  // Helper to get lesson details safely
+  // Bezpieczne pobranie szczegółów lekcji
   const getLessonDetails = useCallback((lesson: Lesson | undefined, variant: PlanVariant | undefined) => {
     if (!lesson) return null;
     const assignmentsPool = variant?.data.assignments || pl.assignments;
@@ -461,7 +467,7 @@ export default function PlanVariantsModal({
     if (onApplySelectiveClassSync) {
       onApplySelectiveClassSync(fromVar.id, toVar.id, classId);
     } else {
-      // Fallback local sync
+      // Zapasowa synchronizacja lokalna
       const lessonsFrom = fromVar.data.lessons || {};
       const newLessonsTo = { ...toVar.data.lessons };
 
@@ -510,11 +516,11 @@ export default function PlanVariantsModal({
     if (onApplyTeacherDutySync) {
       onApplyTeacherDutySync(fromVar.id, toVar.id, teacherAbbr);
     } else {
-      // Fallback local sync
+      // Zapasowa synchronizacja lokalna
       const dutiesFrom = fromVar.data.dyzury || {};
       const dutiesTo = { ...(toVar.data.dyzury || {}) };
 
-      // Remove existing duties of this teacher in target variant
+      // Usunięcie istniejących dyżurów tego nauczyciela w wariancie docelowym
       Object.keys(dutiesTo).forEach(k => {
         if (dutiesTo[k]?.teacherAbbr?.toLowerCase() === teacherAbbr.toLowerCase()) {
           delete dutiesTo[k];

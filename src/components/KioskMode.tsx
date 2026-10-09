@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Tablica Informacyjna TV i Tryb Rzutnika (KioskMode)
+ * Opis: Pełnoekranowy widok na monitory w holu szkoły z zegarem na żywo, odliczaniem do dzwonka i karuzelą klas.
+ */
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, PlanVariant, SchedCell } from '../types';
 import { 
@@ -226,7 +232,7 @@ export default function KioskMode({
 
     const now = currentTime;
     const rawDay = now.getDay(); // 0 = Sun, 1 = Mon .. 5 = Fri, 6 = Sat
-    const dayIdx = rawDay >= 1 && rawDay <= 5 ? rawDay - 1 : 0; // Default to Monday on weekends
+    const dayIdx = rawDay >= 1 && rawDay <= 5 ? rawDay - 1 : 0; // Domyślnie poniedziałek w weekendy
     const dayName = DAYS_NAMES[dayIdx];
 
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -244,7 +250,7 @@ export default function KioskMode({
       const startMin = sh * 60 + sm;
       const endMin = eh * 60 + em;
 
-      // Currently inside this lesson
+      // Aktualnie trwa ta lekcja
       if (currentMinutes >= startMin && currentMinutes < endMin) {
         activeHourIdx = i;
         upcomingHourIdx = i + 1 < hoursList.length ? i + 1 : null;
@@ -254,7 +260,7 @@ export default function KioskMode({
         break;
       }
 
-      // Inside a break before this lesson
+      // Trwa przerwa przed tą lekcją
       if (i > 0) {
         const prevH = hoursList[i - 1];
         const [peh, pem] = prevH.end.split(':').map(Number);
@@ -272,7 +278,7 @@ export default function KioskMode({
       }
     }
 
-    // If before first lesson
+    // Przed rozpoczęciem pierwszej lekcji
     if (activeHourIdx === null && hoursList.length > 0) {
       const firstH = hoursList[0];
       const [sh, sm] = firstH.start.split(':').map(Number);
@@ -306,13 +312,13 @@ export default function KioskMode({
     };
   }, [currentTime, isSimulatingTime, simulatedDayIdx, simulatedHourIdx, hoursList]);
 
-  // Helper to retrieve lesson for a class at a given hour
+  // Pobranie lekcji dla klasy o danej godzinie
   const getClassLessonInfo = useCallback((classId: string, dayIdx: number, hourIdx: number | null) => {
     if (hourIdx === null || hourIdx < 0 || hourIdx >= hoursList.length) return null;
     const hourObj = hoursList[hourIdx];
     const hourNum = hourObj.num;
 
-    // Check Etap 2 first
+    // Sprawdzenie najpierw Etapu 2 (Plan Sal)
     const etap2Cells = etap2Schedule.classes[classId]?.[dayIdx]?.[String(hourNum)] || [];
     if (etap2Cells.length > 0) {
       const cell = etap2Cells[0];
@@ -324,7 +330,7 @@ export default function KioskMode({
       };
     }
 
-    // Check Etap 1
+    // Sprawdzenie Etapu 1 (Plan Klas)
     const lessonKey = Object.keys(pl.lessons || {}).find(k => {
       const p = k.split('|');
       return p[0] === classId && parseInt(p[1], 10) === dayIdx && parseInt(p[2], 10) === hourIdx;

@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Plan Klas – Siatka Godzinowa Oddziałów (PlanKlas)
+ * Opis: Główny pulpit układania planu zajęć metodą Drag & Drop, obsługa grup, pędzla przydziałów oraz uczniów SPE.
+ */
+
 import React, { useState, useMemo, useRef } from 'react';
 import { 
   AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment, StudentSupportType, PlanVariant 
@@ -134,7 +140,7 @@ export default function PlanKlas({
   const [assignTeacher, setAssignTeacher] = useState('');
   const [assignRoom, setAssignRoom] = useState('');
   const [assignHours, setAssignHours] = useState(2);
-  const [assignPreferredBlockSize, setAssignPreferredBlockSize] = useState<number>(1); // default single 1h
+  const [assignPreferredBlockSize, setAssignPreferredBlockSize] = useState<number>(1); // domyślnie pojedyncza lekcja 1h
   const [assignGroup, setAssignGroup] = useState('');
   const [assignLinkedClasses, setAssignLinkedClasses] = useState<string[]>([]);
   const [editingAssignId, setEditingAssignId] = useState<string | null>(null);
@@ -434,7 +440,7 @@ export default function PlanKlas({
     const conflictsAtoB: string[] = [];
     const conflictsBtoA: string[] = [];
 
-    // Check source teacher in target time slot
+    // Sprawdzenie dostępności nauczyciela źródłowego w docelowym slocie
     if (source.teacher) {
       Object.entries(pl.lessons).forEach(([k, l]) => {
         if (k === source.key || k === target.key) return;
@@ -456,7 +462,7 @@ export default function PlanKlas({
       }
     }
 
-    // Check source room in target time slot
+    // Sprawdzenie dostępności sali źródłowej w docelowym slocie
     if (source.room) {
       Object.entries(pl.lessons).forEach(([k, l]) => {
         if (k === source.key || k === target.key) return;
@@ -471,7 +477,7 @@ export default function PlanKlas({
       });
     }
 
-    // Check target teacher in source time slot (if target occupied)
+    // Sprawdzenie nauczyciela docelowego w slocie źródłowym
     if (target.teacher) {
       Object.entries(pl.lessons).forEach(([k, l]) => {
         if (k === source.key || k === target.key) return;
@@ -493,7 +499,7 @@ export default function PlanKlas({
       }
     }
 
-    // Check target room in source time slot
+    // Sprawdzenie dostępności sali docelowej w slocie źródłowym
     if (target.room) {
       Object.entries(pl.lessons).forEach(([k, l]) => {
         if (k === source.key || k === target.key) return;
@@ -547,7 +553,7 @@ export default function PlanKlas({
       };
     }
 
-    // Move target into source (if target had lesson)
+    // Przeniesienie lekcji docelowej do slotu źródłowego
     if (swapTarget.lesson && swapTarget.assignment) {
       const sourceKey = swapTarget.assignment.groupId
         ? `${swapSource.classId}|${swapSource.day}|${swapSource.hour}|${swapTarget.assignment.groupId}`
@@ -580,7 +586,7 @@ export default function PlanKlas({
   const [onlyWithUnassignedOnDay, setOnlyWithUnassignedOnDay] = useState<boolean>(false);
   const [unassignedDayFilter, setUnassignedDayFilter] = useState<number>(0);
 
-  // Helper to extract the grade level (rocznik) from a class name
+  // Wyodrębnienie poziomu klasy (rocznika) z nazwy oddziału
   const getRocznik = (name: string) => {
     const match = name.trim().match(/^(\d+)/);
     return match ? match[1] : name.trim().charAt(0) || '';
@@ -912,7 +918,7 @@ export default function PlanKlas({
     setNewTeacherOvertimeHours(t.overtimeHours || 0);
     setNewTeacherColor(t.color || '#3b82f6');
 
-    // Load or generate list of available slots
+    // Wczytanie lub wygenerowanie listy dostępnych slotów
     if (t.availability) {
       setNewTeacherAvailability(t.availability);
     } else {
@@ -960,7 +966,7 @@ export default function PlanKlas({
 
     const formattedAbbr = newTeacherAbbr.trim().toUpperCase();
 
-    // Check for unique abbr
+    // Weryfikacja unikalności skrótu
     if (pl.teachers.some(t => t.id !== editingTeacherId && t.abbr.toUpperCase() === formattedAbbr)) {
       alert('Ten skrót nauczyciela jest już zajęty!');
       return;
@@ -1414,7 +1420,7 @@ export default function PlanKlas({
     }
 
     allInvolved.forEach(clsId => {
-      // Find all existing lesson keys for this slot
+      // Znalezienie wszystkich istniejących kluczy lekcji w tym slocie
       const existingSlotKeys = Object.keys(updatedLessons).filter(k => {
         const p = k.split('|');
         return p[0] === clsId && parseInt(p[1], 10) === day && parseInt(p[2], 10) === hour;
@@ -1498,7 +1504,7 @@ export default function PlanKlas({
     const isHandle = touchIsHandleRef.current;
     const isFromGrid = !!touchDraggedLessonKeyRef.current;
 
-    // If gesture started on a card in the grid (from schedule):
+    // Obsługa gestu rozpoczętego na kafelku w siatce planu:
     if (isFromGrid) {
       if (!touchDragActiveRef.current) {
         // Natural vertical scroll detected in grid: cancel dragging immediately so native scrolling of the schedule proceeds freely
@@ -1517,7 +1523,7 @@ export default function PlanKlas({
       }
     }
 
-    // If gesture started on a card body in sidebar (not the handle, not the grid):
+    // Obsługa gestu rozpoczętego na kafelku w zasobniku bocznym:
     if (!isHandle && !isFromGrid) {
       if (!touchDragActiveRef.current) {
         // Natural vertical scroll detected: cancel dragging immediately so native scrolling proceeds freely
@@ -2184,7 +2190,7 @@ export default function PlanKlas({
     const specialKey = `${currentStudent.id}|${dayIdx}|${hourIdx}`;
     const classKey = currentStudent.classId ? `${currentStudent.classId}|${dayIdx}|${hourIdx}` : '';
     
-    // Check if currently exempt
+    // Sprawdzenie, czy uczeń jest aktualnie zwolniony
     const isCurrentlyExempt = (pl.specialAbsences && pl.specialAbsences[specialKey]) ||
       (pl.spePlan?.slotAssignments?.some(s => s.studentId === currentStudent.id && s.dayIdx === dayIdx && s.hourIdx === hourIdx && s.mode === 'exempt'));
 
@@ -2194,7 +2200,7 @@ export default function PlanKlas({
       return;
     }
 
-    // Set to exempt (nie obowiązuje / zwolniony)
+    // Ustawienie statusu zwolnienia z zajęć
     let updatedSpecialAbsences = { ...(pl.specialAbsences || {}) };
     updatedSpecialAbsences[specialKey] = true;
 

@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Schematy Walidacji Danych Zod (Validation Schemas)
+ * Opis: Rygorystyczna kontrola poprawności struktur bazy danych, importu, eksportu i synchronizacji wielu kart.
+ */
 import { z } from 'zod';
 import { ImportPayload } from './mergeEngine';
 
@@ -353,7 +358,7 @@ export function validateImportJson(rawInput: unknown): ValidationResult {
   
   let rawObj: unknown;
 
-  // 1. Safe JSON Parse if passed as string
+  // 1. Bezpieczne parsowanie JSON w przypadku przekazania tekstu
   if (typeof rawInput === 'string') {
     try {
       rawObj = JSON.parse(rawInput);
@@ -390,7 +395,7 @@ export function validateImportJson(rawInput: unknown): ValidationResult {
     targetPayload = sanitized.state as Record<string, unknown>;
   }
 
-  // If directly given an AppState (e.g. school, classes at root level), wrap it into ImportPayload
+  // Jeśli przekazano bezpośrednio AppState, opakuj w strukturę ImportPayload
   if (!targetPayload.appState && (targetPayload.school || targetPayload.classes || targetPayload.teachers || targetPayload.planLekcji)) {
     targetPayload = {
       version: '3.0',

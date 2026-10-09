@@ -1,18 +1,19 @@
 /**
- * SalePlan Pro - High-Capacity IndexedDB Storage Engine & Cryptographic Adapter
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Silnik Pamięci IndexedDB i Adapter Kryptograficzny (dbStorage)
  * 
- * Provides unlimited offline storage for large schools, extensive snapshot histories,
- * and massive timetables without the 5MB localStorage limitation.
+ * Zapewnia nielimitowaną pamięć lokalną offline dla dużych szkół, migawek
+ * oraz rozbudowanych planów bez ograniczenia 5 MB pamięci localStorage.
  * 
- * Features:
- * - Native Promise-based IndexedDB engine (zero dependencies, high performance)
- * - Automatic seamless migration of existing data from localStorage on first launch
- * - High-speed AES-256 GCM encryption ('encrypted-v2' format with PBKDF2 600,000 iterations)
- * - Single-session non-extractable CryptoKey held in memory (zero PBKDF2 overhead per write)
- * - Transparent backward-compatibility for 'encrypted-v1' payloads with automatic v2 migration
- * - Pre-encryption backup and comprehensive verification with automatic rollback
- * - Zero plaintext password persistence in sessionStorage
- * - Storage quota detection via navigator.storage.estimate()
+ * Funkcjonalności:
+ * - Natywny asynchroniczny silnik IndexedDB oparty na Promises (brak zewnętrznych zależności)
+ * - Automatyczna i bezstratna migracja danych z localStorage przy pierwszym uruchomieniu
+ * - Szybkie szyfrowanie AES-256 GCM (format 'encrypted-v2' z 600 000 iteracji PBKDF2)
+ * - Niewyodrębnialny sesyjny klucz CryptoKey w pamięci RAM (brak narzutu PBKDF2 przy zapisie)
+ * - Pełna zgodność wsteczna z ładunkami 'encrypted-v1' i automatyczna migracja do v2
+ * - Kopia zapasowa przed szyfrowaniem (pre-encryption backup) i automatyczny rollback
+ * - Brak zapisywania haseł w sessionStorage
+ * - Detekcja limitu pamięci za pomocą navigator.storage.estimate()
  */
 
 const DB_NAME = 'SalePlanProDB';
@@ -59,7 +60,7 @@ export {
   lockSession
 } from '../lib/crypto';
 
-// Known storage keys
+// Znane klucze pamięci podręcznej programu
 export const STORAGE_KEYS = {
   APP_STATE: 'saleplan_v3_app_state',
   SCHED_DATA: 'saleplan_v3_sched_data',
@@ -301,7 +302,7 @@ async function setRawItem(key: string, value: unknown): Promise<void> {
         }
       });
     } catch {
-      // Do not permanently disable IDB on single error
+      // Nie wyłączaj trwale IndexedDB po pojedynczym błędzie
     }
   }
 
@@ -374,7 +375,7 @@ async function processRetrievedValue<T>(rawVal: unknown, key?: string): Promise<
     const pwd = getSessionPassword();
 
     if (!sessionKey && !pwd) {
-      // Database is encrypted and session is locked
+      // Baza danych jest zaszyfrowana, a sesja zablokowana
       return null;
     }
 
@@ -396,13 +397,13 @@ async function processRetrievedValue<T>(rawVal: unknown, key?: string): Promise<
           decryptedStr = await decryptText(JSON.stringify(payload), pwd);
         }
       } else if (payload.type === 'encrypted-v1') {
-        // Legacy v1 payload (100,000 iterations)
+        // Starszy ładunek formatu v1 (100 000 iteracji)
         if (!pwd) {
           return null;
         }
         decryptedStr = await decryptText(JSON.stringify(payload), pwd);
 
-        // Auto-migrate legacy v1 entry to encrypted-v2
+        // Automatyczna migracja wpisu v1 do formatu encrypted-v2
         if (key && (sessionKey || pwd)) {
           try {
             const parsedData = JSON.parse(decryptedStr);
@@ -448,13 +449,13 @@ export async function getStorageItem<T = unknown>(key: string): Promise<T | null
           if (req.result !== undefined && req.result !== null) {
             resolve(req.result);
           } else {
-            // Check fallback in localStorage if not found in IndexedDB
+            // Sprawdzenie zapasowego wpisu w localStorage w przypadku braku w IndexedDB
             try {
               const localVal = localStorage.getItem(key);
               if (localVal !== null) {
                 try {
                   const parsed = JSON.parse(localVal);
-                  // Background migrate unencrypted item to IndexedDB
+                  // Migracja niezaszyfrowanego elementu w tle do IndexedDB
                   if (!isEncryptedObject(parsed)) {
                     setStorageItem(key, parsed).catch(() => {});
                   }
@@ -492,10 +493,10 @@ export async function getStorageItem<T = unknown>(key: string): Promise<T | null
     let val = await processRetrievedValue<T>(rawResult, key);
     if (val === null || val === undefined) return null;
 
-    // Backward migration & sanitization: remove revision/tabId/_revision/_tabId from SCHED_DATA before validation
+    // Sanityzacja zgodności wstecznej: usunięcie revision/tabId z SCHED_DATA przed walidacją Zod
     if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
       val = cleanSchedDataMeta(val, key);
-      // Persist cleaned version back to storage and localStorage mirror
+      // Zapis oczyszczonej wersji do IndexedDB oraz lustra localStorage
       try {
         await setStorageItem(key, val);
       } catch {}
@@ -518,7 +519,7 @@ export async function getStorageItem<T = unknown>(key: string): Promise<T | null
       let val = await processRetrievedValue<T>(parsedLocal, key);
       if (val === null || val === undefined) return null;
 
-      // Backward migration & sanitization: remove revision/tabId/_revision/_tabId from SCHED_DATA before validation
+      // Sanityzacja zgodności wstecznej: usunięcie revision/tabId z SCHED_DATA przed walidacją Zod
       if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
         val = cleanSchedDataMeta(val, key);
         try {
@@ -595,7 +596,7 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
     valueToStore = cleanSchedDataMeta(value, key);
   }
 
-  // Check if encryption is active and key should be encrypted
+  // Sprawdzenie, czy szyfrowanie jest aktywne i czy dany klucz podlega szyfrowaniu
   if (
     isDatabaseEncryptionActive() &&
     key !== STORAGE_KEYS.STORAGE_ENC_META &&
@@ -625,8 +626,8 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
 
     try {
       const serialized = typeof valueToStore === 'string' ? valueToStore : JSON.stringify(valueToStore);
-      // Fast non-blocking AES-256 GCM encryption using the pre-derived session CryptoKey
-      // Random 12-byte IV for every write
+      // Szybkie, nieblokujące szyfrowanie AES-256 GCM przy użyciu klucza sesyjnego CryptoKey
+      // Losowy 12-bajtowy wektor IV dla każdego zapisu
       const { iv, ciphertext } = await encryptWithKey(serialized, sessionKey);
       
       valueToStore = {
@@ -644,7 +645,7 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
 
   let idbWriteSucceeded = false;
 
-  // Update IndexedDB if available
+  // Aktualizacja bazy IndexedDB, jeśli jest dostępna
   if (isIndexedDBAvailable) {
     try {
       const db = await getDB();
@@ -681,7 +682,7 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
     }
   }
 
-  // Also maintain localStorage mirror for fast synchronous initial render if payload is reasonable
+  // Utrzymywanie lustra w localStorage dla szybkiego pierwszego renderu
   let localStorageSaved = false;
   try {
     const serialized = typeof valueToStore === 'string' ? valueToStore : JSON.stringify(valueToStore);
@@ -695,7 +696,7 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
     console.warn(`Zapis lustra localStorage dla "${key}" nie powiódł się (np. QuotaExceeded):`, err);
   }
 
-  // Task 1: Gdy zapis do IndexedDB się nie uda ORAZ lustro localStorage jest pominięte -> rzuć StorageWriteError
+  // Gdy zapis do IndexedDB się nie uda ORAZ lustro localStorage jest pominięte -> rzuć StorageWriteError
   if (!idbWriteSucceeded && !localStorageSaved) {
     throw new StorageWriteError(`Błąd zapisu: nie udało się zapisać danych dla klucza "${key}" ani w bazie IndexedDB, ani w pamięci podręcznej localStorage.`);
   }
@@ -722,13 +723,13 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
     STORAGE_KEYS.ACTIVE_VARIANT_ID,
   ];
 
-  // 1. Collect all current plaintext data
+  // 1. Pobranie wszystkich bieżących danych jawnych
   const currentData: Record<string, unknown> = {};
   for (const k of keysToEncrypt) {
     const rawRecord = await getRawItem(k);
     const val = await getStorageItem(k);
 
-    // Task 4: treat null from getStorageItem for physically existing key as critical error -> abort & rollback
+    // Traktuj brak wartości fizycznie istniejącego klucza jako błąd krytyczny -> przerwij i cofnij
     if (rawRecord !== null && rawRecord !== undefined && (val === null || val === undefined)) {
       throw new Error(`Klucz "${k}" fizycznie istnieje w bazie danych, ale nie mógł zostać poprawnie odczytany przez getStorageItem (błąd integralności lub walidacji schematu).`);
     }
@@ -738,7 +739,7 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
     }
   }
 
-  // 2. Create pre-encryption backup for rollback safety
+  // 2. Utworzenie kopii awaryjnej przed szyfrowaniem (rollback safety)
   const preEncryptionBackup = {
     timestamp: new Date().toISOString(),
     keys: Object.keys(currentData),
@@ -747,15 +748,15 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
   await setRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP, preEncryptionBackup);
 
   try {
-    // 3. Set encryption metadata (v2, 600,000 iterations) and activate session
+    // 3. Zapisanie metadanych szyfrowania (v2, 600 000 iteracji) i aktywacja sesji
     await setupStorageEncryptionMeta(password);
 
-    // 4. Store back all items (now encrypting with the new CryptoKey)
+    // 4. Zapisanie wszystkich elementów zaszyfrowanych nowym kluczem CryptoKey
     for (const [k, val] of Object.entries(currentData)) {
       await setStorageItem(k, val);
     }
 
-    // 5. Verification step: verify read & decryption of every single key
+    // 5. Krok weryfikacyjny: test odczytu i deszyfrowania każdego klucza
     for (const [k, originalVal] of Object.entries(currentData)) {
       const readBack = await getStorageItem(k);
       if (readBack === null || readBack === undefined) {
@@ -768,11 +769,11 @@ export async function enableDatabaseEncryption(password: string): Promise<void> 
       }
     }
 
-    // 6. Verification passed! Remove temporary pre-encryption backup
+    // 6. Weryfikacja zakończona sukcesem! Usunięcie tymczasowej kopii zapasowej
     await removeRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
   } catch (err) {
     console.error('Błąd podczas aktywacji szyfrowania bazy. Rozpoczynanie bezpiecznego rollbacku...', err);
-    // ROLLBACK: restore original plaintext data and disable encryption
+    // COFNIĘCIE (ROLLBACK): przywrócenie oryginalnych danych jawnych i wyłączenie szyfrowania
     try {
       removeStorageEncryptionMeta();
       for (const [k, val] of Object.entries(currentData)) {
@@ -818,10 +819,10 @@ export async function disableDatabaseEncryption(password: string): Promise<boole
     }
   }
 
-  // Remove encryption meta and in-memory session keys
+  // Usunięcie metadanych szyfrowania i sesyjnych kluczy z pamięci RAM
   removeStorageEncryptionMeta();
 
-  // Save all items back as unencrypted
+  // Zapisanie wszystkich elementów w formie jawnej (niezaszyfrowanej)
   for (const [k, val] of Object.entries(currentData)) {
     await setRawItem(k, val);
   }
@@ -861,10 +862,10 @@ export async function changeDatabaseEncryptionPassword(oldPass: string, newPass:
     }
   }
 
-  // Set new encryption metadata (v2, 600,000 iterations) and active session
+  // Zapisanie nowych metadanych szyfrowania (v2, 600 000 iteracji) i aktywacja sesji
   await setupStorageEncryptionMeta(newPass);
 
-  // Store items back re-encrypted with new password
+  // Zapisanie elementów ponownie zaszyfrowanych nowym hasłem
   for (const [k, val] of Object.entries(currentData)) {
     await setStorageItem(k, val);
   }
@@ -1036,10 +1037,10 @@ export interface StorageStatistics {
  */
 export async function getDetailedStorageStats(): Promise<StorageStatistics> {
   let usedBytes = 0;
-  let quotaBytes = 1024 * 1024 * 1024; // Default 1 GB display if quota API unsupported
+  let quotaBytes = 1024 * 1024 * 1024; // Domyślnie 1 GB, jeśli API limitów nie jest wspierane
   let isIDB = isIndexedDBAvailable;
 
-  // 1. Calculate approximate size of stored data
+  // 1. Obliczenie przybliżonego rozmiaru zapisanych danych
   try {
     const db = await getDB();
     const allData = await new Promise<unknown[]>((resolve) => {
@@ -1065,7 +1066,7 @@ export async function getDetailedStorageStats(): Promise<StorageStatistics> {
     }
   }
 
-  // 2. Query browser storage estimate API
+  // 2. Zapytanie do przeglądarkowego API navigator.storage.estimate()
   if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
     try {
       const estimate = await navigator.storage.estimate();

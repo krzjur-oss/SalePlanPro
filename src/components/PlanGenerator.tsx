@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Autogenerator Planu Lekcji (PlanGenerator)
+ * Opis: Inteligentny silnik heurystyczny do automatycznego rozmieszczania lekcji w siatce godzinowej oddziałów.
+ */
+
 import React, { useState, useMemo } from 'react';
 import { 
   AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment, SpecialLesson 
@@ -45,7 +51,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
     if (appState.generatorSettings?.optionalSubjectIds) {
       return appState.generatorSettings.optionalSubjectIds;
     }
-    // Default matching names containing religia, etyka, mniejszość, wdż, wdżwr
+    // Domyślne dopasowanie przedmiotów: religia, etyka, mniejszość, wdż
     return pl.subjects
       .filter(s => {
         const nameLower = s.name.toLowerCase();
@@ -60,11 +66,11 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
       .map(s => s.id);
   });
 
-  // Maintain custom role settings for teachers during this generator session
+  // Zapamiętanie ról nauczycieli w bieżącej sesji generatora
   const [teacherConfigs, setTeacherConfigs] = useState<Record<string, TeacherRoleConfig>>(() => {
     const configs: Record<string, TeacherRoleConfig> = {};
     pl.teachers.forEach(t => {
-      // Guess some roles or default to teacher
+      // Domyślne przypisanie roli nauczyciela
       configs[t.id] = {
         teacherId: t.id,
         role: 'teacher',
@@ -87,13 +93,13 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
     warnings: string[];
   } | null>(null);
 
-  // Helper to change configs
+  // Funkcja pomocnicza do aktualizacji konfiguracji
   const updateTeacherConfig = (teacherId: string, updates: Partial<TeacherRoleConfig>) => {
     setTeacherConfigs(prev => {
       const current = prev[teacherId];
       if (!current) return prev;
       const updated = { ...current, ...updates };
-      // Dyrektor and wicedyrektor get default recommended gaps
+      // Dyrektor i wicedyrektor otrzymują zalecane okienka organizacyjne
       if (updates.role === 'director') {
         updated.maxGaps = 1;
       } else if (updates.role === 'deputy') {
@@ -119,7 +125,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
     setIsGenerating(true);
     setGenerationResult(null);
 
-    // Run slightly deferred so the spinner renders
+    // Uruchomienie asynchroniczne, aby wskaźnik ładowania zdążył się wyrenderować
     setTimeout(() => {
       try {
         const daysCount = 5; // Monday to Friday
@@ -177,7 +183,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
           }
         });
 
-        // Copy locked special lessons (if we have any structure for them, or just preserve them)
+        // Kopiowanie zablokowanych lekcji specjalnych z zachowaniem ich pozycji
         Object.entries(pl.specialLessons).forEach(([key, value]) => {
           generatedSpecialLessons[key] = { ...value };
           const parts = key.split('|');
@@ -207,7 +213,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
 
         const regularUnits: WorkUnit[] = [];
         pl.assignments.forEach(asg => {
-          // Count currently locked lessons for this assignment
+          // Zliczenie aktualnie zablokowanych lekcji dla tego przydziału
           const lockedCount = Object.values(generatedLessons).filter(
             l => l.assignmentId === asg.id && l.locked
           ).length;
@@ -266,19 +272,19 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
         ) => {
           let score = 1000;
 
-          // Check basic clashes
+          // Weryfikacja podstawowych kolizji godzinowych
           if (classBusy.has(`${unit.classId}|${day}|${hour}`)) return -1;
           if (unit.teacherId && teacherBusy.has(`${unit.teacherId}|${day}|${hour}`)) return -1;
 
-          // Check computer science labs limit
+          // Sprawdzenie limitu pracowni informatycznych
           if (limitComputerLabs && isINFSubject(unit.subjectId)) {
             const currentCount = infLessonsCount.get(`${day}|${hour}`) || 0;
             if (currentCount >= customComputerLabsCount) {
-              return -1; // No free computer labs in this slot
+              return -1; // Brak wolnych pracowni komputerowych w tym slocie
             }
           }
 
-          // Check builder parameters
+          // Sprawdzenie parametrów generatora
           // Teacher availability
           if (obeyAvailability && unit.teacherId) {
             const t = teachersMap.get(unit.teacherId);
@@ -483,7 +489,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
           const shouldTryBlock = allowDoubleBlocks && nextMatchIdx !== -1;
 
           if (shouldTryBlock) {
-            // Find best adjacent slots (hour, hour+1)
+            // Wyszukanie najlepszych sąsiadujących slotów (godzina, godzina+1)
             for (let d = 0; d < daysCount; d++) {
               for (let h = 0; h < maxHoursCount - 1; h++) {
                 const s1 = scoreSlot(unit, d, h, true);
@@ -625,7 +631,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
 
           const specialUnits: SpecialWorkUnit[] = [];
           pl.specialAssignments.forEach(sa => {
-            // Filter only individual (withClass = false, which needs scheduling)
+            // Filtrowanie wyłącznie zajęć indywidualnych (wymagających zaplanowania)
             if (!sa.withClass) {
               totalSpecialCount += sa.hoursPerWeek;
               for (let i = 0; i < sa.hoursPerWeek; i++) {

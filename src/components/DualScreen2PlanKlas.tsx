@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Towarzysząca Matryca Sal dla Planu Klas (DualScreen2PlanKlas)
+ * Opis: Podgląd obłożenia gabinetów w czasie rzeczywistym podczas układania lekcji oddziałów na ekranie głównym.
+ */
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   AppState, SchedData, Class, Teacher, Subject, ClassRoom, Assignment, Lesson 
@@ -104,7 +110,7 @@ export default function DualScreen2PlanKlas({
     };
   }, [isAutoFit, pl.classes, isCompact]);
 
-  // Lessons map helper
+  // Funkcja pomocnicza mapy lekcji
   const lessonsMap = pl.lessons || {};
 
   // Handle placing a lesson into a specific cell
@@ -125,7 +131,7 @@ export default function DualScreen2PlanKlas({
       timestamp: Date.now()
     });
 
-    // Reset selected pool lesson if matched
+    // Reset wybranej lekcji z puli w przypadku dopasowania
     if (selectedPoolLesson && selectedPoolLesson.assignmentId === asgData.assignmentId) {
       setSelectedPoolLesson(null);
     }

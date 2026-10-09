@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Nadzór Szatni i Sal Sportowych WF (PE Duty Engine)
+ * Opis: Weryfikacja dyżurów przyległych do lekcji wychowania fizycznego i automatyczne zwalnianie z korytarza.
+ */
 import { AppState, Subject, Przerwa, SchedData, SchedCell } from '../types';
 import { getBreakDuration } from './adaptationDuty';
 
@@ -262,7 +267,7 @@ export function calculatePESupervisionDuties(
       });
     });
 
-    // Check each break for PE supervision
+    // Weryfikacja każdej przerwy pod kątem nadzoru szatni WF
     przerwy.forEach(p => {
       const dur = getBreakDuration(p);
       const timeRange = `${p.start} - ${p.end}`;

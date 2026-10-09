@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Anonimizacja Danych Szkolnych (Anonymization Utility)
+ * Opis: Zastępowanie nazwisk nauczycieli i nazw uczniów fikcyjnymi danymi na potrzeby bezpiecznej demonstracji i testów.
+ */
 import { AppState, SchedData, Teacher, SpecialStudent, SchedCell, ArchiveEntry, SnapshotEntry } from '../types';
 import { ImportPayload } from './mergeEngine';
 
@@ -190,7 +195,7 @@ export function anonymizeBackupPayload(rawPayload: ImportPayload): { payload: Im
     totalCells += schedRes.cellsUpdated;
   }
 
-  // 3. Anonymize Archives if present
+  // 3. Anonimizacja archiwów, jeśli występują
   if (Array.isArray(payloadClone.archive)) {
     payloadClone.archive = payloadClone.archive.map((arch: ArchiveEntry) => {
       if (arch.config) {
@@ -201,7 +206,7 @@ export function anonymizeBackupPayload(rawPayload: ImportPayload): { payload: Im
     });
   }
 
-  // 4. Anonymize Snapshots if present
+  // 4. Anonimizacja migawek, jeśli występują
   if (Array.isArray(payloadClone.snapshots)) {
     payloadClone.snapshots = payloadClone.snapshots.map((snap: SnapshotEntry) => {
       let snapApp = snap.appState;

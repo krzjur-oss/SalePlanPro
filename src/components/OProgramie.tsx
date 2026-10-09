@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Informacje o Programie i Licencje (OProgramie)
+ * Opis: Metryka autorska, Regulamin, Polityka Prywatności RODO, licencja WLDE oraz skróty do podręcznika i historii zmian.
+ */
+
 import React, { useState } from 'react';
 import { 
   Info, User, FileText, Shield, Award, HelpCircle, Heart, HeartHandshake, CheckCircle2, ChevronRight, Mail, ExternalLink, Globe, KeyRound, Github, History, BookOpen, Scale

@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Towarzyszący Podgląd dla Planu Sal (DualScreen2PlanSal)
+ * Opis: Widok pomocniczy na drugim monitorze prezentujący płachtę zbiorczą i weryfikację konfliktów gabinetów.
+ */
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   AppState, SchedData, SchedCell, ClassRoom, Floor, Building 
@@ -73,7 +79,7 @@ export default function DualScreen2PlanSal({
       const num = col.room.num || '';
       const sub = col.room.sub ? ` (${col.room.sub})` : '';
 
-      // Check room type from pl.rooms if matching
+      // Sprawdzenie typu sali z pl.rooms
       const matchedPlRoom = pl.rooms.find(r => r.name.toLowerCase() === num.toLowerCase() || r.id === roomKey);
       const isSport = isSportsFacility(matchedPlRoom);
       const isNi = isNIRoom(matchedPlRoom);
@@ -88,7 +94,7 @@ export default function DualScreen2PlanSal({
       };
     });
 
-    // If floors are empty, fallback to pl.rooms
+    // Gdy kondygnacje są puste, użyj sal z pl.rooms
     if (roomsFromFloors.length === 0 && pl.rooms && pl.rooms.length > 0) {
       return pl.rooms.map(r => ({
         key: r.id,
@@ -149,14 +155,14 @@ export default function DualScreen2PlanSal({
     };
   }, [isAutoFit, filteredRooms.length, isCompact]);
 
-  // Helper to read cell from schedData
+  // Funkcja pomocnicza odczytu komórki z schedData
   const getCellData = (dayIdx: number, hourIdx: number, roomKey: string): SchedCell | null => {
     const yearData = schedData[appState.yearKey];
     if (!yearData) return null;
     const dayData = yearData[dayIdx];
     if (!dayData) return null;
 
-    // The hour key can be index or time string
+    // Klucz godziny może być indeksem lub etykietą czasu
     const hourItem = DEFAULT_HOURS[hourIdx];
     const hourKey = appState.hours[hourIdx] || hourItem.key || `${hourIdx}`;
 
@@ -168,7 +174,7 @@ export default function DualScreen2PlanSal({
     return Array.isArray(cell) ? cell[0] : cell;
   };
 
-  // Helper to assign a lesson into a room slot
+  // Funkcja pomocnicza przypisująca lekcję do slotu sali
   const handleAssignToRoom = (dayIdx: number, hourIdx: number, roomKey: string, roomName: string) => {
     if (!highlightedLesson) {
       alert('Wybierz najpierw zajęcie na Ekranie 1, aby przypisać je do tej sali.');
@@ -204,7 +210,7 @@ export default function DualScreen2PlanSal({
     setHighlightedLesson(null);
   };
 
-  // Helper to clear a single room cell
+  // Funkcja pomocnicza czyszcząca pojedynczą komórkę sali
   const handleClearCell = (dayIdx: number, hourIdx: number, roomKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const yearKey = appState.yearKey;
@@ -222,7 +228,7 @@ export default function DualScreen2PlanSal({
     }
   };
 
-  // Helper to clear all entries for an entire room
+  // Funkcja pomocnicza usuwająca wszystkie lekcje dla danej sali
   const handleClearEntireRoom = (roomKey: string, roomName: string) => {
     if (!confirm(`Czy na pewno chcesz wyczyścić wszystkie wpisy z sali "${roomName}" ze wszystkich dni i godzin?`)) return;
 

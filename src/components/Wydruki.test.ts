@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Testy Modułu Wydruków i Płachty Dyrektorskiej (Wydruki Tests)
+ * Opis: Weryfikacja formatowania dat, deduplikacji komórek oraz szablonów wydruków.
+ */
 import { describe, it, expect } from 'vitest';
 import { generateDutiesHtml } from './Wydruki';
 import { AppState } from '../types';
