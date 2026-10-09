@@ -1,7 +1,7 @@
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
 // Wstrzykiwane automatycznie podczas procesu budowania przez plugin Vite:
-const BUILD_ID = "v_mv0ogit2_d181c27679";
+const BUILD_ID = "v_mv0ozr07_d181c27679";
 const CURRENT_ASSETS = ["assets/AssignRoomDropdown-B-oshd1-.js","assets/CompanionWindowView-CHuKvCUQ.js","assets/DualScreenMasterView-BL4FQYKD.js","assets/Dyzury-CZMN9kdV.js","assets/KreatorSzkoly-ffdU6HfK.js","assets/OProgramie-B3GosPhN.js","assets/PlanKlas-D8uySmEs.js","assets/PlanSal-_ERR9cyV.js","assets/PlanVariantsModal-Cs7SklP3.js","assets/SnapshotManager-CJO_Bu28.js","assets/Statystyki-Xu1A5e1l.js","assets/UstawieniaGeneratorow-BtZqO_NF.js","assets/Wydruki-BEBXdI34.js","assets/adaptationDuty-D8JVwr9A.js","assets/index-CRQtG8Nu.js","assets/index-DrzmiGdf.css","assets/roomUtils-gJMDp5Ow.js","assets/vendor-dnd-Dk37sCMx.js","assets/vendor-lucide-B92qowNC.js","assets/vendor-motion-7o_NUGSZ.js","assets/vendor-react-M1a6ECPm.js","assets/vendor-recharts-BSefab-z.js","assets/vendor-zod-hv1ZMVFq.js"];
 
 // Nazwa cache unikalna dla danego builda
