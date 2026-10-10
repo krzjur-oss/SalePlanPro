@@ -6,7 +6,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Building, MiejsceDyzuru, Floor, Hour, Przerwa, ArchiveEntry, PlanDyzuryState,
+  AppState, Class, Teacher, SupportStaff, Subject, ClassRoom, SchoolGroup, Assignment, Building, MiejsceDyzuru, Floor, Hour, Przerwa, ArchiveEntry, PlanDyzuryState,
   SpecialStudent, SpecialAssignment
 } from '../types';
 import { 
@@ -1577,8 +1577,36 @@ export default function KreatorSzkoly({
   const [newTIsAdministrative, setNewTIsAdministrative] = useState(false);
   const [newTAdministrativeRole, setNewTAdministrativeRole] = useState('');
 
+  // Czynności i zadania realizowane poza tablicą (świetlica, biblioteka, pedagog, psycholog, logopeda, wspomagający)
+  const [newTHasNonTeaching, setNewTHasNonTeaching] = useState(false);
+  const [newTNonTeachingHours, setNewTNonTeachingHours] = useState<number | ''>(0);
+  const [newTNonTeachingRoles, setNewTNonTeachingRoles] = useState<string[]>([]);
+  const [newTNonTeachingDutyEligible, setNewTNonTeachingDutyEligible] = useState(true);
+
+  // Podmoduł w Kroku 6: Nauczyciele vs Pracownicy niepedagogiczni
+  const [staffTab, setStaffTab] = useState<'teachers' | 'support_staff'>('teachers');
+
+  // Stany formularza Pracowników Niepedagogicznych (SupportStaff)
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [newSFirst, setNewSFirst] = useState('');
+  const [newSLast, setNewSLast] = useState('');
+  const [newSAbbr, setNewSAbbr] = useState('');
+  const [isSAbbrManual, setIsSAbbrManual] = useState(false);
+  const [newSRole, setNewSRole] = useState('Woźny / Ochrona');
+  const [newSCustomRole, setNewSCustomRole] = useState('');
+  const [newSWeeklyHours, setNewSWeeklyHours] = useState<number | ''>(40);
+  const [newSDutyEligible, setNewSDutyEligible] = useState(true);
+  const [newSNotes, setNewSNotes] = useState('');
+  const [newSColor, setNewSColor] = useState(() => PALETTE_COLORS[(appState.supportStaff?.length || 0) % PALETTE_COLORS.length] || '#475569');
+  const [newSAvailability, setNewSAvailability] = useState<string[]>([]);
+  const [newSInactive, setNewSInactive] = useState(false);
+  const [newSInactiveComment, setNewSInactiveComment] = useState('');
+  const [staffSearchQuery, setStaffSearchQuery] = useState('');
+  const [isStaffAvailModalOpen, setIsStaffAvailModalOpen] = useState(false);
+
   const [pensumSearchQuery, setPensumSearchQuery] = useState('');
-  const [pensumFilter, setPensumFilter] = useState<'all' | 'administrative' | 'reduced' | 'standard' | 'inactive'>('all');
+  const [pensumFilter, setPensumFilter] = useState<'all' | 'administrative' | 'reduced' | 'standard' | 'inactive' | 'non_teaching'>('all');
+
 
   const handleUpdateTeacherHours = (teacherId: string, field: 'maxHours' | 'overtimeHours', value: number) => {
     const nextT = appState.teachers.map(t => {
@@ -1645,6 +1673,10 @@ export default function KreatorSzkoly({
     setNewTSubstitutions(t.substitutions || []);
     setNewTIsAdministrative(t.isAdministrative || false);
     setNewTAdministrativeRole(t.administrativeRole || '');
+    setNewTHasNonTeaching(Boolean((t.nonTeachingHours && t.nonTeachingHours > 0) || (t.nonTeachingRoles && t.nonTeachingRoles.length > 0)));
+    setNewTNonTeachingHours(t.nonTeachingHours ?? 0);
+    setNewTNonTeachingRoles(t.nonTeachingRoles || []);
+    setNewTNonTeachingDutyEligible(t.nonTeachingDutyEligible !== false);
 
     // Wczytanie lub wygenerowanie listy dostępnych slotów
     if (t.availability) {
@@ -1677,6 +1709,10 @@ export default function KreatorSzkoly({
     setNewTSubstitutions([]);
     setNewTIsAdministrative(false);
     setNewTAdministrativeRole('');
+    setNewTHasNonTeaching(false);
+    setNewTNonTeachingHours(0);
+    setNewTNonTeachingRoles([]);
+    setNewTNonTeachingDutyEligible(true);
     const nextColor = PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706';
     setNewTColor(nextColor);
   };
@@ -1725,7 +1761,10 @@ export default function KreatorSzkoly({
             inactiveComment: newTInactiveComment.trim(),
             substitutions: newTSubstitutions,
             isAdministrative: newTIsAdministrative,
-            administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined
+            administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined,
+            nonTeachingHours: newTHasNonTeaching ? (newTNonTeachingHours === '' ? 0 : Number(newTNonTeachingHours)) : undefined,
+            nonTeachingRoles: newTHasNonTeaching ? newTNonTeachingRoles : undefined,
+            nonTeachingDutyEligible: newTHasNonTeaching ? newTNonTeachingDutyEligible : undefined
           };
         }
         return t;
@@ -1752,6 +1791,10 @@ export default function KreatorSzkoly({
       setNewTSubstitutions([]);
       setNewTIsAdministrative(false);
       setNewTAdministrativeRole('');
+      setNewTHasNonTeaching(false);
+      setNewTNonTeachingHours(0);
+      setNewTNonTeachingRoles([]);
+      setNewTNonTeachingDutyEligible(true);
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti('Zaktualizowano dane nauczyciela');
@@ -1769,7 +1812,10 @@ export default function KreatorSzkoly({
         inactiveComment: newTInactiveComment.trim(),
         substitutions: newTSubstitutions,
         isAdministrative: newTIsAdministrative,
-        administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined
+        administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined,
+        nonTeachingHours: newTHasNonTeaching ? (newTNonTeachingHours === '' ? 0 : Number(newTNonTeachingHours)) : undefined,
+        nonTeachingRoles: newTHasNonTeaching ? newTNonTeachingRoles : undefined,
+        nonTeachingDutyEligible: newTHasNonTeaching ? newTNonTeachingDutyEligible : undefined
       };
 
       const nextT = [...appState.teachers, newTeacher];
@@ -1794,6 +1840,10 @@ export default function KreatorSzkoly({
       setNewTSubstitutions([]);
       setNewTIsAdministrative(false);
       setNewTAdministrativeRole('');
+      setNewTHasNonTeaching(false);
+      setNewTNonTeachingHours(0);
+      setNewTNonTeachingRoles([]);
+      setNewTNonTeachingDutyEligible(true);
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti(`Dodano nauczyciela: ${newTeacher.first} ${newTeacher.last}`);
@@ -1822,6 +1872,184 @@ export default function KreatorSzkoly({
         showNoti('Nauczyciel został usunięty');
       }
     );
+  };
+
+  // --- Funkcje i procedury personelu niepedagogicznego (SupportStaff) ---
+  const updateSAbbrAuto = (f: string, l: string) => {
+    if (!isSAbbrManual) {
+      const auto = genAbbr(f, l);
+      const currentList = appState.supportStaff || [];
+      const safe = ensureUniqueAbbr(auto, currentList.filter(s => s.id !== editingStaffId).map(s => s.abbr));
+      setNewSAbbr(safe);
+    }
+  };
+
+  const handleResetStaffForm = () => {
+    setEditingStaffId(null);
+    setNewSFirst('');
+    setNewSLast('');
+    setNewSAbbr('');
+    setIsSAbbrManual(false);
+    setNewSRole('Woźny / Ochrona');
+    setNewSCustomRole('');
+    setNewSWeeklyHours(40);
+    setNewSDutyEligible(true);
+    setNewSNotes('');
+    setNewSInactive(false);
+    setNewSInactiveComment('');
+    setNewSAvailability([]);
+    const nextCol = PALETTE_COLORS[((appState.supportStaff?.length || 0) + 1) % PALETTE_COLORS.length] || '#475569';
+    setNewSColor(nextCol);
+  };
+
+  const handleStartEditSupportStaff = (st: SupportStaff) => {
+    setEditingStaffId(st.id);
+    setNewSFirst(st.first);
+    setNewSLast(st.last);
+    setNewSAbbr(st.abbr);
+    setIsSAbbrManual(true);
+    const standardRoles = ['Woźny / Ochrona', 'Pomoc nauczyciela', 'Asystent ucznia', 'Szatniarz', 'Pracownik obsługi', 'Pracownik stołówki', 'Konserwator', 'Pielęgniarka szkolna'];
+    if (standardRoles.includes(st.role)) {
+      setNewSRole(st.role);
+      setNewSCustomRole('');
+    } else {
+      setNewSRole('Inne');
+      setNewSCustomRole(st.role);
+    }
+    setNewSWeeklyHours(st.weeklyHours ?? 40);
+    setNewSDutyEligible(st.dutyEligible !== false);
+    setNewSNotes(st.notes || '');
+    setNewSColor(st.color || '#475569');
+    setNewSInactive(st.inactive || false);
+    setNewSInactiveComment(st.inactiveComment || '');
+
+    if (st.availability && st.availability.length > 0) {
+      setNewSAvailability(st.availability);
+    } else {
+      const defaultAvail: string[] = [];
+      const hList = appState.planLekcji.hours && appState.planLekcji.hours.length > 0 
+        ? appState.planLekcji.hours 
+        : (hoursList && hoursList.length > 0 ? hoursList : [{ num: 1, start: '08:00', end: '08:45' }]);
+      for (let day = 0; day < 5; day++) {
+        hList.forEach(h => {
+          defaultAvail.push(`${day}-${h.num}`);
+        });
+      }
+      setNewSAvailability(defaultAvail);
+    }
+  };
+
+  const setAllStaffAvailability = (active: boolean) => {
+    if (active) {
+      const list: string[] = [];
+      const hList = appState.planLekcji.hours && appState.planLekcji.hours.length > 0 ? appState.planLekcji.hours : hoursList;
+      for (let d = 0; d < 5; d++) {
+        hList.forEach(h => {
+          list.push(`${d}-${h.num}`);
+        });
+      }
+      setNewSAvailability(list);
+    } else {
+      setNewSAvailability([]);
+    }
+  };
+
+  const handleAddSupportStaff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSFirst.trim() || !newSLast.trim() || !newSAbbr.trim()) return;
+
+    const formattedAbbr = newSAbbr.trim().toUpperCase();
+    const currentList = appState.supportStaff || [];
+
+    if (currentList.some(s => s.id !== editingStaffId && s.abbr.toUpperCase() === formattedAbbr)) {
+      showNoti('Ten identyfikator pracownika jest już zajęty!', 'info');
+      return;
+    }
+
+    const finalRole = newSRole === 'Inne' ? (newSCustomRole.trim() || 'Pracownik obsługi') : newSRole;
+
+    if (editingStaffId) {
+      const updated = currentList.map(s => {
+        if (s.id === editingStaffId) {
+          return {
+            ...s,
+            first: newSFirst.trim(),
+            last: newSLast.trim(),
+            abbr: formattedAbbr,
+            role: finalRole,
+            weeklyHours: newSWeeklyHours === '' ? 40 : Number(newSWeeklyHours),
+            dutyEligible: newSDutyEligible,
+            notes: newSNotes.trim(),
+            color: newSColor,
+            availability: newSAvailability,
+            inactive: newSInactive,
+            inactiveComment: newSInactiveComment.trim()
+          };
+        }
+        return s;
+      });
+
+      onChangeAppState({
+        ...appState,
+        supportStaff: updated
+      });
+      handleResetStaffForm();
+      showNoti('Zaktualizowano dane pracownika niepedagogicznego');
+    } else {
+      const newStaff: SupportStaff = {
+        id: 'st_' + uid(),
+        first: newSFirst.trim(),
+        last: newSLast.trim(),
+        abbr: formattedAbbr,
+        role: finalRole,
+        weeklyHours: newSWeeklyHours === '' ? 40 : Number(newSWeeklyHours),
+        dutyEligible: newSDutyEligible,
+        notes: newSNotes.trim(),
+        color: newSColor,
+        availability: newSAvailability,
+        inactive: newSInactive,
+        inactiveComment: newSInactiveComment.trim()
+      };
+
+      onChangeAppState({
+        ...appState,
+        supportStaff: [...currentList, newStaff]
+      });
+      handleResetStaffForm();
+      showNoti(`Dodano pracownika: ${newStaff.first} ${newStaff.last}`);
+    }
+  };
+
+  const handleRemoveSupportStaff = (id: string) => {
+    triggerConfirm(
+      'Usuwanie pracownika',
+      'Czy na pewno chcesz usunąć tego pracownika personelu szkoły?',
+      () => {
+        const nextList = (appState.supportStaff || []).filter(s => s.id !== id);
+        onChangeAppState({
+          ...appState,
+          supportStaff: nextList
+        });
+        if (editingStaffId === id) {
+          handleResetStaffForm();
+        }
+        showNoti('Pracownik został usunięty');
+      }
+    );
+  };
+
+  const handleToggleStaffDutyEligible = (id: string) => {
+    const nextList = (appState.supportStaff || []).map(s => {
+      if (s.id === id) {
+        return { ...s, dutyEligible: !s.dutyEligible };
+      }
+      return s;
+    });
+    onChangeAppState({
+      ...appState,
+      supportStaff: nextList
+    });
+    showNoti('Zaktualizowano status dyżurowania pracownika');
   };
 
   // --- Step 7 States (Corridors / Duties) ---
@@ -2556,6 +2784,7 @@ export default function KreatorSzkoly({
       if (pensumFilter === 'reduced') return (t.maxHours ?? 18) < 18;
       if (pensumFilter === 'standard') return (t.maxHours ?? 18) === 18;
       if (pensumFilter === 'inactive') return t.inactive;
+      if (pensumFilter === 'non_teaching') return Boolean((t.nonTeachingHours && t.nonTeachingHours > 0) || (t.nonTeachingRoles && t.nonTeachingRoles.length > 0));
       
       return true;
     });
@@ -2567,6 +2796,7 @@ export default function KreatorSzkoly({
     let reduced = 0;
     let standard = 0;
     let inactive = 0;
+    let nonTeaching = 0;
 
     appState.teachers.forEach(t => {
       all++;
@@ -2574,10 +2804,19 @@ export default function KreatorSzkoly({
       if ((t.maxHours ?? 18) < 18) reduced++;
       if ((t.maxHours ?? 18) === 18) standard++;
       if (t.inactive) inactive++;
+      if ((t.nonTeachingHours && t.nonTeachingHours > 0) || (t.nonTeachingRoles && t.nonTeachingRoles.length > 0)) nonTeaching++;
     });
 
-    return { all, administrative, reduced, standard, inactive };
+    return { all, administrative, reduced, standard, inactive, nonTeaching };
   }, [appState.teachers]);
+
+  const filteredSupportStaff = useMemo(() => {
+    return (appState.supportStaff || []).filter(s => {
+      const q = staffSearchQuery.toLowerCase();
+      const fullName = `${s.first} ${s.last} ${s.abbr} ${s.role} ${s.notes || ''}`.toLowerCase();
+      return fullName.includes(q);
+    });
+  }, [appState.supportStaff, staffSearchQuery]);
 
   // --- Real-time statistics summaries for assignments ---
   const teacherTotalHoursMap = useMemo(() => {
@@ -4403,10 +4642,40 @@ export default function KreatorSzkoly({
             <div className="max-w-7xl mx-auto space-y-6">
               <div className="border-b border-slate-200 pb-4">
                 <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 6</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">🧑‍🏫 Kadra nauczycielska i limity godzin</h2>
-                <p className="text-xs text-slate-500 mt-1">Dodaj nauczycieli podając ich imię, nazwisko, inicjały tablicowe oraz maksymalną dopuszczalną liczbę godzin etatowych (pensum).</p>
+                <h2 className="text-xl font-black text-slate-900 mt-2">🧑‍🏫 Kadra nauczycielska, czynności poza tablicą i personel szkoły</h2>
+                <p className="text-xs text-slate-500 mt-1">Zarządzaj nauczycielami (dydaktyka, pensum oraz czynności poza tablicą jak świetlica czy pedagog) oraz personelem niepedagogicznym pełniącym dyżury.</p>
+
+                {/* Sub-moduły: Nauczyciele i specjaliści vs Pracownicy niepedagogiczni */}
+                <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setStaffTab('teachers')}
+                    className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                      staffTab === 'teachers'
+                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                    }`}
+                  >
+                    <GraduationCap size={15} />
+                    <span>Nauczyciele i specjaliści ({appState.teachers.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStaffTab('support_staff')}
+                    className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+                      staffTab === 'support_staff'
+                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                    }`}
+                  >
+                    <Users size={15} />
+                    <span>Pracownicy niepedagogiczni ({appState.supportStaff?.length || 0})</span>
+                  </button>
+                </div>
               </div>
 
+              {staffTab === 'teachers' && (
+                <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
                 {/* Form column */}
@@ -4546,6 +4815,103 @@ export default function KreatorSzkoly({
                         </div>
                       )}
                     </div>
+
+                    {/* Czynności i zadania realizowane poza tablicą (świetlica, pedagog, biblioteka, itp.) */}
+                    <div className="bg-amber-50/50 p-2.5 rounded-lg border border-amber-200 space-y-2 mt-1">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                          checked={newTHasNonTeaching}
+                          onChange={(e) => {
+                            setNewTHasNonTeaching(e.target.checked);
+                            if (!e.target.checked) {
+                              setNewTNonTeachingHours(0);
+                              setNewTNonTeachingRoles([]);
+                            }
+                          }}
+                        />
+                        <span className="text-xs font-black text-amber-900">📚 Czynności poza tablicą (świetlica, pedagog, biblioteka)</span>
+                      </label>
+                      {newTHasNonTeaching && (
+                        <div className="space-y-2 pt-1 border-t border-amber-200/80">
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-amber-900 font-bold block">
+                              Wymiar godzin poza tablicą (godz./tydzień):
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={0}
+                                max={40}
+                                placeholder="15"
+                                className="w-20 px-2.5 py-1 border border-amber-300 bg-white rounded-lg text-xs outline-none font-bold text-amber-900"
+                                value={newTNonTeachingHours}
+                                onChange={(e) => setNewTNonTeachingHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
+                              />
+                              <span className="text-[10px] text-amber-800 font-bold">godz./tydz.</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-amber-900 font-bold block">
+                              Stanowisko / charakter zadań:
+                            </label>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {[
+                                { id: 'swietlica', label: 'Świetlica', icon: '🧸' },
+                                { id: 'biblioteka', label: 'Biblioteka', icon: '📖' },
+                                { id: 'pedagog', label: 'Pedagog', icon: '🧠' },
+                                { id: 'psycholog', label: 'Psycholog', icon: '💡' },
+                                { id: 'logopeda', label: 'Logopeda', icon: '🗣️' },
+                                { id: 'wspomagajacy', label: 'Wspomagający', icon: '🤝' },
+                                { id: 'terapeuta', label: 'Terapeuta', icon: '🌱' }
+                              ].map(role => {
+                                const checked = newTNonTeachingRoles.includes(role.id);
+                                return (
+                                  <label
+                                    key={role.id}
+                                    className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] cursor-pointer font-bold select-none transition ${
+                                      checked
+                                        ? 'bg-amber-100 border-amber-400 text-amber-900'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="sr-only"
+                                      checked={checked}
+                                      onChange={() => {
+                                        if (checked) {
+                                          setNewTNonTeachingRoles(newTNonTeachingRoles.filter(r => r !== role.id));
+                                        } else {
+                                          setNewTNonTeachingRoles([...newTNonTeachingRoles, role.id]);
+                                        }
+                                      }}
+                                    />
+                                    <span>{role.icon}</span>
+                                    <span className="truncate">{role.label}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                            <input
+                              type="checkbox"
+                              className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                              checked={newTNonTeachingDutyEligible}
+                              onChange={(e) => setNewTNonTeachingDutyEligible(e.target.checked)}
+                            />
+                            <span className="text-[10px] font-bold text-amber-900">
+                              🛡️ Wliczaj do puli dyżurów korytarzowych
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                    </div>
+
 
                     {!newTInactive && inactiveTeachersLessonsList.length > 0 && (
                       <div className="bg-indigo-50/50 p-2.5 rounded-lg border border-indigo-100 space-y-2 mt-1 text-[11px]">
@@ -4830,6 +5196,17 @@ export default function KreatorSzkoly({
                           {pensumCounts.inactive}
                         </span>
                       </button>
+
+                      <button
+                        onClick={() => setPensumFilter('non_teaching')}
+                        className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 ${
+                          pensumFilter === 'non_teaching'
+                            ? 'bg-amber-600 text-white'
+                            : 'bg-slate-50 text-amber-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        📚 Poza tablicą ({pensumCounts.nonTeaching})
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -4882,6 +5259,11 @@ export default function KreatorSzkoly({
                                 ) : (
                                   <span className="text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0">
                                     🏫 Nauczyciel
+                                  </span>
+                                )}
+                                {Boolean((t.nonTeachingHours && t.nonTeachingHours > 0) || (t.nonTeachingRoles && t.nonTeachingRoles.length > 0)) && (
+                                  <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded font-black uppercase tracking-wider shrink-0" title={`Czynności poza tablicą: ${t.nonTeachingRoles?.join(', ') || 'Brak ról'}`}>
+                                    📚 Poza tablicą: {t.nonTeachingHours || 0}h
                                   </span>
                                 )}
                                 {t.inactive ? (
@@ -5082,6 +5464,406 @@ export default function KreatorSzkoly({
                   </div>
                 </div>
               </div>
+            </>
+          )}
+
+          {staffTab === 'support_staff' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Kolumna Formularza */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      {editingStaffId ? '📝 Edytuj dane pracownika' : '➕ Dodaj pracownika niepedagogicznego'}
+                    </h3>
+                    {editingStaffId && (
+                      <button
+                        type="button"
+                        onClick={handleResetStaffForm}
+                        className="text-[10px] text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+                      >
+                        Anuluj
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mb-3 leading-snug">
+                    Personel obsługi, pomocy nauczyciela, woźni i asystenci włączani do dyżurów korytarzowych, stołówkowych i szatniowych.
+                  </p>
+
+                  <form onSubmit={handleAddSupportStaff} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold">Imię</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="np. Marian"
+                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                        value={newSFirst}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewSFirst(val);
+                          updateSAbbrAuto(val, newSLast);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold">Nazwisko</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="np. Kowal"
+                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                        value={newSLast}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewSLast(val);
+                          updateSAbbrAuto(newSFirst, val);
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold">Identyfikator / Skrót (Abbr)</label>
+                      <input 
+                        type="text" 
+                        required
+                        placeholder="np. MKOW"
+                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-slate-800"
+                        value={newSAbbr}
+                        onChange={(e) => {
+                          setNewSAbbr(e.target.value.toUpperCase());
+                          setIsSAbbrManual(true);
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold">Stanowisko / Rola w szkole</label>
+                      <select
+                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-medium text-slate-800"
+                        value={newSRole}
+                        onChange={(e) => setNewSRole(e.target.value)}
+                      >
+                        <option value="Woźny / Ochrona">🚪 Woźny / Ochrona</option>
+                        <option value="Pomoc nauczyciela">🤝 Pomoc nauczyciela</option>
+                        <option value="Asystent ucznia">🎒 Asystent ucznia</option>
+                        <option value="Szatniarz">🧥 Szatniarz</option>
+                        <option value="Pracownik obsługi">🧹 Pracownik obsługi</option>
+                        <option value="Pracownik stołówki">🍲 Pracownik stołówki</option>
+                        <option value="Konserwator">🔧 Konserwator</option>
+                        <option value="Pielęgniarka szkolna">🩺 Pielęgniarka szkolna</option>
+                        <option value="Inne">➕ Inne (wpisz własne)</option>
+                      </select>
+                    </div>
+
+                    {newSRole === 'Inne' && (
+                      <div className="space-y-1">
+                        <label className="text-[9px] text-slate-500 font-bold">Własna nazwa stanowiska</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="np. Instruktor świetlicowy"
+                          className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-medium"
+                          value={newSCustomRole}
+                          onChange={(e) => setNewSCustomRole(e.target.value)}
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold">Wymiar etatu / godzin w tygodniu</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          required
+                          min={1}
+                          max={60}
+                          placeholder="40"
+                          className="w-24 px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
+                          value={newSWeeklyHours}
+                          onChange={(e) => setNewSWeeklyHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
+                        />
+                        <span className="text-[10px] text-slate-500 font-medium">godz./tydz.</span>
+                      </div>
+                    </div>
+
+                    {/* Kolor plakietki */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold block">Kolor plakietki</label>
+                      <div className="grid grid-cols-7 gap-1 p-1.5 border border-slate-200 bg-slate-50 rounded-lg max-h-20 overflow-y-auto">
+                        {PALETTE_COLORS.slice(0, 14).map(c => (
+                          <button
+                            type="button"
+                            key={c}
+                            onClick={() => setNewSColor(c)}
+                            className={`w-5 h-5 rounded-full border transition cursor-pointer ${
+                              newSColor === c ? 'ring-2 ring-blue-500 scale-110 shadow-xs' : 'border-slate-200 hover:scale-105'
+                            }`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Udział w dyżurach */}
+                    <div className="bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-200 space-y-1 mt-1">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                          checked={newSDutyEligible}
+                          onChange={(e) => setNewSDutyEligible(e.target.checked)}
+                        />
+                        <span className="text-xs font-black text-emerald-900">🛡️ Włącz do puli dyżurów korytarzowych</span>
+                      </label>
+                      <p className="text-[9px] text-emerald-700 leading-snug">
+                        Pracownik będzie uwzględniony przez generator dyżurów i widoczny na liście do obsadzenia przerw.
+                      </p>
+                    </div>
+
+                    {/* Dostępność w szkole */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsStaffAvailModalOpen(true)}
+                        className="w-full py-1.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center justify-between cursor-pointer transition"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Calendar size={13} className="text-blue-600" />
+                          <span>Dostępność w szkole</span>
+                        </span>
+                        <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.2 rounded font-black text-slate-700">
+                          {newSAvailability.length > 0 ? `${newSAvailability.length} slotów` : 'Wszystkie godziny'}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Notatki */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-400 font-bold">Notatki / Rejon odpowiedzialności</label>
+                      <input 
+                        type="text" 
+                        placeholder="np. Parter, szatnia, wejście główne"
+                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
+                        value={newSNotes}
+                        onChange={(e) => setNewSNotes(e.target.value)}
+                      />
+                    </div>
+
+                    <button 
+                      type="submit" 
+                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow transition mt-2 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Plus size={14} />
+                      <span>{editingStaffId ? 'Zaktualizuj dane pracownika' : 'Dodaj do personelu'}</span>
+                    </button>
+                  </form>
+                </div>
+
+                {/* Kolumna Listy Pracowników */}
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm md:col-span-2 overflow-hidden flex flex-col">
+                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                    <div className="relative w-full sm:max-w-xs">
+                      <input
+                        type="text"
+                        placeholder="Szukaj personelu..."
+                        className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-white font-medium"
+                        value={staffSearchQuery}
+                        onChange={(e) => setStaffSearchQuery(e.target.value)}
+                      />
+                      <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-3">
+                      <span>Łącznie: <strong className="text-slate-900 font-black">{appState.supportStaff?.length || 0}</strong></span>
+                      <span>W dyżurach: <strong className="text-emerald-700 font-black">{(appState.supportStaff || []).filter(s => s.dutyEligible !== false).length}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
+                    {(filteredSupportStaff || []).map((st) => (
+                      <div key={st.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span 
+                            className="w-9 h-9 text-white font-mono font-black text-[10px] rounded-lg tracking-wider flex items-center justify-center border shadow-xs shrink-0" 
+                            style={{ backgroundColor: st.color || '#475569' }}
+                          >
+                            {st.abbr}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-black text-slate-900 leading-none truncate">
+                                {st.first} {st.last}
+                              </span>
+                              <span className="bg-slate-100 text-slate-700 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 border border-slate-200">
+                                {st.role}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStaffDutyEligible(st.id)}
+                                className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 transition cursor-pointer ${
+                                  st.dutyEligible !== false
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                                    : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                                }`}
+                                title="Kliknij, aby włączyć lub wyłączyć z dyżurów"
+                              >
+                                {st.dutyEligible !== false ? '🛡️ W puli dyżurów' : '⛔ Bez dyżurów'}
+                              </button>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-medium mt-1 flex flex-wrap items-center gap-3">
+                              <span>Wymiar: <strong className="text-slate-700 font-semibold">{st.weeklyHours ?? 40}h/tydz.</strong></span>
+                              {st.notes && <span className="truncate">Rejon: {st.notes}</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <button 
+                            onClick={() => handleStartEditSupportStaff(st)}
+                            className="p-1 px-2 text-slate-400 hover:text-indigo-600 rounded select-none cursor-pointer"
+                            title="Edytuj dane pracownika"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button 
+                            onClick={() => handleRemoveSupportStaff(st.id)}
+                            className="p-1 px-2 text-slate-400 hover:text-rose-500 rounded select-none cursor-pointer"
+                            title="Usuń pracownika"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {(!appState.supportStaff || appState.supportStaff.length === 0) && (
+                      <div className="p-12 text-center space-y-3">
+                        <Users size={32} className="mx-auto text-slate-300" />
+                        <p className="text-xs text-slate-500 font-medium">
+                          Brak zarejestrowanych pracowników niepedagogicznych.
+                        </p>
+                        <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                          Dodaj woźnych, pracowników ochrony, szatniarzy lub pomoce nauczycieli, aby włączyć ich do sprawowania opieki i dyżurów na korytarzach szkolnych.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal dostępności pracownika niepedagogicznego */}
+              {isStaffAvailModalOpen && (() => {
+                const hList = appState.planLekcji.hours && appState.planLekcji.hours.length > 0 
+                  ? appState.planLekcji.hours 
+                  : (hoursList && hoursList.length > 0 ? hoursList : [{ num: 1, start: '08:00', end: '08:45' }]);
+                const days = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
+
+                return (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4">
+                    <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                      <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
+                        <div>
+                          <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                            📅 Dostępność w szkole pracownika ({newSFirst || 'Nowy'} {newSLast})
+                          </h3>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            Zaznacz dni i godziny, w których pracownik jest w szkole i może pełnić dyżur
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsStaffAvailModalOpen(false)}
+                          className="p-1 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700 cursor-pointer"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+
+                      <div className="p-4 overflow-y-auto space-y-3">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setAllStaffAvailability(true)}
+                            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold hover:bg-emerald-100 cursor-pointer"
+                          >
+                            Zaznacz wszystkie
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAllStaffAvailability(false)}
+                            className="px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold hover:bg-rose-100 cursor-pointer"
+                          >
+                            Wyczyść wszystkie
+                          </button>
+                        </div>
+
+                        <table className="w-full text-center border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-slate-100 border-b border-slate-200">
+                              <th className="p-2 text-left text-[10px] text-slate-500 uppercase font-black">Godz.</th>
+                              {days.map((d, dIdx) => (
+                                <th key={dIdx} className="p-2 text-[10px] text-slate-700 uppercase font-black">{d.slice(0, 3)}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {hList.map((h) => (
+                              <tr key={h.num}>
+                                <td className="p-1.5 text-left font-mono font-bold text-[10px] text-slate-500 bg-slate-50/50">
+                                  {h.num}. {h.start}-{h.end}
+                                </td>
+                                {days.map((_, dIdx) => {
+                                  const key = `${dIdx}-${h.num}`;
+                                  const active = newSAvailability.length === 0 || newSAvailability.includes(key);
+                                  return (
+                                    <td key={dIdx} className="p-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          let next: string[];
+                                          if (newSAvailability.length === 0) {
+                                            const allSlots: string[] = [];
+                                            for (let d = 0; d < 5; d++) {
+                                              hList.forEach(hr => allSlots.push(`${d}-${hr.num}`));
+                                            }
+                                            next = allSlots.filter(k => k !== key);
+                                          } else if (newSAvailability.includes(key)) {
+                                            next = newSAvailability.filter(k => k !== key);
+                                          } else {
+                                            next = [...newSAvailability, key];
+                                          }
+                                          setNewSAvailability(next);
+                                        }}
+                                        className={`w-full py-1.5 rounded font-black text-[9px] transition cursor-pointer ${
+                                          active
+                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                            : 'bg-rose-50 text-rose-500 border border-rose-200 line-through'
+                                        }`}
+                                      >
+                                        {active ? '✓ Obecny' : '✗ Niedostępny'}
+                                      </button>
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setIsStaffAvailModalOpen(false)}
+                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+                        >
+                          Zatwierdź godziny
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
               <div className="flex justify-between pt-2">
                 <button onClick={() => setActiveStep(5)} className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
@@ -5284,6 +6066,103 @@ export default function KreatorSzkoly({
                                 </div>
                               )}
                             </div>
+
+                            {/* Czynności i zadania realizowane poza tablicą w modalu */}
+                            <div className="bg-amber-50/50 p-3 rounded-xl border border-amber-200 space-y-2 mt-2 col-span-2">
+                              <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                                  checked={newTHasNonTeaching}
+                                  onChange={(e) => {
+                                    setNewTHasNonTeaching(e.target.checked);
+                                    if (!e.target.checked) {
+                                      setNewTNonTeachingHours(0);
+                                      setNewTNonTeachingRoles([]);
+                                    }
+                                  }}
+                                />
+                                <span className="text-xs font-black text-amber-900">📚 Czynności poza tablicą (świetlica, pedagog, biblioteka)</span>
+                              </label>
+                              {newTHasNonTeaching && (
+                                <div className="space-y-2 pt-1 border-t border-amber-200/80">
+                                  <div className="space-y-1">
+                                    <label className="text-[9px] text-amber-900 font-bold block">
+                                      Wymiar godzin poza tablicą (godz./tydzień):
+                                    </label>
+                                    <div className="flex items-center gap-1.5">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={40}
+                                        placeholder="15"
+                                        className="w-20 px-2.5 py-1 border border-amber-300 bg-white rounded-lg text-xs outline-none font-bold text-amber-900"
+                                        value={newTNonTeachingHours}
+                                        onChange={(e) => setNewTNonTeachingHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
+                                      />
+                                      <span className="text-[10px] text-amber-800 font-bold">godz./tydz.</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <label className="text-[9px] text-amber-900 font-bold block">
+                                      Stanowisko / charakter zadań:
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      {[
+                                        { id: 'swietlica', label: 'Świetlica', icon: '🧸' },
+                                        { id: 'biblioteka', label: 'Biblioteka', icon: '📖' },
+                                        { id: 'pedagog', label: 'Pedagog', icon: '🧠' },
+                                        { id: 'psycholog', label: 'Psycholog', icon: '💡' },
+                                        { id: 'logopeda', label: 'Logopeda', icon: '🗣️' },
+                                        { id: 'wspomagajacy', label: 'Wspomagający', icon: '🤝' },
+                                        { id: 'terapeuta', label: 'Terapeuta', icon: '🌱' }
+                                      ].map(role => {
+                                        const checked = newTNonTeachingRoles.includes(role.id);
+                                        return (
+                                          <label
+                                            key={role.id}
+                                            className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] cursor-pointer font-bold select-none transition ${
+                                              checked
+                                                ? 'bg-amber-100 border-amber-400 text-amber-900'
+                                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              className="sr-only"
+                                              checked={checked}
+                                              onChange={() => {
+                                                if (checked) {
+                                                  setNewTNonTeachingRoles(newTNonTeachingRoles.filter(r => r !== role.id));
+                                                } else {
+                                                  setNewTNonTeachingRoles([...newTNonTeachingRoles, role.id]);
+                                                }
+                                              }}
+                                            />
+                                            <span>{role.icon}</span>
+                                            <span className="truncate">{role.label}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+
+                                  <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                                    <input
+                                      type="checkbox"
+                                      className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                                      checked={newTNonTeachingDutyEligible}
+                                      onChange={(e) => setNewTNonTeachingDutyEligible(e.target.checked)}
+                                    />
+                                    <span className="text-[10px] font-bold text-amber-900">
+                                      🛡️ Wliczaj do puli dyżurów korytarzowych
+                                    </span>
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+
 
                             {!newTInactive && inactiveTeachersLessonsList.length > 0 && (
                               <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-150 space-y-2.5 mt-2 col-span-2">

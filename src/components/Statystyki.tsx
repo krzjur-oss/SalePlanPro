@@ -515,8 +515,31 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
 
   // --- Calculation: Duties statistics ---
   const teacherDutiesStats = useMemo(() => {
+    const allDutyPersons = [
+      ...pl.teachers.map(t => ({
+        id: t.id,
+        first: t.first,
+        last: t.last,
+        abbr: t.abbr,
+        color: t.color,
+        isStaff: false,
+        role: (t.nonTeachingRoles && t.nonTeachingRoles.length > 0) ? t.nonTeachingRoles.join(', ') : 'Nauczyciel',
+        nonTeachingHours: t.nonTeachingHours
+      })),
+      ...(appState.supportStaff || []).map(s => ({
+        id: s.id,
+        first: s.first,
+        last: s.last,
+        abbr: s.abbr,
+        color: s.color,
+        isStaff: true,
+        role: s.role || 'Pracownik obsługi',
+        nonTeachingHours: s.weeklyHours
+      }))
+    ];
+
     const countMap: Record<string, number> = {};
-    pl.teachers.forEach(t => {
+    allDutyPersons.forEach(t => {
       countMap[t.abbr] = 0;
     });
 
@@ -547,7 +570,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
 
     const maxMinutesLimit = appState.dyzury.settings.maxMinutesPerTeacher || 60;
 
-    return pl.teachers.map(t => {
+    return allDutyPersons.map(t => {
       const count = countMap[t.abbr] || 0;
       const mins = minutesMap[t.abbr] || 0;
       return {
@@ -558,7 +581,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
         isOverLimit: mins > maxMinutesLimit
       };
     }).sort((a, b) => b.dutiesMinutes - a.dutiesMinutes);
-  }, [pl.teachers, appState.dyzury]);
+  }, [pl.teachers, appState.supportStaff, appState.dyzury]);
 
   // --- Calculation: Break-wise Duty Demand & Peak Hours ---
   const breakDemandStats = useMemo(() => {
@@ -854,7 +877,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
         const dayIdx = parseInt(parts[1], 10);
         const breakIdx = parseInt(parts[2], 10);
 
-        const teacher = pl.teachers.find(t => t.abbr === teacherAbbr);
+        const teacher = pl.teachers.find(t => t.abbr === teacherAbbr) || (appState.supportStaff || []).find(s => s.abbr === teacherAbbr);
         const prw = appState.dyzury.przerwy[breakIdx];
         const breakLabel = prw ? `${prw.name} (${prw.start}-${prw.end})` : `Przerwa nr ${breakIdx + 1}`;
 
@@ -874,7 +897,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
     });
 
     return overlaps;
-  }, [appState.dyzury, pl.teachers]);
+  }, [appState.dyzury, pl.teachers, appState.supportStaff]);
 
   const classConflicts = useMemo(() => {
     const conflicts: Array<{

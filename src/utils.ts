@@ -4,7 +4,7 @@
  * Opis: Generatory identyfikatorów, skrótów przedmiotów i nazwisk, konwertery kolorów oraz zestaw danych demonstracyjnych.
  */
 
-import { AppState, SchedData, SchedCell, Floor, Segment, Room, ClassRoom, Class, Teacher, Subject, Assignment } from './types';
+import { AppState, SchedData, SchedCell, Floor, Segment, Room, ClassRoom, Class, Teacher, SupportStaff, Subject, Assignment } from './types';
 
 export function uid(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID().replace(/-/g, '');
@@ -236,10 +236,37 @@ export function getDemoAppState(): AppState {
   const teachers: Teacher[] = [
     { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JKOW', maxHours: 18, color: '#3b82f6' },
     { id: 't2', first: 'Anna', last: 'Nowak', abbr: 'ANOW', maxHours: 18, color: '#10b981' },
-    { id: 't3', first: 'Maria', last: 'Zielińska', abbr: 'MZIE', maxHours: 20, color: '#f59e0b' },
+    { id: 't3', first: 'Maria', last: 'Zielińska', abbr: 'MZIE', maxHours: 10, nonTeachingHours: 10, nonTeachingRoles: ['swietlica'], nonTeachingDutyEligible: true, color: '#f59e0b' },
     { id: 't4', first: 'Piotr', last: 'Wiśniewski', abbr: 'PWIS', maxHours: 18, color: '#ef4444' },
     { id: 't5', first: 'Krzysztof', last: 'Wójcik', abbr: 'KWOJ', maxHours: 18, color: '#8b5cf6' },
+    { id: 't6', first: 'Ewa', last: 'Kaczmarek', abbr: 'EKAC', maxHours: 0, nonTeachingHours: 20, nonTeachingRoles: ['pedagog', 'psycholog'], nonTeachingDutyEligible: true, color: '#06b6d4' },
   ];
+
+  const supportStaff: SupportStaff[] = [
+    {
+      id: 'st1',
+      first: 'Marian',
+      last: 'Kowal',
+      abbr: 'MKOW',
+      role: 'Woźny / Ochrona',
+      color: '#475569',
+      weeklyHours: 40,
+      dutyEligible: true,
+      availability: ['0-1', '0-2', '0-3', '0-4', '0-5', '1-1', '1-2', '1-3', '1-4', '1-5', '2-1', '2-2', '2-3', '2-4', '2-5', '3-1', '3-2', '3-3', '3-4', '3-5', '4-1', '4-2', '4-3', '4-4', '4-5'],
+    },
+    {
+      id: 'st2',
+      first: 'Teresa',
+      last: 'Lis',
+      abbr: 'TLIS',
+      role: 'Pomoc nauczyciela / Szatniarz',
+      color: '#0d9488',
+      weeklyHours: 30,
+      dutyEligible: true,
+      availability: ['0-1', '0-2', '0-3', '0-4', '1-1', '1-2', '1-3', '1-4', '2-1', '2-2', '2-3', '2-4', '3-1', '3-2', '3-3', '3-4', '4-1', '4-2', '4-3', '4-4'],
+    }
+  ];
+
 
   const subjects: Subject[] = [
     { id: 's1', name: 'Matematyka', short: 'MAT', color: '#2563eb' },
@@ -367,6 +394,7 @@ export function getDemoAppState(): AppState {
     floors,
     classes: baseClasses,
     teachers: teachers,
+    supportStaff: supportStaff,
     subjects: subjects,
     homerooms: {},
     planLekcji: {

@@ -1,4 +1,4 @@
-# SalePlan Pro v3.9.10 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.9.11 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -47,6 +47,12 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 *   **Dyżury Adaptacyjne i Odprowadzające w Klasach 1**:
     *   **Dyżur w sali lekcyjnej**: opieka wychowawców i nauczycieli edukacji wczesnoszkolnej w salach lekcyjnych klas pierwszych podczas przerw, chroniąca przed równoczesnym wyznaczeniem dyżuru na korytarzu.
     *   **Dyżur odprowadzający**: dedykowany czas (np. 15 minut) na bezpieczne odprowadzenie uczniów do szatni lub świetlicy po zakończeniu zajęć.
+*   **Zadania Poza Tablicą i Personel Niepedagogiczny w Puli Dyżurów (v3.9.11)**:
+    *   **Nauczyciele z zadaniami poza tablicą (moduł Nauczyciele)**: ewidencja czynności świetlicowych, bibliotecznych, wsparcia pedagogicznego, psychologicznego, logopedycznego i współorganizującego (wspomagającego) bezpośrednio w profilu nauczyciela w Kreatorze Szkoły, z określeniem tygodniowej liczby godzin oraz przełącznikiem udziału w dyżurach korytarzowych.
+    *   **Dedykowany moduł pracowników niepedagogicznych**: autonomiczny rejestr pracowników obsługi, asystentów ucznia, woźnych i szatniarzy, zawierający stanowisko, tygodniowy wymiar godzin (Kodeks Pracy) oraz indywidualną siatkę dyspozycyjności.
+    *   **Sprawiedliwe bilansowanie limitów dyżurów**: algorytm przelicza obciążenie według ekwiwalentu pełnego etatu (FTE) – 18h pensum dla nauczycieli (Karta Nauczyciela) oraz 40h dla personelu obsługi (Kodeks Pracy), gwarantując proporcjonalne przydziały minutowe.
+    *   **Inteligentne dopasowanie obecności i rekomendacje**: pracownicy bez lekcji tablicowych są kwalifikowani do dyżurów na podstawie zdefiniowanej dostępności w szkole, a okno ręcznego przydziału oraz generator automatyczny wyróżniają ich role czytelnymi odznakami i podpowiedziami ergonomii.
+    *   **Wielokanałowe filtry w panelu bilansu**: boczny panel umożliwia szybkie filtrowanie kadry: *Wszyscy*, *Tablicowi*, *Poza tablicą / specjaliści* oraz *Obsługa*.
 *   **Ergonomia i Przewijanie Tabeli Dyżurów (v3.9.8)**:
     *   Niezależne przewijanie horyzontalne (`overflow-x-auto`) i wertykalne (`overflow-y-auto`) z zamrożoną, przyklejoną kolumną przerw (`sticky left-0`).
     *   Przełącznik zwijania bocznego panelu bilansu pozwalający rozszerzyć siatkę dyżurów na pełną szerokość ekranu.

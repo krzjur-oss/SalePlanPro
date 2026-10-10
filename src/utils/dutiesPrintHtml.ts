@@ -26,7 +26,9 @@ export function generateDutiesHtml(appState: AppState, schedData: SchedData = {}
       places.forEach(place => {
         const dutyKey = `${place.id}|${dayIdx}|${p.num}`;
         const entry = appState.dyzury?.harmonogram?.[dutyKey];
-        const t = entry?.teacherAbbr ? appState.teachers?.find(tch => tch.abbr === entry.teacherAbbr) : null;
+        const t = entry?.teacherAbbr 
+          ? (appState.teachers?.find(tch => tch.abbr === entry.teacherAbbr) || (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr)) 
+          : null;
         
         let cellContent = '-';
         if (entry?.teacherAbbr) {

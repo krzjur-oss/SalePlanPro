@@ -3445,7 +3445,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                   {appState.dyzury.miejsca.map(place => {
                                     const dutyKey = `${place.id}|${dayIdx}|${przerwa.num}`;
                                     const entry = appState.dyzury.harmonogram[dutyKey];
-                                    const t = entry?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) : null;
+                                    const t = entry?.teacherAbbr 
+                                      ? (appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) || (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr)) 
+                                      : null;
 
                                     return (
                                       <td key={place.id} className="border border-slate-300 p-2 text-center align-middle">
@@ -3675,7 +3677,9 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                                         {appState.dyzury.miejsca.map(place => {
                                           const dutyKey = `${place.id}|${dayIdx}|${przerwa.num}`;
                                           const entry = appState.dyzury.harmonogram[dutyKey];
-                                          const t = entry?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) : null;
+                                          const t = entry?.teacherAbbr 
+                                            ? (appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) || (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr)) 
+                                            : null;
                                           const teacherId = t?.id || entry?.teacherAbbr || '';
 
                                           // Resolve SchedData lessons directly before and after

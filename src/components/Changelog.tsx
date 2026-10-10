@@ -30,11 +30,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.11',
+      date: 'Październik 2026',
+      title: 'Ewidencja Zadań Poza Tablicą w Module Nauczyciele, Moduł Personelu Niepedagogicznego i Integracja z Pulą Dyżurów',
+      description: 'Kompleksowa obsługa pracowników szkoły nieprowadzących tradycyjnych lekcji tablicowych: ewidencja czynności poza tablicą (świetlica, biblioteka, pedagog, psycholog, logopeda, wspomagający) w profilu nauczyciela, dedykowany moduł personelu niepedagogicznego (obsługa, asystenci, woźni) oraz sprawiedliwe bilansowanie ich obecności w puli dyżurów korytarzowych.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Zadania poza tablicą w module Nauczyciele: Ewidencja czynności świetlicowych, bibliotecznych i wsparcia pedagogiczno-psychologicznego bezpośrednio w profilu nauczyciela z tygodniową pulą godzin i statusem udziału w dyżurach.', badgeText: 'Nauczyciele & Specjaliści' },
+        { type: 'feature', text: 'Dedykowany moduł pracowników niepedagogicznych: Osobna ewidencja dla personelu obsługi, woźnych, asystentów ucznia i szatniarzy w Kreatorze Szkoły z określeniem wymiaru etatu, stanowiska i siatki dostępności.', badgeText: 'Personel niepedagogiczny' },
+        { type: 'feature', text: 'Pełna integracja w silniku dyżurów (Dyzury.tsx): Zunifikowana pula personelu uwzględniająca godziny tablicowe, czynności poza tablicą oraz etat pracowników obsługi do proporcjonalnego wyznaczania limitów minutowych dyżurów.', badgeText: 'Silnik dyżurów' },
+        { type: 'improvement', text: 'Inteligentna weryfikacja obecności w szkole: Obecność personelu na przerwach międzylekcyjnych sprawdzana na podstawie lekcji lub indywidualnej siatki dostępności, z wyróżnieniem ról przy ręcznym i automatycznym przydziale.', badgeText: 'Dostępność i Ergonomia' },
+        { type: 'improvement', text: 'Wielokanałowe filtry i bilans obciążenia: Boczny panel bilansu dyżurów z podziałem na nauczycieli tablicowych, specjalistów poza tablicą i obsługę, a także pełne wsparcie w modułach Wydruków, Statystyk i raportach HTML.', badgeText: 'Raporty i Statystyki' }
+      ]
+    },
+    {
       version: 'v3.9.10',
       date: 'Październik 2026',
       title: 'Szczegółowa Identyfikacja Karty i Podgląd Zmian w Oknie Równoległej Edycji (Konflikt Kart)',
       description: 'Rozszerzenie okna dialogowego wykrywania równoległej edycji w wielu kartach o precyzyjne wskazanie karty dokonującej zapisu (nazwa modułu, etykieta karty, dokładny czas) oraz zaawansowany silnik różnicowy pokazujący bilans i szczegółową listę wprowadzonych zmian (lekcje, dyżury, obsada, nauczyciele, klasy, sale i plan sal).',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Wskazanie karty dokonującej zmian: Okno konfliktu precyzyjnie informuje, w której karcie zapisano nowszą wersję (np. Karta: Dyżury Nauczycielskie, Karta: Plan Klas, Karta: Kreator Szkoły), z jakim modułem, czasem zapisu (np. „15 s temu”) oraz porównaniem rewizji.', badgeText: 'Identyfikacja karty' },
         { type: 'feature', text: 'Zaawansowany silnik różnicowy (Conflict Diff): Obliczanie i prezentacja dokładnych różnic pomiędzy bieżącą kartą a wersją zapisaną w bazie (z podziałem na pigułki bilansu: lekcje, dyżury, nauczyciele, oddziały, sale, uczniowie SPE).', badgeText: 'Silnik różnicowy' },

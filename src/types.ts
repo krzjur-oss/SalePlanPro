@@ -50,7 +50,31 @@ export interface Teacher {
   preferredRooms?: string[]; // Lista preferowanych kluczy kolumn sal (np. ["f0_s0_104"])
   isAdministrative?: boolean;
   administrativeRole?: string;
+  // Czynności i zadania realizowane poza tablicą (świetlica, pedagog, biblioteka, psycholog, logopeda, wspomagający)
+  nonTeachingHours?: number; // Liczba godzin tygodniowo zadań poza tablicą
+  nonTeachingRoles?: string[]; // Identyfikatory ról poza tablicą: 'swietlica' | 'biblioteka' | 'pedagog' | 'psycholog' | 'logopeda' | 'wspomagajacy' | 'terapeuta'
+  nonTeachingDutyEligible?: boolean; // Czy nauczyciel bierze udział w dyżurach z tytułu godzin poza tablicą (domyślnie true)
 }
+
+/**
+ * Pracownik niepedagogiczny (obsługa, asystenci, woźni, personel wsparcia)
+ * Może pełnić dyżury na korytarzach, stołówkach, w szatniach i wejściach do szkoły.
+ */
+export interface SupportStaff {
+  id: string;
+  first: string;
+  last: string;
+  abbr: string; // Unikalny identyfikator / skrót (np. W1, AS1, SZ1)
+  role: string; // Stanowisko, np. 'Woźny / Ochrona', 'Pomoc nauczyciela', 'Asystent ucznia', 'Szatniarz', 'Pracownik obsługi'
+  color?: string;
+  weeklyHours?: number; // Tygodniowy wymiar czasu pracy w szkole (np. 40, 20)
+  availability?: string[]; // Format: "dayIndex-hourNum" (np. "0-1") oznaczający obecność w szkole
+  dutyEligible?: boolean; // Czy bierze udział w dyżurach korytarzowych / szkolnych (domyślnie true)
+  notes?: string;
+  inactive?: boolean;
+  inactiveComment?: string;
+}
+
 
 export interface SchoolGroup {
   id: string;
@@ -364,6 +388,7 @@ export interface AppState {
   floors: Floor[];
   classes: Class[]; // Klasy w Planie Sal
   teachers: Teacher[]; // Nauczyciele w Planie Sal
+  supportStaff?: SupportStaff[]; // Pracownicy niepedagogiczni (obsługa, asystenci, woźni dyżurujący)
   subjects: Subject[]; // Przedmioty w Planie Sal
   homerooms: HomeroomState;
   planLekcji: PlanLekcjiState;

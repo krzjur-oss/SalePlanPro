@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState, SchedData, SchedCell, Teacher } from '../types';
+import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState, SchedData, SchedCell, Teacher, SupportStaff } from '../types';
 import { esc, colKey, flattenColumns, uid } from '../utils';
 import { 
   Shield, Timer, RefreshCcw, Trash2, Edit3, Plus, Settings, Check, HelpCircle 
@@ -31,6 +31,32 @@ const getBreakDuration = (p: Przerwa): number => {
   return diff < 0 ? diff + 24 * 60 : diff;
 };
 
+export interface DutyPerson {
+  id: string;
+  first: string;
+  last: string;
+  abbr: string;
+  color?: string;
+  isStaff: boolean;
+  role: string;
+  nonTeachingRoles?: string[];
+  nonTeachingHours?: number;
+  weeklyHours?: number;
+  availability?: string[];
+  inactive?: boolean;
+  dutyEligible: boolean;
+}
+
+export const NON_TEACHING_ROLE_NAMES: Record<string, string> = {
+  swietlica: 'Wychowawca świetlicy',
+  biblioteka: 'Bibliotekarz',
+  pedagog: 'Pedagog szkolny / specjalny',
+  psycholog: 'Psycholog',
+  logopeda: 'Logopeda',
+  wspomagajacy: 'Nauczyciel współorganizujący',
+  terapeuta: 'Terapeuta pedagogiczny',
+};
+
 interface DyzuryProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
@@ -50,6 +76,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   }, [presentationMode, activeTab]);
   const [activeDay, setActiveDay] = useState<number>(0);
   const [showStatsSidebar, setShowStatsSidebar] = useState<boolean>(true);
+  const [statsRoleFilter, setStatsRoleFilter] = useState<'all' | 'teaching' | 'non_teaching' | 'support_staff'>('all');
   const [draggedTeacher, setDraggedTeacher] = useState<{ miejsceId: string; przerwa: number } | null>(null);
 
   // Edit / Add forms
@@ -114,20 +141,80 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
   // ── LOOKUPS & CALCULATIONS ──
 
-  // Excluded teachers set
+  // Pełna zunifikowana lista personelu szkoły biorącego udział w życiu placówki
+  const allPersonnel = useMemo<DutyPerson[]>(() => {
+    const list: DutyPerson[] = [];
+
+    // 1. Nauczyciele (zarówno tablicowi, jak i realizujący zadania poza tablicą)
+    appState.teachers.forEach(t => {
+      const hasNonTeaching = Boolean((t.nonTeachingHours && t.nonTeachingHours > 0) || (t.nonTeachingRoles && t.nonTeachingRoles.length > 0));
+      const roleStr = hasNonTeaching 
+        ? (t.nonTeachingRoles && t.nonTeachingRoles.length > 0
+            ? t.nonTeachingRoles.map(r => NON_TEACHING_ROLE_NAMES[r] || r).join(', ')
+            : 'Zadania poza tablicą')
+        : 'Nauczyciel';
+      
+      list.push({
+        id: t.id,
+        first: t.first,
+        last: t.last,
+        abbr: t.abbr,
+        color: t.color || '#3b82f6',
+        isStaff: false,
+        role: roleStr,
+        nonTeachingRoles: t.nonTeachingRoles || [],
+        nonTeachingHours: t.nonTeachingHours || 0,
+        availability: t.availability || [],
+        inactive: Boolean(t.inactive),
+        dutyEligible: t.nonTeachingDutyEligible !== false,
+      });
+    });
+
+    // 2. Pracownicy niepedagogiczni (wsparcie i obsługa: woźni, asystenci, szatniarze)
+    (appState.supportStaff || []).forEach(s => {
+      list.push({
+        id: s.id,
+        first: s.first,
+        last: s.last,
+        abbr: s.abbr,
+        color: s.color || '#475569',
+        isStaff: true,
+        role: s.role || 'Pracownik obsługi',
+        weeklyHours: s.weeklyHours || 40,
+        availability: s.availability || [],
+        inactive: Boolean(s.inactive),
+        dutyEligible: s.dutyEligible !== false,
+      });
+    });
+
+    return list;
+  }, [appState.teachers, appState.supportStaff]);
+
+  // Mapa szybkiego wyszukiwania osoby po unikalnym skrócie (abbr)
+  const personByAbbr = useMemo(() => {
+    const map = new Map<string, DutyPerson>();
+    allPersonnel.forEach(p => map.set(p.abbr, p));
+    return map;
+  }, [allPersonnel]);
+
+  // Zbiór wyłączonych z dyżurów (nauczyciele i pracownicy)
   const excludedSet = useMemo(() => new Set(excludeTeachers), [excludeTeachers]);
 
-  // Active / Eligible teachers
-  const eligibleTeachers = useMemo(() => {
-    return appState.teachers.filter(t => !excludedSet.has(t.abbr));
-  }, [appState.teachers, excludedSet]);
+  // Aktywny personel uprawniony do dyżurów (nauczyciele tablicowi, specjaliści poza tablicą oraz pracownicy niepedagogiczni)
+  const eligiblePersonnel = useMemo(() => {
+    return allPersonnel.filter(p => !p.inactive && p.dutyEligible && !excludedSet.has(p.abbr));
+  }, [allPersonnel, excludedSet]);
 
-  // Teacher hours in Plan Sal weekly
+  // Alias kompatybilności wstecznej dla algorytmów
+  const eligibleTeachers = eligiblePersonnel;
+
+  // Tygodniowy wymiar godzin personelu (lekcje z planu sal + godziny poza tablicą + etat personelu wsparcia)
   const teacherHours = useMemo(() => {
     const hours: { [abbr: string]: number } = {};
     const yk = appState.yearKey;
     const yearData = schedData[yk] || {};
 
+    // 1. Zlicz godziny lekcyjne przy tablicy
     Object.values(yearData).forEach((dayData) => {
       if (!dayData || typeof dayData !== 'object') return;
       Object.values(dayData).forEach((hourData) => {
@@ -143,10 +230,32 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       });
     });
 
-    return hours;
-  }, [schedData, appState.yearKey]);
+    // 2. Dodaj godziny czynności poza tablicą nauczycieli (świetlica, biblioteka, pedagog, psycholog, logopeda)
+    appState.teachers.forEach(t => {
+      if (t.nonTeachingHours && t.nonTeachingHours > 0) {
+        hours[t.abbr] = (hours[t.abbr] || 0) + t.nonTeachingHours;
+      }
+    });
 
-  // Current duty allocation counts per teacher
+    // 3. Dodaj tygodniowy wymiar godzin pracowników niepedagogicznych
+    (appState.supportStaff || []).forEach(s => {
+      hours[s.abbr] = s.weeklyHours || 40;
+    });
+
+    return hours;
+  }, [schedData, appState.yearKey, appState.teachers, appState.supportStaff]);
+
+  // Pomocnicza kalkulacja ekwiwalentu pełnego etatu (FTE) dla sprawiedliwego bilansowania
+  const getPersonFteProportion = (p: DutyPerson, hours: number): number => {
+    if (p.isStaff) {
+      // Pracownicy niepedagogiczni (Kodeks Pracy): pełny etat = 40h
+      return hours >= 40 ? 1.0 : hours / 40;
+    }
+    // Nauczyciele (Karta Nauczyciela): pensum pełnoetatowe = 18h
+    return hours >= 18 ? 1.0 : hours / 18;
+  };
+
+  // Current duty allocation counts per teacher/staff
   const teacherDutyCounts = useMemo(() => {
     const counts: { [abbr: string]: number } = {};
     Object.values(dyz.harmonogram).forEach((entry) => {
@@ -167,7 +276,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return calculatePESupervisionDuties(appState, schedData);
   }, [appState, schedData]);
 
-  // Current corridor-only duty minutes per teacher
+  // Current corridor-only duty minutes per person
   const teacherCorridorMinutes = useMemo(() => {
     const mins: { [abbr: string]: number } = {};
     Object.entries(dyz.harmonogram).forEach(([key, entry]) => {
@@ -184,7 +293,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return mins;
   }, [dyz.harmonogram, dyz.przerwy]);
 
-  // Łączna liczba minut dyżurów nauczyciela (w tym dyżury adaptacyjne i szatnie WF)
+  // Łączna liczba minut dyżurów pracownika (w tym dyżury adaptacyjne i szatnie WF)
   const teacherDutyMinutes = useMemo(() => {
     const mins: { [abbr: string]: number } = { ...teacherCorridorMinutes };
     if (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false && adaptationDuties.totalTeacherMinutes) {
@@ -200,15 +309,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return mins;
   }, [teacherCorridorMinutes, dyz.settings.firstGradeAdaptationDuty, dyz.settings.countAdaptationInFTE, adaptationDuties, dyz.settings.peSupervisionDuty, dyz.settings.countPeSupervisionInFTE, peDuties]);
 
-  // Target max minutes for each teacher based on FTE
+  // Target max minutes for each person based on FTE proportion
   const teacherMaxMinutes = useMemo(() => {
     const maxMins: { [abbr: string]: number } = {};
-    const fullTimeHours = 18;
     let sumProportions = 0;
 
-    eligibleTeachers.forEach(t => {
-      const hours = teacherHours[t.abbr] || 0;
-      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+    eligiblePersonnel.forEach(p => {
+      const hours = teacherHours[p.abbr] || 0;
+      const prop = getPersonFteProportion(p, hours);
       sumProportions += prop;
     });
 
@@ -227,18 +335,18 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
     const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
-    eligibleTeachers.forEach(t => {
-      const hours = teacherHours[t.abbr] || 0;
-      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+    eligiblePersonnel.forEach(p => {
+      const hours = teacherHours[p.abbr] || 0;
+      const prop = getPersonFteProportion(p, hours);
       if (dyz.settings.autoBalance !== false) {
-        maxMins[t.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * prop)));
+        maxMins[p.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * prop)));
       } else {
-        maxMins[t.abbr] = maxMinsLimit;
+        maxMins[p.abbr] = maxMinsLimit;
       }
     });
 
     return maxMins;
-  }, [eligibleTeachers, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance]);
+  }, [eligiblePersonnel, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance]);
 
   // Memoized duty demand statistics
   const demandStats = useMemo(() => {
@@ -252,26 +360,25 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     // weekly demand (multiplied by 5 school days)
     const weeklyMinutesNeeded = totalMinutesNeeded * 5;
 
-    // Total active/eligible teachers
-    const teachersCount = eligibleTeachers.length;
+    // Total active/eligible personnel count
+    const teachersCount = eligiblePersonnel.length;
 
-    // Total teaching hours of eligible teachers
+    // Total weekly hours of eligible personnel
     let totalTeachingHours = 0;
-    eligibleTeachers.forEach(t => {
-      totalTeachingHours += teacherHours[t.abbr] || 0;
+    eligiblePersonnel.forEach(p => {
+      totalTeachingHours += teacherHours[p.abbr] || 0;
     });
 
     // Sum of proportions (FTE equivalent sum)
-    const fullTimeHours = 18;
     let sumProportions = 0;
-    eligibleTeachers.forEach(t => {
-      const hours = teacherHours[t.abbr] || 0;
-      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+    eligiblePersonnel.forEach(p => {
+      const hours = teacherHours[p.abbr] || 0;
+      const prop = getPersonFteProportion(p, hours);
       sumProportions += prop;
     });
     if (sumProportions === 0) sumProportions = 1;
 
-    // Average minutes of duty for a full-time teacher to cover everything
+    // Average minutes of duty for a full-time person to cover everything
     const avgMinutesForFullTime = weeklyMinutesNeeded / sumProportions;
 
     // Total currently assigned duty minutes
@@ -295,7 +402,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       totalAssignedMinutes,
       coveragePercent: weeklyMinutesNeeded > 0 ? Math.round((totalAssignedMinutes / weeklyMinutesNeeded) * 100) : 0
     };
-  }, [dyz.przerwy, dyz.miejsca, dyz.harmonogram, eligibleTeachers, teacherHours]);
+  }, [dyz.przerwy, dyz.miejsca, dyz.harmonogram, eligiblePersonnel, teacherHours]);
 
 
 
@@ -643,6 +750,18 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   };
 
   const isTeacherAvailableForBreak = (abbr: string, dayIdx: number, przerwa: Przerwa): boolean => {
+    const person = personByAbbr.get(abbr);
+
+    // 1. Sprawdzenie dla pracowników niepedagogicznych (obsługa / asystenci / woźni)
+    if (person?.isStaff) {
+      if (person.availability && person.availability.length > 0) {
+        return person.availability.includes(`${dayIdx}-${przerwa.num}`);
+      }
+      // Domyślnie obecny w godzinach standardowych przerw (1..8)
+      return przerwa.num <= 8;
+    }
+
+    // 2. Sprawdzenie godzin tablicowych z planu sal
     const yk = appState.yearKey;
     const dayData = schedData[yk]?.[dayIdx] || {};
     const activeHours: number[] = [];
@@ -661,7 +780,19 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       }
     });
 
-    if (activeHours.length === 0) return false;
+    const hasNonTeaching = person && Boolean((person.nonTeachingHours && person.nonTeachingHours > 0) || (person.nonTeachingRoles && person.nonTeachingRoles.length > 0));
+
+    // Jeśli nauczyciel nie ma lekcji przy tablicy w tym dniu:
+    if (activeHours.length === 0) {
+      if (hasNonTeaching) {
+        if (person.availability && person.availability.length > 0) {
+          return person.availability.includes(`${dayIdx}-${przerwa.num}`);
+        }
+        // Domyślna dostępność w szkole dla specjalisty poza tablicą (np. świetlica, pedagog)
+        return przerwa.num <= 6;
+      }
+      return false;
+    }
 
     const minHour = Math.min(...activeHours);
     const maxHour = Math.max(...activeHours);
@@ -690,6 +821,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     if (dyz.settings.excludeAfterLastLesson) {
       // Wykluczenie przerwy, jeśli rozpoczyna się po zakończeniu ostatniej lekcji
       if (breakStartMins >= dayEndMins) {
+        // Jeśli jednak nauczyciel ma dodatkowe zadania poza tablicą i jest dyspozycyjny w tym slocie
+        if (hasNonTeaching && person.availability?.includes(`${dayIdx}-${przerwa.num}`)) {
+          return true;
+        }
         return false;
       }
     }
@@ -698,11 +833,16 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const isDirectlyBefore = breakEndMins === dayStartMins || (breakEndMins > dayStartMins - 30 && breakEndMins <= dayStartMins);
     const isDirectlyAfter = breakStartMins === dayEndMins || (breakStartMins >= dayEndMins && breakStartMins < dayEndMins + 30);
 
-    if (dyz.settings.excludeAfterLastLesson) {
-      return isBetween || isDirectlyBefore;
+    if (isBetween || isDirectlyBefore || isDirectlyAfter || (przerwa.num >= minHour - 1 && przerwa.num <= maxHour)) {
+      return true;
     }
 
-    return isBetween || isDirectlyBefore || isDirectlyAfter || (przerwa.num >= minHour - 1 && przerwa.num <= maxHour);
+    // Jawna dyspozycyjność poza tablicą (np. dyżur świetlicy popołudniu)
+    if (hasNonTeaching && person.availability?.includes(`${dayIdx}-${przerwa.num}`)) {
+      return true;
+    }
+
+    return false;
   };
 
   const isPlaceActiveForBreak = (miejsce: MiejsceDyzuru, dayIdx: number, przerwa: Przerwa): boolean => {
@@ -780,13 +920,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const nextHarm = { ...dyz.harmonogram };
     const yk = appState.yearKey || 'default';
 
-    const fullTimeHours = 18;
     const teacherProportions: { [abbr: string]: number } = {};
     let sumProportions = 0;
 
-    eligibleTeachers.forEach(t => {
+    eligiblePersonnel.forEach(t => {
       const hours = teacherHours[t.abbr] || 0;
-      const prop = hours >= fullTimeHours ? 1.0 : hours / fullTimeHours;
+      const prop = getPersonFteProportion(t, hours);
       teacherProportions[t.abbr] = prop;
       sumProportions += prop;
     });
@@ -804,11 +943,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       }
     }
 
-    // Target/Max minutes for each teacher
+    // Target/Max minutes for each person in duty pool
     const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
     const teacherMaxMinutes: { [abbr: string]: number } = {};
     const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
-    eligibleTeachers.forEach(t => {
+    eligiblePersonnel.forEach(t => {
       // Ustawienie minimalnego progu 15 minut, aby umożliwić przydział co najmniej jednego dyżuru
       if (dyz.settings.autoBalance !== false) {
         teacherMaxMinutes[t.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * teacherProportions[t.abbr])));
@@ -817,9 +956,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       }
     });
 
-    // Track assigned minutes for each teacher
+    // Track assigned minutes for each person
     const assignedMinutes: { [abbr: string]: number } = {};
-    eligibleTeachers.forEach(t => {
+    eligiblePersonnel.forEach(t => {
       // If counting adaptation duties in FTE, pre-populate with their adaptation minutes
       const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
         ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
@@ -1264,7 +1403,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                           {dyz.miejsca.map(place => {
                             const key = `${place.id}|${activeDay}|${p.num}`;
                             const duty = dyz.harmonogram[key];
-                            const t = duty?.teacherAbbr ? appState.teachers.find(tch => tch.abbr === duty.teacherAbbr) : null;
+                            const t = duty?.teacherAbbr ? personByAbbr.get(duty.teacherAbbr) : null;
                             const isActive = isPlaceActiveForBreak(place, activeDay, p);
 
                             return (
@@ -1287,8 +1426,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                                         : 'bg-emerald-50/60 border-emerald-500 text-emerald-950 font-semibold'
                                     } ${!isActive ? 'opacity-75 border-slate-300' : ''}`}
                                   >
-                                    <span className="text-xs tracking-wider font-mono font-bold">{duty.teacherAbbr}</span>
-                                    <span className="text-[10px] text-slate-500 truncate max-w-[125px] font-medium mt-0.5" title={t ? `${t.first} ${t.last}` : undefined}>
+                                    <div className="flex items-center gap-1">
+                                      {t?.isStaff && <span className="text-[10px]" title={`Pracownik niepedagogiczny: ${t.role}`}>🏫</span>}
+                                      {Boolean(!t?.isStaff && t?.nonTeachingHours && t.nonTeachingHours > 0) && (
+                                        <span className="text-[10px]" title={`Zadania poza tablicą: ${t?.role}`}>📚</span>
+                                      )}
+                                      <span className="text-xs tracking-wider font-mono font-bold">{duty.teacherAbbr}</span>
+                                    </div>
+                                    <span className="text-[10px] text-slate-500 truncate max-w-[125px] font-medium mt-0.5" title={t ? `${t.first} ${t.last} (${t.role})` : undefined}>
                                       {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
                                     </span>
                                     {!isActive && <span className="absolute bottom-1 right-1 text-[8px] opacity-75" title="Brak lekcji na tym korytarzu">💤</span>}
@@ -1518,65 +1663,148 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     ✕
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-normal">Poniższa lista prezentuje sumaryczną liczbę i czas dyżurów w bieżącym tygodniu zbalansowaną proporcjonalnie do wymiaru godzin lekcyjnych nauczyciela.</p>
-                
-                <div className="divide-y divide-slate-100 max-h-[calc(100vh-230px)] min-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
-                  {appState.teachers.map(t => {
-                    const dc = teacherDutyCounts[t.abbr] || 0;
-                    const dm = teacherDutyMinutes[t.abbr] || 0;
-                    const cm = teacherCorridorMinutes[t.abbr] || 0;
-                    const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
-                      ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
-                      : 0;
-                    const peMins = (dyz.settings.peSupervisionDuty !== false && dyz.settings.countPeSupervisionInFTE)
-                      ? (peDuties.totalTeacherMinutes[t.abbr] || 0)
-                      : 0;
-                    const maxMins = teacherMaxMinutes[t.abbr] || 0;
-                    const hours = teacherHours[t.abbr] || 0;
-                    const isOver = dm > maxMins;
-                    const isExcluded = excludedSet.has(t.abbr);
+                <p className="text-[11px] text-slate-400 leading-normal">
+                  Poniższa lista prezentuje sumaryczną liczbę i czas dyżurów w bieżącym tygodniu zbalansowaną proporcjonalnie do wymiaru czasu pracy (Karta Nauczyciela / Kodeks Pracy).
+                </p>
 
-                    return (
-                      <div key={t.id} className="py-2.5 flex items-center justify-between gap-4 text-xs font-semibold">
-                        <div className="flex flex-col min-w-0">
-                          <span className={`truncate ${isExcluded ? 'text-slate-300 line-through' : 'text-slate-700'}`}>
-                            {t.first} {t.last}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            Siatka: {hours}h lekcyjnych (etat: {hours >= 18 ? '1.00' : (hours / 18).toFixed(2)})
-                          </span>
-                          {adaptMins > 0 && (
-                            <span className="text-[9px] text-amber-700 font-medium flex items-center gap-1 mt-0.5">
-                              🎒 w tym {adaptMins} min opieki w kl. 1
-                            </span>
-                          )}
-                          {peMins > 0 && (
-                            <span className="text-[9px] text-emerald-700 font-medium flex items-center gap-1 mt-0.5">
-                              🏃 w tym {peMins} min nadzoru szatni WF
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {isExcluded ? (
-                            <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Zwolniony</span>
-                          ) : (
-                            <span className={`px-2 py-1 rounded font-mono font-bold text-[10px] flex flex-col items-end border ${
-                              isOver 
-                                ? 'bg-red-50 text-red-700 border-red-200 font-extrabold'
-                                : dm >= maxMins
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                  : 'bg-slate-50 text-slate-500 border-slate-100'
-                            }`}>
-                              <span className="font-bold">{dc} dyżurów korytarz.</span>
-                              <span className="text-[9px] text-slate-400 font-normal mt-0.5">
-                                Łącznie: {dm} / {maxMins} min
+                {/* Filtry personelu */}
+                <div className="flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setStatsRoleFilter('all')}
+                    className={`flex-1 py-1 px-1.5 rounded-lg text-center transition cursor-pointer ${
+                      statsRoleFilter === 'all' 
+                        ? 'bg-white text-slate-900 shadow-xs font-black' 
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    Wszyscy ({allPersonnel.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsRoleFilter('teaching')}
+                    className={`flex-1 py-1 px-1.5 rounded-lg text-center transition cursor-pointer ${
+                      statsRoleFilter === 'teaching' 
+                        ? 'bg-white text-slate-900 shadow-xs font-black' 
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                    title="Nauczyciele prowadzący lekcje tablicowe"
+                  >
+                    Tablicowi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsRoleFilter('non_teaching')}
+                    className={`flex-1 py-1 px-1.5 rounded-lg text-center transition cursor-pointer ${
+                      statsRoleFilter === 'non_teaching' 
+                        ? 'bg-white text-slate-900 shadow-xs font-black' 
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                    title="Nauczyciele z zadaniami poza tablicą (świetlica, pedagog, biblioteka, logopeda)"
+                  >
+                    Poza tablicą
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatsRoleFilter('support_staff')}
+                    className={`flex-1 py-1 px-1.5 rounded-lg text-center transition cursor-pointer ${
+                      statsRoleFilter === 'support_staff' 
+                        ? 'bg-white text-slate-900 shadow-xs font-black' 
+                        : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                    title="Pracownicy niepedagogiczni (obsługa, asystenci, woźni)"
+                  >
+                    Obsługa
+                  </button>
+                </div>
+                
+                <div className="divide-y divide-slate-100 max-h-[calc(100vh-280px)] min-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                  {allPersonnel
+                    .filter(p => {
+                      if (statsRoleFilter === 'teaching') return !p.isStaff && (!p.nonTeachingHours || p.nonTeachingHours === 0);
+                      if (statsRoleFilter === 'non_teaching') return !p.isStaff && Boolean((p.nonTeachingHours && p.nonTeachingHours > 0) || (p.nonTeachingRoles && p.nonTeachingRoles.length > 0));
+                      if (statsRoleFilter === 'support_staff') return p.isStaff;
+                      return true;
+                    })
+                    .map(t => {
+                      const dc = teacherDutyCounts[t.abbr] || 0;
+                      const dm = teacherDutyMinutes[t.abbr] || 0;
+                      const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
+                        ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
+                        : 0;
+                      const peMins = (dyz.settings.peSupervisionDuty !== false && dyz.settings.countPeSupervisionInFTE)
+                        ? (peDuties.totalTeacherMinutes[t.abbr] || 0)
+                        : 0;
+                      const maxMins = teacherMaxMinutes[t.abbr] || 0;
+                      const hours = teacherHours[t.abbr] || 0;
+                      const isOver = dm > maxMins;
+                      const isExcluded = excludedSet.has(t.abbr);
+                      const fte = getPersonFteProportion(t, hours);
+
+                      return (
+                        <div key={t.id} className="py-2.5 flex items-center justify-between gap-3 text-xs font-semibold">
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span 
+                                className="w-2.5 h-2.5 rounded-full shrink-0" 
+                                style={{ backgroundColor: t.color || '#64748b' }} 
+                              />
+                              <span className={`truncate font-bold ${isExcluded ? 'text-slate-300 line-through' : 'text-slate-800'}`}>
+                                {t.first} {t.last}
                               </span>
-                            </span>
-                          )}
+                              <span className="text-[10px] font-mono px-1 py-0.2 bg-slate-100 text-slate-600 rounded">
+                                {t.abbr}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                              {t.isStaff ? (
+                                <span className="text-[9px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-bold">
+                                  🏫 {t.role} ({hours}h/tyg. • etat: {fte.toFixed(2)})
+                                </span>
+                              ) : t.nonTeachingHours && t.nonTeachingHours > 0 ? (
+                                <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded font-bold">
+                                  📚 {t.role} ({t.nonTeachingHours}h poza tablicą • łącz.: {hours}h)
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  Siatka: {hours}h lekcji (etat: {fte.toFixed(2)})
+                                </span>
+                              )}
+                            </div>
+
+                            {adaptMins > 0 && (
+                              <span className="text-[9px] text-amber-700 font-medium flex items-center gap-1 mt-0.5">
+                                🎒 w tym {adaptMins} min opieki w kl. 1
+                              </span>
+                            )}
+                            {peMins > 0 && (
+                              <span className="text-[9px] text-emerald-700 font-medium flex items-center gap-1 mt-0.5">
+                                🏃 w tym {peMins} min nadzoru szatni WF
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isExcluded ? (
+                              <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Zwolniony</span>
+                            ) : (
+                              <span className={`px-2 py-1 rounded font-mono font-bold text-[10px] flex flex-col items-end border ${
+                                isOver 
+                                  ? 'bg-red-50 text-red-700 border-red-200 font-extrabold'
+                                  : dm >= maxMins
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                              }`}>
+                                <span className="font-bold">{dc} dyżurów</span>
+                                <span className="text-[9px] text-slate-400 font-normal mt-0.5">
+                                  {dm} / {maxMins} min
+                                </span>
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -2197,29 +2425,62 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   </div>
                 </div>
 
-                <div className="border-t border-slate-100 pt-4 select-none">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-2">Wyłączeni z dyżurów szkolnych (np. Dyrekcja)</label>
-                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border border-slate-100 p-2.5 rounded-lg bg-slate-50/50">
-                    {appState.teachers.map(t => {
-                      const isExcluded = excludedSet.has(t.abbr);
-                      return (
-                        <label 
-                          key={t.id} 
-                          className={`flex items-center gap-2 cursor-pointer p-1.5 rounded-md hover:bg-white text-xs ${
-                            isExcluded ? 'text-slate-400 font-medium' : 'text-slate-700 font-semibold'
-                          }`}
-                        >
-                          <input 
-                            type="checkbox"
-                            checked={isExcluded}
-                            onChange={() => handleToggleExcludeTeacher(t.abbr)}
-                            className="rounded border-slate-300 text-blue-600"
-                          />
-                          <span className="truncate">{t.first} {t.last}</span>
-                        </label>
-                      );
-                    })}
+                <div className="border-t border-slate-100 pt-4 select-none space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">
+                      Nauczyciele i specjaliści wyłączeni z dyżurów (np. Dyrekcja)
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto border border-slate-100 p-2.5 rounded-lg bg-slate-50/50">
+                      {appState.teachers.map(t => {
+                        const isExcluded = excludedSet.has(t.abbr);
+                        return (
+                          <label 
+                            key={t.id} 
+                            className={`flex items-center gap-2 cursor-pointer p-1.5 rounded-md hover:bg-white text-xs ${
+                              isExcluded ? 'text-slate-400 font-medium' : 'text-slate-700 font-semibold'
+                            }`}
+                          >
+                            <input 
+                              type="checkbox"
+                              checked={isExcluded}
+                              onChange={() => handleToggleExcludeTeacher(t.abbr)}
+                              className="rounded border-slate-300 text-blue-600"
+                            />
+                            <span className="truncate">{t.first} {t.last}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {(appState.supportStaff && appState.supportStaff.length > 0) && (
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">
+                        Pracownicy niepedagogiczni wyłączeni z dyżurów
+                      </label>
+                      <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto border border-slate-100 p-2.5 rounded-lg bg-slate-50/50">
+                        {appState.supportStaff.map(s => {
+                          const isExcluded = excludedSet.has(s.abbr);
+                          return (
+                            <label 
+                              key={s.id} 
+                              className={`flex items-center gap-2 cursor-pointer p-1.5 rounded-md hover:bg-white text-xs ${
+                                isExcluded ? 'text-slate-400 font-medium' : 'text-slate-700 font-semibold'
+                              }`}
+                            >
+                              <input 
+                                type="checkbox"
+                                checked={isExcluded}
+                                onChange={() => handleToggleExcludeTeacher(s.abbr)}
+                                className="rounded border-slate-300 text-blue-600"
+                              />
+                              <span className="truncate">{s.first} {s.last} ({s.role})</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2288,6 +2549,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                 const preInfo = lessonBefore ? `${lessonBefore.subject} (s. ${lessonBefore.roomName})` : '';
                 const postInfo = lessonAfter ? `${lessonAfter.subject} (s. ${lessonAfter.roomName})` : '';
                 reason = `👍 Dostępny: Lekcja blisko (${[preInfo, postInfo].filter(Boolean).join(' / ')})`;
+              } else if (t.isStaff) {
+                score = 2;
+                reason = `🏫 Pracownik niepedagogiczny: ${t.role} (${t.weeklyHours || 40}h/tyg.)`;
+              } else if (t.nonTeachingHours && t.nonTeachingHours > 0) {
+                score = 2;
+                reason = `🤝 Zadania poza tablicą: ${t.role} (${t.nonTeachingHours}h)`;
               }
             }
 
@@ -2421,10 +2688,24 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                       >
                         <div className="flex justify-between items-center w-full">
                           <span className="text-xs font-bold font-mono text-slate-900 flex items-center gap-1.5">
+                            <span 
+                              className="w-2.5 h-2.5 rounded-full shrink-0" 
+                              style={{ backgroundColor: teacher.color || '#64748b' }} 
+                            />
                             <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-black border border-slate-200">
                               {teacher.abbr}
                             </span>
-                            {teacher.first} {teacher.last}
+                            <span>{teacher.first} {teacher.last}</span>
+                            {teacher.isStaff && (
+                              <span className="text-[9px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.2 rounded font-sans font-bold">
+                                🏫 Obsługa
+                              </span>
+                            )}
+                            {Boolean(!teacher.isStaff && teacher.nonTeachingHours && teacher.nonTeachingHours > 0) && (
+                              <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded font-sans font-bold">
+                                📚 Poza tablicą
+                              </span>
+                            )}
                           </span>
                           <span className={`text-[10px] font-bold ${currentMins >= maxMins ? 'text-red-600' : 'text-slate-400'}`}>
                             {currentMins} / {maxMins} min

@@ -76,7 +76,26 @@ export const TeacherSchema = z.object({
   preferredRooms: z.array(z.string()).optional().default([]),
   isAdministrative: z.boolean().optional(),
   administrativeRole: z.string().optional(),
+  nonTeachingHours: z.number().optional(),
+  nonTeachingRoles: z.array(z.string()).optional().default([]),
+  nonTeachingDutyEligible: z.boolean().optional().default(true),
 }).passthrough();
+
+export const SupportStaffSchema = z.object({
+  id: z.string(),
+  first: z.string().optional().default(''),
+  last: z.string(),
+  abbr: z.string(),
+  role: z.string().optional().default('Pracownik obsługi'),
+  color: z.string().optional().default('#64748b'),
+  weeklyHours: z.number().optional().default(40),
+  availability: z.array(z.string()).optional().default([]),
+  dutyEligible: z.boolean().optional().default(true),
+  notes: z.string().optional(),
+  inactive: z.boolean().optional().default(false),
+  inactiveComment: z.string().optional(),
+}).passthrough();
+
 
 export const SubjectSchema = z.object({
   id: z.string(),
@@ -263,6 +282,7 @@ export const AppStateSchema = z.object({
   floors: z.array(FloorSchema).optional().default([]),
   classes: z.array(ClassSchema).optional().default([]),
   teachers: z.array(TeacherSchema).optional().default([]),
+  supportStaff: z.array(SupportStaffSchema).optional().default([]),
   subjects: z.array(SubjectSchema).optional().default([]),
   homerooms: z.record(z.string(), z.unknown()).optional().default({}),
   planLekcji: PlanLekcjiStateSchema.optional(),
