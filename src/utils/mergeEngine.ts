@@ -27,7 +27,8 @@ import {
   DyzuryState,
   PlanDyzuryState,
   PlanLekcjiState,
-  Hour
+  Hour,
+  SupportStaff
 } from '../types';
 import { sanitizeProtoPollution } from './validationSchemas';
 
@@ -137,7 +138,33 @@ export function sanitizeAppState(rawInput: unknown): AppState {
         maxHours: typeof t.maxHours === 'number' ? t.maxHours : 18,
         color: String(t.color || '#3b82f6'),
         availability: Array.isArray(t.availability) ? (t.availability as string[]) : [],
-        preferredRooms: Array.isArray(t.preferredRooms) ? (t.preferredRooms as string[]) : []
+        preferredRooms: Array.isArray(t.preferredRooms) ? (t.preferredRooms as string[]) : [],
+        overtimeHours: typeof t.overtimeHours === 'number' ? t.overtimeHours : undefined,
+        inactive: !!t.inactive,
+        inactiveComment: typeof t.inactiveComment === 'string' ? t.inactiveComment : undefined,
+        substitutions: Array.isArray(t.substitutions) ? (t.substitutions as string[]) : [],
+        isAdministrative: !!t.isAdministrative,
+        administrativeRole: typeof t.administrativeRole === 'string' ? t.administrativeRole : undefined,
+        nonTeachingHours: typeof t.nonTeachingHours === 'number' ? t.nonTeachingHours : undefined,
+        nonTeachingRoles: Array.isArray(t.nonTeachingRoles) ? (t.nonTeachingRoles as string[]) : [],
+        nonTeachingDutyEligible: t.nonTeachingDutyEligible !== false
+      }))
+    : [];
+
+  const supportStaff: SupportStaff[] = Array.isArray(raw.supportStaff)
+    ? (raw.supportStaff as Record<string, unknown>[]).filter(Boolean).map((s, i) => ({
+        id: String(s.id || `st_${i}`),
+        first: String(s.first || ''),
+        last: String(s.last || `Pracownik ${i + 1}`),
+        abbr: String(s.abbr || `P${i + 1}`).toUpperCase(),
+        role: String(s.role || 'Pracownik obsługi'),
+        color: String(s.color || '#475569'),
+        weeklyHours: typeof s.weeklyHours === 'number' ? s.weeklyHours : 40,
+        availability: Array.isArray(s.availability) ? (s.availability as string[]) : [],
+        dutyEligible: s.dutyEligible !== false,
+        notes: typeof s.notes === 'string' ? s.notes : undefined,
+        inactive: !!s.inactive,
+        inactiveComment: typeof s.inactiveComment === 'string' ? s.inactiveComment : undefined
       }))
     : [];
 
@@ -224,11 +251,16 @@ export function sanitizeAppState(rawInput: unknown): AppState {
     floors,
     classes,
     teachers,
+    supportStaff,
     subjects,
     homerooms,
     planLekcji,
     dyzury,
-    generatorSettings
+    generatorSettings,
+    revision: typeof raw.revision === 'number' ? raw.revision : undefined,
+    tabId: typeof raw.tabId === 'string' ? raw.tabId : undefined,
+    _revision: typeof raw._revision === 'number' ? raw._revision : undefined,
+    _tabId: typeof raw._tabId === 'string' ? raw._tabId : undefined
   };
 }
 

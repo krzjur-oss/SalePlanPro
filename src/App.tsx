@@ -123,10 +123,24 @@ function sortAppState(rawInput: unknown): AppState {
     );
   }
 
+  let nextSupportStaff = resolved.supportStaff;
+  if (Array.isArray(nextSupportStaff)) {
+    nextSupportStaff = [...nextSupportStaff].filter(Boolean).sort((a, b) => {
+      const lA = String(a?.last || '');
+      const lB = String(b?.last || '');
+      const lCompare = lA.localeCompare(lB, undefined, { sensitivity: 'base' });
+      if (lCompare !== 0) return lCompare;
+      const fA = String(a?.first || '');
+      const fB = String(b?.first || '');
+      return fA.localeCompare(fB, undefined, { sensitivity: 'base' });
+    });
+  }
+
   return {
     ...resolved,
     classes: nextClasses || [],
     teachers: nextTeachers || [],
+    supportStaff: nextSupportStaff || [],
     subjects: nextSubjects || [],
     planLekcji: {
       ...resolved.planLekcji,

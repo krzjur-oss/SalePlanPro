@@ -1606,6 +1606,7 @@ export default function KreatorSzkoly({
 
   const [pensumSearchQuery, setPensumSearchQuery] = useState('');
   const [pensumFilter, setPensumFilter] = useState<'all' | 'administrative' | 'reduced' | 'standard' | 'inactive' | 'non_teaching'>('all');
+  const [supportStaffFilter, setSupportStaffFilter] = useState<'all' | 'support' | 'specialists' | 'duty'>('all');
 
 
   const handleUpdateTeacherHours = (teacherId: string, field: 'maxHours' | 'overtimeHours', value: number) => {
@@ -1994,6 +1995,8 @@ export default function KreatorSzkoly({
         supportStaff: updated
       });
       handleResetStaffForm();
+      setStaffSearchQuery('');
+      setSupportStaffFilter('all');
       showNoti('Zaktualizowano dane pracownika niepedagogicznego');
     } else {
       const newStaff: SupportStaff = {
@@ -2016,6 +2019,8 @@ export default function KreatorSzkoly({
         supportStaff: [...currentList, newStaff]
       });
       handleResetStaffForm();
+      setStaffSearchQuery('');
+      setSupportStaffFilter('all');
       showNoti(`Dodano pracownika: ${newStaff.first} ${newStaff.last}`);
     }
   };
@@ -2050,6 +2055,110 @@ export default function KreatorSzkoly({
       supportStaff: nextList
     });
     showNoti('Zaktualizowano status dyżurowania pracownika');
+  };
+
+  const handleToggleTeacherNonTeachingDutyEligible = (id: string) => {
+    const nextTeachers = appState.teachers.map(t => {
+      if (t.id === id) {
+        return {
+          ...t,
+          nonTeachingDutyEligible: t.nonTeachingDutyEligible === false ? true : false
+        };
+      }
+      return t;
+    });
+    onChangeAppState({
+      ...appState,
+      teachers: nextTeachers,
+      planLekcji: {
+        ...appState.planLekcji,
+        teachers: nextTeachers
+      }
+    });
+    showNoti('Zaktualizowano status dyżurowania nauczyciela');
+  };
+
+  const handleConvertTeacherToSupportStaff = (t: Teacher) => {
+    triggerConfirm(
+      'Przeniesienie do personelu niepedagogicznego',
+      `Czy chcesz przenieść „${t.first} ${t.last}” do personelu niepedagogicznego (obsługi)? Profil zostanie przeniesiony z kadry dydaktycznej do pracowników niepedagogicznych.`,
+      () => {
+        const nextTeachers = appState.teachers.filter(item => item.id !== t.id);
+        const roleStr = (t.nonTeachingRoles && t.nonTeachingRoles.length > 0)
+          ? t.nonTeachingRoles.map(r => {
+              if (r === 'swietlica') return 'Świetlica';
+              if (r === 'biblioteka') return 'Biblioteka';
+              if (r === 'pedagog') return 'Pedagog';
+              if (r === 'psycholog') return 'Psycholog';
+              if (r === 'logopeda') return 'Logopeda';
+              if (r === 'wspomagajacy') return 'Wspomagający';
+              if (r === 'terapeuta') return 'Terapeuta';
+              return r;
+            }).join(', ')
+          : (t.administrativeRole || 'Pracownik obsługi');
+
+        const newStaff: SupportStaff = {
+          id: 'st_' + uid(),
+          first: t.first,
+          last: t.last,
+          abbr: t.abbr,
+          role: roleStr,
+          color: t.color || '#475569',
+          weeklyHours: t.nonTeachingHours || (t.maxHours === 0 ? 40 : t.maxHours),
+          dutyEligible: t.nonTeachingDutyEligible !== false,
+          notes: t.isAdministrative ? `Rola: ${t.administrativeRole || ''}` : undefined,
+          inactive: t.inactive,
+          inactiveComment: t.inactiveComment
+        };
+
+        onChangeAppState({
+          ...appState,
+          teachers: nextTeachers,
+          supportStaff: [...(appState.supportStaff || []), newStaff],
+          planLekcji: {
+            ...appState.planLekcji,
+            teachers: nextTeachers,
+            assignments: appState.planLekcji.assignments.filter(a => a.teacherId !== t.id)
+          }
+        });
+        showNoti(`Przeniesiono pracownika: ${t.first} ${t.last} do personelu niepedagogicznego`);
+      }
+    );
+  };
+
+  const handleConvertSupportStaffToTeacher = (st: SupportStaff) => {
+    triggerConfirm(
+      'Konwersja na kadrę nauczycielską / specjalistów',
+      `Czy chcesz utworzyć profil nauczyciela / specjalisty dla „${st.first} ${st.last}”?`,
+      () => {
+        const nextStaff = (appState.supportStaff || []).filter(s => s.id !== st.id);
+        const newTeacher: Teacher = {
+          id: 't_' + uid(),
+          first: st.first,
+          last: st.last,
+          abbr: st.abbr,
+          maxHours: 0,
+          color: st.color || '#d97706',
+          nonTeachingHours: st.weeklyHours || 20,
+          nonTeachingRoles: ['swietlica'],
+          nonTeachingDutyEligible: st.dutyEligible !== false,
+          inactive: st.inactive,
+          inactiveComment: st.inactiveComment
+        };
+
+        const nextTeachers = [...appState.teachers, newTeacher];
+        onChangeAppState({
+          ...appState,
+          teachers: nextTeachers,
+          supportStaff: nextStaff,
+          planLekcji: {
+            ...appState.planLekcji,
+            teachers: nextTeachers
+          }
+        });
+        showNoti(`Przeniesiono ${st.first} ${st.last} do kadry nauczycieli i specjalistów`);
+      }
+    );
   };
 
   // --- Step 7 States (Corridors / Duties) ---
@@ -2809,6 +2918,103 @@ export default function KreatorSzkoly({
 
     return { all, administrative, reduced, standard, inactive, nonTeaching };
   }, [appState.teachers]);
+
+  const nonTeachingTeachers = useMemo(() => {
+    return (appState.teachers || []).filter(t => 
+      Boolean(
+        (t.nonTeachingHours !== undefined && t.nonTeachingHours > 0) || 
+        (t.nonTeachingRoles && t.nonTeachingRoles.length > 0) ||
+        t.isAdministrative ||
+        (t.maxHours === 0)
+      )
+    );
+  }, [appState.teachers]);
+
+  const totalNonTeachingCount = useMemo(() => {
+    return (appState.supportStaff?.length || 0) + nonTeachingTeachers.length;
+  }, [appState.supportStaff, nonTeachingTeachers]);
+
+  const filteredUnifiedStaff = useMemo(() => {
+    const q = staffSearchQuery.trim().toLowerCase();
+
+    // 1. Pracownicy obsługi (SupportStaff - Kodeks Pracy)
+    const supportItems = (appState.supportStaff || []).map(s => ({
+      id: s.id,
+      first: s.first,
+      last: s.last,
+      abbr: s.abbr,
+      color: s.color || '#475569',
+      role: s.role || 'Pracownik obsługi',
+      category: 'support' as const,
+      weeklyHours: s.weeklyHours ?? 40,
+      hoursLabel: `${s.weeklyHours ?? 40}h/tydz.`,
+      dutyEligible: s.dutyEligible !== false,
+      notes: s.notes,
+      inactive: s.inactive,
+      inactiveComment: s.inactiveComment,
+      rawSupportStaff: s,
+      searchStr: `${s.first} ${s.last} ${s.abbr} ${s.role} ${s.notes || ''}`.toLowerCase()
+    }));
+
+    // 2. Kadra z zadaniami poza tablicą (Teacher - Karta Nauczyciela)
+    const specialistItems = nonTeachingTeachers.map(t => {
+      const roleBadges: string[] = [];
+      if (t.nonTeachingRoles && t.nonTeachingRoles.length > 0) {
+        t.nonTeachingRoles.forEach(r => {
+          if (r === 'swietlica') roleBadges.push('Świetlica');
+          else if (r === 'biblioteka') roleBadges.push('Biblioteka');
+          else if (r === 'pedagog') roleBadges.push('Pedagog');
+          else if (r === 'psycholog') roleBadges.push('Psycholog');
+          else if (r === 'logopeda') roleBadges.push('Logopeda');
+          else if (r === 'wspomagajacy') roleBadges.push('Wspomagający');
+          else if (r === 'terapeuta') roleBadges.push('Terapeuta');
+          else roleBadges.push(r);
+        });
+      }
+      if (t.isAdministrative && t.administrativeRole) {
+        roleBadges.push(t.administrativeRole);
+      }
+      const roleStr = roleBadges.length > 0 ? roleBadges.join(', ') : (t.maxHours === 0 ? 'Specjalista poza tablicą' : 'Nauczyciel poza tablicą');
+      const hPoza = t.nonTeachingHours || 0;
+      const hLekcji = t.maxHours ?? 18;
+      const hLabel = hPoza > 0 
+        ? `${hPoza}h poza tablicą${hLekcji > 0 ? ` (+${hLekcji}h lekcji)` : ''}` 
+        : `${hLekcji}h (rola kierownicza / specjalna)`;
+
+      return {
+        id: t.id,
+        first: t.first,
+        last: t.last,
+        abbr: t.abbr,
+        color: t.color || '#d97706',
+        role: roleStr,
+        category: 'specialist' as const,
+        weeklyHours: hPoza,
+        hoursLabel: hLabel,
+        dutyEligible: t.nonTeachingDutyEligible !== false,
+        notes: t.isAdministrative ? `Kadra kierownicza: ${t.administrativeRole || 'Administracja'}` : (t.inactive ? `Powód: ${t.inactiveComment || ''}` : undefined),
+        inactive: t.inactive,
+        inactiveComment: t.inactiveComment,
+        rawTeacher: t,
+        searchStr: `${t.first} ${t.last} ${t.abbr} ${roleStr} ${t.administrativeRole || ''}`.toLowerCase()
+      };
+    });
+
+    let list = [...supportItems, ...specialistItems];
+    if (supportStaffFilter === 'support') {
+      list = supportItems;
+    } else if (supportStaffFilter === 'specialists') {
+      list = specialistItems;
+    } else if (supportStaffFilter === 'duty') {
+      list = list.filter(i => i.dutyEligible);
+    }
+
+    if (q) {
+      list = list.filter(i => i.searchStr.includes(q));
+    }
+
+    return list;
+  }, [appState.supportStaff, nonTeachingTeachers, staffSearchQuery, supportStaffFilter]);
 
   const filteredSupportStaff = useMemo(() => {
     return (appState.supportStaff || []).filter(s => {
@@ -4669,7 +4875,7 @@ export default function KreatorSzkoly({
                     }`}
                   >
                     <Users size={15} />
-                    <span>Pracownicy niepedagogiczni ({appState.supportStaff?.length || 0})</span>
+                    <span>Pracownicy niepedagogiczni i poza tablicą ({totalNonTeachingCount})</span>
                   </button>
                 </div>
               </div>
@@ -4908,6 +5114,10 @@ export default function KreatorSzkoly({
                               🛡️ Wliczaj do puli dyżurów korytarzowych
                             </span>
                           </label>
+                          <div className="mt-1 pt-1.5 border-t border-amber-200/80 text-[10px] text-amber-900 font-semibold flex items-center gap-1.5">
+                            <span>💡</span>
+                            <span>Pracownik zostanie również ujęty w zakładce <strong>„Pracownicy niepedagogiczni i poza tablicą”</strong>.</span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -5551,6 +5761,11 @@ export default function KreatorSzkoly({
                         <option value="Pracownik stołówki">🍲 Pracownik stołówki</option>
                         <option value="Konserwator">🔧 Konserwator</option>
                         <option value="Pielęgniarka szkolna">🩺 Pielęgniarka szkolna</option>
+                        <option value="Pedagog / Psycholog szkolny">🧠 Pedagog / Psycholog szkolny</option>
+                        <option value="Świetlica / Wychowawca świetlicy">🧸 Świetlica / Wychowawca świetlicy</option>
+                        <option value="Bibliotekarz">📖 Bibliotekarz</option>
+                        <option value="Logopeda / Terapeuta">🗣️ Logopeda / Terapeuta</option>
+                        <option value="Sekretariat / Administracja">💼 Sekretariat / Administracja</option>
                         <option value="Inne">➕ Inne (wpisz własne)</option>
                       </select>
                     </div>
@@ -5661,26 +5876,105 @@ export default function KreatorSzkoly({
 
                 {/* Kolumna Listy Pracowników */}
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm md:col-span-2 overflow-hidden flex flex-col">
-                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row gap-3 justify-between items-center">
-                    <div className="relative w-full sm:max-w-xs">
-                      <input
-                        type="text"
-                        placeholder="Szukaj personelu..."
-                        className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-white font-medium"
-                        value={staffSearchQuery}
-                        onChange={(e) => setStaffSearchQuery(e.target.value)}
-                      />
-                      <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                  {/* Nagłówek i Wyszukiwarka */}
+                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-col gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
+                      <div className="relative w-full sm:max-w-xs">
+                        <input
+                          type="text"
+                          placeholder="Szukaj personelu i ról..."
+                          className="w-full pl-8 pr-8 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500 bg-white font-medium"
+                          value={staffSearchQuery}
+                          onChange={(e) => setStaffSearchQuery(e.target.value)}
+                        />
+                        <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                        {staffSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setStaffSearchQuery('')}
+                            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                            title="Wyczyść szukanie"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-3">
+                        <span>Łącznie: <strong className="text-slate-900 font-black">{totalNonTeachingCount}</strong></span>
+                        <span>Obsługa: <strong className="text-blue-700 font-black">{appState.supportStaff?.length || 0}</strong></span>
+                        <span>Poza tablicą: <strong className="text-amber-700 font-black">{nonTeachingTeachers.length}</strong></span>
+                        <span>W dyżurach: <strong className="text-emerald-700 font-black">{filteredUnifiedStaff.filter(s => s.dutyEligible).length}</strong></span>
+                      </div>
                     </div>
-                    <div className="text-[10px] text-slate-500 font-semibold flex items-center gap-3">
-                      <span>Łącznie: <strong className="text-slate-900 font-black">{appState.supportStaff?.length || 0}</strong></span>
-                      <span>W dyżurach: <strong className="text-emerald-700 font-black">{(appState.supportStaff || []).filter(s => s.dutyEligible !== false).length}</strong></span>
+
+                    {/* Filtry podkategorii personelu */}
+                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-200/70">
+                      <button
+                        type="button"
+                        onClick={() => setSupportStaffFilter('all')}
+                        className={`px-3 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          supportStaffFilter === 'all'
+                            ? 'bg-slate-900 text-white shadow-xs'
+                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                        }`}
+                      >
+                        Wszyscy
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${supportStaffFilter === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                          {totalNonTeachingCount}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSupportStaffFilter('support')}
+                        className={`px-3 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          supportStaffFilter === 'support'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'bg-white text-blue-700 hover:bg-blue-50 border border-slate-200'
+                        }`}
+                      >
+                        🏢 Personel obsługi
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${supportStaffFilter === 'support' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800'}`}>
+                          {appState.supportStaff?.length || 0}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSupportStaffFilter('specialists')}
+                        className={`px-3 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          supportStaffFilter === 'specialists'
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : 'bg-white text-amber-700 hover:bg-amber-50 border border-slate-200'
+                        }`}
+                      >
+                        📚 Specjaliści poza tablicą
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${supportStaffFilter === 'specialists' ? 'bg-amber-700 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                          {nonTeachingTeachers.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setSupportStaffFilter('duty')}
+                        className={`px-3 py-1 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          supportStaffFilter === 'duty'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white text-emerald-700 hover:bg-emerald-50 border border-slate-200'
+                        }`}
+                      >
+                        🛡️ W puli dyżurów
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${supportStaffFilter === 'duty' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {(appState.supportStaff || []).filter(s => s.dutyEligible !== false).length + nonTeachingTeachers.filter(t => t.nonTeachingDutyEligible !== false).length}
+                        </span>
+                      </button>
                     </div>
                   </div>
 
+                  {/* Lista elementów */}
                   <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
-                    {(filteredSupportStaff || []).map((st) => (
-                      <div key={st.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
+                    {filteredUnifiedStaff.map((st) => (
+                      <div key={st.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/60 w-full min-w-0 gap-4 transition">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <span 
                             className="w-9 h-9 text-white font-mono font-black text-[10px] rounded-lg tracking-wider flex items-center justify-center border shadow-xs shrink-0" 
@@ -5693,56 +5987,138 @@ export default function KreatorSzkoly({
                               <span className="text-xs font-black text-slate-900 leading-none truncate">
                                 {st.first} {st.last}
                               </span>
-                              <span className="bg-slate-100 text-slate-700 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 border border-slate-200">
+                              <span className="bg-slate-100 text-slate-800 text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 border border-slate-200">
                                 {st.role}
                               </span>
+                              {st.category === 'support' ? (
+                                <span className="bg-blue-50 text-blue-700 text-[8.5px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 border border-blue-200">
+                                  🏢 Obsługa (KP)
+                                </span>
+                              ) : (
+                                <span className="bg-amber-50 text-amber-800 text-[8.5px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 border border-amber-200">
+                                  📚 Karta Nauczyciela
+                                </span>
+                              )}
                               <button
                                 type="button"
-                                onClick={() => handleToggleStaffDutyEligible(st.id)}
+                                onClick={() => {
+                                  if (st.category === 'support') {
+                                    handleToggleStaffDutyEligible(st.id);
+                                  } else {
+                                    handleToggleTeacherNonTeachingDutyEligible(st.id);
+                                  }
+                                }}
                                 className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shrink-0 transition cursor-pointer ${
-                                  st.dutyEligible !== false
+                                  st.dutyEligible
                                     ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
                                     : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
                                 }`}
                                 title="Kliknij, aby włączyć lub wyłączyć z dyżurów"
                               >
-                                {st.dutyEligible !== false ? '🛡️ W puli dyżurów' : '⛔ Bez dyżurów'}
+                                {st.dutyEligible ? '🛡️ W puli dyżurów' : '⛔ Bez dyżurów'}
                               </button>
                             </div>
                             <div className="text-[10px] text-slate-400 font-medium mt-1 flex flex-wrap items-center gap-3">
-                              <span>Wymiar: <strong className="text-slate-700 font-semibold">{st.weeklyHours ?? 40}h/tydz.</strong></span>
-                              {st.notes && <span className="truncate">Rejon: {st.notes}</span>}
+                              <span>Wymiar: <strong className="text-slate-700 font-semibold">{st.hoursLabel}</strong></span>
+                              {st.notes && <span className="truncate">Informacja: {st.notes}</span>}
                             </div>
                           </div>
                         </div>
-                        <div className="flex gap-1 shrink-0">
-                          <button 
-                            onClick={() => handleStartEditSupportStaff(st)}
-                            className="p-1 px-2 text-slate-400 hover:text-indigo-600 rounded select-none cursor-pointer"
-                            title="Edytuj dane pracownika"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button 
-                            onClick={() => handleRemoveSupportStaff(st.id)}
-                            className="p-1 px-2 text-slate-400 hover:text-rose-500 rounded select-none cursor-pointer"
-                            title="Usuń pracownika"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+
+                        {/* Przyciski akcji */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {st.category === 'support' ? (
+                            <>
+                              <button 
+                                onClick={() => handleStartEditSupportStaff(st.rawSupportStaff!)}
+                                className="p-1 px-2 text-slate-400 hover:text-indigo-600 rounded select-none cursor-pointer"
+                                title="Edytuj dane pracownika obsługi"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button 
+                                onClick={() => handleConvertSupportStaffToTeacher(st.rawSupportStaff!)}
+                                className="p-1 px-2 text-slate-400 hover:text-amber-600 rounded select-none cursor-pointer"
+                                title="Przekształć w profil nauczyciela/specjalisty"
+                              >
+                                <GraduationCap size={13} />
+                              </button>
+                              <button 
+                                onClick={() => handleRemoveSupportStaff(st.id)}
+                                className="p-1 px-2 text-slate-400 hover:text-rose-500 rounded select-none cursor-pointer"
+                                title="Usuń pracownika personelu"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button 
+                                onClick={() => {
+                                  setStaffTab('teachers');
+                                  if (st.rawTeacher) handleStartEditTeacher(st.rawTeacher);
+                                }}
+                                className="px-2 py-1 text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg select-none cursor-pointer flex items-center gap-1"
+                                title="Przejdź do edycji w profilu nauczyciela"
+                              >
+                                <Edit3 size={11} />
+                                <span>Edytuj profil</span>
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  if (st.rawTeacher) handleConvertTeacherToSupportStaff(st.rawTeacher);
+                                }}
+                                className="p-1 px-2 text-slate-400 hover:text-blue-600 rounded select-none cursor-pointer"
+                                title="Przenieś do personelu obsługi (SupportStaff)"
+                              >
+                                <Users size={13} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
 
-                    {(!appState.supportStaff || appState.supportStaff.length === 0) && (
+                    {/* Stany puste */}
+                    {filteredUnifiedStaff.length === 0 && (
                       <div className="p-12 text-center space-y-3">
                         <Users size={32} className="mx-auto text-slate-300" />
-                        <p className="text-xs text-slate-500 font-medium">
-                          Brak zarejestrowanych pracowników niepedagogicznych.
-                        </p>
-                        <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                          Dodaj woźnych, pracowników ochrony, szatniarzy lub pomoce nauczycieli, aby włączyć ich do sprawowania opieki i dyżurów na korytarzach szkolnych.
-                        </p>
+                        {staffSearchQuery.trim() ? (
+                          <>
+                            <p className="text-xs text-slate-600 font-bold">
+                              Brak wyników wyszukiwania dla frazy „{staffSearchQuery}”.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setStaffSearchQuery('')}
+                              className="px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 cursor-pointer"
+                            >
+                              Wyczyść filtr wyszukiwania
+                            </button>
+                          </>
+                        ) : supportStaffFilter !== 'all' ? (
+                          <>
+                            <p className="text-xs text-slate-500 font-medium">
+                              Brak pracowników w wybranej kategorii filtra.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setSupportStaffFilter('all')}
+                              className="px-3 py-1.5 text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-200 cursor-pointer"
+                            >
+                              Pokaż wszystkich pracowników
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs text-slate-500 font-medium">
+                              Brak zarejestrowanych pracowników niepedagogicznych.
+                            </p>
+                            <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                              Dodaj woźnych, pracowników ochrony, szatniarzy, asystentów lub pedagogów i świetlicę, aby zarządzać personelem i włączyć ich do sprawowania opieki w dyżurach szkolnych.
+                            </p>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
