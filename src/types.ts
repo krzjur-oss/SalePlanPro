@@ -313,6 +313,7 @@ export interface DyzurEntry {
   teacherAbbr: string;
   locked: boolean;
   note?: string;
+  isUnneeded?: boolean; // Dyżur oznaczony ręcznie jako niepotrzebny / zbędny
 }
 
 export interface DyzuryState {

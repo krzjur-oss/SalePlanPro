@@ -658,10 +658,14 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
 
       daysToCalculate.forEach(dayIdx => {
         miejsca.forEach(miejsce => {
+          const key = `${miejsce.id}|${dayIdx}|${przerwa.num}`;
+          if (harmonogram[key]?.isUnneeded) {
+            // Dyżur ręcznie oznaczony jako zbędny – nie generuje zapotrzebowania
+            return;
+          }
           if (checkPlaceActive(miejsce, dayIdx, przerwa)) {
             totalDemand += (miejsce.teachersNeeded || 1);
 
-            const key = `${miejsce.id}|${dayIdx}|${przerwa.num}`;
             if (harmonogram[key]?.teacherAbbr) {
               totalAssigned += 1;
             }

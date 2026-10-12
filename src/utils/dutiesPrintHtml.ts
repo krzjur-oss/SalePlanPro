@@ -31,7 +31,14 @@ export function generateDutiesHtml(appState: AppState, schedData: SchedData = {}
           : null;
         
         let cellContent = '-';
-        if (entry?.teacherAbbr) {
+        if (entry?.isUnneeded) {
+          cellContent = `
+            <div style="font-weight: 800; background-color: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; padding: 3px 6px; border-radius: 6px; font-size: 10px; display: inline-block;">
+              🚫 Zbędny
+            </div>
+            ${entry.note ? `<div style="font-size: 8px; color: #64748b; font-weight: 600; margin-top: 2px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${escapeHtml(entry.note)}">${escapeHtml(entry.note)}</div>` : ''}
+          `;
+        } else if (entry?.teacherAbbr) {
           cellContent = `
             <div style="font-weight: 900; background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 4px 8px; border-radius: 6px; font-size: 11px; display: inline-block; min-width: 45px; text-align: center;">
               ${escapeHtml(entry.teacherAbbr)}

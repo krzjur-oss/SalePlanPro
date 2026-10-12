@@ -1193,7 +1193,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.9.11';
+  const CURRENT_VERSION = '3.9.12';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -3179,9 +3179,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.11!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.12!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Zadania poza tablicą w module Nauczyciele, moduł personelu niepedagogicznego oraz pełna integracja z pulą dyżurów.
+                  Ręczne oznaczanie zbędnych (niepotrzebnych) dyżurów w Etapie 3, szybkie przyciski w siatce oraz bilans zwolnionych stanowisk.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

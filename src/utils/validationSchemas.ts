@@ -228,9 +228,10 @@ export const PrzerwaSchema = z.object({
 }).passthrough();
 
 export const DyzurEntrySchema = z.object({
-  teacherAbbr: z.string(),
+  teacherAbbr: z.string().optional().default(''),
   locked: z.boolean().optional().default(false),
   note: z.string().optional(),
+  isUnneeded: z.boolean().optional().default(false),
 }).passthrough();
 
 export const PlanDyzuryStateSchema = z.object({

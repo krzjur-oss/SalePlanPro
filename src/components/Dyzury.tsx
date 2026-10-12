@@ -132,6 +132,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [dutyNote, setDutyNote] = useState('');
   const [dutyLocked, setDutyLocked] = useState(true);
+  const [slotIsUnneeded, setSlotIsUnneeded] = useState<boolean>(false);
+  const [applyAllDays, setApplyAllDays] = useState<boolean>(false);
+  const [showUnneededManager, setShowUnneededManager] = useState<boolean>(false);
 
   const [editingPlaceId, setEditingPlaceId] = useState<string | null>(null);
   const [editingBreakNum, setEditingBreakNum] = useState<number | null>(null);
@@ -351,14 +354,30 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   // Memoized duty demand statistics
   const demandStats = useMemo(() => {
     let totalMinutesNeeded = 0;
-    dyz.przerwy.forEach(przerwa => {
-      const duration = getBreakDuration(przerwa);
-      dyz.miejsca.forEach(miejsce => {
-        totalMinutesNeeded += duration * (miejsce.teachersNeeded || 1);
+    let unneededMinutes = 0;
+    let unneededSlotsCount = 0;
+    let unneededTodayCount = 0;
+
+    for (let day = 0; day < 5; day++) {
+      dyz.przerwy.forEach(przerwa => {
+        const duration = getBreakDuration(przerwa);
+        dyz.miejsca.forEach(miejsce => {
+          const key = `${miejsce.id}|${day}|${przerwa.num}`;
+          const isSlotUnneeded = Boolean(dyz.harmonogram[key]?.isUnneeded);
+          if (isSlotUnneeded) {
+            unneededSlotsCount += 1;
+            unneededMinutes += duration;
+            if (day === activeDay) {
+              unneededTodayCount += 1;
+            }
+          } else {
+            totalMinutesNeeded += duration * (miejsce.teachersNeeded || 1);
+          }
+        });
       });
-    });
-    // weekly demand (multiplied by 5 school days)
-    const weeklyMinutesNeeded = totalMinutesNeeded * 5;
+    }
+    // weekly demand (sum over active needed slots across all 5 days)
+    const weeklyMinutesNeeded = totalMinutesNeeded;
 
     // Total active/eligible personnel count
     const teachersCount = eligiblePersonnel.length;
@@ -384,7 +403,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     // Total currently assigned duty minutes
     let totalAssignedMinutes = 0;
     Object.entries(dyz.harmonogram).forEach(([key, entry]) => {
-      if (entry.teacherAbbr) {
+      if (entry.teacherAbbr && !entry.isUnneeded) {
         const parts = key.split('|');
         const przerwaNum = parseInt(parts[2]);
         const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
@@ -396,13 +415,16 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     return {
       weeklyMinutesNeeded,
+      unneededMinutes,
+      unneededSlotsCount,
+      unneededTodayCount,
       teachersCount,
       totalTeachingHours,
       avgMinutesForFullTime: Math.round(avgMinutesForFullTime),
       totalAssignedMinutes,
       coveragePercent: weeklyMinutesNeeded > 0 ? Math.round((totalAssignedMinutes / weeklyMinutesNeeded) * 100) : 0
     };
-  }, [dyz.przerwy, dyz.miejsca, dyz.harmonogram, eligiblePersonnel, teacherHours]);
+  }, [dyz.przerwy, dyz.miejsca, dyz.harmonogram, eligiblePersonnel, teacherHours, activeDay]);
 
 
 
@@ -932,12 +954,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     if (sumProportions === 0) sumProportions = 1;
 
-    // Obliczenie łącznej liczby slotów dyżurów w tygodniu oraz ich czasu trwania
+    // Obliczenie łącznej liczby slotów dyżurów w tygodniu oraz ich czasu trwania (z pominięciem zbędnych)
     let totalRequiredDutyMinutes = 0;
     for (let day = 0; day < 5; day++) {
       for (const przerwa of dyz.przerwy) {
         const breakDur = getBreakDuration(przerwa);
         for (const miejsce of dyz.miejsca) {
+          const key = `${miejsce.id}|${day}|${przerwa.num}`;
+          if (nextHarm[key]?.isUnneeded) continue;
           totalRequiredDutyMinutes += breakDur * (miejsce.teachersNeeded || 1);
         }
       }
@@ -972,7 +996,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     // Uzupełnienie liczby przydzielonych minut zablokowanymi dyżurami
     Object.entries(nextHarm).forEach(([key, entry]) => {
-      if (entry.locked && entry.teacherAbbr && assignedMinutes[entry.teacherAbbr] !== undefined) {
+      if (entry.locked && entry.teacherAbbr && !entry.isUnneeded && assignedMinutes[entry.teacherAbbr] !== undefined) {
         const parts = key.split('|'); // [miejsceId, day, przerwaNum]
         const przerwaNum = parseInt(parts[2]);
         const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
@@ -982,9 +1006,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       }
     });
 
-    // Clear unlocked duties first so we can regenerate them
+    // Clear unlocked duties first so we can regenerate them (zachowaj sloty zbędne)
     Object.keys(nextHarm).forEach(key => {
-      if (!nextHarm[key]?.locked) {
+      if (!nextHarm[key]?.locked && !nextHarm[key]?.isUnneeded) {
         delete nextHarm[key];
       }
     });
@@ -1054,9 +1078,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
           const breakDur = getBreakDuration(przerwa);
 
           for (const miejsce of dyz.miejsca) {
-            if (!isPlaceActiveForBreak(miejsce, day, przerwa)) continue;
-
             const key = `${miejsce.id}|${day}|${przerwa.num}`;
+
+            // Pomiń sloty oznaczone jako zbędne
+            if (nextHarm[key]?.isUnneeded) continue;
+
+            if (!isPlaceActiveForBreak(miejsce, day, przerwa)) continue;
 
             // Skip if already filled
             if (nextHarm[key]) continue;
@@ -1183,6 +1210,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     setSelectedTeacher(entry?.teacherAbbr || '');
     setDutyNote(entry?.note || '');
     setDutyLocked(entry ? entry.locked : true);
+    setSlotIsUnneeded(Boolean(entry?.isUnneeded));
+    setApplyAllDays(false);
   };
 
   const saveDirectAssign = (e?: React.FormEvent) => {
@@ -1190,17 +1219,37 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     if (!editingSlot) return;
 
     const { miejsceId, przerwa } = editingSlot;
-    const key = `${miejsceId}|${activeDay}|${przerwa}`;
     const nextHarm = { ...dyz.harmonogram };
+    const daysToUpdate = applyAllDays ? [0, 1, 2, 3, 4] : [activeDay];
 
-    if (selectedTeacher) {
-      nextHarm[key] = {
-        teacherAbbr: selectedTeacher,
-        locked: dutyLocked,
-        note: dutyNote.trim() || undefined
-      };
+    if (slotIsUnneeded) {
+      daysToUpdate.forEach(d => {
+        const k = `${miejsceId}|${d}|${przerwa}`;
+        nextHarm[k] = {
+          teacherAbbr: '',
+          locked: true,
+          isUnneeded: true,
+          note: dutyNote.trim() || undefined
+        };
+      });
+      notify(applyAllDays ? 'Oznaczono dyżur jako zbędny (cały tydzień Pn–Pt)' : 'Oznaczono dyżur jako zbędny');
+    } else if (selectedTeacher) {
+      daysToUpdate.forEach(d => {
+        const k = `${miejsceId}|${d}|${przerwa}`;
+        nextHarm[k] = {
+          teacherAbbr: selectedTeacher,
+          locked: dutyLocked,
+          isUnneeded: false,
+          note: dutyNote.trim() || undefined
+        };
+      });
+      notify(applyAllDays ? 'Przypisano dyżur na cały tydzień' : 'Zapisano dyżur');
     } else {
-      delete nextHarm[key];
+      daysToUpdate.forEach(d => {
+        const k = `${miejsceId}|${d}|${przerwa}`;
+        delete nextHarm[k];
+      });
+      notify(applyAllDays ? 'Wyczyszczono dyżur z całego tygodnia' : 'Wyczyszczono dyżur');
     }
 
     onChangeAppState({
@@ -1212,7 +1261,58 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     });
 
     setEditingSlot(null);
-    notify('Zapisano dyżur');
+  };
+
+  // Szybkie przełączenie statusu zbędnego dyżuru (1-kliknięcie w komórce)
+  const handleQuickToggleUnneeded = (miejsceId: string, przerwa: number) => {
+    if (presentationMode) return;
+    const key = `${miejsceId}|${activeDay}|${przerwa}`;
+    const entry = dyz.harmonogram[key];
+    const nextHarm = { ...dyz.harmonogram };
+    const place = dyz.miejsca.find(m => m.id === miejsceId);
+    const prw = dyz.przerwy.find(p => p.num === przerwa);
+
+    if (entry?.isUnneeded) {
+      delete nextHarm[key];
+      notify(`Przywrócono dyżur jako wymagany: ${place?.name || ''} (${prw?.name || `Przerwa ${przerwa}`})`);
+    } else {
+      nextHarm[key] = {
+        teacherAbbr: '',
+        locked: true,
+        isUnneeded: true,
+        note: 'Dyżur zbędny'
+      };
+      notify(`Oznaczono dyżur jako zbędny: ${place?.name || ''} (${prw?.name || `Przerwa ${przerwa}`})`);
+    }
+
+    onChangeAppState({
+      ...appState,
+      dyzury: {
+        ...dyz,
+        harmonogram: nextHarm
+      }
+    });
+  };
+
+  // Usunięcie wszystkich oznaczeń zbędnych dyżurów z tygodnia
+  const handleClearAllUnneeded = () => {
+    if (!confirm('Czy na pewno chcesz usunąć wszystkie oznaczenia zbędnych dyżurów z całego tygodnia?')) return;
+    const nextHarm = { ...dyz.harmonogram };
+    let removedCount = 0;
+    Object.keys(nextHarm).forEach(key => {
+      if (nextHarm[key]?.isUnneeded) {
+        delete nextHarm[key];
+        removedCount++;
+      }
+    });
+    onChangeAppState({
+      ...appState,
+      dyzury: {
+        ...dyz,
+        harmonogram: nextHarm
+      }
+    });
+    notify(`Przywrócono ${removedCount} dyżurów jako wymagane`);
   };
 
   const handleClearDuties = () => {
@@ -1351,6 +1451,26 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                 <span>{showStatsSidebar ? 'Zwiń bilans' : 'Pokaż bilans'}</span>
               </button>
             )}
+            {activeTab === 'roster' && (
+              <button
+                type="button"
+                onClick={() => setShowUnneededManager(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
+                  demandStats.unneededSlotsCount > 0
+                    ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 shadow-xs'
+                    : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+                title="Wykaz dyżurów oznaczonych ręcznie jako zbędne (niewymagane)"
+              >
+                <span>🚫</span>
+                <span>Zbędne dyżury</span>
+                {demandStats.unneededSlotsCount > 0 && (
+                  <span className="bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-black">
+                    {demandStats.unneededSlotsCount}
+                  </span>
+                )}
+              </button>
+            )}
             <button 
               onClick={handleAutoSuggest}
               className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition flex items-center gap-1 cursor-pointer"
@@ -1413,7 +1533,34 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={() => handleDropOnSlot(place.id, p.num)}
                               >
-                                {duty?.teacherAbbr ? (
+                                {duty?.isUnneeded ? (
+                                  <div 
+                                    onClick={() => openDirectAssign(place.id, p.num)}
+                                    className="group/unneeded relative p-1.5 rounded-lg border-2 border-dashed border-amber-300/80 bg-amber-50/70 hover:bg-amber-100/80 hover:border-amber-400 transition cursor-pointer flex flex-col justify-center items-center min-h-[50px] shadow-xs select-none"
+                                    title={duty.note ? `Dyżur oznaczony jako zbędny: ${duty.note}. Kliknij, aby edytować.` : 'Dyżur oznaczony ręcznie jako niepotrzebny (zbędny). Kliknij, aby edytować.'}
+                                  >
+                                    <div className="flex items-center gap-1 text-amber-950 font-bold">
+                                      <span className="text-xs leading-none">🚫</span>
+                                      <span className="text-[10px] font-black uppercase tracking-wider font-mono">Zbędny</span>
+                                    </div>
+                                    <span className="text-[9px] text-amber-800/90 font-semibold truncate max-w-[125px] mt-0.5" title={duty.note || 'Zwolniony z obsady'}>
+                                      {duty.note || 'Dyżur niepotrzebny'}
+                                    </span>
+                                    {!presentationMode && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleQuickToggleUnneeded(place.id, p.num);
+                                        }}
+                                        className="opacity-0 group-hover/unneeded:opacity-100 focus:opacity-100 absolute top-1 right-1 text-[8.5px] bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-700 border border-slate-200 rounded px-1.5 py-0.5 shadow-xs transition font-bold"
+                                        title="Przywróć dyżur jako wymagany"
+                                      >
+                                        ✕
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : duty?.teacherAbbr ? (
                                   <div 
                                     draggable={!presentationMode}
                                     onDragStart={() => handleDragStart(place.id, p.num)}
@@ -1443,21 +1590,52 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                                 ) : presentationMode ? (
                                   <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>
                                 ) : !isActive ? (
-                                  <button 
-                                    onClick={() => openDirectAssign(place.id, p.num)}
-                                    className="w-full py-1 border border-dashed border-slate-200 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/30 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer text-[9px] flex flex-col items-center justify-center min-h-[46px]"
-                                    title="Na tym korytarzu nie odbywają się teraz lekcje (dyżur niewymagany)"
-                                  >
-                                    <span className="font-bold text-slate-400 leading-none">+</span>
-                                    <span className="text-[7.5px] text-slate-400 font-semibold leading-none mt-0.5">wolne</span>
-                                  </button>
+                                  <div className="relative group/slot flex items-center justify-center w-full min-h-[46px]">
+                                    <button 
+                                      onClick={() => openDirectAssign(place.id, p.num)}
+                                      className="w-full h-full py-1 border border-dashed border-slate-200 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/30 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer text-[9px] flex flex-col items-center justify-center min-h-[46px]"
+                                      title="Na tym korytarzu nie odbywają się teraz lekcje (dyżur niewymagany automatycznie)"
+                                    >
+                                      <span className="font-bold text-slate-400 leading-none">+</span>
+                                      <span className="text-[7.5px] text-slate-400 font-semibold leading-none mt-0.5">wolne</span>
+                                    </button>
+                                    {!presentationMode && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleQuickToggleUnneeded(place.id, p.num);
+                                        }}
+                                        className="opacity-0 group-hover/slot:opacity-100 focus:opacity-100 absolute top-1 right-1 p-1 rounded bg-white hover:bg-amber-100 text-slate-400 hover:text-amber-800 border border-slate-200 hover:border-amber-300 shadow-xs transition text-[9px] font-bold"
+                                        title="Oznacz ręcznie: dyżur zbędny / niepotrzebny"
+                                      >
+                                        🚫
+                                      </button>
+                                    )}
+                                  </div>
                                 ) : (
-                                  <button 
-                                    onClick={() => openDirectAssign(place.id, p.num)}
-                                    className="w-full py-2.5 border border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/20 hover:text-blue-600 rounded-lg text-slate-400 text-sm font-light transition cursor-pointer min-h-[46px] flex items-center justify-center"
-                                  >
-                                    +
-                                  </button>
+                                  <div className="relative group/slot flex items-center justify-center w-full min-h-[46px]">
+                                    <button 
+                                      onClick={() => openDirectAssign(place.id, p.num)}
+                                      className="w-full h-full py-2.5 border border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/20 hover:text-blue-600 rounded-lg text-slate-400 text-sm font-light transition cursor-pointer min-h-[46px] flex items-center justify-center"
+                                      title="Kliknij, aby przypisać osobę na dyżur"
+                                    >
+                                      +
+                                    </button>
+                                    {!presentationMode && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleQuickToggleUnneeded(place.id, p.num);
+                                        }}
+                                        className="opacity-0 group-hover/slot:opacity-100 focus:opacity-100 absolute top-1 right-1 p-1 rounded bg-white hover:bg-amber-100 text-slate-400 hover:text-amber-800 border border-slate-200 hover:border-amber-300 shadow-xs transition text-[9px] font-bold"
+                                        title="Oznacz ręcznie: dyżur zbędny / niepotrzebny"
+                                      >
+                                        🚫
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                             );
@@ -2404,6 +2582,18 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                       </div>
                     </div>
 
+                    {demandStats.unneededSlotsCount > 0 && (
+                      <div className="p-2.5 bg-amber-50/80 border border-amber-200/90 rounded-lg flex items-center justify-between text-[11px] text-amber-950">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <span>🚫</span>
+                          <span>Dyżury zbędne (zwolnione):</span>
+                        </div>
+                        <span className="font-mono font-black text-amber-900">
+                          {demandStats.unneededSlotsCount} ({demandStats.unneededMinutes} min)
+                        </span>
+                      </div>
+                    )}
+
                     <div className="p-2.5 bg-indigo-50/50 border border-indigo-100/50 rounded-lg space-y-1.5 text-[11px] leading-relaxed">
                       <div className="flex justify-between font-semibold text-slate-700">
                         <span>Liczba uprawnionych nauczycieli:</span>
@@ -2613,163 +2803,368 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                 </div>
               )}
 
-              <div className="p-4 overflow-y-auto space-y-2 flex-1 scrollbar-thin">
-                {/* Opcje edycji dyżuru */}
-                {selectedTeacher && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3 mb-3">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                      <span>Ustawienia dyżuru dla: <span className="font-mono bg-white px-1.5 py-0.5 border rounded text-blue-700">{selectedTeacher}</span></span>
+              <div className="p-4 overflow-y-auto space-y-3 flex-1 scrollbar-thin">
+                {/* Tryb konfiguracji slotu: Wymagany vs Zbędny */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSlotIsUnneeded(false);
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      !slotIsUnneeded
+                        ? 'bg-blue-50/80 border-blue-500 text-blue-900 shadow-xs ring-1 ring-blue-300'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>🧑‍🏫</span>
+                    <span>Dyżur wymagany</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSlotIsUnneeded(true);
+                      setSelectedTeacher('');
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      slotIsUnneeded
+                        ? 'bg-amber-50 border-amber-500 text-amber-950 shadow-xs ring-1 ring-amber-300'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>🚫</span>
+                    <span>Dyżur zbędny</span>
+                  </button>
+                </div>
+
+                {/* Gdy oznaczony jako zbędny */}
+                {slotIsUnneeded ? (
+                  <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-3.5 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-xl leading-none">🚫</span>
+                      <div className="text-xs text-amber-950">
+                        <p className="font-extrabold text-[12px]">Stanowisko oznaczone jako zbędne (niepotrzebne)</p>
+                        <p className="text-[11px] text-amber-900/90 mt-0.5 leading-relaxed">
+                          W tym miejscu o tej godzinie dyżur nie wymaga obsady. Generator pominie to stanowisko na tej przerwie, a system nie wykaże braków kadrowych ani nie obciąży nauczycieli.
+                        </p>
+                      </div>
                     </div>
+
                     <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Notatka / Uwagi:</label>
-                      <input 
+                      <label className="text-[10px] font-bold text-amber-900 uppercase tracking-wider">
+                        Powód / notatka (opcjonalnie):
+                      </label>
+                      <input
                         type="text"
-                        placeholder="np. Zastępstwo za Kowalskiego"
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:border-blue-500 font-medium"
+                        placeholder="np. Brak uczniów w tej części korytarza, skrzydło zamknięte"
+                        className="w-full px-3 py-1.5 border border-amber-200 rounded-lg text-xs bg-white outline-none focus:border-amber-500 font-medium text-slate-800"
                         value={dutyNote}
                         onChange={(e) => setDutyNote(e.target.value)}
                       />
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
-                      <input 
+
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-amber-950 pt-1.5 border-t border-amber-200/60">
+                      <input
                         type="checkbox"
-                        checked={dutyLocked}
-                        onChange={(e) => setDutyLocked(e.target.checked)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                        checked={applyAllDays}
+                        onChange={(e) => setApplyAllDays(e.target.checked)}
+                        className="rounded border-amber-300 text-amber-600 focus:ring-amber-500 h-4 w-4"
                       />
-                      <span>Zablokuj dyżur (zapobiega nadpisaniu przez generator)</span>
+                      <span>Zastosuj we wszystkie dni robocze (Poniedziałek – Piątek) o tej godzinie</span>
                     </label>
                   </div>
+                ) : (
+                  <>
+                    {/* Opcje edycji dyżuru */}
+                    {selectedTeacher && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3 mb-2">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                          <span>Ustawienia dyżuru dla: <span className="font-mono bg-white px-1.5 py-0.5 border rounded text-blue-700">{selectedTeacher}</span></span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Notatka / Uwagi:</label>
+                          <input 
+                            type="text"
+                            placeholder="np. Zastępstwo za Kowalskiego"
+                            className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none focus:border-blue-500 font-medium"
+                            value={dutyNote}
+                            onChange={(e) => setDutyNote(e.target.value)}
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                          <input 
+                            type="checkbox"
+                            checked={dutyLocked}
+                            onChange={(e) => setDutyLocked(e.target.checked)}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                          />
+                          <span>Zablokuj dyżur (zapobiega nadpisaniu przez generator)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 pt-1 border-t border-slate-200/60">
+                          <input 
+                            type="checkbox"
+                            checked={applyAllDays}
+                            onChange={(e) => setApplyAllDays(e.target.checked)}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                          />
+                          <span>Zastosuj we wszystkie dni robocze (Poniedziałek – Piątek)</span>
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Opcja: Brak dyżuru */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedTeacher('');
+                        setSlotIsUnneeded(false);
+                      }}
+                      className={`w-full p-2.5 rounded-lg border text-left text-xs font-bold transition flex justify-between items-center cursor-pointer ${
+                        selectedTeacher === '' && !slotIsUnneeded
+                          ? 'border-blue-400 bg-blue-50/40 text-blue-900' 
+                          : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                      }`}
+                    >
+                      <span>— Pusty slot (wymagany, gotowy do obsadzenia) —</span>
+                      {selectedTeacher === '' && !slotIsUnneeded && <span className="text-blue-500">✓</span>}
+                    </button>
+
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-1 border-b border-slate-100">
+                      Rekomendowani nauczyciele (inteligentne dopasowanie):
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {candidates.map(({ teacher, score, reason, lessonBefore, lessonAfter, currentMins, maxMins }) => {
+                        const isSelected = selectedTeacher === teacher.abbr;
+                        const isBusy = score === -1;
+                        
+                        let bgClass = 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50';
+                        let borderClass = 'border-slate-200';
+                        if (isSelected) {
+                          bgClass = 'bg-blue-50/65 text-blue-950';
+                          borderClass = 'border-blue-500 ring-2 ring-blue-100';
+                        } else if (isBusy) {
+                          bgClass = 'bg-slate-50/50 text-slate-400 cursor-not-allowed opacity-60';
+                          borderClass = 'border-slate-100';
+                        } else if (score === 3) {
+                          bgClass = 'bg-emerald-50/25 text-slate-800 hover:bg-emerald-50/50';
+                          borderClass = 'border-emerald-300';
+                        }
+
+                        return (
+                          <button
+                            key={teacher.id}
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => setSelectedTeacher(teacher.abbr)}
+                            className={`w-full p-2.5 rounded-xl border text-left transition flex flex-col gap-1 ${bgClass} ${borderClass}`}
+                          >
+                            <div className="flex justify-between items-center w-full">
+                              <span className="text-xs font-bold font-mono text-slate-900 flex items-center gap-1.5">
+                                <span 
+                                  className="w-2.5 h-2.5 rounded-full shrink-0" 
+                                  style={{ backgroundColor: teacher.color || '#64748b' }} 
+                                />
+                                <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-black border border-slate-200">
+                                  {teacher.abbr}
+                                </span>
+                                <span>{teacher.first} {teacher.last}</span>
+                                {teacher.isStaff && (
+                                  <span className="text-[9px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.2 rounded font-sans font-bold">
+                                    🏫 Obsługa
+                                  </span>
+                                )}
+                                {Boolean(!teacher.isStaff && teacher.nonTeachingHours && teacher.nonTeachingHours > 0) && (
+                                  <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded font-sans font-bold">
+                                    📚 Poza tablicą
+                                  </span>
+                                )}
+                              </span>
+                              <span className={`text-[10px] font-bold ${currentMins >= maxMins ? 'text-red-600' : 'text-slate-400'}`}>
+                                {currentMins} / {maxMins} min
+                              </span>
+                            </div>
+
+                            {/* Recommendation label / Helper description */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                score === 3 
+                                  ? 'bg-emerald-100 text-emerald-800' 
+                                  : score === 2 
+                                    ? 'bg-indigo-100 text-indigo-800' 
+                                    : score === 0 
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : isBusy 
+                                        ? 'bg-slate-200/80 text-slate-500' 
+                                        : 'bg-slate-100 text-slate-500'
+                              }`}>
+                                {reason}
+                              </span>
+                            </div>
+
+                            {/* Show school lessons context */}
+                            {(lessonBefore || lessonAfter) && (
+                              <div className="mt-1 text-[9px] font-semibold text-slate-400 bg-slate-50/50 rounded p-1.5 space-y-0.5 border border-slate-100">
+                                {lessonBefore && (
+                                  <div>
+                                    🕧 lekcja przed przerwą: <span className="font-bold text-slate-600">{lessonBefore.className} - {lessonBefore.subject}</span> w sali <span className="font-bold text-slate-700">{lessonBefore.roomName}</span>
+                                  </div>
+                                )}
+                                {lessonAfter && (
+                                  <div>
+                                    🕐 lekcja po przerwie: <span className="font-bold text-slate-600">{lessonAfter.className} - {lessonAfter.subject}</span> w sali <span className="font-bold text-slate-700">{lessonAfter.roomName}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
-
-                {/* Opcja: Brak dyżuru */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedTeacher('')}
-                  className={`w-full p-2.5 rounded-lg border text-left text-xs font-bold transition flex justify-between items-center ${
-                    selectedTeacher === '' 
-                      ? 'border-red-500 bg-red-50 text-red-900' 
-                      : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                  }`}
-                >
-                  <span>— Brak Dyżuru / Usuń przypisanie —</span>
-                  {selectedTeacher === '' && <span className="text-red-500">✓</span>}
-                </button>
-
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider py-1 border-b border-slate-100">
-                  Rekomendowani nauczyciele (inteligentne dopasowanie):
-                </div>
-
-                <div className="space-y-1.5">
-                  {candidates.map(({ teacher, score, reason, lessonBefore, lessonAfter, currentMins, maxMins }) => {
-                    const isSelected = selectedTeacher === teacher.abbr;
-                    const isBusy = score === -1;
-                    
-                    let bgClass = 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50';
-                    let borderClass = 'border-slate-200';
-                    if (isSelected) {
-                      bgClass = 'bg-blue-50/65 text-blue-950';
-                      borderClass = 'border-blue-500 ring-2 ring-blue-100';
-                    } else if (isBusy) {
-                      bgClass = 'bg-slate-50/50 text-slate-400 cursor-not-allowed opacity-60';
-                      borderClass = 'border-slate-100';
-                    } else if (score === 3) {
-                      bgClass = 'bg-emerald-50/25 text-slate-800 hover:bg-emerald-50/50';
-                      borderClass = 'border-emerald-300';
-                    }
-
-                    return (
-                      <button
-                        key={teacher.id}
-                        type="button"
-                        disabled={isBusy}
-                        onClick={() => setSelectedTeacher(teacher.abbr)}
-                        className={`w-full p-2.5 rounded-xl border text-left transition flex flex-col gap-1 ${bgClass} ${borderClass}`}
-                      >
-                        <div className="flex justify-between items-center w-full">
-                          <span className="text-xs font-bold font-mono text-slate-900 flex items-center gap-1.5">
-                            <span 
-                              className="w-2.5 h-2.5 rounded-full shrink-0" 
-                              style={{ backgroundColor: teacher.color || '#64748b' }} 
-                            />
-                            <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-[10px] font-black border border-slate-200">
-                              {teacher.abbr}
-                            </span>
-                            <span>{teacher.first} {teacher.last}</span>
-                            {teacher.isStaff && (
-                              <span className="text-[9px] bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.2 rounded font-sans font-bold">
-                                🏫 Obsługa
-                              </span>
-                            )}
-                            {Boolean(!teacher.isStaff && teacher.nonTeachingHours && teacher.nonTeachingHours > 0) && (
-                              <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.2 rounded font-sans font-bold">
-                                📚 Poza tablicą
-                              </span>
-                            )}
-                          </span>
-                          <span className={`text-[10px] font-bold ${currentMins >= maxMins ? 'text-red-600' : 'text-slate-400'}`}>
-                            {currentMins} / {maxMins} min
-                          </span>
-                        </div>
-
-                        {/* Recommendation label / Helper description */}
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                            score === 3 
-                              ? 'bg-emerald-100 text-emerald-800' 
-                              : score === 2 
-                                ? 'bg-indigo-100 text-indigo-800' 
-                                : score === 0 
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : isBusy 
-                                    ? 'bg-slate-200/80 text-slate-500' 
-                                    : 'bg-slate-100 text-slate-500'
-                          }`}>
-                            {reason}
-                          </span>
-                        </div>
-
-                        {/* Show school lessons context */}
-                        {(lessonBefore || lessonAfter) && (
-                          <div className="mt-1 text-[9px] font-semibold text-slate-400 bg-slate-50/50 rounded p-1.5 space-y-0.5 border border-slate-100">
-                            {lessonBefore && (
-                              <div>
-                                🕧 lekcja przed przerwą: <span className="font-bold text-slate-600">{lessonBefore.className} - {lessonBefore.subject}</span> w sali <span className="font-bold text-slate-700">{lessonBefore.roomName}</span>
-                              </div>
-                            )}
-                            {lessonAfter && (
-                              <div>
-                                🕐 lekcja po przerwie: <span className="font-bold text-slate-600">{lessonAfter.className} - {lessonAfter.subject}</span> w sali <span className="font-bold text-slate-700">{lessonAfter.roomName}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
 
               <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button 
                   type="button" 
                   onClick={() => setEditingSlot(null)}
-                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200"
+                  className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-bold border border-slate-200 cursor-pointer"
                 >
                   Anuluj
                 </button>
                 <button 
                   type="button" 
                   onClick={() => saveDirectAssign()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm"
+                  className={`px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition cursor-pointer ${
+                    slotIsUnneeded
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
                 >
-                  ✓ Zapisz Dyżur
+                  {slotIsUnneeded ? '✓ Zapisz jako zbędny' : '✓ Zapisz Dyżur'}
                 </button>
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* ── MODAL ZARZĄDZANIA ZBĘDNYMI DYŻURAMI ── */}
+      {showUnneededManager && (
+        <div className="fixed inset-0 z-[2000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                  <span>🚫</span>
+                  <span>Wykaz dyżurów zbędnych (niewymaganych)</span>
+                </h3>
+                <p className="text-[10.5px] text-slate-500 mt-0.5 font-medium">
+                  Stanowiska zwolnione z obowiązku obsady w wybranych godzinach ({demandStats.unneededSlotsCount} w skali tygodnia).
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowUnneededManager(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold p-1 animate-hover cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-3 flex-1 scrollbar-thin">
+              {demandStats.unneededSlotsCount === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  <span className="text-2xl block mb-2">✅</span>
+                  Wszystkie stanowiska i przerwy w szkole są aktualnie oznaczone jako wymagane.
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Aby oznaczyć dyżur jako zbędny, kliknij ikonę 🚫 w dowolnej komórce harmonogramu dziennego lub w oknie edycji dyżuru.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                    {Object.entries(dyz.harmonogram)
+                      .filter(([, entry]) => entry.isUnneeded)
+                      .map(([key, entry]) => {
+                        const [mId, dStr, pNumStr] = key.split('|');
+                        const dayNum = parseInt(dStr, 10);
+                        const pNum = parseInt(pNumStr, 10);
+                        const place = dyz.miejsca.find(m => m.id === mId);
+                        const przerwa = dyz.przerwy.find(p => p.num === pNum);
+
+                        return (
+                          <div key={key} className="p-3 bg-white hover:bg-slate-50 flex items-center justify-between gap-3 text-xs">
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-800 truncate">
+                                  {place?.name || 'Stanowisko'}
+                                </span>
+                                <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.2 rounded-full">
+                                  {DAYS[dayNum]}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                                  {przerwa?.name || `Przerwa ${pNum}`} ({przerwa?.start}–{przerwa?.end})
+                                </span>
+                              </div>
+                              {entry.note && (
+                                <p className="text-[11px] text-slate-500 italic truncate">
+                                  📝 {entry.note}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextHarm = { ...dyz.harmonogram };
+                                delete nextHarm[key];
+                                onChangeAppState({
+                                  ...appState,
+                                  dyzury: {
+                                    ...dyz,
+                                    harmonogram: nextHarm
+                                  }
+                                });
+                                notify('Przywrócono dyżur jako wymagany');
+                              }}
+                              className="px-2.5 py-1 bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-700 border border-slate-200 hover:border-rose-300 rounded-lg text-[10.5px] font-bold transition shrink-0 cursor-pointer"
+                              title="Przywróć to stanowisko jako wymagane"
+                            >
+                              ✕ Przywróć
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+              {demandStats.unneededSlotsCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleClearAllUnneeded();
+                    setShowUnneededManager(false);
+                  }}
+                  className="px-3 py-1.5 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg text-xs font-bold transition cursor-pointer"
+                >
+                  Przywróć wszystkie
+                </button>
+              ) : <div />}
+              <button
+                type="button"
+                onClick={() => setShowUnneededManager(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Zamknij
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

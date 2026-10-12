@@ -3451,7 +3451,18 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
                                     return (
                                       <td key={place.id} className="border border-slate-300 p-2 text-center align-middle">
-                                        {entry?.teacherAbbr ? (
+                                        {entry?.isUnneeded ? (
+                                          <div className="inline-flex flex-col items-center justify-center">
+                                            <span className="bg-slate-100 text-slate-700 border border-slate-300 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                                              🚫 Zbędny
+                                            </span>
+                                            {entry.note && (
+                                              <span className="block text-[8px] text-slate-500 font-medium truncate max-w-[90px] mt-0.5" title={entry.note}>
+                                                {entry.note}
+                                              </span>
+                                            )}
+                                          </div>
+                                        ) : entry?.teacherAbbr ? (
                                           <div className="inline-flex flex-col items-center justify-center">
                                             <span className="bg-emerald-900 text-white rounded px-2.5 py-1 text-[10px] font-mono font-black shadow-xs tracking-wider uppercase inline-block print:bg-slate-100 print:text-slate-900 print:border print:border-slate-300">
                                               {entry.teacherAbbr}
@@ -3699,7 +3710,22 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
 
                                           return (
                                             <td key={place.id} className="p-3 text-center align-middle border-r border-slate-200 last:border-r-0">
-                                              {entry?.teacherAbbr ? (
+                                              {entry?.isUnneeded ? (
+                                                <div className="flex flex-col items-center justify-center py-2">
+                                                  <span className="bg-slate-100 text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
+                                                    🚫 Dyżur zbędny
+                                                  </span>
+                                                  {entry.note ? (
+                                                    <span className="block text-[9px] text-slate-500 font-medium truncate max-w-[140px] mt-1" title={entry.note}>
+                                                      {entry.note}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="block text-[8px] text-slate-400 font-medium mt-0.5">
+                                                      (zwolniony z obsady)
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              ) : entry?.teacherAbbr ? (
                                                 <div className="flex flex-col items-center justify-center space-y-2">
                                                   {/* Teacher badge */}
                                                   <div className="inline-flex flex-col items-center justify-center">

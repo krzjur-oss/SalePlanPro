@@ -30,11 +30,25 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.12',
+      date: 'Październik 2026',
+      title: 'Ręczne Oznaczanie Zbędnych Dyżurów w Etapie 3 (Dyżury Niepotrzebne / Zwolnione)',
+      description: 'Wprowadzenie pełnej możliwości ręcznego definiowania i oznaczania stanowisk oraz godzin, w których dyżur korytarzowy jest zbędny (niepotrzebny). Funkcjonalność obejmuje bezpośrednie przełączanie w siatce harmonogramu, zaawansowane okno edycji z opcją zastosowania na cały tydzień roboczy, wykluczenie ze statystyk zapotrzebowania, zabezpieczenie przed automatycznym nadpisaniem przez generator oraz dedykowany modal zarządzania i czyste wydruki.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Ręczne oznaczanie zbędnych dyżurów w komórkach harmonogramu (Etap 3): Szybki przycisk 🚫 oraz dedykowana karta w tabeli dziennej pozwalają jednym kliknięciem oznaczyć dany punkt dyżurowania na danej przerwie jako zbędny/niepotrzebny.', badgeText: 'Dyżury zbędne' },
+        { type: 'feature', text: 'Zaawansowany modal konfiguracji slotu: Możliwość oznaczenia dyżuru jako zbędny z podaniem uzasadnienia (np. brak zajęć na piętrze, zamknięte skrzydło) oraz opcją zastosowania reguły na wszystkie dni robocze (Pn–Pt) o tej godzinie.', badgeText: 'Reguły tygodniowe' },
+        { type: 'improvement', text: 'Ochrona przed generatorem dyżurów: Silnik auto-sugestii dyżurów (Auto-sugestia) w pełni respektuje oznaczenia zbędnych dyżurów – nie obsadza ich personelem i nie usuwa ich podczas ponownego losowania harmonogramu.', badgeText: 'Silnik generatora' },
+        { type: 'improvement', text: 'Precyzyjny bilans zapotrzebowania i statystyki: Czas trwania zbędnych dyżurów jest automatycznie odejmowany z wymaganego bilansu tygodniowego, a wskaźnik pokrycia (100%) nie traktuje ich jako braków.', badgeText: 'Bilans & Zapotrzebowanie' },
+        { type: 'improvement', text: 'Wykaz zbędnych dyżurów oraz czyste wydruki: Nowy przycisk „Zbędne dyżury” w pasku narzędzi otwiera zbiorczy panel zarządzania wyłączeniami z opcją natychmiastowego przywracania, a arkusze wydruku i podglądu wyświetlają czytelną plakietkę „🚫 Zbędny”.', badgeText: 'Wydruki i Zarządzanie' }
+      ]
+    },
+    {
       version: 'v3.9.11',
       date: 'Październik 2026',
       title: 'Ewidencja Zadań Poza Tablicą w Module Nauczyciele, Moduł Personelu Niepedagogicznego i Integracja z Pulą Dyżurów',
       description: 'Kompleksowa obsługa pracowników szkoły nieprowadzących tradycyjnych lekcji tablicowych: ewidencja czynności poza tablicą (świetlica, biblioteka, pedagog, psycholog, logopeda, wspomagający) w profilu nauczyciela, dedykowany moduł personelu niepedagogicznego (obsługa, asystenci, woźni) oraz sprawiedliwe bilansowanie ich obecności w puli dyżurów korytarzowych.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Zadania poza tablicą w module Nauczyciele: Ewidencja czynności świetlicowych, bibliotecznych i wsparcia pedagogiczno-psychologicznego bezpośrednio w profilu nauczyciela z tygodniową pulą godzin i statusem udziału w dyżurach.', badgeText: 'Nauczyciele & Specjaliści' },
         { type: 'feature', text: 'Dedykowany moduł pracowników niepedagogicznych: Osobna ewidencja dla personelu obsługi, woźnych, asystentów ucznia i szatniarzy w Kreatorze Szkoły z określeniem wymiaru etatu, stanowiska i siatki dostępności.', badgeText: 'Personel niepedagogiczny' },
