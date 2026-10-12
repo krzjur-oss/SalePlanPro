@@ -1,8 +1,13 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: PWA Service Worker (public/sw.js)
+ * Opis: Obsługa trybu offline (Cache-First), pre-cache powłoki aplikacji oraz płynna aktualizacja zasobów.
+ */
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
 // Wstrzykiwane automatycznie podczas procesu budowania przez plugin Vite:
-const BUILD_ID = "v_mv3l9lco_2a0fd5eaed";
-const CURRENT_ASSETS = ["assets/AssignRoomDropdown-B-oshd1-.js","assets/CompanionWindowView-CC0xv9ma.js","assets/DualScreenMasterView-BoSPsgi4.js","assets/Dyzury-B-wn-A3x.js","assets/KreatorSzkoly-2F_yMNia.js","assets/OProgramie-1ILBH9fE.js","assets/PlanKlas-gTLdy9n4.js","assets/PlanSal-UmXk0TCk.js","assets/PlanVariantsModal-DpI35S5y.js","assets/SnapshotManager-B6eg1PqD.js","assets/Statystyki-D6o-8ztC.js","assets/UstawieniaGeneratorow-QLe8VO7_.js","assets/Wydruki-CTosfhMw.js","assets/adaptationDuty-B8h0ls2J.js","assets/index-XFJ0QzQk.js","assets/index-xGVUTpQz.css","assets/roomUtils-gJMDp5Ow.js","assets/vendor-dnd-Dk37sCMx.js","assets/vendor-lucide-B92qowNC.js","assets/vendor-motion-7o_NUGSZ.js","assets/vendor-react-M1a6ECPm.js","assets/vendor-recharts-BSefab-z.js","assets/vendor-zod-hv1ZMVFq.js"];
+const BUILD_ID = "v_mv5deh4l_f3011e45b4";
+const CURRENT_ASSETS = ["assets/AssignRoomDropdown-B-oshd1-.js","assets/CompanionWindowView-sbJrsaad.js","assets/DualScreenMasterView-djx-uHaO.js","assets/Dyzury-BQ-cDNq0.js","assets/KreatorSzkoly-DMe0XI3T.js","assets/OProgramie-DLlqnzAc.js","assets/PlanKlas-CttrM5rw.js","assets/PlanSal-pBw08UTL.js","assets/PlanVariantsModal-CfRlJGuB.js","assets/SnapshotManager-BXdzBXyq.js","assets/Statystyki-CgEGidkd.js","assets/UstawieniaGeneratorow-BeKNQsPY.js","assets/Wydruki-C_TY022z.js","assets/adaptationDuty-C968ahHk.js","assets/index-Bdr-QAN1.js","assets/index-xGVUTpQz.css","assets/roomUtils-gJMDp5Ow.js","assets/vendor-dnd-Dk37sCMx.js","assets/vendor-lucide-B92qowNC.js","assets/vendor-motion-7o_NUGSZ.js","assets/vendor-react-M1a6ECPm.js","assets/vendor-recharts-BSefab-z.js","assets/vendor-zod-hv1ZMVFq.js"];
 
 // Nazwa cache unikalna dla danego builda
 const CACHE_NAME = 'saleplan-cache-' + (typeof BUILD_ID === 'string' && !BUILD_ID.startsWith('__') ? BUILD_ID : 'dev');
