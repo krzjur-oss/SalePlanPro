@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Okno Akceptacji Regulaminu i Licencji WLDE (TermsModal)
+ * Opis: Bramka startowa pierwszego uruchomienia aplikacji z pełnym tekstem Regulaminu i Wolnej Licencji Edukacyjnej.
+ */
+
 import React, { useState } from 'react';
 import { Shield, FileText, Award, CheckCircle2, Lock, Scale, AlertTriangle, ArrowRight, ExternalLink } from 'lucide-react';
 import { Z_INDEX_CLASSES } from '../styles/zIndex';
@@ -29,7 +35,7 @@ export default function TermsModal({ isOpen, onAccept, isReviewMode = false, onC
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/20 font-mono">
-                    SalePlan Pro v3.9.10
+                    SalePlan Pro v3.9.11
                   </span>
                   <span className="text-[10px] uppercase font-bold text-slate-400">
                     {isReviewMode ? 'Podgląd dokumentów prawnych' : 'Wymagana akceptacja warunków'}

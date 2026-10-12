@@ -842,7 +842,7 @@ export function applyFileMergeToState(
       const customClassNames = new Set((config.planSalCustomClasses || []).map(s => String(s || '').toUpperCase().trim()));
       const customColKeys = new Set(config.planSalCustomColKeys || []);
 
-      // Function to check if a cell matches the targeted Plan Sal filter
+      // Funkcja weryfikująca dopasowanie komórki do docelowego filtra Planu Sal
       const cellMatchesFilter = (cell: SchedCell): boolean => {
         if (!cell) return false;
         if (targetScope === 'all') return true;

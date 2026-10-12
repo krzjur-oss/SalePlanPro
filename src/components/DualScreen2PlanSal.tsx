@@ -46,10 +46,10 @@ export default function DualScreen2PlanSal({
 }: DualScreen2PlanSalProps) {
   const pl = appState.planLekcji;
 
-  // Highlighted slot / lesson sent from Ekran 1
+  // Podświetlony slot lub lekcja przesłana z Ekranu 1
   const [highlightedLesson, setHighlightedLesson] = useState<any | null>(null);
 
-  // Auto-fit & Zoom controls
+  // Automatyczne dopasowanie i kontrola powiększenia
   const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isCompact, setIsCompact] = useState<boolean>(false);
@@ -59,7 +59,7 @@ export default function DualScreen2PlanSal({
   const containerRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
 
-  // Listen to highlights and assignments from Master
+  // Nasłuchiwanie podświetleń i przydziałów z okna głównego (Master)
   useEffect(() => {
     const unsub = dualScreenService.subscribe((msg: DualScreenMessage) => {
       if (msg.type === 'PLAN_KLAS_HIGHLIGHT' && msg.payload) {
@@ -69,7 +69,7 @@ export default function DualScreen2PlanSal({
     return () => unsub();
   }, []);
 
-  // Build the list of rooms with 3-part hierarchy: [Budynek, Piętro, Sala]
+  // Budowanie listy sal z zachowaniem 3-stopniowej hierarchii: [Budynek, Piętro, Sala]
   const roomRows = useMemo(() => {
     const rawCols = flattenColumns(appState.floors || []);
     const roomsFromFloors = rawCols.map(col => {
@@ -127,7 +127,7 @@ export default function DualScreen2PlanSal({
     });
   }, [roomRows, categoryFilter, searchQuery]);
 
-  // Compute scale for auto-fit
+  // Obliczenie skali dla automatycznego dopasowania do okna
   useEffect(() => {
     if (!isAutoFit || !containerRef.current || !tableRef.current) return;
 

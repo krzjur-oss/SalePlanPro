@@ -41,26 +41,26 @@ export default function KioskMode({
 }: KioskModeProps) {
   const pl = appState.planLekcji;
 
-  // Visual & Presentation States
+  // Stany wizualne i prezentacji tablicy
   const [displayMode, setDisplayMode] = useState<'live' | 'carousel' | 'rooms' | 'autoscroll'>('live');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'xlarge'>('large');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   
-  // Carousel & Animation States
+  // Stany karuzeli i animacji
   const [carouselClassIdx, setCarouselClassIdx] = useState<number>(0);
   const [carouselRoomFloorIdx, setCarouselRoomFloorIdx] = useState<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [rotationIntervalSec, setRotationIntervalSec] = useState<number>(10);
   const [progressPercent, setProgressPercent] = useState<number>(0);
 
-  // Time & Bell States
+  // Stany czasu i odliczania do dzwonków
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [isSimulatingTime, setIsSimulatingTime] = useState<boolean>(false);
   const [simulatedDayIdx, setSimulatedDayIdx] = useState<number>(0);
   const [simulatedHourIdx, setSimulatedHourIdx] = useState<number>(0);
 
-  // Announcement bar
+  // Pasek ogłoszeń i komunikatów dyrekcji
   const [announcementText, setAnnouncementText] = useState<string>(() => {
     return localStorage.getItem('saleplan_kiosk_announcement') || DEFAULT_ANNOUNCEMENT;
   });
@@ -69,7 +69,7 @@ export default function KioskMode({
   const [showAnnouncementModal, setShowAnnouncementModal] = useState<boolean>(false);
   const [tempAnnouncement, setTempAnnouncement] = useState<string>('');
 
-  // Live board filter: hide classes without lessons or with a free period (okienko)
+  // Filtr tablicy na żywo: ukrywanie klas bez lekcji lub z okienkiem
   const [hideEmptyClasses, setHideEmptyClasses] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('saleplan_kiosk_hide_empty');
@@ -104,13 +104,13 @@ export default function KioskMode({
     setShowAnnouncementModal(false);
   };
 
-  // Maps for fast lookups
+  // Mapy do szybkiego wyszukiwania powiązań O(1)
   const classesMap = useMemo(() => new Map(pl.classes.map(c => [c.id, c])), [pl.classes]);
   const teachersMap = useMemo(() => new Map(pl.teachers.map(t => [t.id, t])), [pl.teachers]);
   const subjectsMap = useMemo(() => new Map(pl.subjects.map(s => [s.id, s])), [pl.subjects]);
   const roomsMap = useMemo(() => new Map(pl.rooms.map(r => [r.id, r])), [pl.rooms]);
 
-  // Hours list resolved
+  // Ustalona lista godzin lekcyjnych
   const hoursList = useMemo(() => {
     if (pl.hours && pl.hours.length > 0) {
       return [...pl.hours].sort((a, b) => a.num - b.num);
@@ -127,7 +127,7 @@ export default function KioskMode({
     ];
   }, [pl.hours]);
 
-  // Etap 2 Room key resolver
+  // Rozpoznawanie klucza sali w Etapie 2 (Plan Sal)
   const flatColumns = useMemo(() => {
     return localFlattenColumns(appState.floors || []);
   }, [appState.floors]);
@@ -146,7 +146,7 @@ export default function KioskMode({
     return (ck: string) => cache.get(ck) || '';
   }, [flatColumns]);
 
-  // Compiled Etap 2 schedule matrix: [type][entityId][dayIdx][hourKey] = SchedCell[]
+  // Skompilowana matryca planu sal Etapu 2: [typ][id][dzień][godzina] = SchedCell[]
   const etap2Schedule = useMemo(() => {
     const yearKey = appState.yearKey || 'default';
     const yearData = schedData[yearKey] || {};
@@ -203,7 +203,7 @@ export default function KioskMode({
     return { classes: classMap, teachers: teacherMap, rooms: roomMap };
   }, [schedData, appState.yearKey, pl.classes, pl.teachers, pl.rooms, resolveRoomFromColKey]);
 
-  // Live timer interval (every second)
+  // Licznik czasu rzeczywistego (odświeżanie co sekundę)
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -211,7 +211,7 @@ export default function KioskMode({
     return () => clearInterval(timer);
   }, []);
 
-  // Determine current day and current active/upcoming hour index
+  // Określenie bieżącego dnia i aktywnej lub nadchodzącej lekcji
   const bellStatus = useMemo(() => {
     if (isSimulatingTime) {
       const hObj = hoursList[simulatedHourIdx] || hoursList[0];
@@ -355,7 +355,7 @@ export default function KioskMode({
     return null;
   }, [hoursList, etap2Schedule, pl.lessons, pl.assignments, subjectsMap, teachersMap, roomsMap]);
 
-  // Live duties on current break
+  // Dyżury na żywo na aktualnej przerwie
   const activeDuties = useMemo(() => {
     if (!appState.dyzury?.harmonogram || !appState.dyzury?.miejsca) return [];
     const duties: Array<{ placeName: string; teacherAbbr: string; breakName: string }> = [];
@@ -378,7 +378,7 @@ export default function KioskMode({
     return duties;
   }, [appState.dyzury, bellStatus.dayIdx, bellStatus.currentHour]);
 
-  // Reference hour index for the Live Hall Board ("Na żywo")
+  // Referencyjny indeks godziny dla tablicy w holu ("Na żywo")
   const liveReferenceHourIdx = useMemo(() => {
     if (isSimulatingTime) {
       return simulatedHourIdx;
@@ -392,7 +392,7 @@ export default function KioskMode({
     return bellStatus.nextHourIdx ?? 0;
   }, [isSimulatingTime, simulatedHourIdx, bellStatus.isBreak, bellStatus.nextHourIdx, bellStatus.currentHourIdx]);
 
-  // Classes list for Live Board (filtering out classes without lessons or with a free period / okienko)
+  // Lista oddziałów dla tablicy na żywo (pomijanie klas bez lekcji lub z okienkiem)
   const classesToDisplay = useMemo(() => {
     const list = pl.classes.map(cls => {
       const currentLesson = getClassLessonInfo(cls.id, bellStatus.dayIdx, liveReferenceHourIdx);
@@ -415,7 +415,7 @@ export default function KioskMode({
     return list;
   }, [pl.classes, bellStatus.dayIdx, liveReferenceHourIdx, getClassLessonInfo, hideEmptyClasses]);
 
-  // Free classrooms in current hour
+  // Wolne gabinety lekcyjne w bieżącej godzinie
   const freeRoomsInCurrentHour = useMemo(() => {
     if (liveReferenceHourIdx === null || liveReferenceHourIdx === undefined) return [];
     const occupiedRoomNames = new Set<string>();
@@ -430,7 +430,7 @@ export default function KioskMode({
     return pl.rooms.filter(r => !occupiedRoomNames.has(r.name.toLowerCase().trim())).slice(0, 8);
   }, [liveReferenceHourIdx, bellStatus.dayIdx, pl.classes, pl.rooms, getClassLessonInfo]);
 
-  // Carousel timer effect (rotates class or floor)
+  // Efekt timera karuzeli (rotacja klas lub pięter)
   useEffect(() => {
     if (isPaused || pl.classes.length === 0) return;
 
@@ -458,7 +458,7 @@ export default function KioskMode({
     return () => clearInterval(interval);
   }, [isPaused, rotationIntervalSec, displayMode, pl.classes.length, appState.floors]);
 
-  // Fullscreen management
+  // Zarządzanie trybem pełnoekranowym
   useEffect(() => {
     const handleFsChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -479,7 +479,7 @@ export default function KioskMode({
     }
   };
 
-  // Keyboard navigation
+  // Obsługa nawigacji klawiaturą
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -501,10 +501,10 @@ export default function KioskMode({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose, pl.classes.length]);
 
-  // Active carousel class
+  // Aktywna klasa w rotacji karuzeli
   const currentCarouselClass = pl.classes[carouselClassIdx] || pl.classes[0];
 
-  // Font scaling styles
+  // Style skalowania czcionek
   const fontStyles = useMemo(() => {
     switch (fontSize) {
       case 'xlarge':

@@ -479,6 +479,7 @@ export interface SchoolStructureTemplate {
     floors: Floor[];
     subjects: Subject[];
     teachers: Teacher[];
+    supportStaff?: SupportStaff[];
     classes: Class[];
     schoolGroups: SchoolGroup[];
     rooms: ClassRoom[];

@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Konfiguracja: Vite Build & Dev Server (vite.config.ts)
+ * Opis: Konfiguracja bundlera Vite, pluginów Tailwind v4, React oraz automatycznego wersjonowania Service Workera.
+ */
 /// <reference types="vitest" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';

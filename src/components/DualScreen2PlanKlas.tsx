@@ -42,7 +42,7 @@ export default function DualScreen2PlanKlas({
 }: DualScreen2PlanKlasProps) {
   const pl = appState.planLekcji;
 
-  // Selected lesson from pool (sent by Ekran 1)
+  // Wybrana lekcja z puli przydziałów (przesłana z Ekranu 1)
   const [selectedPoolLesson, setSelectedPoolLesson] = useState<{
     assignmentId: string;
     classId: string;
@@ -81,7 +81,7 @@ export default function DualScreen2PlanKlas({
     return () => unsub();
   }, []);
 
-  // Compute scale for auto-fit
+  // Obliczenie skali dla automatycznego dopasowania do okna
   useEffect(() => {
     if (!isAutoFit || !containerRef.current || !tableRef.current) return;
 
@@ -95,7 +95,7 @@ export default function DualScreen2PlanKlas({
       if (tWidth > 0 && tHeight > 0) {
         const scaleX = cWidth / tWidth;
         const scaleY = cHeight / tHeight;
-        // Perfect fit for both X and Y so no scrollbars are required
+        // Precyzyjne dopasowanie osi X i Y bez konieczności przewijania
         const idealScale = Math.min(scaleX, scaleY, 1.05);
         setZoomLevel(Math.max(0.15, idealScale));
       }

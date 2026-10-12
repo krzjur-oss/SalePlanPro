@@ -475,6 +475,7 @@ export default function KreatorSzkoly({
       floors: newFloors,
       classes: newClasses,
       teachers: newTeachers,
+      supportStaff: appState.supportStaff ? JSON.parse(JSON.stringify(appState.supportStaff)) : [],
       subjects: newSubjects,
       homerooms: newHomerooms,
       planLekcji: {
@@ -837,7 +838,7 @@ export default function KreatorSzkoly({
         nextFloors.push({
           id: 'f_bld_' + newBld.id,
           name: 'Budynek: ' + newBld.name,
-          color: newBldIsZlecony ? '#f43f5e' : '#2563eb', // pink for outer, blue for local
+          color: newBldIsZlecony ? '#f43f5e' : '#2563eb', // różowy dla lokalizacji zewnętrznych, niebieski dla lokalnych
           buildingIdx: bldIdx,
           segments: [
             {
@@ -1909,7 +1910,12 @@ export default function KreatorSzkoly({
     setNewSLast(st.last);
     setNewSAbbr(st.abbr);
     setIsSAbbrManual(true);
-    const standardRoles = ['Woźny / Ochrona', 'Pomoc nauczyciela', 'Asystent ucznia', 'Szatniarz', 'Pracownik obsługi', 'Pracownik stołówki', 'Konserwator', 'Pielęgniarka szkolna'];
+    const standardRoles = [
+      'Woźny / Ochrona', 'Pomoc nauczyciela', 'Asystent ucznia', 'Szatniarz', 
+      'Pracownik obsługi', 'Pracownik stołówki', 'Konserwator', 'Pielęgniarka szkolna',
+      'Pedagog / Psycholog szkolny', 'Świetlica / Wychowawca świetlicy', 'Bibliotekarz',
+      'Logopeda / Terapeuta', 'Sekretariat / Administracja'
+    ];
     if (standardRoles.includes(st.role)) {
       setNewSRole(st.role);
       setNewSCustomRole('');
@@ -1957,13 +1963,26 @@ export default function KreatorSzkoly({
 
   const handleAddSupportStaff = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSFirst.trim() || !newSLast.trim() || !newSAbbr.trim()) return;
+    if (!newSFirst.trim() || !newSLast.trim()) {
+      showNoti('Wypełnij imię i nazwisko pracownika niepedagogicznego!', 'info');
+      return;
+    }
+    if (!newSAbbr.trim()) {
+      showNoti('Wprowadź unikalny identyfikator / skrót pracownika!', 'info');
+      return;
+    }
 
     const formattedAbbr = newSAbbr.trim().toUpperCase();
     const currentList = appState.supportStaff || [];
 
     if (currentList.some(s => s.id !== editingStaffId && s.abbr.toUpperCase() === formattedAbbr)) {
-      showNoti('Ten identyfikator pracownika jest już zajęty!', 'info');
+      showNoti(`Ten identyfikator pracownika (${formattedAbbr}) jest już zajęty!`, 'info');
+      return;
+    }
+
+    const teacherConflict = appState.teachers.find(t => t.abbr.toUpperCase() === formattedAbbr);
+    if (teacherConflict) {
+      showNoti(`Identyfikator „${formattedAbbr}” jest już przypisany do nauczyciela (${teacherConflict.first} ${teacherConflict.last})!`, 'info');
       return;
     }
 
@@ -2555,7 +2574,7 @@ export default function KreatorSzkoly({
     return (appState.planLekcji.specialAssignments || []).filter(a => a.studentId === activeStudentId);
   }, [activeStudentId, appState.planLekcji.specialAssignments]);
 
-  // States for student edit modal
+  // Stany modala edycji parametrów ucznia
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [editStudFirstName, setEditStudFirstName] = useState('');
@@ -2786,7 +2805,7 @@ export default function KreatorSzkoly({
     setEditStudSupportTypes(initialTypes);
     setEditStudSupportHours(initialHours);
 
-    // reset draft fields
+    // czyszczenie pól tymczasowych
     setEditStudSubjId('');
     setEditStudTeachId('');
     setEditStudHours(2);
@@ -2875,7 +2894,7 @@ export default function KreatorSzkoly({
     showNoti('Dodano indywidualne zajęcie dla ucznia (w modalu)');
   };
 
-  // Memoized maps for optimized O(1) lookups
+  // Zamemoizowane mapy dla zoptymalizowanego wyszukiwania O(1)
   const classesMap = useMemo(() => new Map(appState.classes.map(c => [c.id, c])), [appState.classes]);
   const teachersMap = useMemo(() => new Map(appState.teachers.map(t => [t.id, t])), [appState.teachers]);
   const subjectsMap = useMemo(() => new Map(appState.subjects.map(s => [s.id, s])), [appState.subjects]);
@@ -2922,7 +2941,7 @@ export default function KreatorSzkoly({
   const nonTeachingTeachers = useMemo(() => {
     return (appState.teachers || []).filter(t => 
       Boolean(
-        (t.nonTeachingHours !== undefined && t.nonTeachingHours > 0) || 
+        t.nonTeachingHours !== undefined || 
         (t.nonTeachingRoles && t.nonTeachingRoles.length > 0) ||
         t.isAdministrative ||
         (t.maxHours === 0)
@@ -4889,6 +4908,24 @@ export default function KreatorSzkoly({
                   <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">
                     {editingTeacherId ? '📝 Edytuj dane nauczyciela' : '➕ Dodaj Nauczyciela'}
                   </h3>
+
+                  {!editingTeacherId && (
+                    <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl mb-3 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Users size={14} className="text-blue-600 shrink-0" />
+                        <span className="text-[10.5px] text-blue-900 font-bold leading-tight">
+                          Pracownik obsługi, woźny lub pomoc?
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setStaffTab('support_staff')}
+                        className="px-2.5 py-1 text-[10px] font-black bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shrink-0 cursor-pointer shadow-xs"
+                      >
+                        Przejdź ➔
+                      </button>
+                    </div>
+                  )}
                   <form onSubmit={handleAddTeacher} className="space-y-3">
                     <div className="space-y-1">
                       <label className="text-[10px] text-slate-400 font-bold">Imię</label>
@@ -5918,7 +5955,7 @@ export default function KreatorSzkoly({
                             : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
                         }`}
                       >
-                        Wszyscy
+                        Wszyscy pracownicy
                         <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${supportStaffFilter === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-700'}`}>
                           {totalNonTeachingCount}
                         </span>
@@ -5933,7 +5970,7 @@ export default function KreatorSzkoly({
                             : 'bg-white text-blue-700 hover:bg-blue-50 border border-slate-200'
                         }`}
                       >
-                        🏢 Personel obsługi
+                        🏢 Pracownicy obsługi (Kodeks Pracy)
                         <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${supportStaffFilter === 'support' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800'}`}>
                           {appState.supportStaff?.length || 0}
                         </span>
@@ -5948,7 +5985,7 @@ export default function KreatorSzkoly({
                             : 'bg-white text-amber-700 hover:bg-amber-50 border border-slate-200'
                         }`}
                       >
-                        📚 Specjaliści poza tablicą
+                        📚 Specjaliści poza tablicą (Karta Nauczyciela)
                         <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${supportStaffFilter === 'specialists' ? 'bg-amber-700 text-white' : 'bg-amber-100 text-amber-800'}`}>
                           {nonTeachingTeachers.length}
                         </span>
@@ -7508,7 +7545,7 @@ export default function KreatorSzkoly({
                             onChange={(e) => {
                               const clsId = e.target.value;
                               setNewAsgClass(clsId);
-                              setNewAsgGroup(''); // reset group first
+                              setNewAsgGroup(''); // najpierw reset grupy
                               autoSelectGroupForAssignment(clsId, newAsgSubject);
                             }}
                           >

@@ -665,7 +665,7 @@ export default function App() {
         schedData: JSON.parse(JSON.stringify(newSchedData)),
       };
 
-      const nextVersions = [newVersion, ...versions].slice(0, 5); // Extended from 3 to 5 versions thanks to IndexedDB
+      const nextVersions = [newVersion, ...versions].slice(0, 5); // Rozszerzono z 3 do 5 wersji dzięki pamięci IndexedDB
       await setStorageItem(STORAGE_KEYS.AUTOSAVE_VERSIONS, nextVersions);
       setAutosaveVersions(nextVersions);
     } catch (e) {
@@ -1193,7 +1193,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.9.10';
+  const CURRENT_VERSION = '3.9.11';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -1357,7 +1357,7 @@ export default function App() {
     }
   };
 
-  // States for selective export and import
+  // Stany selektywnego eksportu i importu danych
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
@@ -1792,7 +1792,7 @@ export default function App() {
     const yearKey = appState.yearKey;
     const pl = appState.planLekcji;
 
-    // Build map for efficient assignment lookups
+    // Budowa mapy dla szybkiego wyszukiwania przydziałów O(1)
     const assignmentsMap = new Map<string, Assignment>(pl.assignments.map(a => [a.id, a]));
     const teachersMap = new Map<string, Teacher>(pl.teachers.map(t => [t.id, t]));
     const subjectsMap = new Map<string, Subject>(pl.subjects.map(s => [s.id, s]));
@@ -1845,7 +1845,7 @@ export default function App() {
                 seg.rooms.forEach((rm, ri) => {
                   const targetKey = `f${fi}_s${si}_${rm.num}`;
                   
-                  // Prioritize the room matching name / num
+                  // Priorytetowe traktowanie sali zgodnej nazwą lub numerem
                   if (roomEtap1 && String(rm.num).trim() === String(roomEtap1.name).trim()) {
                     assignedColKey = targetKey;
                   }
@@ -2028,7 +2028,7 @@ export default function App() {
     }
     pl.lessons = cleanedLessons;
 
-    // 6. SchedData integrity check
+    // 6. Sprawdzenie integralności danych planu sal (SchedData)
     const sanitizedSched: SchedData = {};
     for (const [yearK, yData] of Object.entries(rawSched as Record<string, unknown>)) {
       if (!yData || typeof yData !== 'object') continue;
@@ -3179,9 +3179,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.10!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.11!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Szczegółowa identyfikacja karty oraz podgląd i bilans zmian w oknie wykrywania równoległej edycji.
+                  Zadania poza tablicą w module Nauczyciele, moduł personelu niepedagogicznego oraz pełna integracja z pulą dyżurów.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

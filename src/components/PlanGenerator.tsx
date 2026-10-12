@@ -81,7 +81,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
     return configs;
   });
 
-  // Simple state for feedback on running
+  // Stan informacji zwrotnej o trwającym procesie generowania
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationResult, setGenerationResult] = useState<{
     success: boolean;
@@ -234,7 +234,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
         });
 
         // Sort work units heuristically:
-        // - Place assignments with teachers first, especially those with lower availability or high hours (most constrained variable)
+        // - Rozmieszczanie w pierwszej kolejności przydziałów nauczycieli z ograniczoną dostępnością lub dużym pensum
         const getTeacherDifficulty = (teacherId: string | null) => {
           if (!teacherId) return 0;
           const t = teachersMap.get(teacherId);
@@ -329,11 +329,11 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
             if (dayMax !== -1) {
               // If class already has lessons scheduled on this day, we want this to be on the outer boundary
               if (hour === dayMin - 1 || hour === dayMax + 1) {
-                score += 800; // Big bonus for edge of day
+                score += 800; // Duży bonus za umieszczenie na skrajnych godzinach dnia
               } else if (hour >= dayMin && hour <= dayMax) {
-                score -= 1200; // HEAVY PENALTY for scheduling optional subject in the middle of a class day
+                score -= 1200; // Wysoka kara za zaplanowanie przedmiotu do wyboru w środku dnia lekcyjnego
               } else {
-                score -= 300; // Isolated from current day lessons
+                score -= 300; // Izolacja od lekcji w bieżącym dniu
               }
             } else {
               // First lesson being scheduled for this class on this day.

@@ -500,18 +500,18 @@ export default function PlanSal({
                 if (capacity >= 25) {
                   score += capacity * 30; // e.g. up to +1500 score bonus for large capacity
                 } else {
-                  score -= (30 - capacity) * 30; // penalty for placing whole class in small rooms
+                  score -= (30 - capacity) * 30; // kara za przydział całej klasy do małego gabinetu
                 }
               } else {
                 // For group split classes, prefer smaller rooms so we leave large ones to whole classes
                 if (capacity >= 25) {
                   score -= capacity * 40; // penalize group-split lesson taking large room (e.g. up to -1200)
                 } else {
-                  score += (30 - capacity) * 40; // bonus for choosing smaller room
+                  score += (30 - capacity) * 40; // bonus za optymalny dobór mniejszej sali
                 }
               }
 
-              // Adjustments/Penalties for sport or individual rooms when placing standard lessons
+              // Korygowanie kar dla sal sportowych i gabinetów indywidualnych przy standardowych lekcjach
               if (isSport) {
                 score -= 800;
               }
@@ -701,7 +701,7 @@ export default function PlanSal({
     return classifiedCols[activeRoomCategory];
   }, [classifiedCols, activeRoomCategory]);
 
-  // Group columns for layout merging
+  // Grupowanie kolumn dla scalania układu sal
   const buildingGroups = useMemo(() => {
     const groups: { startIdx: number; span: number; buildingIdx: number; name: string }[] = [];
     let currentGroup = null as any;
@@ -772,7 +772,7 @@ export default function PlanSal({
     return schedData[appState.yearKey]?.[activeDay] || {};
   }, [schedData, appState.yearKey, activeDay]);
 
-  // Resolvers for Etap 1 -> Etap 2 Bridging
+  // Funkcje pomostowe łączące Etap 1 (Plan Klas) z Etapem 2 (Plan Sal)
   const assignmentsMap = useMemo(() => {
     return new Map((appState.planLekcji.assignments || []).map(a => [a.id, a]));
   }, [appState.planLekcji.assignments]);

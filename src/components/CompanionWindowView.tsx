@@ -459,7 +459,7 @@ export default function CompanionWindowView({
       });
     }
 
-    // 2. Also check schedData for room allocation from Plan Sal
+    // 2. Sprawdzenie także schedData pod kątem przydziału gabinetu z Planu Sal
     if (schedData) {
       const yearKey = Object.keys(schedData)[0] || appState?.yearLabel;
       const daysObj = schedData[yearKey];

@@ -970,7 +970,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       assignedMinutes[t.abbr] = adaptMins + peMins;
     });
 
-    // Populate assignedMinutes with currently locked duties
+    // Uzupełnienie liczby przydzielonych minut zablokowanymi dyżurami
     Object.entries(nextHarm).forEach(([key, entry]) => {
       if (entry.locked && entry.teacherAbbr && assignedMinutes[entry.teacherAbbr] !== undefined) {
         const parts = key.split('|'); // [miejsceId, day, przerwaNum]
@@ -2576,7 +2576,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
             }
             const deficitA = a.maxMins - a.currentMins;
             const deficitB = b.maxMins - b.currentMins;
-            return deficitB - deficitA; // prefer those with larger deficit
+            return deficitB - deficitA; // preferowanie osób z większym deficytem minut
           });
         };
 

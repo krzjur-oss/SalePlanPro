@@ -70,7 +70,7 @@ export default function PlanVariantsModal({
   const [activeTab, setActiveTab] = useState<'list' | 'diff' | 'create'>('list');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Form states for creating a new variant
+  // Stany formularza tworzenia nowego wariantu planu
   const [newVarName, setNewVarName] = useState('');
   const [newVarTag, setNewVarTag] = useState<PlanVariantTag>('semestr_2');
   const [newVarColor, setNewVarColor] = useState(COLOR_PRESETS[1]);
@@ -424,7 +424,7 @@ export default function PlanVariantsModal({
     onShowNotification?.(`Wyeksportowano wariant „${variant.name}”.`, 'success');
   };
 
-  // Import variant from JSON
+  // Import wariantu planu z pliku JSON
   const handleImportVariant = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -455,7 +455,7 @@ export default function PlanVariantsModal({
     e.target.value = '';
   };
 
-  // Selective sync for one class: Copy class schedule from B to A (or vice versa)
+  // Selektywna synchronizacja klasy: kopiowanie planu klasy z wariantu B do A (lub odwrotnie)
   const handleSyncClass = (fromVar: PlanVariant, toVar: PlanVariant, classId: string) => {
     const targetClass = pl.classes.find(c => c.id === classId);
     if (!targetClass) return;
@@ -478,7 +478,7 @@ export default function PlanVariantsModal({
         }
       });
 
-      // Copy from source
+      // Kopiowanie ze źródła
       Object.entries(lessonsFrom).forEach(([k, l]) => {
         if (k.startsWith(`${classId}|`)) {
           newLessonsTo[k] = JSON.parse(JSON.stringify(l));
@@ -504,7 +504,7 @@ export default function PlanVariantsModal({
     }
   };
 
-  // Selective sync for teacher duties: Copy duties for one teacher from B to A (or vice versa)
+  // Selektywna synchronizacja dyżurów: kopiowanie dyżurów nauczyciela z B do A (lub odwrotnie)
   const handleSyncTeacherDuty = (fromVar: PlanVariant, toVar: PlanVariant, teacherAbbr: string) => {
     const teacher = pl.teachers.find(t => t.abbr.toLowerCase() === teacherAbbr.toLowerCase());
     const teacherName = teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : teacherAbbr;

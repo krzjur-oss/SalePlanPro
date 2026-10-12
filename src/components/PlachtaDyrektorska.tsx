@@ -118,7 +118,7 @@ export default function PlachtaDyrektorska({
   // Screen preview Zoom
   const [zoomLevel, setZoomLevel] = useState<number>(100);
 
-  // Maps for fast lookups
+  // Mapy do szybkiego wyszukiwania powiązań O(1)
   const classesMap = useMemo(() => new Map(pl.classes.map(c => [c.id, c])), [pl.classes]);
   const teachersMap = useMemo(() => new Map(pl.teachers.map(t => [t.id, t])), [pl.teachers]);
   const subjectsMap = useMemo(() => new Map(pl.subjects.map(s => [s.id, s])), [pl.subjects]);

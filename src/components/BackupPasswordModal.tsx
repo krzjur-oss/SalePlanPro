@@ -14,7 +14,7 @@ interface BackupPasswordModalProps {
   onClose: () => void;
   mode: 'export' | 'import';
   onSubmit: (password: string) => void;
-  onSkip?: () => void; // only for export
+  onSkip?: () => void; // tylko przy operacji eksportu
   errorMsg?: string;   // to display custom errors from parent
 }
 

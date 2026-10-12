@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Konfiguracja: ESLint Flat Config (eslint.config.js)
+ * Opis: Zasady lintera dla kodu TypeScript oraz reguł React Hooks.
+ */
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';

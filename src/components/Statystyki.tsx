@@ -211,7 +211,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
     return pl.hours || [];
   }, [pl.hours]);
 
-  // --- Calculations for Lessons scheduled ---
+  // --- Obliczenia zaplanowanych lekcji i obciążeń ---
   const scheduledLessonsList = useMemo(() => {
     // Collect all scheduled lessons in Plan Klas (Etap 1)
     const list: Array<{ 

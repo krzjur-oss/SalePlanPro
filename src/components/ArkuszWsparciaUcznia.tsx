@@ -154,7 +154,7 @@ export default function ArkuszWsparciaUcznia({
         const hourKeyStr = String(hourNum);
         const yk = appState.yearKey || 'default';
 
-        // 1. Check for Individual Special Lessons (1 na 1 / SPE / Rewalidacja / NI)
+        // 1. Weryfikacja indywidualnych zajęć specjalnych (1 na 1 / SPE / Rewalidacja / NI)
         const specialLessonsMatches: Array<{ assignmentId: string }> = [];
 
         // Sprawdzenie slotów indywidualnych i grupowych w spePlan

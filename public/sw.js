@@ -1,3 +1,8 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: PWA Service Worker (public/sw.js)
+ * Opis: Obsługa trybu offline (Cache-First), pre-cache powłoki aplikacji oraz płynna aktualizacja zasobów.
+ */
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
 // Wstrzykiwane automatycznie podczas procesu budowania przez plugin Vite:

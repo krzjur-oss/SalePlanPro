@@ -104,7 +104,7 @@ export default function DualScreenMasterView({
   const [genAllowDoubleBlocks, setGenAllowDoubleBlocks] = useState<boolean>(true);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
-  // Assignments analysis with planned count
+  // Analiza przydziałów wraz z zaplanowaną liczbą godzin
   const classAssignmentsPool = useMemo(() => {
     const assignmentsMap = new Map<string, {
       asg: Assignment;

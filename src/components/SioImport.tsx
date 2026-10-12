@@ -41,7 +41,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
   const [subjectCol, setSubjectCol] = useState<number>(-1);
   const [hoursCol, setHoursCol] = useState<number>(-1);
 
-  // Selection state for items to import
+  // Stan zaznaczenia pozycji przeznaczonych do importu
   const [selectedTeachers, setSelectedTeachers] = useState<Record<string, boolean>>({});
   const [selectedClasses, setSelectedClasses] = useState<Record<string, boolean>>({});
   const [selectedSubjects, setSelectedSubjects] = useState<Record<string, boolean>>({});
@@ -135,7 +135,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
 
       // If we found "imię" separate from "nazwisko", set accordingly
       if (tIdx !== -1 && fIdx !== -1 && tIdx === fIdx) {
-        // Overlap, reset first name
+        // Nakładanie się danych – reset imienia
         fIdx = -1;
       }
 
@@ -356,7 +356,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
 
     // Structure mapped list of teachers
     const processedTeachers = Array.from(rawTeachers.values()).map(t => {
-      // Look for match in existing database
+      // Wyszukiwanie dopasowania w istniejącej bazie danych
       const existing = appState.teachers.find(et => {
         const etFull = `${et.last} ${et.first}`.toLowerCase();
         const etRev = `${et.first} ${et.last}`.toLowerCase();

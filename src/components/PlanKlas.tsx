@@ -114,7 +114,7 @@ export default function PlanKlas({
   const [sidebarSearch, setSidebarSearch] = useState<string>('');
   const [hideCompletedAssignments, setHideCompletedAssignments] = useState<boolean>(false);
 
-  // Form states for modal / quick inline adding
+  // Stany formularza dla modala i szybkiego dodawania
   const [newClassName, setNewClassName] = useState('');
   const [newClassGroup, setNewClassGroup] = useState('');
   const [newTeacherFirst, setNewTeacherFirst] = useState('');
@@ -609,7 +609,7 @@ export default function PlanKlas({
     });
   }, [pl.classes]);
 
-  // Helper to check if a class has unplaced assignments on a specific day
+  // Funkcja pomocnicza sprawdzająca nieprzypisane lekcje klasy w danym dniu
   const classHasUnplacedOnDay = React.useCallback((classId: string, dayIndex: number) => {
     const classAsgs = pl.assignments.filter(a => a.classId === classId || (a.linkedClassIds && a.linkedClassIds.includes(classId)));
     if (classAsgs.length === 0) return false;
@@ -649,7 +649,7 @@ export default function PlanKlas({
   // Memoized filtered classes list
   const filteredClasses = useMemo(() => {
     return pl.classes.filter(c => {
-      // 1. Grade (Rocznik) filter
+      // 1. Filtr rocznika oddziałów (klasy 1-8 / 1-4)
       if (selectedGradeFilters.length > 0) {
         const rocznik = getRocznik(c.name);
         if (!selectedGradeFilters.includes(rocznik)) {
@@ -1387,7 +1387,7 @@ export default function PlanKlas({
                   if (hasSingleClassLimit && !allInvolved.includes(cId)) {
                     conflictingLessons.push({ classId: cId, assignmentId: lessonVal.assignmentId });
                   }
-                  // If !hasSingleClassLimit (default for sports facilities), multiple classes and groups are allowed without conflict!
+                  // Jeśli brak limitu pojedynczej klasy (domyślnie dla obiektów sportowych), wiele klas może ćwiczyć bez konfliktu!
                 } else {
                   conflictingLessons.push({ classId: cId, assignmentId: lessonVal.assignmentId });
                 }
@@ -1583,7 +1583,7 @@ export default function PlanKlas({
       lastScrollTimeRef.current = Date.now();
     }
 
-    // Hide the floating element immediately before checking elementFromPoint
+    // Natychmiastowe ukrycie unoszącego się kafelka przed wywołaniem elementFromPoint
     if (touchDragRef.current) {
       touchDragRef.current.style.display = 'none';
     }

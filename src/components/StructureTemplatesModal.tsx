@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Szablony Struktury Szkoły (StructureTemplatesModal)
+ * Opis: Wczytywanie i zapisywanie gotowych konfiguracji typów szkół (SP, LO, Technikum) oraz awans roczników.
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AppState, SchoolStructureTemplate, Class, Teacher, Subject, ClassRoom, 
@@ -563,6 +569,7 @@ export default function StructureTemplatesModal({
         rooms: saveOptions.infrastructure ? JSON.parse(JSON.stringify(currentAppState.planLekcji.rooms)) : [],
         subjects: saveOptions.subjects ? JSON.parse(JSON.stringify(currentAppState.subjects)) : [],
         teachers: saveOptions.teachers ? JSON.parse(JSON.stringify(currentAppState.teachers)) : [],
+        supportStaff: saveOptions.teachers ? JSON.parse(JSON.stringify(currentAppState.supportStaff || [])) : [],
         classes: saveOptions.classes ? JSON.parse(JSON.stringify(currentAppState.classes)) : [],
         schoolGroups: saveOptions.classes ? JSON.parse(JSON.stringify(currentAppState.planLekcji.schoolGroups || [])) : [],
         homerooms: saveOptions.homerooms ? JSON.parse(JSON.stringify(currentAppState.homerooms || {})) : {},
@@ -643,6 +650,10 @@ export default function StructureTemplatesModal({
     const finalTeachers = applyOptions.teachers && tStruct.teachers
       ? JSON.parse(JSON.stringify(tStruct.teachers))
       : JSON.parse(JSON.stringify(currentAppState.teachers));
+
+    const finalSupportStaff = applyOptions.teachers && tStruct.supportStaff
+      ? JSON.parse(JSON.stringify(tStruct.supportStaff))
+      : JSON.parse(JSON.stringify(currentAppState.supportStaff || []));
 
     // 4. Classes (Promote or 1:1)
     let finalClasses: Class[] = [];
@@ -761,6 +772,7 @@ export default function StructureTemplatesModal({
       floors: finalFloors,
       classes: finalClasses,
       teachers: finalTeachers,
+      supportStaff: finalSupportStaff,
       subjects: finalSubjects,
       homerooms: finalHomerooms,
       planLekcji: {

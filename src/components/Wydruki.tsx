@@ -126,7 +126,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     return 'etap1';
   });
   
-  // Selected filter states
+  // Stany wybranych filtrów wydruku
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('all');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('all');
@@ -150,7 +150,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
   const [roomsSelectedCategory, setRoomsSelectedCategory] = useState<string>('all');
   const [roomsPrintScale, setRoomsPrintScale] = useState<number>(1.0);
   
-  // State for in-app interactive duties print preview modal
+  // Stan modala interaktywnego podglądu wydruku dyżurów w aplikacji
   const [isDutiesModalOpen, setIsDutiesModalOpen] = useState<boolean>(false);
   const [dutiesModalScale, setDutiesModalScale] = useState<number>(1.0);
   const [dutiesModalDayFilter, setDutiesModalDayFilter] = useState<number | 'all'>('all');
@@ -565,7 +565,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     ];
   }, [pl.hours]);
 
-  // Fast lookup from colKey (e.g. f0_s0_101) to room definition in appState.floors
+  // Szybkie mapowanie klucza kolumny (np. f0_s0_101) na definicję sali w appState.floors
   const colKeyToRoomMap = useMemo(() => {
     const map = new Map<string, { num: string; sub?: string; name: string; floorName: string }>();
     const rawCols = localFlattenColumns(appState.floors || []);
@@ -631,7 +631,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
           
           cellList.forEach(cell => {
             if (!cell) return;
-            // Always resolve the actual room name from the Plan Sal room column
+            // Pobranie rzeczywistej nazwy gabinetu z kolumny sali Planu Sal
             const actualRoomName = resolveRoomFromColKey(colKeyStr);
 
             // 1. By Class name
@@ -1067,7 +1067,7 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
     return host1 || host2 || null;
   }, [appState.homerooms]);
 
-  // Safe builder for teacher's current assigned lessons list
+  // Bezpieczny konstruktor listy bieżących lekcji przydzielonych nauczycielowi
   const getTeacherLessonsList = useCallback((teacher: Teacher) => {
     const lessons: Array<{
       dayIdx: number;

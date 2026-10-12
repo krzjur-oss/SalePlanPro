@@ -1,3 +1,9 @@
+/**
+ * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
+ * Moduł: Parametry Generatorów i Higieny Planu (UstawieniaGeneratorow)
+ * Opis: Konfiguracja wag heurystycznych, limitów okienek, preferencji bloków przedmiotowych i przerw obiadowych.
+ */
+
 import React, { useState } from 'react';
 import { AppState, GeneratorSettings } from '../types';
 import { 

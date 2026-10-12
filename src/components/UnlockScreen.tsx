@@ -33,7 +33,7 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
   const [isVerifying, setIsVerifying] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
-  // Rate limiting / exponential delay state (1s, 2s, 4s, 8s, 16s... do 30s)
+  // Blokada czasowa z wykładniczym opóźnieniem (1s, 2s, 4s, 8s, 16s... do 30s)
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
 
@@ -41,11 +41,11 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [activeHelpTab, setActiveHelpTab] = useState<'info' | 'restore' | 'reset'>('info');
 
-  // Emergency reset confirmation
+  // Potwierdzenie awaryjnego resetu bazy
   const [resetConfirmInput, setResetConfirmInput] = useState('');
   const [isResetting, setIsResetting] = useState(false);
 
-  // Backup restore in unlock screen
+  // Przywracanie kopii zapasowej na ekranie odblokowania
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restorePassword, setRestorePassword] = useState('');
   const [restoreIsEncrypted, setRestoreIsEncrypted] = useState(false);
@@ -63,7 +63,7 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
     }
   }, [lockoutSeconds, showHelpModal]);
 
-  // Lockout countdown timer
+  // Odliczanie czasu blokady po nieudanych próbach
   useEffect(() => {
     if (lockoutSeconds <= 0) return;
     const interval = setInterval(() => {
@@ -159,7 +159,7 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
         throw new Error('Wybrany plik nie zawiera prawidłowej struktury planu SalePlan Pro.');
       }
 
-      // Reset old storage encryption meta & storage
+      // Reset metadanych szyfrowania i czyszczenie starej bazy danych
       removeStorageEncryptionMeta();
       await clearAllStorage();
 
@@ -172,7 +172,7 @@ export default function UnlockScreen({ onUnlocked, onResetDatabase }: UnlockScre
       await setStorageItem(STORAGE_KEYS.ARCHIVE, restoredArchive);
       await setStorageItem(STORAGE_KEYS.SNAPSHOTS, restoredSnapshots);
 
-      // Successfully restored: reload page to start fresh with decrypted restored data
+      // Pomyślnie przywrócono: przeładowanie strony z odszyfrowanymi danymi
       window.location.reload();
     } catch (err: any) {
       setRestoreError(err.message || 'Nie udało się przywrócić danych z pliku kopii.');
