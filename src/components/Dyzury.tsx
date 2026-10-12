@@ -8,7 +8,8 @@ import React, { useState, useMemo } from 'react';
 import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState, SchedData, SchedCell, Teacher, SupportStaff } from '../types';
 import { esc, colKey, flattenColumns, uid } from '../utils';
 import { 
-  Shield, Timer, RefreshCcw, Trash2, Edit3, Plus, Settings, Check, HelpCircle 
+  Shield, Timer, RefreshCcw, Trash2, Edit3, Plus, Settings, Check, HelpCircle,
+  ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, GripVertical, ArrowUpDown, SlidersHorizontal
 } from 'lucide-react';
 import { 
   calculateAdaptationDuties, 
@@ -138,6 +139,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
   const [editingPlaceId, setEditingPlaceId] = useState<string | null>(null);
   const [editingBreakNum, setEditingBreakNum] = useState<number | null>(null);
+  const [draggedPlaceIdx, setDraggedPlaceIdx] = useState<number | null>(null);
+  const [dragOverPlaceIdx, setDragOverPlaceIdx] = useState<number | null>(null);
 
   const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
   const DAYS_SHORT = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'];
@@ -542,6 +545,99 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       }
     });
     notify('Usunięto miejsce dyżuru');
+  };
+
+  // ── REORDERING MIEJSC DYŻURÓW ──
+  const handleMovePlace = (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx >= dyz.miejsca.length || toIdx >= dyz.miejsca.length) return;
+    const nextPlaces = [...dyz.miejsca];
+    const [moved] = nextPlaces.splice(fromIdx, 1);
+    nextPlaces.splice(toIdx, 0, moved);
+    onChangeAppState({
+      ...appState,
+      dyzury: {
+        ...dyz,
+        miejsca: nextPlaces,
+      }
+    });
+    notify(`Zmieniono kolejność: "${moved.name}" (pozycja ${toIdx + 1} z ${nextPlaces.length})`);
+  };
+
+  const handleMovePlaceToEdge = (fromIdx: number, edge: 'top' | 'bottom') => {
+    if (fromIdx < 0 || fromIdx >= dyz.miejsca.length) return;
+    const targetIdx = edge === 'top' ? 0 : dyz.miejsca.length - 1;
+    if (fromIdx === targetIdx) return;
+    const nextPlaces = [...dyz.miejsca];
+    const [moved] = nextPlaces.splice(fromIdx, 1);
+    if (edge === 'top') {
+      nextPlaces.unshift(moved);
+    } else {
+      nextPlaces.push(moved);
+    }
+    onChangeAppState({
+      ...appState,
+      dyzury: {
+        ...dyz,
+        miejsca: nextPlaces,
+      }
+    });
+    notify(`Przeniesiono "${moved.name}" na ${edge === 'top' ? 'sam początek' : 'sam koniec'} listy dyżurów`);
+  };
+
+  const handleSortPlacesByName = () => {
+    const sorted = [...dyz.miejsca].sort((a, b) => a.name.localeCompare(b.name, 'pl'));
+    onChangeAppState({
+      ...appState,
+      dyzury: {
+        ...dyz,
+        miejsca: sorted,
+      }
+    });
+    notify('Posortowano punkty dyżurów alfabetycznie (A-Z)');
+  };
+
+  const handleSortPlacesByFloor = () => {
+    const floorRank = (fl?: string) => {
+      if (!fl) return 99;
+      const low = fl.toLowerCase().trim();
+      if (low.includes('piwnic') || low.includes('-1') || low.includes('podziem')) return 1;
+      if (low.includes('parter') || low.includes('0') || low.includes('hol')) return 2;
+      if (low.includes('półpiętro') || low.includes('antresola')) return 3;
+      if (low.includes('i piętro') || low.includes('1 piętro') || low.includes('1.') || low === 'i') return 4;
+      if (low.includes('ii piętro') || low.includes('2 piętro') || low.includes('2.') || low === 'ii') return 5;
+      if (low.includes('iii piętro') || low.includes('3 piętro') || low.includes('3.') || low === 'iii') return 6;
+      if (low.includes('iv piętro') || low.includes('4 piętro') || low.includes('4.') || low === 'iv') return 7;
+      if (low.includes('sala') || low.includes('gimn') || low.includes('sport') || low.includes('wf')) return 8;
+      if (low.includes('boisko') || low.includes('orlik') || low.includes('plac')) return 9;
+      if (low.includes('stołówk') || low.includes('szatn')) return 10;
+      return 50;
+    };
+    const sorted = [...dyz.miejsca].sort((a, b) => {
+      const rA = floorRank(a.floor);
+      const rB = floorRank(b.floor);
+      if (rA !== rB) return rA - rB;
+      return a.name.localeCompare(b.name, 'pl');
+    });
+    onChangeAppState({
+      ...appState,
+      dyzury: {
+        ...dyz,
+        miejsca: sorted,
+      }
+    });
+    notify('Ułożono punkty dyżurów wg kondygnacji i pięter');
+  };
+
+  const handleReversePlacesOrder = () => {
+    const rev = [...dyz.miejsca].reverse();
+    onChangeAppState({
+      ...appState,
+      dyzury: {
+        ...dyz,
+        miejsca: rev,
+      }
+    });
+    notify('Odwrócono kolejność punktów dyżurów');
   };
 
   const handleAddBreak = (e: React.FormEvent) => {
@@ -1503,11 +1599,31 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     <thead>
                       <tr className="bg-slate-100/90 border-b border-slate-200 sticky top-0 z-20">
                         <th className="p-3 text-left text-xs font-bold text-slate-600 w-48 min-w-[190px] sticky left-0 z-30 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.12)]">
-                          Godzina / Przerwa
+                          <div className="flex items-center justify-between gap-1">
+                            <span>Godzina / Przerwa</span>
+                            {!presentationMode && (
+                              <button
+                                type="button"
+                                onClick={() => setActiveTab('places')}
+                                className="text-[9px] font-bold text-blue-600 hover:text-blue-800 bg-white hover:bg-blue-50 border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs transition flex items-center gap-0.5 cursor-pointer"
+                                title="Zmień kolejność kolumn miejsc w zakładce Miejsca Dyżurowania"
+                              >
+                                <ArrowUpDown size={10} /> Układ kolumn
+                              </button>
+                            )}
+                          </div>
                         </th>
-                        {dyz.miejsca.map(place => (
+                        {dyz.miejsca.map((place, pIdx) => (
                           <th key={place.id} className="p-3 text-center text-xs font-bold text-slate-700 min-w-[150px] border-l border-slate-200/60">
-                            <span className="block text-slate-800 font-bold truncate max-w-[180px] mx-auto" title={place.name}>{place.name}</span>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span 
+                                className="px-1.5 py-0.2 rounded bg-slate-200/80 text-slate-600 text-[9px] font-mono font-black"
+                                title={`Kolumna #${pIdx + 1} wg kolejności ustalonej w zakładce Miejsca`}
+                              >
+                                #{pIdx + 1}
+                              </span>
+                              <span className="block text-slate-800 font-bold truncate max-w-[150px]" title={place.name}>{place.name}</span>
+                            </div>
                             {place.floor && <span className="block text-[9px] text-slate-400 font-medium mt-0.5 truncate">{place.floor}</span>}
                           </th>
                         ))}
@@ -2111,13 +2227,63 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm md:col-span-2 overflow-hidden min-w-0">
-              <div className="p-4 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-900 select-none">🚪 Skonfigurowane punkty dyżurów</h3>
+              <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-slate-50 to-white">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900 select-none flex items-center gap-2">
+                      <span>🚪 Skonfigurowane punkty dyżurów</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-700">
+                        {dyz.miejsca.length}
+                      </span>
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Kolejność na tej liście decyduje o kolejności kolumn w <strong>Harmonogramie Dziennym</strong> oraz na <strong>wydrukach</strong>. Przeciągaj wiersze lub użyj strzałek ▲▼.
+                  </p>
+                </div>
+
+                {dyz.miejsca.length > 1 && (
+                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-1 select-none flex items-center gap-1">
+                      <SlidersHorizontal size={11} /> Szybkie:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSortPlacesByFloor}
+                      className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                      title="Uporządkuj miejsca logicznie wg kondygnacji (Parter, I Piętro, II Piętro, Sale WF...)"
+                    >
+                      🏢 Wg pięter
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSortPlacesByName}
+                      className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                      title="Ułóż alfabetycznie według nazwy miejsca"
+                    >
+                      🔤 A-Z
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReversePlacesOrder}
+                      className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg transition shadow-2xs flex items-center gap-1 cursor-pointer"
+                      title="Odwróć aktualną kolejność punktów dyżurów"
+                    >
+                      🔄 Odwróć
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="overflow-x-auto w-full custom-scrollbar">
                 <table className="min-w-full border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-400">
+                    <th className="p-3 text-left text-xs font-bold uppercase tracking-wider w-40 min-w-[150px]">
+                      <span className="flex items-center gap-1">
+                        <ArrowUpDown size={12} className="text-slate-400" />
+                        Kolejność
+                      </span>
+                    </th>
                     <th className="p-3 text-left text-xs font-bold uppercase tracking-wider">Lokalizacja</th>
                     <th className="p-3 text-left text-xs font-bold uppercase tracking-wider">Piętro / Strefa</th>
                     <th className="p-3 text-left text-xs font-bold uppercase tracking-wider">Liczba naucz.</th>
@@ -2126,8 +2292,97 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   </tr>
                 </thead>
                 <tbody>
-                  {dyz.miejsca.map(place => (
-                    <tr key={place.id} className="hover:bg-slate-50/50 border-b border-slate-100 last:border-b-0">
+                  {dyz.miejsca.map((place, idx) => (
+                    <tr 
+                      key={place.id} 
+                      draggable={true}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/plain', String(idx));
+                        e.dataTransfer.effectAllowed = 'move';
+                        setDraggedPlaceIdx(idx);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        if (dragOverPlaceIdx !== idx) setDragOverPlaceIdx(idx);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverPlaceIdx === idx) setDragOverPlaceIdx(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedPlaceIdx !== null && draggedPlaceIdx !== idx) {
+                          handleMovePlace(draggedPlaceIdx, idx);
+                        }
+                        setDraggedPlaceIdx(null);
+                        setDragOverPlaceIdx(null);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedPlaceIdx(null);
+                        setDragOverPlaceIdx(null);
+                      }}
+                      className={`border-b border-slate-100 last:border-b-0 transition-colors ${
+                        draggedPlaceIdx === idx ? 'opacity-40 bg-slate-100' : ''
+                      } ${
+                        dragOverPlaceIdx === idx ? 'bg-blue-50/70 border-t-2 border-t-blue-500' : 'hover:bg-slate-50/70'
+                      }`}
+                    >
+                      {/* Kolumna zmiany kolejności */}
+                      <td className="p-2.5 text-xs align-middle">
+                        <div className="flex items-center gap-1.5 select-none">
+                          <div 
+                            className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100 transition" 
+                            title="Przeciągnij wiersz myszą w górę lub w dół, aby zmienić pozycję na liście"
+                          >
+                            <GripVertical size={14} />
+                          </div>
+                          <span 
+                            className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-black flex items-center justify-center border border-slate-200/90 shrink-0"
+                            title={`Miejsce #${idx + 1} na liście dyżurów`}
+                          >
+                            {idx + 1}
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => handleMovePlace(idx, idx - 1)}
+                              className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
+                              title="Przesuń o 1 pozycję w górę"
+                            >
+                              <ChevronUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === dyz.miejsca.length - 1}
+                              onClick={() => handleMovePlace(idx, idx + 1)}
+                              className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
+                              title="Przesuń o 1 pozycję w dół"
+                            >
+                              <ChevronDown size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => handleMovePlaceToEdge(idx, 'top')}
+                              className="p-1 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded transition disabled:opacity-20 disabled:pointer-events-none cursor-pointer hidden sm:inline-flex"
+                              title="Przenieś na sam początek listy (kolumna #1)"
+                            >
+                              <ChevronsUp size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === dyz.miejsca.length - 1}
+                              onClick={() => handleMovePlaceToEdge(idx, 'bottom')}
+                              className="p-1 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded transition disabled:opacity-20 disabled:pointer-events-none cursor-pointer hidden sm:inline-flex"
+                              title="Przenieś na sam koniec listy"
+                            >
+                              <ChevronsDown size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+
                       <td className="p-3 text-xs text-slate-800">
                         <div className="font-bold flex items-center gap-1.5 flex-wrap">
                           <span>{place.name}</span>
@@ -2154,14 +2409,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                         <div className="flex items-center justify-center gap-1.5">
                           <button 
                             onClick={() => handleStartEditPlace(place)}
-                            className="p-1 text-slate-400 hover:text-amber-600 rounded transition-colors"
+                            className="p-1 text-slate-400 hover:text-amber-600 rounded transition-colors cursor-pointer"
                             title="Edytuj miejsce"
                           >
                             <Edit3 size={14} />
                           </button>
                           <button 
                             onClick={() => handleRemovePlace(place.id)}
-                            className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
+                            className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors cursor-pointer"
                             title="Usuń miejsce"
                           >
                             <Trash2 size={14} />
@@ -2172,7 +2427,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                   ))}
                   {dyz.miejsca.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400 text-xs">Brak skonfigurowanych punktów korytarzowych.</td>
+                      <td colSpan={6} className="p-8 text-center text-slate-400 text-xs">Brak skonfigurowanych punktów korytarzowych.</td>
                     </tr>
                   )}
                 </tbody>
