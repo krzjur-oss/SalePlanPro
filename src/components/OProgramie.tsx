@@ -11,6 +11,7 @@ import {
 import Changelog from './Changelog';
 import Instrukcje from './Instrukcje';
 import TermsModal from './TermsModal';
+import { SalePlanLogoMark } from './SalePlanLogo';
 
 interface OProgramieProps {
   initialTab?: 'info' | 'instructions' | 'changelog';
@@ -42,9 +43,11 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
               Profesjonalny, lokalny system wspomagania układania tygodniowych planów zajęć lekcyjnych, przydziału gabinetów przedmiotowych oraz harmonogramowania dyżurów nauczycielskich na przerwach.
             </p>
           </div>
-          <div className="flex flex-col items-center justify-center shrink-0 w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md font-bold text-4xl select-none z-10">
-            SP
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-100 mt-1 font-mono">v3.9.12</span>
+          <div className="flex flex-col items-center justify-center shrink-0 select-none z-10 gap-2">
+            <SalePlanLogoMark size={84} className="shadow-2xl rounded-2xl" />
+            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-200 font-mono bg-indigo-950/80 px-2 py-0.5 rounded-full border border-indigo-500/30">
+              v3.9.13
+            </span>
           </div>
         </div>
 

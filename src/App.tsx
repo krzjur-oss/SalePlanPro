@@ -28,6 +28,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { sanitizeAppState, ImportPayload } from './utils/mergeEngine';
 import { StateMeta, AppStateSchema, SchedDataSchema } from './utils/validationSchemas';
 import { anonymizeBackupPayload, AnonymizationSummary } from './utils/anonymization';
+import { SalePlanLogoMark } from './components/SalePlanLogo';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
 const PlanSal = lazy(() => import('./components/PlanSal'));
@@ -2399,13 +2400,15 @@ export default function App() {
           <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-4 border-b border-slate-800/80">
             {/* Lewa strona: Logo + Nazwa programu + Nazwa szkoły */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="bg-blue-600 rounded-lg p-1.5 sm:p-2 text-white flex items-center justify-center font-black text-xs sm:text-sm shrink-0 shadow-xs">
-                SP
-              </div>
+              <SalePlanLogoMark size={34} className="shadow-xs rounded-xl shrink-0" />
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 leading-none">
-                  <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-white leading-none whitespace-nowrap">
-                    SalePlan Pro
+                  <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-white leading-none whitespace-nowrap flex items-center gap-1" title="SalePlan Pro">
+                    <span className="sr-only">SalePlan Pro</span>
+                    <span aria-hidden="true">SalePlan</span>
+                    <span aria-hidden="true" className="font-serif italic font-black text-amber-400 text-sm sm:text-base leading-none -ml-0.5 inline-block transform rotate-2" style={{ fontFamily: 'Georgia, cursive, serif' }}>
+                      pro
+                    </span>
                   </h1>
                   <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold px-1.5 py-0.5 rounded text-[9px] uppercase font-mono tracking-wide hidden sm:inline-block leading-none">
                     PWA App
@@ -3179,9 +3182,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.12!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.13!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Ręczne oznaczanie zbędnych (niepotrzebnych) dyżurów w Etapie 3, szybkie przyciski w siatce oraz bilans zwolnionych stanowisk.
+                  Nowa stała ikona i logo (białe SP + żółte „pro” pismem pisanym) oraz ręczne układanie kolejności miejsc dyżurów.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

@@ -2462,7 +2462,7 @@ export default function PlanKlas({
               currentClass && (
                 <div 
                   onClick={() => setIsLeftSidebarCollapsed(false)}
-                  className="mt-auto mb-2 p-1 rounded-md bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black cursor-pointer text-center"
+                  className="mt-auto mb-2 p-1 rounded-md bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-black cursor-pointer text-center [writing-mode:vertical-lr] rotate-180 truncate max-h-32"
                   title={`Aktywna klasa: ${currentClass.name}. Kliknij aby rozwinąć.`}
                 >
                   {currentClass.name}
@@ -5906,7 +5906,7 @@ export default function PlanKlas({
             </button>
             <div 
               onClick={() => setIsRightSidebarCollapsed(false)}
-              className="cursor-pointer [writing-mode:vertical-lr] text-[11px] font-extrabold text-slate-400 hover:text-indigo-600 tracking-wider uppercase flex items-center gap-2 py-2"
+              className="cursor-pointer [writing-mode:vertical-lr] rotate-180 text-[11px] font-extrabold text-slate-400 hover:text-indigo-600 tracking-wider uppercase flex items-center gap-2 py-2"
               title="Rozwiń skrytkę lekcji"
             >
               <span>🗂️ Skrytka lekcji</span>

@@ -25,6 +25,7 @@ import Wydruki from './Wydruki';
 import Statystyki from './Statystyki';
 import UstawieniaGeneratorow from './UstawieniaGeneratorow';
 import OProgramie from './OProgramie';
+import { SalePlanLogoMark } from './SalePlanLogo';
 
 interface DualScreenMasterViewProps {
   currentTab: 'kreator' | 'plan_klas' | 'plan_sal' | 'dyzury' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow';
@@ -392,8 +393,9 @@ export default function DualScreenMasterView({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-white tracking-wide uppercase">
-                Ekran 1 (Główny) • Tryb 2 Ekrany
+              <span className="text-xs font-black text-white tracking-wide uppercase flex items-center gap-1.5">
+                <SalePlanLogoMark size={18} className="rounded-md shrink-0 inline-block shadow-xs" />
+                <span>Ekran 1 (Główny) • Tryb 2 Ekrany</span>
               </span>
               <span className="inline-flex items-center gap-1 bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />

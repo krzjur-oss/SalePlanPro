@@ -27,6 +27,7 @@ import Wydruki from './Wydruki';
 import Statystyki from './Statystyki';
 import UstawieniaGeneratorow from './UstawieniaGeneratorow';
 import OProgramie from './OProgramie';
+import { SalePlanLogoMark } from './SalePlanLogo';
 import { 
   Maximize2, Minimize2, RefreshCw, X, Monitor, Layers, 
   Sparkles, Filter, Search, CheckCircle2, 
@@ -620,8 +621,9 @@ export default function CompanionWindowView({
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="font-extrabold text-sm text-white tracking-tight truncate">
-                SalePlan Pro • Monitor Towarzyszący
+              <h1 className="font-extrabold text-sm text-white tracking-tight truncate flex items-center gap-1.5">
+                <SalePlanLogoMark size={20} className="rounded-md shrink-0 inline-block shadow-xs" />
+                <span>SalePlan Pro • Monitor Towarzyszący</span>
               </h1>
               {isConnectedToMaster ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-full">

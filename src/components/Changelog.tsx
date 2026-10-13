@@ -30,11 +30,24 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.9.13',
+      date: 'Październik 2026',
+      title: 'Nowa Stała Ikona i Logo Programu (Białe SP + Żółte "pro" Pismem Pisanym) oraz Ręczne Układanie Miejsc Dyżurów',
+      description: 'Oficjalna identyfikacja wizualna systemu SalePlan Pro: stała ikona oraz logotyp zawierające duże, drukowane białe litery „SP” oraz dynamiczny, żółty odręczny dopisek „pro” pismem pisanym. Ponadto w Etapie 3 (Dyżury) wprowadzono pełne ręczne układanie kolejności miejsc dyżurowania (przeciąganie Drag & Drop, strzałki, szybkie sortowanie po piętrach i nazwach), z natychmiastowym odzwierciedleniem w harmonogramie i na wydrukach.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Nowa stała ikona i logotyp programu: Elegancki emblemat marki złożony z dużych drukowanych liter „SP” w kolorze białym oraz żółtego dopisku „pro” pismem pisanym (odręcznym/kaligraficznym) na głębokim kobaltowym squircle.', badgeText: 'Identyfikacja wizualna' },
+        { type: 'feature', text: 'Pełna integracja ikony w systemie: Nowa ikona stała się domyślną favikoną przeglądarki, ikonami Progressive Web App (PWA 192x192, 512x512 oraz maskable), nagłówkiem ekranu głównego, okna towarzyszącego (Monitor 2) oraz modułu O programie.', badgeText: 'Logo & Favicon' },
+        { type: 'feature', text: 'Ręczne układanie kolejności miejsc dyżurów (Etap 3): W zakładce „Miejsca Dyżurowania” użytkownik może dowolnie porządkować listę punktów dyżurów – metodą Drag & Drop (chwyć i upuść) lub za pomocą precyzyjnych przycisków strzałek (góra/dół/początek/koniec).', badgeText: 'Etap 3 Dyżury' },
+        { type: 'improvement', text: 'Szybkie szablony porządkowania: Dodano przyciski szybkiego układania miejsc dyżurów: logicznie wg pięter (piwnica → parter → piętra → obiekty sportowe), alfabetycznie (A-Z) oraz odwracanie kolejności.', badgeText: 'Układ kolumn' },
+        { type: 'improvement', text: 'Spójność w całym module dyżurów: Kolejność ustalona w punktach dyżurów natychmiast definiuje kolejność kolumn w siatce Harmonogramu Dziennego (z numerami #1, #2...) oraz na kartach wydruków i PDF.', badgeText: 'Harmonogram' }
+      ]
+    },
+    {
       version: 'v3.9.12',
       date: 'Październik 2026',
       title: 'Ręczne Oznaczanie Zbędnych Dyżurów w Etapie 3 (Dyżury Niepotrzebne / Zwolnione)',
       description: 'Wprowadzenie pełnej możliwości ręcznego definiowania i oznaczania stanowisk oraz godzin, w których dyżur korytarzowy jest zbędny (niepotrzebny). Funkcjonalność obejmuje bezpośrednie przełączanie w siatce harmonogramu, zaawansowane okno edycji z opcją zastosowania na cały tydzień roboczy, wykluczenie ze statystyk zapotrzebowania, zabezpieczenie przed automatycznym nadpisaniem przez generator oraz dedykowany modal zarządzania i czyste wydruki.',
-      badge: 'Najnowsza',
       changes: [
         { type: 'feature', text: 'Ręczne oznaczanie zbędnych dyżurów w komórkach harmonogramu (Etap 3): Szybki przycisk 🚫 oraz dedykowana karta w tabeli dziennej pozwalają jednym kliknięciem oznaczyć dany punkt dyżurowania na danej przerwie jako zbędny/niepotrzebny.', badgeText: 'Dyżury zbędne' },
         { type: 'feature', text: 'Zaawansowany modal konfiguracji slotu: Możliwość oznaczenia dyżuru jako zbędny z podaniem uzasadnienia (np. brak zajęć na piętrze, zamknięte skrzydło) oraz opcją zastosowania reguły na wszystkie dni robocze (Pn–Pt) o tej godzinie.', badgeText: 'Reguły tygodniowe' },
