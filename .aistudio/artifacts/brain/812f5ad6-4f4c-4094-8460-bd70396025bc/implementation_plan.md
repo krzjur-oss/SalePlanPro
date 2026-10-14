@@ -1,96 +1,68 @@
-# Obsługa Zadań Poza Tablicą i Personelu Niepedagogicznego w Puli Dyżurów
+# Plan Rozwoju i Katalog Możliwości Usprawnień: SalePlan Pro
 
-Kompleksowa rozbudowa systemu SalePlan Pro o ewidencję czynności poza tablicą (świetlica, biblioteka, pedagog, psycholog, logopeda, nauczyciel wspomagający) bezpośrednio w profilu nauczyciela, utworzenie dedykowanego modułu dla personelu nieuczącego (pracownicy obsługi i wsparcia) oraz ich pełną integrację z silnikiem bilansowania dyżurów korytarzowych.
+Niniejszy dokument przedstawia pełne zestawienie potencjalnych kierunków rozwoju systemu **SalePlan Pro** opracowane na podstawie szczegółowego audytu architektury, modułów planistycznych i bazy danych, z uwzględnieniem preferencji planisty dotyczących asysty w zamianach oraz optymalizacji dużych siatek.
 
-## User Review & Critical Decisions
+---
 
-> [!IMPORTANT]
-> Zgodnie z ustaleniami:
-> 1. **Nauczyciele z zadaniami poza tablicą**: Definiowani i zarządzani w module **Nauczyciele** (Kreator Szkoły – Krok 3). Dodane zostają dedykowane pola ról specjalistycznych (świetlica, biblioteka, pedagog, psycholog, logopeda, wspomagający) oraz pule godzin poza tablicą, które wliczają się do ich pensum i dostępności.
-> 2. **Pracownicy nieuczący (personel niepedagogiczny)**: Zorganizowani w **osobnym, dedykowanym module** w Kreatorze Szkoły i panelu szkoły (pracownicy wsparcia, asystenci, woźni, obsługa), którzy posiadają własny grafik dyspozycyjności i mogą być włączani do dyżurów na korytarzach, szatniach i stołówkach.
-> 3. **Obecność i dyżury**: Dla osób bez lekcji tablicowych ich obecność w szkole podczas przerw weryfikowana jest na podstawie indywidualnej siatki dostępności (dni i godziny dyżurowania) z zachowaniem pełnej ergonomii pracy.
+## 1. Dwa Wiodące Priorytety Użytkownika
 
-## 1. Overview & Core Concept
+### Priorytet A: Asystent Sugerowania Optymalnych Zamian i Wolnych Sal (Smart Swap & Room Engine)
+1. **Inteligentny analizator slotu**:
+   - Po kliknięciu w dowolną komórkę lekcji lub pusty slot w siatce (w Planie Klas, Sal lub Nauczycieli) aktywuje się panel sugestii.
+   - Analiza dostępności sal: wyszukiwanie sal spełniających wymóg pojemności i specyfiki (np. pracownia chemiczna, sala gimnastyczna, pracownia informatyczna), które w danym slocie są w 100% wolne.
+   - Sugestie zamiany lekcji (Swap Suggestions): algorytm skanuje plan danej klasy lub nauczyciela i wskazuje bezkolizyjne sloty, w które można przenieść daną lekcję (np. *„Możesz przenieść Historię na wtorek g. 11:30 – sala 204 i nauczyciel są wtedy wolni”*).
+2. **Kalkulator wpływu i podgląd przed zatwierdzeniem**:
+   - Wizualizacja skutków zamiany (brak nowych okienek, brak kolizji dyżurów korytarzowych) z opcją zatwierdzenia jednym kliknięciem (*„Zastosuj zamianę”* z możliwością natychmiastowego cofnięcia `Ctrl+Z`).
 
-* **Cel modułu**: W szkołach wielu pracowników nie prowadzi tradycyjnych lekcji przedmiotowych przy tablicy, lecz realizuje zadania o kluczowym znaczeniu (świetlica, biblioteka, pomoc psychologiczno-pedagogiczna, wsparcie uczniów ze SPE czy obsługa szkoły). Dotychczasowy algorytm dyżurów bazował wyłącznie na godzinach lekcyjnych w planie zajęć, przez co osoby te miały zerowy wymiar godzin w puli dyżurów.
-* **Grupa docelowa**: Dyrektorzy szkół, wicedyrektorzy układający plan lekcji i harmonogram dyżurów oraz koordynatorzy bezpieczeństwa.
-* **Kluczowa wartość**: Sprawiedliwe, automatyczne i proporcjonalne włączenie wszystkich pracowników szkoły do dyżurów korytarzowych z uwzględnieniem ich realnego czasu pracy i obecności w placówce.
+### Priorytet B: Optymalizacja Wydajności Renderowania Dużych Siatek Lekcji
+1. **Dekompozycja i memoizacja komórek siatki (`React.memo`)**:
+   - Siatki w `PlanKlas.tsx` i `PlanSal.tsx` generują setki komórek DOM jednocześnie. Przesunięcie kursora z wybranym pędzlem lub zaznaczenie pojedynczej lekcji powoduje re-render całej matrycy.
+   - Wdrożenie zoptymalizowanych komponentów komórek (`LessonCellMemo`, `SlotDroppableMemo`) z selektywnym porównywaniem propsów (`arePropsEqual`).
+2. **Zaawansowana wirtualizacja i `content-visibility: auto`**:
+   - Zastosowanie natywnej właściwości CSS `content-visibility: auto` oraz `contain-intrinsic-size` dla dni i oddziałów poza widocznym obszarem przewijania ekranu.
+   - Wirtualizacja wierszy/kolumn przy wyświetlaniu 20–40 oddziałów jednocześnie w widoku horyzontalnym.
+3. **Optymalizacja bufora transakcyjnego IndexedDB**:
+   - Zwiększenie responsywności UI podczas seryjnego wstawiania lekcji poprzez odroczenie zapisu na dysku (`debounce` 600 ms z natychmiastowym optymistycznym stanem w pamięci RAM).
 
-## 2. User Experience & Visual Design
+---
 
-### Ścieżka Użytkownika (User Flows)
-1. **Kreator Szkoły – Krok Nauczyciele (Zadania Poza Tablicą)**:
-   * W formularzu dodawania/edycji nauczyciela pojawia się sekcja *Czynności i zadania poza tablicą*.
-   * Możliwość zaznaczenia ról: Wychowawca świetlicy, Bibliotekarz, Pedagog szkolny / specjalny, Psycholog, Logopeda, Nauczyciel współorganizujący / wspomagający.
-   * Wprowadzenie tygodniowej puli godzin poza tablicą (np. 15h świetlicy, 20h biblioteki).
-   * Przełącznik: *Uwzględniaj w puli dyżurów korytarzowych* z automatycznym przeliczeniem ekwiwalentu etatu.
-   * Ustalenie godzin dostępności w szkole w tygodniowej siatce dni/godzin.
+## 2. Katalog Pozostałych Możliwości Usprawnień Aplikacji
 
-2. **Dedykowany Moduł Pracowników Niepedagogicznych**:
-   * Nowy, przejrzysty widok personelu wsparcia i obsługi w Kreatorze Szkoły oraz panelu szkoły.
-   * Karta pracownika: Imię, nazwisko, identyfikator/skrót, stanowisko (np. pomoc nauczyciela, asystent ucznia, woźny/ochrona, szatniarz), tygodniowy wymiar obecności.
-   * Siatka dostępności (dni i godziny, w których pracownik pełni dyżury lub przebywa w strefach wspólnych).
-   * Uprawnienia do dyżurów: możliwość przypisania do konkretnych stref (korytarz, parter, stołówka, szatnia, plac szkolny).
+### Kategoria 1: Automatyzacja i Generator Planu
+- **Półautomatyczny asystent wypełniania okienek**: narzędzie wykrywające pojedyncze luki w planie nauczycieli i proponujące przesunięcia lekcji skracające dzień pracy.
+- **Audytor higieny planu ucznia (zgodność z wytycznymi MEN)**:
+  - Automatyczna weryfikacja równomiernego rozłożenia przedmiotów ścisłych i trudnych w tygodniu (unikanie kumulacji w piątki po południu).
+  - Ostrzeżenia o zbyt dużej liczbie lekcji w jednym ciągu bez przerwy obiadowej.
 
-3. **Moduł Dyżurów (Harmonogram i Bilans)**:
-   * Tabela personelu dyżurującego zawiera zakładki/filtry: *Wszyscy*, *Nauczyciele tablicowi*, *Specjaliści i poza tablicą*, *Pracownicy niepedagogiczni*.
-   * Wskaźnik obciążenia (minuty dyżurów) uwzględnia godziny poza tablicą i etat personelu.
-   * W menu wyboru dyżurnego na danej przerwie widoczni są wszyscy pracownicy dostępni w tym slocie, z czytelnym oznaczeniem ich roli (np. `Jan Kowalski (Świetlica)`, `Anna Nowak (Pedagog)`, `Piotr Wiśniewski (Obsługa)`).
-   * Generator automatyczny równomiernie przydziela dyżury wszystkim uprawnionym osobom.
+### Kategoria 2: Zastępstwa i Organizacja Dnia
+- **Dedykowany Moduł Szybkich Zastępstw Dziennych**:
+  - Rejestracja nagłej nieobecności nauczyciela na dany dzień.
+  - Podpowiedź wolnych nauczycieli z uprawnieniami do danego przedmiotu lub z okienkiem w tym samym czasie.
+  - Generowanie estetycznego zestawienia zastępstw na tablicę ogłoszeń lub do e-dziennika (PDF/wydruk).
 
-### Visual Identity & Theme
-* **Aestetyka**: Spójna z dotychczasowym systemem SalePlan Pro – profesjonalny interfejs szkolny, stonowana paleta neutralna (slate), akcenty indygo/błękitu dla działań kluczowych.
-* **Typografia**: Czytelny krój bezszeryfowy, liczby i minuty w układzie monospace (`tabular-nums font-mono`).
-* **Karty i tabele**: Pojedyncza głębokość, delikatne obramowania 1px, brak zbędnych badge'ów-pigułek, elegancka typografia i czytelne etykiety tekstowe.
+### Kategoria 3: Wydruki, Raporty i Wymiana Danych
+- **Eksport do formatu Excel (.xlsx) i CSV**:
+  - Eksport planów zbiorczych i indywidualnych do gotowych arkuszy kalkulacyjnych z zachowaniem formatowania i kolorów.
+- **Generowanie wektorowych planów PDF (A4 / A3)**:
+  - Dedykowane szablony do gabloty szkolnej z nagłówkiem szkoły, logo i legendą sal.
+- **Kody QR dla uczniów i nauczycieli**:
+  - Generowanie unikalnego kodu QR na wydruku, którego zeskanowanie smartfonem otwiera interaktywny plan danej klasy w trybie offline PWA.
 
-## 3. Key Product Decisions & Trade-Offs
+### Kategoria 4: Ergonomia i Doświadczenie Użytkownika (UX)
+- **Kompletna obsługa skrótów klawiszowych**:
+  - Nawigacja strzałkami po siatce, szybkie usuwanie (`Delete`/`Backspace`), szybki pędzel (`1-9` dla ulubionych przedmiotów), `Ctrl+Z` / `Ctrl+Y`.
+- **Wielokrotne cofanie/ponawianie (Historia Akcji z osią czasu)**:
+  - Panel historii umożliwiający cofnięcie się do dowolnego momentu sesji planowania.
+- **Tryb porównywania wariantów (Split-Screen Diff)**:
+  - Możliwość otwarcia wersji A i wersji B planu obok siebie z podświetleniem różnic w salach i godzinach.
 
-* **Decyzja 1: Rozdzielenie nauczycieli z zadaniami poza tablicą od personelu niepedagogicznego**:
-  * *Podejście*: Nauczyciele (nawet pracujący wyłącznie w świetlicy lub poradnictwie) podlegają Karcie Nauczyciela i są zarządzani w module Nauczyciele, z opcją łączenia godzin tablicowych i pozatablicowych. Pracownicy niepedagogiczni (Kodeks Pracy / administracja i obsługa) otrzymują dedykowaną, autonomiczną ewidencję.
-  * *Dlaczego*: Zapewnia to logiczny podział prawno-organizacyjny w polskich szkołach oraz maksymalną przejrzystość arkusza organizacyjnego.
-  * *Alternatywy*: Wrzucenie wszystkich do jednej listy mieszało typy umów i pensum; rozdzielenie na dwa zupełnie osobne programy uniemożliwiłoby wspólne planowanie dyżurów.
+---
 
-* **Decyzja 2: Algorytm sprawdzania obecności na przerwie**:
-  * *Podejście*: Dla nauczycieli tablicowych system sprawdza lekcje przyległe do przerwy. Dla osób z godzinami poza tablicą lub personelu obsługi system bazuje na zdefiniowanej siatce dostępności godzinowej (dostępność w szkole) oraz oznaczeniu obecności w wybranym dniu i godzinie.
-  * *Dlaczego*: Pedagog czy bibliotekarz nie mają wpisanych klas i sal w planie lekcji, ale przebywają w szkole w konkretnych przedziałach godzinowych.
+## 3. Plan Wdrożenia (Krok po Kroku)
 
-## 4. Technical Architecture & Data Strategy
+Gdy zdecydujesz o rozpoczęciu prac, rekomendowane wdrożenie przebiegnie w następujących fazach:
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        SalePlan Pro Data Model                         │
-├──────────────────────────────────┬─────────────────────────────────────┤
-│ Teacher (Rozszerzony)            │ SupportStaff (Nowy model)           │
-│ - nonTeachingHours?: number      │ - id: string                        │
-│ - nonTeachingRoles?: string[]    │ - first: string, last: string       │
-│ - nonTeachingDutyEligible: bool  │ - abbr: string, role: string        │
-│ - availability: string[]         │ - weeklyHours: number               │
-│ - maxHours / pensum              │ - availability: string[]            │
-│                                  │ - dutyEligible: boolean             │
-└─────────────────┬────────────────┴──────────────────┬──────────────────┘
-                  │                                   │
-                  ▼                                   ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                 Moduł Dyżurów (Duty Allocation Engine)                 │
-├────────────────────────────────────────────────────────────────────────┤
-│ 1. Unified Eligible Personnel Pool (Nauczyciele + Pracownicy Wsparcia) │
-│ 2. Obliczanie etatu i wag dyżurów:                                     │
-│    totalHours = teachingHours + nonTeachingHours + staffHours          │
-│ 3. Weryfikacja obecności w slocie przerwy (lekcje LUB dostępność)      │
-│ 4. Generator automatyczny + ręczna edycja harmonogramu dyżurów         │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-### Zmiany w Modelu Danych (`types.ts` i walidacja)
-1. Rozszerzenie interfejsu `Teacher`:
-   * `nonTeachingHours?: number` – tygodniowa liczba godzin poza tablicą.
-   * `nonTeachingRoles?: string[]` – role: świetlica, biblioteka, pedagog, psycholog, logopeda, wspomagający.
-   * `nonTeachingDutyEligible?: boolean` – włączony do puli dyżurów korytarzowych.
-2. Nowy interfejs `SupportStaff`:
-   * `id: string`, `first: string`, `last: string`, `abbr: string`, `role: string`, `color?: string`, `weeklyHours?: number`, `availability?: string[]`, `dutyEligible?: boolean`, `notes?: string`.
-3. Rozszerzenie `AppState`:
-   * `supportStaff?: SupportStaff[]`.
-4. Dostosowanie silnika `Dyzury.tsx`:
-   * Połączona pula kandydatów do dyżurów.
-   * Aktualizacja statystyk etatu, limitu minut oraz algorytmu optymalizatora dyżurów.
-   * Obsługa wydruków i eksportu dyżurów z uwzględnieniem nowego personelu.
+- **Krok 1 (Wydajność)**: Profilowanie `PlanKlas.tsx` i `PlanSal.tsx`, memoizacja komponentów komórek, dodanie `content-visibility: auto` oraz zoptymalizowanie stanu hover/drag.
+- **Krok 2 (Silnik Asystenta)**: Utworzenie modułu `src/services/swapAdvisorService.ts` obliczającego bezkolizyjne sloty, wolne sale i alternatywne godziny dla wskazanego przedmiotu.
+- **Krok 3 (Interfejs Asystenta)**: Dodanie bocznego paska / wyskakującego okna sugestii zamiany z podglądem na żywo i przyciskiem aplikowania zamiany jednym kliknięciem.
+- **Krok 4 (Weryfikacja)**: Uruchomienie pełnego zestawu testów jednostkowych, testów e2e i testów wydajnościowych renderowania siatki.

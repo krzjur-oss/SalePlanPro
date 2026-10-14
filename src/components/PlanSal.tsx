@@ -2272,7 +2272,7 @@ export default function PlanSal({
                   {appState.hours.map((h, hourIndex) => {
                     const ts = appState.timeslots.find(t => String(t.num) === h);
                     return (
-                      <tr key={hourIndex} className="hover:bg-slate-50/50">
+                      <tr key={hourIndex} className="hover:bg-slate-50/50 timetable-row-contain">
                         {/* Hour cell */}
                         <td className="border-b border-r border-slate-200 p-3 text-center bg-slate-100 select-none sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)]">
                           <span className="block font-bold text-slate-700">{h}</span>
@@ -2299,7 +2299,7 @@ export default function PlanSal({
                             return (
                               <td 
                                 key={colIdx} 
-                                className={`border-b border-r last:border-r-0 border-slate-200 p-2 align-top transition-colors ${
+                                className={`border-b border-r last:border-r-0 border-slate-200 p-2 align-top transition-colors timetable-cell-fast ${
                                   isCellConf ? 'bg-red-50/70 border-2 border-red-300' : 'bg-slate-50/20'
                                 }`}
                                 title={isCellConf ? cellConfReasons.join('\n') : undefined}
@@ -2413,7 +2413,7 @@ export default function PlanSal({
                           return (
                             <td 
                               key={colIdx} 
-                              className={`border-b border-r last:border-r-0 border-slate-200 p-2 align-top transition-colors ${
+                              className={`border-b border-r last:border-r-0 border-slate-200 p-2 align-top transition-colors timetable-cell-fast ${
                                 isConf ? 'bg-red-50/70 border-2 border-red-300' : 'hover:bg-blue-50/40'
                               }`}
                             >

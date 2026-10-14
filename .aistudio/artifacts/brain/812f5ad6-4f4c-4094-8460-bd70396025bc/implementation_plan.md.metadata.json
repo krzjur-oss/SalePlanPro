@@ -1,6 +1,6 @@
 {
-  "summary":  "Plan wdrożenia obsługi nauczycieli z zadaniami poza tablicą (świetlica, biblioteka, pedagog, psycholog, logopeda, nauczyciel wspomagający) w module Nauczyciele oraz dedykowanego modułu dla pracowników niepedagogicznych wraz z pełną integracją w puli i algorytmie dyżurów.",
-  "updatedAt":  "2026-10-10T10:02:29.978836862Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Kompleksowy audyt możliwości rozwoju systemu SalePlan Pro oraz plan wdrożenia dwóch priorytetowych innowacji: Asystenta Optymalnych Zamian i Wolnych Sal oraz Optymalizacji Wydajności Renderowania Dużych Siatek Lekcji (wirtualizacja, memoizacja, redukcja renderów).",
+  "updatedAt": "2026-10-13T18:26:24.981571016Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

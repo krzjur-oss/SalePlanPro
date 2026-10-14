@@ -37,3 +37,14 @@
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 #f1f5f9;
 }
+
+/* High-performance rendering optimizations for large timetable matrices (30+ classes/rooms) */
+.timetable-row-contain {
+  content-visibility: auto;
+  contain-intrinsic-size: 115px;
+}
+
+.timetable-cell-fast {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}

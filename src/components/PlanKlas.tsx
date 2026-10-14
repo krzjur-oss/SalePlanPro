@@ -6,15 +6,16 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { 
-  AppState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment, StudentSupportType, PlanVariant 
+  AppState, PlanLekcjiState, Class, Teacher, Subject, ClassRoom, SchoolGroup, Assignment, Lesson, SpecialStudent, SpecialAssignment, StudentSupportType, PlanVariant 
 } from '../types';
 import { esc, hexRgba, uid, subjectAbbr, genAbbr } from '../utils';
 import { 
   User, BookOpen, Layers, MapPin, Plus, Trash2, Edit3, Check, RefreshCw, X, Calendar, Filter, Users, Settings, Info, Sparkles, CheckCircle, Award, Zap, RotateCcw, Ban,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, GripVertical, Search, Lock, Unlock, ArrowLeftRight
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ChevronLeft, ChevronRight, GripVertical, Search, Lock, Unlock, ArrowLeftRight, Undo2, Redo2
 } from 'lucide-react';
 import PlanGenerator from './PlanGenerator';
 import SwapAssistantModal, { SwapSlotItem } from './SwapAssistantModal';
+import SwapAdvisorModal from './SwapAdvisorModal';
 import LockManagerModal from './LockManagerModal';
 import { AssignRoomDropdown } from './AssignRoomDropdown';
 import { dualScreenService, DualScreenMessage } from '../services/dualScreenService';
@@ -425,15 +426,69 @@ export default function PlanKlas({
     notify(lock ? `🔒 Zablokowano wszystkie lekcje w szkole (${count} godz.).` : `🔓 Odblokowano wszystkie lekcje w szkole.`, 'ok');
   };
 
-  // ── SWAP ASSISTANT (SZYBKA ZAMIANA LEKCJI) STATES & HANDLERS ──
+  // ── HISTORIA OPERACJI (UNDO / REDO) PLANU LEKCJI ──
+  const [undoStack, setUndoStack] = useState<PlanLekcjiState[]>([]);
+  const [redoStack, setRedoStack] = useState<PlanLekcjiState[]>([]);
+
+  const pushUndo = React.useCallback((currentPlan: PlanLekcjiState) => {
+    setUndoStack(prev => [...prev.slice(-30), JSON.parse(JSON.stringify(currentPlan))]);
+    setRedoStack([]);
+  }, []);
+
+  const handleUndo = React.useCallback(() => {
+    if (undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    setRedoStack(prev => [...prev, JSON.parse(JSON.stringify(pl))]);
+    onChangeAppState({
+      ...appState,
+      planLekcji: previous
+    });
+    notify('↩️ Cofnięto ostatnią zmianę w planie lekcji.', 'info');
+  }, [undoStack, pl, appState, onChangeAppState]);
+
+  const handleRedo = React.useCallback(() => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => [...prev, JSON.parse(JSON.stringify(pl))]);
+    onChangeAppState({
+      ...appState,
+      planLekcji: next
+    });
+    notify('↪️ Przywrócono zmianę w planie lekcji.', 'info');
+  }, [redoStack, pl, appState, onChangeAppState]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
+  // ── SWAP & ROOM ADVISOR (ASYSTENT ZAMIAN I SAL) STATES & HANDLERS ──
   const [swapSource, setSwapSource] = useState<SwapSlotItem | null>(null);
   const [swapTarget, setSwapTarget] = useState<SwapSlotItem | null>(null);
   const [showSwapModal, setShowSwapModal] = useState(false);
+  const [showSwapAdvisorModal, setShowSwapAdvisorModal] = useState(false);
   const [swapIncludeRooms, setSwapIncludeRooms] = useState(true);
 
   const handleStartSwap = (item: SwapSlotItem) => {
     setSwapSource(item);
-    notify(`Wybrano lekcję do zamiany: ${item.subject?.name || 'Lekcja'}. Kliknij teraz inny slot w planie.`, 'info');
+    setShowSwapAdvisorModal(true);
   };
 
   const checkSwapConflicts = (source: SwapSlotItem, target: SwapSlotItem) => {
@@ -531,6 +586,7 @@ export default function PlanKlas({
   const handleExecuteSwap = () => {
     if (!swapSource || !swapTarget) return;
 
+    pushUndo(pl);
     const nextLessons = { ...pl.lessons };
 
     // Remove source key
@@ -1462,6 +1518,7 @@ export default function PlanKlas({
       lessons: updatedLessons
     };
 
+    pushUndo(pl);
     onChangeAppState({
       ...appState,
       planLekcji: updatedPL
@@ -1633,6 +1690,7 @@ export default function PlanKlas({
   };
 
   const handleRemoveLesson = (key: string) => {
+    pushUndo(pl);
     const updatedLessons = { ...pl.lessons };
     const lessonToRemove = updatedLessons[key];
     if (lessonToRemove) {
@@ -2970,24 +3028,68 @@ export default function PlanKlas({
                       </span>
                     </button>
 
+                    {/* Przyciski Cofnij / Ponów (Undo / Redo) */}
+                    <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={handleUndo}
+                        disabled={undoStack.length === 0}
+                        className={`px-2 py-1 text-xs font-bold rounded-md transition flex items-center gap-1 cursor-pointer ${
+                          undoStack.length > 0
+                            ? 'text-slate-700 hover:bg-white hover:shadow-xs'
+                            : 'text-slate-300 cursor-not-allowed'
+                        }`}
+                        title="Cofnij ostatnią zmianę w planie (Ctrl+Z)"
+                      >
+                        <Undo2 size={13} className={undoStack.length > 0 ? 'text-indigo-600' : 'text-slate-300'} />
+                        <span className="hidden sm:inline">Cofnij</span>
+                        {undoStack.length > 0 && (
+                          <span className="text-[10px] px-1 rounded-full bg-indigo-100 text-indigo-700 font-extrabold leading-none">
+                            {undoStack.length}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleRedo}
+                        disabled={redoStack.length === 0}
+                        className={`px-2 py-1 text-xs font-bold rounded-md transition flex items-center gap-1 cursor-pointer ${
+                          redoStack.length > 0
+                            ? 'text-slate-700 hover:bg-white hover:shadow-xs'
+                            : 'text-slate-300 cursor-not-allowed'
+                        }`}
+                        title="Ponów cofniętą zmianę w planie (Ctrl+Y)"
+                      >
+                        <Redo2 size={13} className={redoStack.length > 0 ? 'text-indigo-600' : 'text-slate-300'} />
+                        <span className="hidden sm:inline">Ponów</span>
+                        {redoStack.length > 0 && (
+                          <span className="text-[10px] px-1 rounded-full bg-indigo-100 text-indigo-700 font-extrabold leading-none">
+                            {redoStack.length}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+
                     <button 
                       onClick={() => {
                         if (swapSource) {
                           setSwapSource(null);
+                          setShowSwapAdvisorModal(false);
                           notify('Anulowano tryb zamiany lekcji.', 'info');
                         } else {
-                          notify('Wybierz lekcję w planie za pomocą ikony [ ⇄ ], a następnie kliknij drugi kafelek, aby otworzyć asystenta zamiany.', 'info');
+                          notify('Wybierz lekcję w planie za pomocą ikony [ ⇄ ], aby uruchomić Inteligentnego Asystenta Zamian i Wolnych Sal.', 'info');
                         }
                       }}
                       className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                         swapSource 
-                          ? 'bg-indigo-600 text-white border-indigo-600 animate-pulse' 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
                           : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                       }`}
-                      title="Szybka zamiana lekcji (Swap Assistant): zamieniaj lekcje między dniami i godzinami z kontrolą kolizji"
+                      title="Inteligentny Asystent Zamian i Wolnych Sal (Swap & Room Advisor)"
                     >
-                      <ArrowLeftRight size={14} className={swapSource ? 'text-white' : 'text-indigo-600'} />
-                      <span>Szybka zamiana (Swap)</span>
+                      <Sparkles size={14} className={swapSource ? 'text-amber-300 animate-spin' : 'text-indigo-600'} />
+                      <span>Asystent Zamian & Sal</span>
                     </button>
                   </div>
 
@@ -3062,13 +3164,27 @@ export default function PlanKlas({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSwapSource(null)}
-                  className="px-3.5 py-1.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0"
-                >
-                  ✕ Anuluj zamianę
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowSwapAdvisorModal(true)}
+                    className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-amber-950 font-black rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                    title="Otwórz inteligentnego asystenta optymalnych zamian i wolnych sal dla wybranej lekcji"
+                  >
+                    <Sparkles size={14} className="text-amber-950" />
+                    <span>💡 Otwórz Asystenta Sugestii i Sal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSwapSource(null);
+                      setShowSwapAdvisorModal(false);
+                    }}
+                    className="px-3.5 py-1.5 bg-white/15 hover:bg-white/25 text-white rounded-xl text-xs font-extrabold transition cursor-pointer shrink-0"
+                  >
+                    ✕ Anuluj
+                  </button>
+                </div>
               </div>
             )}
 
@@ -3118,7 +3234,7 @@ export default function PlanKlas({
                   </thead>
                   <tbody>
                     {filteredClasses.map((cls) => (
-                      <tr key={cls.id} className="hover:bg-slate-50/50">
+                      <tr key={cls.id} className="hover:bg-slate-50/50 timetable-row-contain">
                         {/* Kolumna Klasy */}
                         <td className="p-3 border-b border-r border-slate-200 text-center bg-slate-50/50 select-none align-middle font-bold text-xs">
                           <button
@@ -3147,7 +3263,7 @@ export default function PlanKlas({
                             <td 
                               key={hourIndex}
                               title={anyConf ? allConfReasons.join('\n') : undefined}
-                              className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-28 transition-all ${
+                              className={`p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-28 transition-all timetable-cell-fast ${
                                 anyConf ? 'bg-red-50/70 border-2 border-red-300' : ''
                               }`}
                               data-cell-type="plan-cell"
@@ -3485,7 +3601,7 @@ export default function PlanKlas({
                     </thead>
                     <tbody>
                       {pl.hours.map((h, hourIndex) => (
-                        <tr key={hourIndex} className="hover:bg-slate-50/50">
+                        <tr key={hourIndex} className="hover:bg-slate-50/50 timetable-row-contain">
                           {/* Godzina */}
                           <td className="p-1 sm:p-2 border-b border-r border-slate-200 text-center bg-slate-50/50 select-none align-middle">
                             <span className="block font-bold text-slate-700 text-xs sm:text-sm md:text-base">{h.num}</span>
@@ -3501,7 +3617,7 @@ export default function PlanKlas({
                               <td 
                                 key={dayIndex}
                                 title={anyConf ? allConfReasons.join('\n') : undefined}
-                                className={`p-1 sm:p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-24 sm:min-h-28 transition-all overflow-hidden ${
+                                className={`p-1 sm:p-1.5 border-b border-r last:border-r-0 border-slate-200 align-top min-h-24 sm:min-h-28 transition-all overflow-hidden timetable-cell-fast ${
                                   anyConf ? 'bg-red-50/70 border-2 border-red-300' : ''
                                 }`}
                                 data-cell-type="plan-cell"
@@ -6866,6 +6982,33 @@ export default function PlanKlas({
           appState={appState} 
           onChangeAppState={onChangeAppState} 
           onClose={() => setShowGenerator(false)} 
+        />
+      )}
+
+      {showSwapAdvisorModal && swapSource && (
+        <SwapAdvisorModal
+          isOpen={showSwapAdvisorModal}
+          source={swapSource}
+          target={swapTarget}
+          pl={pl}
+          onApplyPlanChange={(newPlan, logMsg) => {
+            pushUndo(pl);
+            onChangeAppState({
+              ...appState,
+              planLekcji: newPlan
+            });
+            notify(logMsg, 'ok');
+            setShowSwapAdvisorModal(false);
+            setSwapSource(null);
+            setSwapTarget(null);
+          }}
+          onSelectManualTargetMode={() => {
+            setShowSwapAdvisorModal(false);
+            notify('Wskaż drugi kafelek w planie lekcji, aby porównać te dwa sloty w asystencie.', 'info');
+          }}
+          onClose={() => {
+            setShowSwapAdvisorModal(false);
+          }}
         />
       )}
 
