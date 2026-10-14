@@ -6,8 +6,8 @@
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 
 // Wstrzykiwane automatycznie podczas procesu budowania przez plugin Vite:
-const BUILD_ID = "v_mv6vw18m_dcb5e15870";
-const CURRENT_ASSETS = ["assets/AssignRoomDropdown-BBbqhK-T.js","assets/CompanionWindowView-cvGEggoO.js","assets/DualScreenMasterView-DFD7FDbt.js","assets/Dyzury-Dcaq3hhl.js","assets/KreatorSzkoly-Biy_PXO5.js","assets/OProgramie-BxOyCcor.js","assets/PlanKlas-Dd0VNazN.js","assets/PlanSal-BZ4hvfcP.js","assets/PlanVariantsModal--Ft3Wj2w.js","assets/SnapshotManager-DZnnz6dQ.js","assets/Statystyki-Ciuz0YMe.js","assets/UstawieniaGeneratorow-zaRKzIpz.js","assets/Wydruki-DnRRUVBd.js","assets/adaptationDuty-CkY1ufja.js","assets/index-B3TWjuVT.js","assets/index-Dnp779A6.css","assets/roomUtils-gJMDp5Ow.js","assets/vendor-dnd-Dk37sCMx.js","assets/vendor-lucide-BMNCz33b.js","assets/vendor-motion-7o_NUGSZ.js","assets/vendor-react-M1a6ECPm.js","assets/vendor-recharts-BSefab-z.js","assets/vendor-zod-hv1ZMVFq.js"];
+const BUILD_ID = "v_mv80o3m4_1bc87be942";
+const CURRENT_ASSETS = ["assets/AssignRoomDropdown-Cbd2--xK.js","assets/CompanionWindowView-QhMHPAEb.js","assets/DualScreenMasterView-DFY0BI7_.js","assets/Dyzury-C_gC7bC-.js","assets/KreatorSzkoly-mD3U2V9c.js","assets/OProgramie-IKjID-dv.js","assets/PlanKlas-BXx2HIOZ.js","assets/PlanSal-BjRgucga.js","assets/PlanVariantsModal-BEAx-cL_.js","assets/SnapshotManager-bPTPKgQk.js","assets/Statystyki-BPajaU2x.js","assets/UstawieniaGeneratorow-D6jHAJfy.js","assets/Wydruki-C1anvSxX.js","assets/adaptationDuty-D-IenWDl.js","assets/index-BHX5yXYb.js","assets/index-B_dsSXdv.css","assets/roomUtils-gJMDp5Ow.js","assets/vendor-dnd-Dk37sCMx.js","assets/vendor-lucide-DBMtmSqp.js","assets/vendor-motion-7o_NUGSZ.js","assets/vendor-react-M1a6ECPm.js","assets/vendor-recharts-BSefab-z.js","assets/vendor-zod-hv1ZMVFq.js"];
 
 // Nazwa cache unikalna dla danego builda
 const CACHE_NAME = 'saleplan-cache-' + (typeof BUILD_ID === 'string' && !BUILD_ID.startsWith('__') ? BUILD_ID : 'dev');
