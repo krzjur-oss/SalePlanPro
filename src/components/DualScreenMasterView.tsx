@@ -21,6 +21,10 @@ import { isSportsFacility } from '../utils/roomUtils';
 import { isNIRoom } from './CompanionWindowView';
 import { AssignRoomDropdown } from './AssignRoomDropdown';
 import Dyzury from './Dyzury';
+import ZastepstwaDziennik from './ZastepstwaDziennik';
+import AudytorHigienyMEN from './AudytorHigienyMEN';
+import EksportIRaporty from './EksportIRaporty';
+import SplitScreenDiffViewer from './SplitScreenDiffViewer';
 import Wydruki from './Wydruki';
 import Statystyki from './Statystyki';
 import UstawieniaGeneratorow from './UstawieniaGeneratorow';
@@ -28,7 +32,7 @@ import OProgramie from './OProgramie';
 import { SalePlanLogoMark } from './SalePlanLogo';
 
 interface DualScreenMasterViewProps {
-  currentTab: 'kreator' | 'plan_klas' | 'plan_sal' | 'dyzury' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow';
+  currentTab: 'kreator' | 'plan_klas' | 'plan_sal' | 'dyzury' | 'zastepstwa' | 'higiena_men' | 'eksport_raporty' | 'porownywarka_diff' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow';
   appState: AppState;
   schedData: SchedData;
   activeVariant: PlanVariant | null;
@@ -1158,6 +1162,46 @@ export default function DualScreenMasterView({
                 }
               }}
               schedData={schedData}
+            />
+          </div>
+        )}
+
+        {currentTab === 'zastepstwa' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-950">
+            <ZastepstwaDziennik
+              appState={appState}
+              schedData={schedData}
+              onChangeAppState={onChangeAppState}
+            />
+          </div>
+        )}
+
+        {currentTab === 'higiena_men' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-950">
+            <AudytorHigienyMEN
+              appState={appState}
+              schedData={schedData}
+              onNavigateToTab={onNavigateToTab}
+            />
+          </div>
+        )}
+
+        {currentTab === 'eksport_raporty' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-950">
+            <EksportIRaporty
+              appState={appState}
+              schedData={schedData}
+            />
+          </div>
+        )}
+
+        {currentTab === 'porownywarka_diff' && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-950">
+            <SplitScreenDiffViewer
+              appState={appState}
+              planVariants={planVariants}
+              activeVariantId={activeVariant?.id}
+              onBackToMain={() => onNavigateToTab('plan_klas')}
             />
           </div>
         )}

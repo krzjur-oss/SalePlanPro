@@ -23,6 +23,7 @@ import {
   isPESubject, 
   PESupervisionResult 
 } from '../utils/peDuty';
+import { calculateTeacherWorkload } from '../utils/workloadUtils';
 
 const getBreakDuration = (p: Przerwa): number => {
   const [sh, sm] = p.start.split(':').map(Number);
@@ -251,14 +252,39 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return hours;
   }, [schedData, appState.yearKey, appState.teachers, appState.supportStaff]);
 
-  // Pomocnicza kalkulacja ekwiwalentu pełnego etatu (FTE) dla sprawiedliwego bilansowania
+  // Mapa nauczycieli do szybkiego wyszukiwania
+  const teacherMap = useMemo(() => {
+    const map = new Map<string, Teacher>();
+    appState.teachers.forEach(t => map.set(t.abbr, t));
+    return map;
+  }, [appState.teachers]);
+
+  // Pomocnicza kalkulacja proporcji dyżurów:
+  // Zgodnie z decyzją: Proporcjonalnie do wymiaru etatu i godzin bezpośrednio przy tablicy
   const getPersonFteProportion = (p: DutyPerson, hours: number): number => {
     if (p.isStaff) {
       // Pracownicy niepedagogiczni (Kodeks Pracy): pełny etat = 40h
       return hours >= 40 ? 1.0 : hours / 40;
     }
-    // Nauczyciele (Karta Nauczyciela): pensum pełnoetatowe = 18h
-    return hours >= 18 ? 1.0 : hours / 18;
+
+    const teacher = teacherMap.get(p.abbr);
+    if (!teacher) return hours >= 18 ? 1.0 : hours / 18;
+    if (teacher.dutyExempt || teacher.isAdministrative) return 0;
+
+    const analysis = calculateTeacherWorkload(
+      teacher,
+      appState.planLekcji.assignments,
+      appState.planLekcji.specialAssignments
+    );
+
+    if (analysis.dutyExempt || analysis.effectiveDutyLimit === 0) {
+      return 0;
+    }
+
+    // Proporcja tablicy do pełnego etatu przedmiotowego (18h) oraz ułamek etatu
+    const boardRatio = Math.max(0, analysis.boardHours / 18);
+    const fteFactor = Math.min(1.0, analysis.totalFte);
+    return boardRatio * fteFactor;
   };
 
   // Current duty allocation counts per teacher/staff
@@ -315,7 +341,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return mins;
   }, [teacherCorridorMinutes, dyz.settings.firstGradeAdaptationDuty, dyz.settings.countAdaptationInFTE, adaptationDuties, dyz.settings.peSupervisionDuty, dyz.settings.countPeSupervisionInFTE, peDuties]);
 
-  // Target max minutes for each person based on FTE proportion
+  // Target max minutes for each person based on FTE proportion and board hours
   const teacherMaxMinutes = useMemo(() => {
     const maxMins: { [abbr: string]: number } = {};
     let sumProportions = 0;
@@ -342,9 +368,21 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
     const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
     eligiblePersonnel.forEach(p => {
+      const teacher = !p.isStaff ? teacherMap.get(p.abbr) : null;
+      if (teacher?.dutyExempt) {
+        maxMins[p.abbr] = 0;
+        return;
+      }
+      if (teacher && teacher.maxDutyCount !== undefined) {
+        maxMins[p.abbr] = Math.max(0, teacher.maxDutyCount * 15);
+        return;
+      }
+
       const hours = teacherHours[p.abbr] || 0;
       const prop = getPersonFteProportion(p, hours);
-      if (dyz.settings.autoBalance !== false) {
+      if (prop <= 0) {
+        maxMins[p.abbr] = 0;
+      } else if (dyz.settings.autoBalance !== false) {
         maxMins[p.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * prop)));
       } else {
         maxMins[p.abbr] = maxMinsLimit;
@@ -352,7 +390,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     });
 
     return maxMins;
-  }, [eligiblePersonnel, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance]);
+  }, [eligiblePersonnel, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance, teacherMap]);
 
   // Memoized duty demand statistics
   const demandStats = useMemo(() => {

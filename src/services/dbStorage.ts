@@ -79,6 +79,7 @@ export const STORAGE_KEYS = {
   STORAGE_ENC_META: STORAGE_ENC_META_KEY,
   PRE_ENCRYPTION_BACKUP: 'saleplan_pre_encryption_backup',
   PENDING_CHANGES_BACKUP: 'saleplan_v3_pending_changes_backup',
+  DAILY_SUBSTITUTIONS: 'saleplan_v3_daily_substitutions',
 } as const;
 
 /**

@@ -30,11 +30,28 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.10.0',
+      date: 'Listopad 2026',
+      title: 'Kompleksowa Reforma Pensum i Nadgodzin w Szkole Podstawowej (Karta Nauczyciela art. 42) oraz Moduł 4: Porównywanie Wariantów Split-Screen Diff',
+      description: 'Przełomowe wydanie v3.10.0 wprowadzające pełne odzwierciedlenie przepisów o czasie pracy nauczycieli w szkole podstawowej: zróżnicowane pensum (przedmiotowe 18h, wspomagający 20h, świetlica 26h, bibliotekarz 30h, specjaliści i doradcy 22h, pracownicy niepedagogiczni 40h), proporcjonalny wzór pensum łączonego, rozróżnienie jednostek czasu (45 min lekcyjne vs 60 min świetlicowe/opiekuńcze), wyliczanie sugerowanego limitu dyżurów korytarzowych wg godzin tablicowych, kontrolę 40-godzinnego budżetu czasu pracy, nowy edytor TeacherWorkloadEditor w Kreatorze Szkoły, a także Moduł 4: tryb porównywania wariantów planu lekcji Split-Screen Diff z funkcją cherry-pickingu zajęć.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Zróżnicowane pensum wg stanowisk i funkcji (Karta Nauczyciela art. 42 ust. 3): Nauczyciel przedmiotowy (18h), współorganizujący kształcenie (20h), świetlica (26h), biblioteka (30h), pedagog/psycholog/logopeda/terapeuta (maks. 22h), doradca zawodowy (maks. 22h) oraz obsługa niepedagogiczna (40h wg Kodeksu Pracy).', badgeText: 'Karta Nauczyciela' },
+        { type: 'feature', text: 'Proporcjonalny wzór pensum łączonego: Obliczanie uśrednionego pensum przy łączeniu etatów wg reguły organu prowadzącego: P = Σh_i / Σ(h_i / P_i), z precyzyjnym wyznaczaniem ułamka etatu (FTE) oraz godzin ponadwymiarowych (nadgodzin).', badgeText: 'Pensum łączone' },
+        { type: 'feature', text: 'Rozdzielenie jednostek czasu – 45 min vs 60 min: Godziny lekcyjne (45 min) oraz godziny opiekuńcze/świetlicowe (60 min) prezentowane w osobnych kolumnach w tabelach obciążeń, statystykach i arkuszach Excel z prawidłowym przeliczeniem etatu.', badgeText: 'Jednostki 45m / 60m' },
+        { type: 'feature', text: 'Proporcjonalny przydział i limity dyżurów korytarzowych: Sugerowany limit minutowy dyżurów na przerwach wyliczany proporcjonalnie do godzin bezpośrednio prowadzonych przy tablicy (h_tablica / 18) oraz wymiaru etatu, z możliwością zwolnienia personelu realizującego wyłącznie czynności opiekuńcze lub specjalistyczne.', badgeText: 'Dyżury korytarzowe' },
+        { type: 'feature', text: 'Monitor pełnego 40-godzinnego budżetu czasu pracy: Prezentacja całkowitego tygodniowego czasu pracy (pensum zajęć z uczniami + dyżury na przerwach + przygotowanie, sprawdzanie prac i czynności statutowe szkoły) z ostrzeżeniem o przekroczeniu limitu.', badgeText: 'Budżet 40h' },
+        { type: 'feature', text: 'Nowy edytor TeacherWorkloadEditor w Kreatorze Szkoły: Interaktywny panel stanowisk i pensum w profilu nauczyciela z gotowymi szablonami stanowisk, swobodnym dodawaniem funkcji i natychmiastowym kalkulatorem wskaźników KPI.', badgeText: 'Kreator Szkoły' },
+        { type: 'feature', text: 'Moduł 4: Tryb Porównywania Wariantów Planu (Split-Screen Diff): Równoległy widok side-by-side dwóch wersji planu z silnikiem wykrywania różnic, filtrowaniem zmian, natychmiastową detekcją kolizji oraz przenoszeniem wybranych lekcji (cherry-picking) między wariantami.', badgeText: 'Split-Screen Diff' },
+        { type: 'improvement', text: 'Kompleksowe zestawienie w Statystykach i raportach Excel: Nowy panel KPI, rozbudowana tabela obciążeń z podziałem na 45m/60m, pensum łączone, nadgodziny, wskaźniki dyżurów oraz dedykowany arkusz „Czas Pracy i Pensum” w eksporcie .xlsx.', badgeText: 'Statystyki & Excel' }
+      ]
+    },
+    {
       version: 'v3.9.13',
       date: 'Październik 2026',
       title: 'Nowa Stała Ikona i Logo Programu (Białe SP + Żółte "pro" Pismem Pisanym) oraz Ręczne Układanie Miejsc Dyżurów',
       description: 'Oficjalna identyfikacja wizualna systemu SalePlan Pro: stała ikona oraz logotyp zawierające duże, drukowane białe litery „SP” oraz dynamiczny, żółty odręczny dopisek „pro” pismem pisanym. Ponadto w Etapie 3 (Dyżury) wprowadzono pełne ręczne układanie kolejności miejsc dyżurowania (przeciąganie Drag & Drop, strzałki, szybkie sortowanie po piętrach i nazwach), z natychmiastowym odzwierciedleniem w harmonogramie i na wydrukach.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Nowa stała ikona i logotyp programu: Elegancki emblemat marki złożony z dużych drukowanych liter „SP” w kolorze białym oraz żółtego dopisku „pro” pismem pisanym (odręcznym/kaligraficznym) na głębokim kobaltowym squircle.', badgeText: 'Identyfikacja wizualna' },
         { type: 'feature', text: 'Pełna integracja ikony w systemie: Nowa ikona stała się domyślną favikoną przeglądarki, ikonami Progressive Web App (PWA 192x192, 512x512 oraz maskable), nagłówkiem ekranu głównego, okna towarzyszącego (Monitor 2) oraz modułu O programie.', badgeText: 'Logo & Favicon' },

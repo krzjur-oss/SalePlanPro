@@ -37,6 +37,11 @@ const Wydruki = lazy(() => import('./components/Wydruki'));
 const Statystyki = lazy(() => import('./components/Statystyki'));
 const SnapshotManager = lazy(() => import('./components/SnapshotManager'));
 const Dyzury = lazy(() => import('./components/Dyzury'));
+const ZastepstwaDziennik = lazy(() => import('./components/ZastepstwaDziennik'));
+const AudytorHigienyMEN = lazy(() => import('./components/AudytorHigienyMEN'));
+const EksportIRaporty = lazy(() => import('./components/EksportIRaporty'));
+const MobilePlanViewer = lazy(() => import('./components/MobilePlanViewer'));
+const SplitScreenDiffViewer = lazy(() => import('./components/SplitScreenDiffViewer'));
 const OProgramie = lazy(() => import('./components/OProgramie'));
 const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
 const PlanVariantsModal = lazy(() => import('./components/PlanVariantsModal'));
@@ -52,7 +57,8 @@ import { Z_INDEX, Z_INDEX_CLASSES } from './styles/zIndex';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, Layers, MapPin, Shield, Download, Upload, Trash2, RotateCcw, RotateCw, RefreshCw, Layers2, FileText, Sparkles, Menu, X, Printer, BarChart2,
-  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database, Monitor
+  Maximize2, Minimize2, HelpCircle, History, Camera, Plus, Clock, Bookmark, AlertTriangle, Check, Search, Sliders, Eye, EyeOff, ChevronRight, ChevronDown, Database, Monitor, UserCheck, HeartHandshake,
+  FileSpreadsheet, QrCode, Columns2
 } from 'lucide-react';
 
 export const APP_TAB_NAMES: Record<string, string> = {
@@ -60,7 +66,11 @@ export const APP_TAB_NAMES: Record<string, string> = {
   plan_klas: 'Plan Klas',
   plan_sal: 'Plan Sal',
   dyzury: 'Dyżury Nauczycielskie',
-  wydruki: 'Wydruki i Raporty',
+  zastepstwa: 'Zastępstwa Dzienne',
+  higiena_men: 'Audytor Higieny MEN',
+  eksport_raporty: 'Raporty i Kody QR',
+  porownywarka_diff: 'Porównywarka (Diff)',
+  wydruki: 'Wydruki i Publikacje',
   statystyki: 'Statystyki i Analiza',
   o_programie: 'O programie',
   ustawienia_generatorow: 'Ustawienia generatorów'
@@ -999,8 +1009,17 @@ export default function App() {
     notify(`Skopiowano ${copiedCount} dyżurów nauczyciela ${teacher.first} ${teacher.last} (${teacher.abbr}) do wariantu „${targetVar.name}”.`, 'ok');
   };
 
-  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
+  const [currentTab, setCurrentTab] = useState<'plan_klas' | 'plan_sal' | 'dyzury' | 'zastepstwa' | 'higiena_men' | 'eksport_raporty' | 'porownywarka_diff' | 'kreator' | 'wydruki' | 'statystyki' | 'o_programie' | 'ustawienia_generatorow'>('kreator');
   const [oProgramieTab, setOProgramieTab] = useState<'info' | 'instructions' | 'changelog'>('info');
+
+  // Bezpośredni podgląd planu mobilnego z kodu QR (?view=mobile_plan)
+  const [isMobilePlanMode, setIsMobilePlanMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('view') === 'mobile_plan';
+    }
+    return false;
+  });
 
   useEffect(() => {
     const sName = APP_TAB_NAMES[currentTab] || currentTab;
@@ -1194,7 +1213,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.9.12';
+  const CURRENT_VERSION = '3.10.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -2337,6 +2356,36 @@ export default function App() {
     );
   }
 
+  // W trybie bezpośredniego podglądu z kodu QR (?view=mobile_plan) renderuj natychmiast MobilePlanViewer
+  if (isMobilePlanMode) {
+    return (
+      <Suspense fallback={
+        <div className="h-screen w-screen flex items-center justify-center bg-slate-950 text-slate-100 font-sans">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm font-semibold">Ładowanie planu mobilnego...</p>
+          </div>
+        </div>
+      }>
+        <MobilePlanViewer
+          appState={appState}
+          schedData={schedData}
+          onBackToApp={() => {
+            setIsMobilePlanMode(false);
+            if (typeof window !== 'undefined') {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('view');
+              url.searchParams.delete('type');
+              url.searchParams.delete('id');
+              url.searchParams.delete('yk');
+              window.history.pushState({}, '', url.toString());
+            }
+          }}
+        />
+      </Suspense>
+    );
+  }
+
   // W trybie okna towarzyszącego (?mode=companion) renderuj bezpośrednio CompanionWindowView
   if (isCompanionMode) {
     return (
@@ -2440,6 +2489,10 @@ export default function App() {
                     {currentTab === 'plan_klas' && <><Layers size={13} className="text-blue-400" /> <span className="hidden sm:inline">Etap 1: Plan Klas</span><span className="sm:hidden">Plan Klas</span></>}
                     {currentTab === 'plan_sal' && <><MapPin size={13} className="text-teal-400" /> <span className="hidden sm:inline">Etap 2: Plan Sal</span><span className="sm:hidden">Plan Sal</span></>}
                     {currentTab === 'dyzury' && <><Shield size={13} className="text-indigo-400" /> <span className="hidden sm:inline">Etap 3: Dyżury</span><span className="sm:hidden">Dyżury</span></>}
+                    {currentTab === 'zastepstwa' && <><UserCheck size={13} className="text-amber-400" /> <span className="hidden sm:inline">Zastępstwa Dzienne</span><span className="sm:hidden">Zastępstwa</span></>}
+                    {currentTab === 'higiena_men' && <><HeartHandshake size={13} className="text-emerald-400" /> <span className="hidden sm:inline">Audytor MEN</span><span className="sm:hidden">Higiena</span></>}
+                    {currentTab === 'eksport_raporty' && <><FileSpreadsheet size={13} className="text-emerald-400" /> <span className="hidden sm:inline">Raporty & QR</span><span className="sm:hidden">Raporty</span></>}
+                    {currentTab === 'porownywarka_diff' && <><Columns2 size={13} className="text-indigo-400" /> <span className="hidden sm:inline">Porównywarka Diff</span><span className="sm:hidden">Diff</span></>}
                     {currentTab === 'wydruki' && <><Printer size={13} className="text-emerald-400" /> <span className="hidden sm:inline">Wydruki</span><span className="sm:hidden">Druk</span></>}
                     {currentTab === 'statystyki' && <><BarChart2 size={13} className="text-rose-400" /> <span className="hidden sm:inline">Statystyki</span><span className="sm:hidden">Stats</span></>}
                     {currentTab === 'ustawienia_generatorow' && <><Sliders size={13} className="text-indigo-400 font-bold" /> <span className="hidden sm:inline">Generator</span><span className="sm:hidden">Algorytmy</span></>}
@@ -2518,6 +2571,66 @@ export default function App() {
                           <div>
                             <span className="text-xs font-black block">🛡️ Etap 3: Dyżury</span>
                             <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Opieka na przerwach</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('zastepstwa'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'zastepstwa'
+                              ? 'bg-amber-950/50 border-l-4 border-amber-500 text-amber-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <UserCheck size={15} className={`shrink-0 mt-0.5 ${currentTab === 'zastepstwa' ? 'text-amber-400' : 'text-slate-400'}`} />
+                          <div>
+                            <span className="text-xs font-black block">⚡ Zastępstwa Dzienne</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Nieobecności, wakaty i wydruki</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('higiena_men'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'higiena_men'
+                              ? 'bg-emerald-950/50 border-l-4 border-emerald-500 text-emerald-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <HeartHandshake size={15} className={`shrink-0 mt-0.5 ${currentTab === 'higiena_men' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                          <div>
+                            <span className="text-xs font-black block">🌿 Audytor Higieny MEN</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Ergonomia & normy Sanepidu</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('eksport_raporty'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'eksport_raporty'
+                              ? 'bg-emerald-950/50 border-l-4 border-emerald-500 text-emerald-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <FileSpreadsheet size={15} className={`shrink-0 mt-0.5 ${currentTab === 'eksport_raporty' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                          <div>
+                            <span className="text-xs font-black block">📊 Raporty Excel & Kody QR</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Arkusze .xlsx & plany mobilne</span>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => { setCurrentTab('porownywarka_diff'); setHamburgerOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-xl transition flex items-start gap-2.5 hover:bg-slate-800/60 ${
+                            currentTab === 'porownywarka_diff'
+                              ? 'bg-indigo-950/50 border-l-4 border-indigo-500 text-indigo-200 font-extrabold pl-2'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <Columns2 size={15} className={`shrink-0 mt-0.5 ${currentTab === 'porownywarka_diff' ? 'text-indigo-400' : 'text-slate-400'}`} />
+                          <div>
+                            <span className="text-xs font-black block">⚖️ Porównywarka (Diff)</span>
+                            <span className="text-[9px] text-slate-400 block leading-tight mt-0.5 font-bold uppercase">Split-Screen & detekcja kolizji</span>
                           </div>
                         </button>
 
@@ -2859,10 +2972,41 @@ export default function App() {
                         presentationMode={isPresentationMode}
                       />
                     )}
+                    {currentTab === 'zastepstwa' && (
+                      <ZastepstwaDziennik 
+                        appState={appState} 
+                        schedData={schedData} 
+                        onChangeAppState={handleUpdateAppState} 
+                      />
+                    )}
+                    {currentTab === 'higiena_men' && (
+                      <AudytorHigienyMEN 
+                        appState={appState} 
+                        schedData={schedData} 
+                        onNavigateToTab={(tab) => setCurrentTab(tab as any)} 
+                      />
+                    )}
+                    {currentTab === 'eksport_raporty' && (
+                      <EksportIRaporty 
+                        appState={appState} 
+                        schedData={schedData} 
+                      />
+                    )}
+                    {currentTab === 'porownywarka_diff' && (
+                      <SplitScreenDiffViewer
+                        appState={appState}
+                        planVariants={planVariants}
+                        activeVariantId={activeVariantId}
+                        onUpdateVariants={handleSaveVariants}
+                        onApplyVariantToActive={(variant) => handleSwitchVariant(variant.id)}
+                        onBackToMain={() => setCurrentTab('plan_klas')}
+                      />
+                    )}
                     {currentTab === 'wydruki' && (
                       <Wydruki 
                         appState={appState} 
                         schedData={schedData}
+                        onNavigateToTab={(tab) => setCurrentTab(tab as any)}
                       />
                     )}
                     {currentTab === 'statystyki' && (
@@ -2871,6 +3015,7 @@ export default function App() {
                         schedData={schedData}
                         historyLogs={historyLogs}
                         onClearHistoryLogs={() => setHistoryLogs([])}
+                        onNavigateToTab={(tab) => setCurrentTab(tab as any)}
                       />
                     )}
                     {currentTab === 'ustawienia_generatorow' && (
@@ -3005,6 +3150,10 @@ export default function App() {
             onApplySelectiveClassSync={handleApplySelectiveClassSync}
             onApplyTeacherDutySync={handleApplyTeacherDutySync}
             onShowNotification={(text, type) => notify(text, type === 'success' ? 'ok' : type === 'err' ? 'err' : 'info')}
+            onOpenSplitScreen={() => {
+              setShowVariantsModal(false);
+              setCurrentTab('porownywarka_diff');
+            }}
           />
         )}
       </Suspense>
@@ -3182,9 +3331,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.9.13!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.10.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Nowa stała ikona i logo (białe SP + żółte „pro” pismem pisanym) oraz ręczne układanie kolejności miejsc dyżurów.
+                  Reforma pensum i nadgodzin SP (Karta Nauczyciela art. 42), wzór pensum łączonego, zróżnicowanie 45/60 min oraz Moduł 4: Porównywanie wariantów Split-Screen Diff.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

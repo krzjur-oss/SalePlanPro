@@ -36,8 +36,14 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
             <span className="bg-blue-600/35 text-blue-300 font-extrabold px-3 py-1 rounded-full text-[10px] uppercase font-mono tracking-wider">
               O programie & systemie
             </span>
-            <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">
-              SalePlan Pro
+            <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center justify-center md:justify-start gap-1.5 leading-none">
+              <span>SalePlan</span>
+              <span 
+                className="font-serif italic font-black text-amber-400 text-2xl md:text-3xl leading-none inline-block transform rotate-2"
+                style={{ fontFamily: 'Georgia, cursive, serif' }}
+              >
+                pro
+              </span>
             </h2>
             <p className="text-slate-300 text-xs md:text-sm leading-relaxed font-medium">
               Profesjonalny, lokalny system wspomagania układania tygodniowych planów zajęć lekcyjnych, przydziału gabinetów przedmiotowych oraz harmonogramowania dyżurów nauczycielskich na przerwach.
@@ -45,8 +51,8 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
           </div>
           <div className="flex flex-col items-center justify-center shrink-0 select-none z-10 gap-2">
             <SalePlanLogoMark size={84} className="shadow-2xl rounded-2xl" />
-            <span className="text-[10px] uppercase font-black tracking-widest text-indigo-200 font-mono bg-indigo-950/80 px-2 py-0.5 rounded-full border border-indigo-500/30">
-              v3.9.13
+            <span className="text-[10px] uppercase font-black tracking-widest text-blue-300 font-mono bg-blue-950/80 px-2.5 py-0.5 rounded-full border border-blue-500/35">
+              v3.10.0
             </span>
           </div>
         </div>

@@ -623,7 +623,13 @@ export default function CompanionWindowView({
             <div className="flex items-center gap-2">
               <h1 className="font-extrabold text-sm text-white tracking-tight truncate flex items-center gap-1.5">
                 <SalePlanLogoMark size={20} className="rounded-md shrink-0 inline-block shadow-xs" />
-                <span>SalePlan Pro • Monitor Towarzyszący</span>
+                <span className="flex items-center gap-1">
+                  <span>SalePlan</span>
+                  <span className="font-serif italic font-black text-amber-400 text-sm leading-none -ml-0.5 inline-block transform rotate-2" style={{ fontFamily: 'Georgia, cursive, serif' }}>
+                    pro
+                  </span>
+                  <span className="text-slate-300 font-semibold ml-1">• Monitor Towarzyszący</span>
+                </span>
               </h1>
               {isConnectedToMaster ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-full">

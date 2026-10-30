@@ -35,6 +35,51 @@ export interface Subject {
   defaultGroupPattern?: string;
 }
 
+export type StandardPositionType = 
+  | 'przedmiotowy'   // 18h, 45 min (Karta Nauczyciela art. 42 ust. 3)
+  | 'wspomagajacy'   // 20h, 45 min (pedagog specjalny / wspierający)
+  | 'swietlica'      // 26h, 60 min (wychowawca świetlicy)
+  | 'biblioteka'     // 30h, 60 min (nauczyciel bibliotekarz)
+  | 'specjalista'    // 22h, 60 min (pedagog, psycholog, logopeda, terapeuta pedagogiczny)
+  | 'doradca'        // 22h, 45 min (doradca zawodowy)
+  | 'inny';          // stanowisko niestandardowe / organ prowadzący
+
+export interface TeacherWorkloadPosition {
+  id: string;
+  type: StandardPositionType;
+  title: string;          // np. "Matematyka", "Świetlica szkolna", "Psycholog"
+  hours: number;          // liczba godzin w tygodniu przypisana do tego stanowiska
+  basePensum: number;     // tygodniowe pensum bazowe (np. 18, 20, 26, 30, 22)
+  unitMinutes: 45 | 60;   // 45 min (lekcyjne) lub 60 min (zegarowe)
+  note?: string;
+}
+
+export interface TeacherWorkloadAnalysis {
+  teacherId: string;
+  positions: TeacherWorkloadPosition[];
+  hours45min: number;         // suma godzin lekcyjnych 45 min
+  hours60min: number;         // suma godzin zegarowych 60 min
+  boardHours: number;         // godziny bezpośrednio przy tablicy (dydaktyka)
+  totalAssignedHours: number; // łączna liczba godzin przydzielonych w planie / zadaniach
+  nominalHours: number;       // deklarowane godziny ze stanowisk (np. 18, 26)
+  totalFte: number;           // ułamek etatu, np. 1.00, 1.15, 0.75
+  ftePercent: number;         // wymiar etatu w procentach (np. 100%, 115%)
+  isCombinedPensum: boolean;  // czy nauczyciel łączy stanowiska o różnym pensum
+  basePensum: number;         // bazowe pensum (lub pensum uśrednione jeśli łączone)
+  averagedPensum: number;     // wyliczone pensum łączone: sum(h_i) / sum(h_i / P_i)
+  overtimeHours: number;      // godziny ponadwymiarowe (nadgodziny)
+  unfilledHours: number;      // godziny brakujące do pełnego etatu
+  suggestedDutyLimit: number; // sugerowany limit dyżurów proporcjonalny do etatu i tablicy
+  effectiveDutyLimit: number; // efektywny limit dyżurów (z uwzględnieniem ewentualnego nadpisania)
+  dutyExempt: boolean;        // czy nauczyciel jest zwolniony z dyżurów
+  timeEnvelope40h: {
+    directTeachingMinutes: number;   // czas bezpośredni z uczniami (w minutach zegarowych)
+    breakDutiesMinutes: number;      // szacowany czas dyżurów (np. 15 min * liczba dyżurów)
+    statutoryAndPrepMinutes: number; // pozostały czas na przygotowanie, sprawdzanie prac, rady
+    totalWeeklyMinutes: number;      // norma 2400 minut (40h)
+  };
+}
+
 export interface Teacher {
   id: string;
   first: string;
@@ -54,6 +99,11 @@ export interface Teacher {
   nonTeachingHours?: number; // Liczba godzin tygodniowo zadań poza tablicą
   nonTeachingRoles?: string[]; // Identyfikatory ról poza tablicą: 'swietlica' | 'biblioteka' | 'pedagog' | 'psycholog' | 'logopeda' | 'wspomagajacy' | 'terapeuta'
   nonTeachingDutyEligible?: boolean; // Czy nauczyciel bierze udział w dyżurach z tytułu godzin poza tablicą (domyślnie true)
+  // Zaawansowane rozliczanie pensum i stanowisk (Karta Nauczyciela)
+  workloadPositions?: TeacherWorkloadPosition[];
+  customPensum?: number; // Ręczne nadpisanie pensum
+  maxDutyCount?: number; // Ręczny limit liczby dyżurów tygodniowo
+  dutyExempt?: boolean;  // Całkowite zwolnienie z dyżurów na korytarzach
 }
 
 /**
@@ -553,5 +603,25 @@ export interface PlanDiffItem {
     roomB?: string;
   };
 }
+
+// -------------------------------------------------------------
+// SZYBKIE ZASTĘPSTWA DZIENNE (DAILY SUBSTITUTIONS)
+// -------------------------------------------------------------
+export * from './types/substitutions';
+
+// -------------------------------------------------------------
+// AUDYTOR HIGIENY PLANU UCZNIA WG MEN (STUDENT HYGIENE AUDITOR)
+// -------------------------------------------------------------
+export * from './types/hygiene';
+
+// -------------------------------------------------------------
+// ZAAWANSOWANE RAPORTY I KODY QR (EXCEL & MOBILE QR CODES)
+// -------------------------------------------------------------
+export * from './types/reports';
+
+// -------------------------------------------------------------
+// PORÓWNYWARKA WARIANTÓW SPLIT-SCREEN DIFF (MODULE 4)
+// -------------------------------------------------------------
+export * from './types/variantDiff';
 
 

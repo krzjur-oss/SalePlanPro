@@ -15,17 +15,19 @@ import { STORAGE_KEYS, getStorageItemSync, removeStorageItem, getStorageItem } f
 import { 
   BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
+import { calculateTeacherWorkload, calculateSchoolWorkloadKPI, round } from '../utils/workloadUtils';
 
 interface StatystykiProps {
   appState: AppState;
   schedData: SchedData;
   historyLogs?: AppEventLog[];
   onClearHistoryLogs?: () => void;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 const DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
-export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs }: StatystykiProps) {
+export default function Statystyki({ appState, schedData, historyLogs = [], onClearHistoryLogs, onNavigateToTab }: StatystykiProps) {
   const [activeTab, setActiveTab] = useState<'general' | 'teachers' | 'rooms' | 'gaps' | 'audit' | 'history' | 'errors'>('audit');
   const [isScanning, setIsScanning] = useState(false);
   const [logSearch, setLogSearch] = useState('');
@@ -33,6 +35,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'all'>('all');
   const [teacherGapFilter, setTeacherGapFilter] = useState<'all' | 'excessive'>('all');
   const [teacherLoadFilter, setTeacherLoadFilter] = useState<'all' | 'excessive_gaps'>('all');
+  const [teacherViewMode, setTeacherViewMode] = useState<'table' | 'cards' | 'charts'>('table');
 
   const [errorLogs, setErrorLogs] = useState<AppErrorLog[]>(() => {
     const saved = getStorageItemSync<AppErrorLog[]>(STORAGE_KEYS.ERROR_LOGS);
@@ -424,10 +427,26 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
       }
     });
 
+    const dutiesMap: Record<string, number> = {};
+    Object.values(appState.dyzury?.harmonogram || {}).forEach(d => {
+      if (d?.teacherAbbr) {
+        dutiesMap[d.teacherAbbr] = (dutiesMap[d.teacherAbbr] || 0) + 1;
+      }
+    });
+
     return pl.teachers.map(t => {
       const scheduled = hoursScheduled[t.id] || 0;
-      const max = t.maxHours ?? 18;
-      const overtime = Math.max(0, scheduled - max);
+      const dutyCount = dutiesMap[t.abbr] || 0;
+      const workloadAnalysis = calculateTeacherWorkload(
+        t,
+        pl.assignments,
+        pl.specialAssignments,
+        dutyCount,
+        3
+      );
+
+      const max = workloadAnalysis.basePensum;
+      const overtime = workloadAnalysis.overtimeHours;
       const ratio = max > 0 ? (scheduled / max) * 100 : 0;
       const gapInfo = gapsStats.teacherGapsByTeacher[t.id];
       const gapHours = gapInfo?.totalGapHours || 0;
@@ -439,14 +458,37 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
         max,
         overtime,
         ratio,
-        isOverloaded: scheduled > 40,
+        isOverloaded: scheduled > 40 || workloadAnalysis.totalAssignedHours > 40,
         hasOvertime: overtime > 0,
         gapHours,
         hasExcessiveGaps,
-        gapInfo
+        gapInfo,
+        workloadAnalysis,
+        dutyCount
       };
     }).sort((a, b) => b.scheduled - a.scheduled);
-  }, [pl.teachers, scheduledLessonsList, gapsStats.teacherGapsByTeacher]);
+  }, [pl.teachers, pl.assignments, pl.specialAssignments, appState.dyzury?.harmonogram, scheduledLessonsList, gapsStats.teacherGapsByTeacher]);
+
+  // Zbiorcze wskaźniki obciążenia kadry w całej szkole
+  const schoolWorkloadKPI = useMemo(() => {
+    const dutiesCountMap: Record<string, number> = {};
+    Object.values(appState.dyzury?.harmonogram || {}).forEach(d => {
+      if (d?.teacherAbbr) {
+        const teacher = pl.teachers.find(t => t.abbr === d.teacherAbbr);
+        if (teacher) {
+          dutiesCountMap[teacher.id] = (dutiesCountMap[teacher.id] || 0) + 1;
+        }
+      }
+    });
+
+    return calculateSchoolWorkloadKPI(
+      pl.teachers,
+      pl.assignments,
+      pl.specialAssignments,
+      dutiesCountMap,
+      3
+    );
+  }, [pl.teachers, pl.assignments, pl.specialAssignments, appState.dyzury?.harmonogram]);
 
   // --- Calculation: Room Occupancy ---
   const roomStats = useMemo(() => {
@@ -1206,6 +1248,34 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
               </button>
             </div>
 
+            {/* Dedykowany baner przejścia do Audytora Higieny MEN */}
+            <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-blue-950/40 border border-emerald-500/30 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl shrink-0">
+                  <Activity size={20} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
+                    <span>Nowość: Dedykowany Audytor Higieny Planu Ucznia (MEN & Sanepid)</span>
+                    <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] px-2 py-0.2 rounded-full font-bold">Standard MEN</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    Szczegółowa ocena zmęczenia poznawczego, pozycji przedmiotów trudnych, przerw obiadowych i eliminacji okienek uczniowskich.
+                  </p>
+                </div>
+              </div>
+
+              {onNavigateToTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('higiena_men')}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-sm transition cursor-pointer shrink-0 text-center"
+                >
+                  Otwórz Audytor Higieny MEN →
+                </button>
+              )}
+            </div>
+
             {isScanning ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-16 shadow-xs flex flex-col items-center justify-center text-center space-y-4">
                 <div className="relative">
@@ -1705,8 +1775,281 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
         {/* ======================= TAB: TEACHERS CONTENT ======================= */}
         {activeTab === 'teachers' && (
           <div className="space-y-6">
-            
-            {/* Chart Card */}
+
+            {/* KPI Banner: Rozliczenie pensum i etatów szkoły podstawowej */}
+            <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-indigo-900/60 pb-3.5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">⚖️</span>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                      Bilans Pensum i Czasu Pracy Kadry (Karta Nauczyciela)
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-indigo-200 mt-0.5">
+                    Rozliczanie etatów, pensum łączonego, nadgodzin i limitu 40h tygodnia pracy w szkole podstawowej
+                  </p>
+                </div>
+
+                {/* Widok: Tabela vs Karty vs Wykres */}
+                <div className="flex bg-slate-800/90 p-1 rounded-xl border border-indigo-800/60 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setTeacherViewMode('table')}
+                    className={`px-3 py-1.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                      teacherViewMode === 'table'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-indigo-200 hover:text-white'
+                    }`}
+                  >
+                    <span>📋</span> Tabela Pensum i Nadgodzin
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeacherViewMode('cards')}
+                    className={`px-3 py-1.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                      teacherViewMode === 'cards'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-indigo-200 hover:text-white'
+                    }`}
+                  >
+                    <span>🗂️</span> Karty i Okienka
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTeacherViewMode('charts')}
+                    className={`px-3 py-1.5 text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                      teacherViewMode === 'charts'
+                        ? 'bg-amber-500 text-slate-950 shadow-xs'
+                        : 'text-indigo-200 hover:text-white'
+                    }`}
+                  >
+                    <span>📊</span> Szczyty Dyżurów
+                  </button>
+                </div>
+              </div>
+
+              {/* KPI metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                  <span className="text-[9px] text-indigo-300 font-bold uppercase block">Łączny wymiar etatów</span>
+                  <div className="text-base font-black text-white mt-0.5 font-mono">
+                    {schoolWorkloadKPI.totalFte} <span className="text-[10px] text-indigo-300 font-normal">FTE</span>
+                  </div>
+                  <span className="text-[9px] text-indigo-300/80">{schoolWorkloadKPI.activeTeachersCount} aktywnych pedagogów</span>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                  <span className="text-[9px] text-indigo-300 font-bold uppercase block">Godziny 45m (lekcyjne)</span>
+                  <div className="text-base font-black text-sky-400 mt-0.5 font-mono">
+                    {schoolWorkloadKPI.totalHours45min} <span className="text-[10px] text-indigo-300 font-normal">godz.</span>
+                  </div>
+                  <span className="text-[9px] text-indigo-300/80">tablica dydaktyczna</span>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                  <span className="text-[9px] text-indigo-300 font-bold uppercase block">Godziny 60m (zegarowe)</span>
+                  <div className="text-base font-black text-amber-400 mt-0.5 font-mono">
+                    {schoolWorkloadKPI.totalHours60min} <span className="text-[10px] text-indigo-300 font-normal">godz.</span>
+                  </div>
+                  <span className="text-[9px] text-indigo-300/80">świetlica / biblioteka / gabinet</span>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                  <span className="text-[9px] text-indigo-300 font-bold uppercase block">Suma nadgodzin</span>
+                  <div className={`text-base font-black mt-0.5 font-mono ${schoolWorkloadKPI.totalOvertimeHours > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    +{schoolWorkloadKPI.totalOvertimeHours} <span className="text-[10px] text-indigo-300 font-normal">godz.</span>
+                  </div>
+                  <span className="text-[9px] text-indigo-300/80">{schoolWorkloadKPI.teachersWithOvertime} osób z nadgodzinami</span>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                  <span className="text-[9px] text-indigo-300 font-bold uppercase block">Pensum łączone</span>
+                  <div className="text-base font-black text-amber-300 mt-0.5 font-mono">
+                    {schoolWorkloadKPI.teachersWithCombinedPensum} <span className="text-[10px] text-indigo-300 font-normal">osób</span>
+                  </div>
+                  <span className="text-[9px] text-indigo-300/80">różne stanowiska w SP</span>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3 border border-white/10">
+                  <span className="text-[9px] text-indigo-300 font-bold uppercase block">Dyżury na przerwach</span>
+                  <div className="text-base font-black text-emerald-400 mt-0.5 font-mono">
+                    {schoolWorkloadKPI.totalAssignedDuties} <span className="text-[10px] text-indigo-300 font-normal">/ {schoolWorkloadKPI.totalSuggestedDuties}</span>
+                  </div>
+                  <span className="text-[9px] text-indigo-300/80">przypisane / limit</span>
+                </div>
+              </div>
+            </div>
+
+            {/* WIDOK 1: TABELA ROZLICZENIA PENSUM, 45/60 MIN, NADGODZIN I DYŻURÓW */}
+            {teacherViewMode === 'table' && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>Tabela Rozliczenia Pensum, Nadgodzin i Dyżurów (Karta Nauczyciela)</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                      Osobne kolumny dla godzin lekcyjnych (45 min) oraz opiekuńczych (60 min) z uśrednionym pensum łączonym
+                    </p>
+                  </div>
+
+                  <div className="text-xs font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                    Razem: <strong className="text-slate-900">{teacherStats.length} nauczycieli</strong> ({schoolWorkloadKPI.totalFte} etatów)
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Nauczyciel</th>
+                        <th className="py-2.5 px-2">Stanowiska / Przydziały</th>
+                        <th className="py-2.5 px-2 text-right">Godz. 45m (lekcyjne)</th>
+                        <th className="py-2.5 px-2 text-right">Godz. 60m (zegarowe)</th>
+                        <th className="py-2.5 px-2 text-right">Suma godzin</th>
+                        <th className="py-2.5 px-2 text-center">Wymiar etatu (FTE)</th>
+                        <th className="py-2.5 px-2 text-center">Pensum</th>
+                        <th className="py-2.5 px-2 text-right">Nadgodziny</th>
+                        <th className="py-2.5 px-2 text-center">Dyżury (przyp./limit)</th>
+                        <th className="py-2.5 px-3">Tygodniowy budżet 40h</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {teacherStats.map(t => {
+                        const w = t.workloadAnalysis;
+                        const isCombined = w.isCombinedPensum;
+                        const hasOvertime = w.overtimeHours > 0;
+                        const dutyLimit = w.effectiveDutyLimit;
+                        const dutyCount = t.dutyCount;
+                        const dutyExceeded = dutyLimit > 0 && dutyCount > dutyLimit;
+
+                        // 40h envelope percent
+                        const usedMinutes = w.timeEnvelope40h.directTeachingMinutes + w.timeEnvelope40h.breakDutiesMinutes;
+                        const envelopePercent = Math.min(100, Math.round((usedMinutes / 2400) * 100));
+
+                        return (
+                          <tr key={t.id} className="hover:bg-slate-50/80 transition">
+                            <td className="py-2.5 px-3">
+                              <div className="flex items-center gap-2">
+                                <span 
+                                  className="w-3 h-3 rounded-full shrink-0" 
+                                  style={{ backgroundColor: t.color || '#3b82f6' }} 
+                                />
+                                <div>
+                                  <span className="font-extrabold text-slate-900 block leading-tight">
+                                    {t.last} {t.first}
+                                  </span>
+                                  <span className="font-mono text-[10px] text-blue-600 font-bold">
+                                    {t.abbr}
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="py-2.5 px-2 max-w-[220px]">
+                              <div className="flex flex-wrap gap-1">
+                                {w.positions.map((pos, pIdx) => (
+                                  <span 
+                                    key={pIdx} 
+                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border leading-tight ${
+                                      pos.unitMinutes === 45
+                                        ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                                    }`}
+                                    title={`${pos.title}: ${pos.hours}h tygodniowo przy pensum ${pos.basePensum}h (${pos.unitMinutes} min)`}
+                                  >
+                                    {pos.title} ({pos.hours}h/P{pos.basePensum})
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+
+                            <td className="py-2.5 px-2 text-right font-mono font-bold text-blue-700">
+                              {w.hours45min}h
+                            </td>
+
+                            <td className="py-2.5 px-2 text-right font-mono font-bold text-amber-700">
+                              {w.hours60min}h
+                            </td>
+
+                            <td className="py-2.5 px-2 text-right font-mono font-black text-slate-900">
+                              {w.nominalHours}h
+                            </td>
+
+                            <td className="py-2.5 px-2 text-center">
+                              <span className="font-mono font-black text-indigo-700 bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-md text-[11px]">
+                                {w.totalFte.toFixed(2)} ({w.ftePercent}%)
+                              </span>
+                            </td>
+
+                            <td className="py-2.5 px-2 text-center">
+                              <span className={`text-[11px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                isCombined 
+                                  ? 'bg-amber-100 text-amber-950 border border-amber-300 font-black' 
+                                  : 'text-slate-700'
+                              }`}>
+                                {w.averagedPensum}h {isCombined ? '(łączone)' : ''}
+                              </span>
+                            </td>
+
+                            <td className="py-2.5 px-2 text-right">
+                              {hasOvertime ? (
+                                <span className="font-mono font-black text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                  +{w.overtimeHours}h
+                                </span>
+                              ) : (
+                                <span className="font-mono text-slate-400">0h</span>
+                              )}
+                            </td>
+
+                            <td className="py-2.5 px-2 text-center">
+                              {w.dutyExempt ? (
+                                <span className="text-[10px] font-bold text-slate-400 italic">zwolniony</span>
+                              ) : (
+                                <span className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                                  dutyExceeded 
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-300 font-black' 
+                                    : dutyCount > 0 
+                                      ? 'bg-slate-100 text-slate-800' 
+                                      : 'text-slate-400'
+                                }`}>
+                                  {dutyCount} / {dutyLimit}
+                                </span>
+                              )}
+                            </td>
+
+                            <td className="py-2.5 px-3 min-w-[140px]">
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[9px] font-bold text-slate-500">
+                                  <span>{Math.round(usedMinutes / 60)}h pracy bezpośredniej</span>
+                                  <span>{envelopePercent}% z 40h</span>
+                                </div>
+                                <div className="w-full bg-slate-150 h-2 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full ${
+                                      envelopePercent > 80 ? 'bg-amber-500' : 'bg-indigo-600'
+                                    }`}
+                                    style={{ width: `${envelopePercent}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-xl text-[10.5px] text-blue-900 leading-relaxed font-medium">
+                  ⚖️ <strong>Zasada rozliczania pensum w szkole podstawowej:</strong> Dla nauczycieli łączących stanowiska (np. przedmiot 18h + świetlica 26h), pensum jest uśredniane proporcjonalnie według wzoru <em>P = sum(h_i) / sum(h_i / P_i)</em>. Nadgodziny przysługują po zrealizowaniu pensum uśrednionego przy etacie &ge; 1.0. Limit dyżurów na przerwach wyliczany jest proporcjonalnie do godzin bezpośrednio przy tablicy (h_tablica / 18).
+                </div>
+              </div>
+            )}
+
+            {/* WIDOK 2: WYKRES ZAPOTRZEBOWANIA NA DYŻURY */}
+            {teacherViewMode === 'charts' && (
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 pb-4">
                 <div className="space-y-1">
@@ -1855,7 +2198,10 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
                 💡 <strong>Wskazówka:</strong> Godziny szczytu ("szczyty słupków") pokazują przerwy o największym zagęszczeniu zajęć lekcyjnych na korytarzach szkolnych. Dopasuj liczbę dyżurów i obsadę w sekcji "Dyżury", aby zapewnić optymalne bezpieczeństwo uczniów w tych okresach.
               </div>
             </div>
+            )}
 
+            {/* WIDOK 3: KARTY NAUCZYCIELI I OKIENEK */}
+            {teacherViewMode === 'cards' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Lesson Loads */}
@@ -2039,6 +2385,7 @@ export default function Statystyki({ appState, schedData, historyLogs = [], onCl
             </div>
 
           </div>
+          )}
         </div>
         )}
 

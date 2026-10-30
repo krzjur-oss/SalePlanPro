@@ -104,12 +104,15 @@ export default function Instrukcje() {
           tip: 'W salach specjalistycznych (np. WF, informatyka) warto zaznaczyć odpowiedni typ, aby generator sal automatycznie kierował zajęcia do dedykowanych pracowni.'
         },
         {
-          title: 'Krok 5 i 6: Kadra pedagogiczna i przedmioty nauczania',
-          description: 'Zarządzaj zespołem nauczycieli i katalogiem przedmiotów:',
+          title: 'Krok 5 i 6: Kadra pedagogiczna, zróżnicowane pensum (KN art. 42) i przedmioty',
+          description: 'Zarządzaj zespołem nauczycieli, stanowiskami, pensum łączonym i katalogiem przedmiotów:',
           points: [
-            'Dla każdego nauczyciela określ imię, nazwisko, skrót do planu (np. JKOW), pensum etatowe (np. 18h) oraz kolor.',
-            'Wskaż przedmioty nauczane przez nauczyciela oraz jego dyspozycyjność (dni bez lekcji lub ograniczenia godzinowe).',
-            'W Kroku 6 zdefiniuj przedmioty nauczania, ich skróty i przypisany typ pracowni.'
+            'Dla każdego pracownika określ imię, nazwisko, skrót do planu (np. JKOW), stanowiska oraz kolor.',
+            'Zróżnicowane pensum w SP (Karta Nauczyciela art. 42 ust. 3): nauczyciel przedmiotowy (18h), współorganizujący (20h), świetlica (26h), biblioteka (30h), specjaliści/pedagog/psycholog/logopeda (22h), doradca (22h) oraz personel niepedagogiczny (40h wg Kodeksu Pracy).',
+            'Nowy edytor TeacherWorkloadEditor: interaktywny panel z szablonami stanowisk, swobodnym łączeniem funkcji i automatycznym wyliczaniem pensum łączonego wg proporcjonalnego wzoru organu prowadzącego: P = Σh_i / Σ(h_i / P_i).',
+            'Rozdzielenie jednostek czasu: godziny dydaktyczne (45 min) vs opiekuńcze/świetlicowe (60 min) z wyliczaniem ułamka etatu i nadgodzin.',
+            'Wskaż dyspozycyjność kadry (dni wolne, ograniczenia godzinowe) oraz uprawnienia do dyżurów korytarzowych (limit skalowany wg godzin tablicowych h_tablica/18).',
+            'W Kroku 6 zdefiniuj przedmioty nauczania, ich oficjalne skróty i przypisany typ pracowni.'
           ]
         },
         {
@@ -445,14 +448,14 @@ export default function Instrukcje() {
           ]
         },
         {
-          title: 'Wizualna porównywarka planów (Narzędzie Diff)',
-          description: 'Precyzyjna kontrola zmian pomiędzy Semestrem I i Semestrem II:',
+          title: 'Wizualna porównywarka planów (Moduł 4: Split-Screen Diff Dual-View)',
+          description: 'Precyzyjna kontrola zmian pomiędzy Semestrem I i Semestrem II oraz cherry-picking lekcji:',
           points: [
-            'Wybierz zakładkę „Porównywarka Planów (Diff)”.',
-            'Wskaż Wariant A (jako bazę/wzorzec) oraz Wariant B (plan docelowy).',
+            'Wybierz zakładkę „Porównywarka Planów (Diff)” lub uruchom tryb Split-Screen z paska wariantów.',
+            'Wskaż Wariant A (jako bazę/wzorzec) oraz Wariant B (plan porównywany) – oba plany wyświetlane są obok siebie w układzie side-by-side.',
             'Przeglądaj plan według oddziałów, nauczycieli lub w postaci zbiorczego wykazu odchyleń.',
             'Kolorowe znaczniki wskazują: nowo dodane lekcje (zielony), usunięte (czerwony) oraz zmiany przedmiotu, nauczyciela lub gabinetu (żółty/fioletowy).',
-            'Funkcja „Przenieś rozkład z B do A” umożliwia selektywną synchronizację pojedynczego oddziału (np. klasy technikum odbywającej praktyki).'
+            'Funkcja Cherry-pickingu: możliwość selektywnego przenoszenia pojedynczych lekcji lub całych bloków z Wariantu B do Wariantu A za pomocą przycisków akcji z natychmiastową detekcją kolizji sal i nauczycieli.'
           ]
         }
       ]

@@ -7,8 +7,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   AppState, Class, Teacher, SupportStaff, Subject, ClassRoom, SchoolGroup, Assignment, Building, MiejsceDyzuru, Floor, Hour, Przerwa, ArchiveEntry, PlanDyzuryState,
-  SpecialStudent, SpecialAssignment
+  SpecialStudent, SpecialAssignment, TeacherWorkloadPosition, StandardPositionType
 } from '../types';
+import { 
+  STANDARD_POSITIONS_META, 
+  calculateCombinedPensum, 
+  calculateTeacherWorkload, 
+  normalizeTeacherPositions, 
+  round 
+} from '../utils/workloadUtils';
 import { 
   Building as BuildingIcon, School as SchoolIcon, Users, BookOpen, GraduationCap, ShieldAlert, BadgePlus,
   Trash2, Landmark, CheckCircle, ArrowRight, ArrowLeft, Plus, Users2, HelpCircle, Eye, Shield, MapPin, Sparkles, Layers,
@@ -19,6 +26,7 @@ import { Z_INDEX_CLASSES } from '../styles/zIndex';
 import SioImport from './SioImport';
 import StructureTemplatesModal from './StructureTemplatesModal';
 import { Bookmark } from 'lucide-react';
+import { TeacherWorkloadEditor } from './TeacherWorkloadEditor';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -1584,6 +1592,77 @@ export default function KreatorSzkoly({
   const [newTNonTeachingRoles, setNewTNonTeachingRoles] = useState<string[]>([]);
   const [newTNonTeachingDutyEligible, setNewTNonTeachingDutyEligible] = useState(true);
 
+  // Zaawansowane rozliczanie pensum i stanowisk (Karta Nauczyciela)
+  const [newTWorkloadPositions, setNewTWorkloadPositions] = useState<TeacherWorkloadPosition[]>([]);
+  const [newTCustomPensum, setNewTCustomPensum] = useState<number | ''>('');
+  const [newTMaxDutyCount, setNewTMaxDutyCount] = useState<number | ''>('');
+  const [newTDutyExempt, setNewTDutyExempt] = useState(false);
+
+  // Live preview kalkulacji pensum, etatu, nadgodzin i dyżurów
+  const livePensumPreview = useMemo(() => {
+    if (newTWorkloadPositions.length === 0) {
+      const h = typeof newTMaxHours === 'number' ? newTMaxHours : 18;
+      const ot = typeof newTOvertimeHours === 'number' ? newTOvertimeHours : 0;
+      const fte = round((h + ot) / 18, 4);
+      return {
+        hours45min: h + ot,
+        hours60min: 0,
+        boardHours: h + ot,
+        totalHours: h + ot,
+        totalFte: fte,
+        ftePercent: round(fte * 100, 1),
+        averagedPensum: 18,
+        isCombined: false,
+        overtimeHours: ot,
+        suggestedDutyLimit: newTDutyExempt ? 0 : Math.round(3 * Math.min(1.0, fte))
+      };
+    }
+
+    const combined = calculateCombinedPensum(
+      newTWorkloadPositions.map(p => ({ hours: p.hours, basePensum: p.basePensum }))
+    );
+
+    let h45 = 0;
+    let h60 = 0;
+    let boardHours = 0;
+
+    newTWorkloadPositions.forEach(p => {
+      if (p.unitMinutes === 45) {
+        h45 += p.hours;
+      } else {
+        h60 += p.hours;
+      }
+      const meta = STANDARD_POSITIONS_META[p.type];
+      if (meta?.isBoardTeaching || p.type === 'przedmiotowy' || p.type === 'wspomagajacy' || p.type === 'doradca') {
+        boardHours += p.hours;
+      }
+    });
+
+    const effPensum = typeof newTCustomPensum === 'number' && newTCustomPensum > 0
+      ? newTCustomPensum
+      : combined.averagedPensum;
+
+    let overtime = combined.overtimeHours;
+    if (typeof newTOvertimeHours === 'number' && newTOvertimeHours > 0) {
+      overtime = newTOvertimeHours;
+    }
+
+    const suggestedDuty = newTDutyExempt ? 0 : Math.max(0, Math.round(3 * (boardHours / 18) * Math.min(1.0, combined.totalFte)));
+
+    return {
+      hours45min: round(h45, 1),
+      hours60min: round(h60, 1),
+      boardHours: round(boardHours, 1),
+      totalHours: combined.totalHours,
+      totalFte: combined.totalFte,
+      ftePercent: round(combined.totalFte * 100, 1),
+      averagedPensum: effPensum,
+      isCombined: combined.isCombined,
+      overtimeHours: overtime,
+      suggestedDutyLimit: suggestedDuty
+    };
+  }, [newTWorkloadPositions, newTCustomPensum, newTOvertimeHours, newTMaxHours, newTDutyExempt]);
+
   // Podmoduł w Kroku 6: Nauczyciele vs Pracownicy niepedagogiczni
   const [staffTab, setStaffTab] = useState<'teachers' | 'support_staff'>('teachers');
 
@@ -1680,6 +1759,16 @@ export default function KreatorSzkoly({
     setNewTNonTeachingRoles(t.nonTeachingRoles || []);
     setNewTNonTeachingDutyEligible(t.nonTeachingDutyEligible !== false);
 
+    // Wczytanie pozycji pensum i konfiguracji dyżurów
+    if (t.workloadPositions && t.workloadPositions.length > 0) {
+      setNewTWorkloadPositions(t.workloadPositions);
+    } else {
+      setNewTWorkloadPositions(normalizeTeacherPositions(t, appState.planLekcji.assignments, appState.planLekcji.specialAssignments));
+    }
+    setNewTCustomPensum(t.customPensum ?? '');
+    setNewTMaxDutyCount(t.maxDutyCount ?? '');
+    setNewTDutyExempt(Boolean(t.dutyExempt));
+
     // Wczytanie lub wygenerowanie listy dostępnych slotów
     if (t.availability) {
       setNewTAvailability(t.availability);
@@ -1715,6 +1804,10 @@ export default function KreatorSzkoly({
     setNewTNonTeachingHours(0);
     setNewTNonTeachingRoles([]);
     setNewTNonTeachingDutyEligible(true);
+    setNewTWorkloadPositions([]);
+    setNewTCustomPensum('');
+    setNewTMaxDutyCount('');
+    setNewTDutyExempt(false);
     const nextColor = PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706';
     setNewTColor(nextColor);
   };
@@ -1746,6 +1839,10 @@ export default function KreatorSzkoly({
       return;
     }
 
+    const totalPosHours = newTWorkloadPositions.reduce((acc, p) => acc + p.hours, 0);
+    const finalMaxHours = totalPosHours > 0 ? totalPosHours : (newTMaxHours === '' ? 18 : Number(newTMaxHours));
+    const finalOvertime = livePensumPreview.overtimeHours;
+
     if (editingTeacherId) {
       // Edycja nauczyciela
       const nextT = appState.teachers.map(t => {
@@ -1755,8 +1852,8 @@ export default function KreatorSzkoly({
             first: newTFirst.trim(),
             last: newTLast.trim(),
             abbr: formattedAbbr,
-            maxHours: newTMaxHours === '' ? 18 : Number(newTMaxHours),
-            overtimeHours: newTOvertimeHours === '' ? 0 : Number(newTOvertimeHours) || undefined,
+            maxHours: finalMaxHours,
+            overtimeHours: finalOvertime || undefined,
             color: newTColor,
             availability: newTAvailability,
             inactive: newTInactive,
@@ -1766,7 +1863,11 @@ export default function KreatorSzkoly({
             administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined,
             nonTeachingHours: newTHasNonTeaching ? (newTNonTeachingHours === '' ? 0 : Number(newTNonTeachingHours)) : undefined,
             nonTeachingRoles: newTHasNonTeaching ? newTNonTeachingRoles : undefined,
-            nonTeachingDutyEligible: newTHasNonTeaching ? newTNonTeachingDutyEligible : undefined
+            nonTeachingDutyEligible: newTHasNonTeaching ? newTNonTeachingDutyEligible : undefined,
+            workloadPositions: newTWorkloadPositions.length > 0 ? newTWorkloadPositions : undefined,
+            customPensum: newTCustomPensum === '' ? undefined : Number(newTCustomPensum),
+            maxDutyCount: newTMaxDutyCount === '' ? undefined : Number(newTMaxDutyCount),
+            dutyExempt: newTDutyExempt ? true : undefined
           };
         }
         return t;
@@ -1797,6 +1898,10 @@ export default function KreatorSzkoly({
       setNewTNonTeachingHours(0);
       setNewTNonTeachingRoles([]);
       setNewTNonTeachingDutyEligible(true);
+      setNewTWorkloadPositions([]);
+      setNewTCustomPensum('');
+      setNewTMaxDutyCount('');
+      setNewTDutyExempt(false);
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti('Zaktualizowano dane nauczyciela');
@@ -1807,8 +1912,8 @@ export default function KreatorSzkoly({
         first: newTFirst.trim(),
         last: newTLast.trim(),
         abbr: formattedAbbr,
-        maxHours: newTMaxHours === '' ? 18 : Number(newTMaxHours),
-        overtimeHours: newTOvertimeHours === '' ? 0 : Number(newTOvertimeHours) || undefined,
+        maxHours: finalMaxHours,
+        overtimeHours: finalOvertime || undefined,
         color: newTColor,
         inactive: newTInactive,
         inactiveComment: newTInactiveComment.trim(),
@@ -1817,7 +1922,11 @@ export default function KreatorSzkoly({
         administrativeRole: newTIsAdministrative ? newTAdministrativeRole.trim() : undefined,
         nonTeachingHours: newTHasNonTeaching ? (newTNonTeachingHours === '' ? 0 : Number(newTNonTeachingHours)) : undefined,
         nonTeachingRoles: newTHasNonTeaching ? newTNonTeachingRoles : undefined,
-        nonTeachingDutyEligible: newTHasNonTeaching ? newTNonTeachingDutyEligible : undefined
+        nonTeachingDutyEligible: newTHasNonTeaching ? newTNonTeachingDutyEligible : undefined,
+        workloadPositions: newTWorkloadPositions.length > 0 ? newTWorkloadPositions : undefined,
+        customPensum: newTCustomPensum === '' ? undefined : Number(newTCustomPensum),
+        maxDutyCount: newTMaxDutyCount === '' ? undefined : Number(newTMaxDutyCount),
+        dutyExempt: newTDutyExempt ? true : undefined
       };
 
       const nextT = [...appState.teachers, newTeacher];
@@ -1846,6 +1955,10 @@ export default function KreatorSzkoly({
       setNewTNonTeachingHours(0);
       setNewTNonTeachingRoles([]);
       setNewTNonTeachingDutyEligible(true);
+      setNewTWorkloadPositions([]);
+      setNewTCustomPensum('');
+      setNewTMaxDutyCount('');
+      setNewTDutyExempt(false);
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti(`Dodano nauczyciela: ${newTeacher.first} ${newTeacher.last}`);
@@ -4971,34 +5084,22 @@ export default function KreatorSzkoly({
                         }}
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold">Pensum (godz.)</label>
-                        <input 
-                          type="number" 
-                          required
-                          min={0}
-                          max={40}
-                          placeholder="18"
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-semibold text-slate-800"
-                          value={newTMaxHours}
-                          onChange={(e) => setNewTMaxHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-indigo-600 font-bold">Nadgodziny</label>
-                        <input 
-                          type="number" 
-                          required
-                          min={0}
-                          max={40}
-                          placeholder="0"
-                          className="w-full px-3 py-1.5 border border-indigo-100 bg-indigo-50/35 rounded-lg text-xs outline-none font-semibold text-indigo-800"
-                          value={newTOvertimeHours}
-                          onChange={(e) => setNewTOvertimeHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                        />
-                      </div>
-                    </div>
+                    {/* Zaawansowany edytor pensum, stanowisk i dyżurów (Karta Nauczyciela) */}
+                    <TeacherWorkloadEditor
+                      positions={newTWorkloadPositions}
+                      onChangePositions={setNewTWorkloadPositions}
+                      livePreview={livePensumPreview}
+                      dutyExempt={newTDutyExempt}
+                      onChangeDutyExempt={setNewTDutyExempt}
+                      maxDutyCount={newTMaxDutyCount}
+                      onChangeMaxDutyCount={setNewTMaxDutyCount}
+                      customPensum={newTCustomPensum}
+                      onChangeCustomPensum={setNewTCustomPensum}
+                      maxHours={newTMaxHours}
+                      onChangeMaxHours={setNewTMaxHours}
+                      overtimeHours={newTOvertimeHours}
+                      onChangeOvertimeHours={setNewTOvertimeHours}
+                    />
 
                     <div className="bg-slate-100/50 p-2.5 rounded-lg border border-slate-200 space-y-2 mt-1">
                       <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -6367,44 +6468,22 @@ export default function KreatorSzkoly({
                               />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1">
-                                <label className="text-[10px] text-slate-500 font-bold col-span-2">Pensum (godz.)</label>
-                                <input 
-                                  type="number" 
-                                  required
-                                  min={0}
-                                  max={40}
-                                  placeholder="18"
-                                  className="w-full px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs outline-none font-semibold text-slate-800 focus:border-blue-500"
-                                  value={newTMaxHours}
-                                  onChange={(e) => setNewTMaxHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] text-indigo-600 font-bold col-span-2">Nadgodziny (plan)</label>
-                                <input 
-                                  type="number" 
-                                  required
-                                  min={0}
-                                  max={40}
-                                  placeholder="0"
-                                  className="w-full px-3 py-1.5 border border-indigo-150 bg-indigo-50/20 rounded-lg text-xs outline-none font-semibold text-indigo-800 focus:border-indigo-500"
-                                  value={newTOvertimeHours}
-                                  onChange={(e) => setNewTOvertimeHours(e.target.value === '' ? '' : parseInt(e.target.value) || 0)}
-                                />
-                              </div>
-                              {editingTeacherId && (() => {
-                                const asgHours = teacherTotalHoursMap[editingTeacherId] || 0;
-                                const p = newTMaxHours === '' ? 18 : Number(newTMaxHours);
-                                const ot = Math.max(0, asgHours - p);
-                                if (asgHours === 0) return null;
-                                return (
-                                  <div className="col-span-2 text-[10px] bg-indigo-50/80 border border-indigo-150 p-2 rounded-lg text-indigo-900 font-medium">
-                                    📊 <strong>Aktualny przydział w arkuszu:</strong> {asgHours}h {ot > 0 ? `(${p}h pensum + ${ot}h nadgodzin)` : `(w ramach pensum ${p}h)`}
-                                  </div>
-                                );
-                              })()}
+                            <div className="col-span-2">
+                              <TeacherWorkloadEditor
+                                positions={newTWorkloadPositions}
+                                onChangePositions={setNewTWorkloadPositions}
+                                livePreview={livePensumPreview}
+                                dutyExempt={newTDutyExempt}
+                                onChangeDutyExempt={setNewTDutyExempt}
+                                maxDutyCount={newTMaxDutyCount}
+                                onChangeMaxDutyCount={setNewTMaxDutyCount}
+                                customPensum={newTCustomPensum}
+                                onChangeCustomPensum={setNewTCustomPensum}
+                                maxHours={newTMaxHours}
+                                onChangeMaxHours={setNewTMaxHours}
+                                overtimeHours={newTOvertimeHours}
+                                onChangeOvertimeHours={setNewTOvertimeHours}
+                              />
                             </div>
 
                             <div className="space-y-1.5 col-span-2">

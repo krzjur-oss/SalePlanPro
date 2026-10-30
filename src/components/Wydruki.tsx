@@ -14,12 +14,15 @@ import PlachtaDyrektorska from './PlachtaDyrektorska';
 import KioskMode from './KioskMode';
 import { escapeHtml } from '../utils/sanitizer';
 import { generateDutiesHtml } from '../utils/dutiesPrintHtml';
-import { Z_INDEX_CLASSES } from '../styles/zIndex';
 export { generateDutiesHtml };
+import { Z_INDEX_CLASSES } from '../styles/zIndex';
+import { exportFullSchoolWorkbook } from '../services/excelExportService';
+import { QrCode } from 'lucide-react';
 
 interface WydrukiProps {
   appState: AppState;
   schedData: SchedData;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
@@ -109,7 +112,7 @@ function getSegmentGroups(categoryCols: any[]) {
   return groups;
 }
 
-export default function Wydruki({ appState, schedData }: WydrukiProps) {
+export default function Wydruki({ appState, schedData, onNavigateToTab }: WydrukiProps) {
   const [printType, setPrintType] = useState<'classes' | 'teachers' | 'rooms' | 'duties' | 'special_support' | 'plachta'>('classes');
   const [isKioskOpen, setIsKioskOpen] = useState<boolean>(false);
   const [scheduleVersion, setScheduleVersion] = useState<'etap1' | 'etap2'>(() => {
@@ -2603,6 +2606,27 @@ export default function Wydruki({ appState, schedData }: WydrukiProps) {
                 className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer"
               >
                 <Printer size={15} className="animate-pulse" /> Podgląd płachty sal
+              </button>
+            )}
+            {onNavigateToTab ? (
+              <button 
+                type="button"
+                onClick={() => onNavigateToTab('eksport_raporty')}
+                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer"
+                title="Przejdź do generatora arkuszy Excel (.xlsx) oraz mobilnych kodów QR"
+              >
+                <FileSpreadsheet size={15} />
+                <span>Excel & Kody QR</span>
+              </button>
+            ) : (
+              <button 
+                type="button"
+                onClick={() => exportFullSchoolWorkbook(appState, schedData)}
+                className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition select-none cursor-pointer"
+                title="Pobierz pełny skoroszyt szkoły w formacie Microsoft Excel (.xlsx)"
+              >
+                <FileSpreadsheet size={15} />
+                <span>Pobierz Excel (.xlsx)</span>
               </button>
             )}
             <button 

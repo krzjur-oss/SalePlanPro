@@ -12,7 +12,7 @@ import {
   Layers, GitCompare, Plus, Trash2, Edit2, Copy, Check, X, Download, Upload, 
   ArrowRight, ArrowLeftRight, Sparkles, FileText, Printer, Eye, Tag, Calendar, 
   CheckCircle, AlertCircle, Search, RefreshCw, Clock, Building, User, BookOpen, 
-  HelpCircle, ShieldCheck, CheckCheck
+  HelpCircle, ShieldCheck, CheckCheck, Columns2
 } from 'lucide-react';
 import { uid, downloadFile } from '../utils';
 
@@ -31,6 +31,7 @@ interface PlanVariantsModalProps {
   onApplySelectiveClassSync?: (sourceVariantId: string, targetVariantId: string, classId: string) => void;
   onApplyTeacherDutySync?: (sourceVariantId: string, targetVariantId: string, teacherAbbr: string) => void;
   onShowNotification?: (text: string, type?: 'info' | 'success' | 'err') => void;
+  onOpenSplitScreen?: () => void;
 }
 
 const TAG_CONFIG: Record<PlanVariantTag, { label: string; bg: string; text: string; border: string }> = {
@@ -65,7 +66,8 @@ export default function PlanVariantsModal({
   onUpdateActiveVariant,
   onApplySelectiveClassSync,
   onApplyTeacherDutySync,
-  onShowNotification
+  onShowNotification,
+  onOpenSplitScreen
 }: PlanVariantsModalProps) {
   const [activeTab, setActiveTab] = useState<'list' | 'diff' | 'create'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -987,6 +989,17 @@ export default function PlanVariantsModal({
                   <div className="px-3 py-1.5 rounded-xl bg-slate-100 text-xs font-bold text-slate-700">
                     Łącznie różnic: <span className="font-black text-indigo-600">{diffItems.length}</span>
                   </div>
+                  {onOpenSplitScreen && (
+                    <button
+                      type="button"
+                      onClick={onOpenSplitScreen}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-xs"
+                      title="Otwórz pełnoekranowy tryb Split-Screen Diff"
+                    >
+                      <Columns2 className="w-3.5 h-3.5" />
+                      <span>Pełnoekranowy Split-Screen</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handlePrintDiffReport}
