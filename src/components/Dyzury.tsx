@@ -275,7 +275,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     const analysis = calculateTeacherWorkload(
       teacher,
       appState.planLekcji.assignments,
-      appState.planLekcji.specialAssignments
+      appState.planLekcji.specialAssignments,
+      0,
+      3,
+      appState.school.basePensumConfig,
+      appState.school.overtimeDefaultHandling
     );
 
     if (analysis.dutyExempt || analysis.effectiveDutyLimit === 0) {
@@ -289,7 +293,13 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     }
     // W przypadku nauczycieli bez godzin tablicowych, ale z etatem (np. świetlica z dyżurami)
     return Math.min(1.0, Math.max(0, analysis.totalFte));
-  }, [teacherMap, appState.planLekcji.assignments, appState.planLekcji.specialAssignments]);
+  }, [
+    teacherMap,
+    appState.planLekcji.assignments,
+    appState.planLekcji.specialAssignments,
+    appState.school.basePensumConfig,
+    appState.school.overtimeDefaultHandling
+  ]);
 
   // Current duty allocation counts per teacher/staff
   const teacherDutyCounts = useMemo(() => {
