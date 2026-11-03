@@ -9,6 +9,8 @@ export interface School {
   short: string;
   phone?: string;
   web?: string;
+  basePensumConfig?: Partial<Record<StandardPositionType, number>>; // Własne pensum bazowe per szkoła (np. wg uchwały organu prowadzącego)
+  overtimeDefaultHandling?: 'overtime' | 'second_contract'; // Domyślne traktowanie nadwyżki > 1.0 etatu w szkole
 }
 
 export interface Hour {
@@ -67,11 +69,15 @@ export interface TeacherWorkloadAnalysis {
   isCombinedPensum: boolean;  // czy nauczyciel łączy stanowiska o różnym pensum
   basePensum: number;         // bazowe pensum (lub pensum uśrednione jeśli łączone)
   averagedPensum: number;     // wyliczone pensum łączone: sum(h_i) / sum(h_i / P_i)
-  overtimeHours: number;      // godziny ponadwymiarowe (nadgodziny)
+  overtimeHours: number;      // godziny ponadwymiarowe (nadgodziny w ramach etatu podstawowego)
+  secondContractFte: number;  // wymiar drugiego etatu (ułamek ponad 1.0 etatu, np. 0.25)
+  secondContractHours: number;// liczba godzin w ramach drugiego etatu
+  overtimeHandling: 'overtime' | 'second_contract'; // sposób potraktowania nadwyżki ponad 1.0 etatu
   unfilledHours: number;      // godziny brakujące do pełnego etatu
   suggestedDutyLimit: number; // sugerowany limit dyżurów proporcjonalny do etatu i tablicy
   effectiveDutyLimit: number; // efektywny limit dyżurów (z uwzględnieniem ewentualnego nadpisania)
   dutyExempt: boolean;        // czy nauczyciel jest zwolniony z dyżurów
+  hasNoAssignments: boolean;  // czy nauczyciel nie ma żadnych przydziałów ani godzin pozalekcyjnych
   timeEnvelope40h: {
     directTeachingMinutes: number;   // czas bezpośredni z uczniami (w minutach zegarowych)
     breakDutiesMinutes: number;      // szacowany czas dyżurów (np. 15 min * liczba dyżurów)
@@ -104,6 +110,7 @@ export interface Teacher {
   customPensum?: number; // Ręczne nadpisanie pensum
   maxDutyCount?: number; // Ręczny limit liczby dyżurów tygodniowo
   dutyExempt?: boolean;  // Całkowite zwolnienie z dyżurów na korytarzach
+  overtimeHandling?: 'overtime' | 'second_contract'; // 'overtime' = godziny ponadwymiarowe, 'second_contract' = drugi etat (odrębna umowa)
 }
 
 /**

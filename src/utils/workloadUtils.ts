@@ -165,25 +165,54 @@ export function calculateCombinedPensum(
 }
 
 /**
+ * Dzieli łączną liczbę godzin na zadaną liczbę ról bez gubienia reszty
+ * (ostatnia rola otrzymuje resztę z zaokrąglenia, tak aby suma była dokładnie równa totalHours)
+ */
+export function distributeHoursAcrossRoles(
+  totalHours: number,
+  rolesCount: number,
+  decimals: number = 1
+): number[] {
+  if (rolesCount <= 0 || totalHours <= 0) return [];
+  if (rolesCount === 1) return [round(totalHours, decimals)];
+
+  const baseHours = round(totalHours / rolesCount, decimals);
+  const result: number[] = [];
+  let allocated = 0;
+
+  for (let i = 0; i < rolesCount; i++) {
+    if (i === rolesCount - 1) {
+      const remaining = round(totalHours - allocated, decimals);
+      result.push(remaining);
+    } else {
+      result.push(baseHours);
+      allocated = round(allocated + baseHours, decimals);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Wylicza sugerowany limit dyżurów na przerwach
  * Wzór uzgodniony z użytkownikiem:
- * Proporcjonalnie do wymiaru etatu i godzin bezpośrednio przy tablicy:
- * limit = round( L_base * (h_tablica / 18) * min(1.0, E) )
+ * Proporcjonalnie do godzin bezpośrednio przy tablicy (18h dydaktycznych = 1.0 pełnego etatu tablicowego)
+ * limit = round( L_base * (h_tablica / 18) )
+ * Nie mnożymy podwójnie przez min(1, FTE), gdy boardHours już odzwierciedla etat.
  */
 export function calculateSuggestedDutyLimit(
   boardHours: number,
-  totalFte: number,
+  _totalFte: number = 0,
   baseDutyPerFullTime: number = 3,
   dutyExempt: boolean = false
 ): number {
   if (dutyExempt) return 0;
-  if (boardHours <= 0 || totalFte <= 0) return 0;
+  if (boardHours <= 0) return 0;
 
-  // Współczynnik tablicy (18h dydaktycznych = 1.0)
+  // boardHours już bezpośrednio odzwierciedla wymiar etatu przy tablicy (18h = 1.0)
   const boardRatio = boardHours / 18;
-  const fteFactor = Math.min(1.0, totalFte);
+  const rawLimit = baseDutyPerFullTime * boardRatio;
 
-  const rawLimit = baseDutyPerFullTime * boardRatio * fteFactor;
   // Minimalna wartość dla uczącego przy tablicy to 1 dyżur, jeśli ma min. 4h przy tablicy
   if (boardHours >= 4 && rawLimit < 1) {
     return 1;
@@ -192,29 +221,58 @@ export function calculateSuggestedDutyLimit(
 }
 
 /**
+ * Zwraca konfigurację metadanych stanowisk z uwzględnieniem ewentualnych nadpisań pensum bazowego per szkoła
+ * (np. zgodnie z uchwałą właściwego organu prowadzącego)
+ */
+export function getStandardPositionsMeta(
+  schoolBasePensum?: Partial<Record<StandardPositionType, number>>
+): Record<StandardPositionType, StandardPositionMeta> {
+  if (!schoolBasePensum || Object.keys(schoolBasePensum).length === 0) {
+    return STANDARD_POSITIONS_META;
+  }
+  const result: Record<StandardPositionType, StandardPositionMeta> = { ...STANDARD_POSITIONS_META };
+  (Object.keys(STANDARD_POSITIONS_META) as StandardPositionType[]).forEach(type => {
+    const custom = schoolBasePensum[type];
+    if (custom !== undefined && custom > 0) {
+      result[type] = {
+        ...STANDARD_POSITIONS_META[type],
+        defaultPensum: custom
+      };
+    }
+  });
+  return result;
+}
+
+/**
  * Buduje znormalizowaną listę stanowisk dla nauczyciela
  * Jeśli nauczyciel nie ma zdefiniowanych workloadPositions, tworzy je automatycznie
  * z dotychczasowych pól (przydziały lekcyjne, nonTeachingHours, nonTeachingRoles).
+ * Gdy brak przydziałów i godzin pozalekcyjnych, zwraca pustą tablicę (0 h, FTE 0) bez fantomowych 18h.
  */
 export function normalizeTeacherPositions(
   teacher: Teacher,
   assignments: Assignment[] = [],
-  specialAssignments: SpecialAssignment[] = []
+  specialAssignments: SpecialAssignment[] = [],
+  schoolBasePensum?: Partial<Record<StandardPositionType, number>>
 ): TeacherWorkloadPosition[] {
   if (teacher.workloadPositions && teacher.workloadPositions.length > 0) {
     return teacher.workloadPositions;
   }
 
   const positions: TeacherWorkloadPosition[] = [];
+  const metaMap = getStandardPositionsMeta(schoolBasePensum);
+
+  const safeAssignments = Array.isArray(assignments) ? assignments : [];
+  const safeSpecial = Array.isArray(specialAssignments) ? specialAssignments : [];
 
   // 1. Zlicz godziny lekcyjne przy tablicy z przydziałów
-  const assignedLessonHours = assignments
-    .filter(a => a.teacherId === teacher.id)
+  const assignedLessonHours = safeAssignments
+    .filter(a => a && a.teacherId === teacher.id)
     .reduce((sum, a) => sum + (Number(a.hoursPerWeek) || 0), 0);
 
   // 2. Zlicz godziny SPE / wspomagające
-  const assignedSpecialHours = specialAssignments
-    .filter(sa => sa.teacherId === teacher.id || sa.supportTeacherId === teacher.id)
+  const assignedSpecialHours = safeSpecial
+    .filter(sa => sa && (sa.teacherId === teacher.id || sa.supportTeacherId === teacher.id))
     .reduce((sum, sa) => sum + (Number(sa.hoursPerWeek) || 0), 0);
 
   const totalBoardHours = assignedLessonHours + assignedSpecialHours;
@@ -225,22 +283,12 @@ export function normalizeTeacherPositions(
       type: 'przedmiotowy',
       title: 'Zajęcia przedmiotowe / dydaktyczne',
       hours: totalBoardHours,
-      basePensum: 18,
-      unitMinutes: 45
-    });
-  } else if ((teacher.maxHours || 0) > 0 && !teacher.nonTeachingHours) {
-    // Brak przydziałów, ale zdefiniowano maxHours w profilu
-    positions.push({
-      id: `${teacher.id}-pos-default`,
-      type: 'przedmiotowy',
-      title: 'Zajęcia przedmiotowe',
-      hours: teacher.maxHours || 18,
-      basePensum: 18,
+      basePensum: metaMap.przedmiotowy.defaultPensum,
       unitMinutes: 45
     });
   }
 
-  // 3. Obsługa dotychczasowych godzin poza tablicą (nonTeachingHours)
+  // 3. Obsługa godzin poza tablicą (nonTeachingHours) z podziałem bez gubienia reszty
   if (teacher.nonTeachingHours && teacher.nonTeachingHours > 0) {
     const roles = teacher.nonTeachingRoles || [];
     if (roles.length === 0) {
@@ -249,45 +297,44 @@ export function normalizeTeacherPositions(
         type: 'inny',
         title: 'Zadania opiekuńczo-wychowawcze',
         hours: teacher.nonTeachingHours,
-        basePensum: 26,
+        basePensum: metaMap.swietlica?.defaultPensum || 26,
         unitMinutes: 60
       });
     } else {
-      // Podziel po równo lub przypisz do konkretnych ról
-      const hoursPerRole = round(teacher.nonTeachingHours / roles.length, 1);
+      const distributedHours = distributeHoursAcrossRoles(teacher.nonTeachingHours, roles.length, 1);
       roles.forEach((r, idx) => {
         let type: StandardPositionType = 'inny';
-        let defaultPensum = 22;
+        let defaultPensum = metaMap.specjalista.defaultPensum;
         let unitMinutes: 45 | 60 = 60;
         let title = 'Czynności pozalekcyjne';
 
         if (r === 'swietlica') {
           type = 'swietlica';
-          defaultPensum = 26;
+          defaultPensum = metaMap.swietlica.defaultPensum;
           unitMinutes = 60;
           title = 'Świetlica szkolna';
         } else if (r === 'biblioteka') {
           type = 'biblioteka';
-          defaultPensum = 30;
+          defaultPensum = metaMap.biblioteka.defaultPensum;
           unitMinutes = 60;
           title = 'Biblioteka szkolna';
         } else if (r === 'wspomagajacy') {
           type = 'wspomagajacy';
-          defaultPensum = 20;
+          defaultPensum = metaMap.wspomagajacy.defaultPensum;
           unitMinutes = 45;
           title = 'Nauczyciel współorganizujący';
         } else if (['pedagog', 'psycholog', 'logopeda', 'terapeuta'].includes(r)) {
           type = 'specjalista';
-          defaultPensum = 22;
+          defaultPensum = metaMap.specjalista.defaultPensum;
           unitMinutes = 60;
-          title = STANDARD_POSITIONS_META[type].label;
+          title = metaMap[type].label;
         }
 
         positions.push({
           id: `${teacher.id}-pos-nt-${idx}`,
           type,
           title,
-          hours: hoursPerRole,
+          hours: distributedHours[idx] ?? 0,
           basePensum: defaultPensum,
           unitMinutes
         });
@@ -295,34 +342,28 @@ export function normalizeTeacherPositions(
     }
   }
 
-  // Jeśli nauczyciel nie ma nic, stwórz pozycję 18h pełnoetatową jako punkt startowy
-  if (positions.length === 0) {
-    positions.push({
-      id: `${teacher.id}-pos-empty`,
-      type: 'przedmiotowy',
-      title: 'Zajęcia dydaktyczne (etat bazowy)',
-      hours: 18,
-      basePensum: 18,
-      unitMinutes: 45
-    });
-  }
-
+  // Gdy nauczyciel nie ma żadnych przydziałów ani godzin pozalekcyjnych,
+  // zwracamy pustą listę pozycji (0 h, FTE 0) zamiast fantomowych 18h
   return positions;
 }
 
 /**
  * Główna funkcja wykonująca pełną analizę obciążenia i pensum nauczyciela
+ * Rozdziela pojęcia „godziny ponadwymiarowe” i „drugi etat” (odrębna umowa).
  */
 export function calculateTeacherWorkload(
   teacher: Teacher,
   assignments: Assignment[] = [],
   specialAssignments: SpecialAssignment[] = [],
   dutiesAssignedCount: number = 0,
-  baseDutyPerFullTime: number = 3
+  baseDutyPerFullTime: number = 3,
+  schoolBasePensum?: Partial<Record<StandardPositionType, number>>,
+  schoolDefaultOvertimeHandling?: 'overtime' | 'second_contract'
 ): TeacherWorkloadAnalysis {
-  const positions = normalizeTeacherPositions(teacher, assignments, specialAssignments);
+  const positions = normalizeTeacherPositions(teacher, assignments, specialAssignments, schoolBasePensum);
+  const metaMap = getStandardPositionsMeta(schoolBasePensum);
 
-  // 1. Zlicz godziny 45 min i 60 min
+  // 1. Zlicz godziny 45 min i 60 min oraz godziny tablicowe
   let hours45min = 0;
   let hours60min = 0;
   let boardHours = 0;
@@ -336,49 +377,104 @@ export function calculateTeacherWorkload(
       hours60min += p.hours;
     }
 
-    const meta = STANDARD_POSITIONS_META[p.type];
-    if (meta?.isBoardTeaching || p.type === 'przedmiotowy' || p.type === 'wspomagajacy' || p.type === 'doradca') {
+    // boardHours wyłącznie z unitMinutes === 45 i typów tablicowych;
+    // typ 'inny' z 60 min NIE jest tablicowy
+    const meta = metaMap[p.type] || STANDARD_POSITIONS_META[p.type];
+    const isBoardType = p.type === 'przedmiotowy' || 
+                        p.type === 'wspomagajacy' || 
+                        p.type === 'doradca' || 
+                        (p.type === 'inny' && meta?.isBoardTeaching);
+    if (p.unitMinutes === 45 && isBoardType) {
       boardHours += p.hours;
     }
   });
 
-  // 2. Rzeczywiste godziny przydzielone w planie zajęć (dla weryfikacji)
-  const actualPlanHours = assignments
-    .filter(a => a.teacherId === teacher.id)
-    .reduce((sum, a) => sum + (Number(a.hoursPerWeek) || 0), 0);
-
-  const actualSpecialHours = specialAssignments
-    .filter(sa => sa.teacherId === teacher.id || sa.supportTeacherId === teacher.id)
-    .reduce((sum, sa) => sum + (Number(sa.hoursPerWeek) || 0), 0);
-
-  const totalAssignedHours = round(actualPlanHours + actualSpecialHours + hours60min, 2);
+  // 2. Flaga braku przydziałów (gdy nauczyciel nie ma żadnych przydziałów ani godzin)
+  const hasNoAssignments = positions.length === 0 || nominalHours === 0;
 
   // 3. Obliczenie pensum łączonego i etatu
   const pensumResult = calculateCombinedPensum(
     positions.map(p => ({ hours: p.hours, basePensum: p.basePensum }))
   );
 
-  const effectivePensum = teacher.customPensum && teacher.customPensum > 0
-    ? teacher.customPensum
-    : pensumResult.averagedPensum;
+  const hasCustomPensum = Boolean(teacher.customPensum && teacher.customPensum > 0);
+  const effectivePensum = hasCustomPensum
+    ? (teacher.customPensum as number)
+    : (hasNoAssignments ? (teacher.customPensum || 18) : pensumResult.averagedPensum);
 
-  const totalFte = pensumResult.totalFte;
+  // (1) FTE = nominalHours / effectivePensum przy customPensum, w przeciwnym razie suma h_i/P_i
+  let totalFte = 0;
+  if (!hasNoAssignments) {
+    if (hasCustomPensum && effectivePensum > 0) {
+      totalFte = round(nominalHours / effectivePensum, 4);
+    } else {
+      totalFte = pensumResult.totalFte;
+    }
+  }
   const ftePercent = round(totalFte * 100, 1);
 
-  // Nadgodziny:
-  let overtimeHours = 0;
-  let unfilledHours = 0;
+  // 4. Rozdzielenie: godziny ponadwymiarowe (nadgodziny) vs drugi etat (odrębna umowa)
+  // Zasada: nadgodziny liczone są tylko dla stanowisk jednego rodzaju lub według ustawienia w Kreatorze/profilu
+  const activePositions = positions.filter(p => p.hours > 0);
+  const distinctPositionTypes = new Set(activePositions.map(p => p.type));
+  const isSinglePositionType = distinctPositionTypes.size <= 1;
 
-  if (teacher.overtimeHours !== undefined && teacher.overtimeHours > 0) {
-    overtimeHours = teacher.overtimeHours;
-  } else if (totalFte >= 1.0) {
-    overtimeHours = Math.max(0, round(nominalHours - effectivePensum, 2));
+  let overtimeHandling: 'overtime' | 'second_contract';
+  if (teacher.overtimeHandling) {
+    overtimeHandling = teacher.overtimeHandling;
+  } else if (schoolDefaultOvertimeHandling) {
+    overtimeHandling = schoolDefaultOvertimeHandling;
+  } else if (isSinglePositionType) {
+    overtimeHandling = 'overtime';
   } else {
-    // Niepełny etat - ile brakuje do pełnego etatu
-    unfilledHours = Math.max(0, round(effectivePensum - nominalHours, 2));
+    // Stanowiska łączone (różne rodzaje): domyślnie drugi etat (odrębna umowa)
+    overtimeHandling = 'second_contract';
   }
 
-  // 4. Dyżury na przerwach
+  let overtimeHours = 0;
+  let secondContractFte = 0;
+  let secondContractHours = 0;
+  let unfilledHours = 0;
+
+  if (!hasNoAssignments) {
+    if (teacher.overtimeHours !== undefined && teacher.overtimeHours > 0) {
+      overtimeHours = teacher.overtimeHours;
+      overtimeHandling = 'overtime';
+    } else if (totalFte >= 1.0) {
+      const excessHours = Math.max(0, round(nominalHours - effectivePensum, 2));
+
+      if (overtimeHandling === 'overtime') {
+        overtimeHours = excessHours;
+      } else {
+        // 'second_contract' (odrębna umowa o pracę)
+        secondContractFte = Math.max(0, round(totalFte - 1.0, 4));
+
+        // Godziny drugiego etatu: sumujemy godziny pozycji wykraczające ponad 1,0 FTE
+        let fteAccum = 0;
+        let scHours = 0;
+        activePositions.forEach(p => {
+          const pFte = p.basePensum > 0 ? p.hours / p.basePensum : 0;
+          if (fteAccum + pFte <= 1.0) {
+            fteAccum += pFte;
+          } else if (fteAccum < 1.0) {
+            const neededFte = 1.0 - fteAccum;
+            const firstContractHours = neededFte * p.basePensum;
+            scHours += p.hours - firstContractHours;
+            fteAccum = 1.0;
+          } else {
+            scHours += p.hours;
+          }
+        });
+
+        secondContractHours = scHours > 0 ? round(scHours, 2) : excessHours;
+      }
+    } else {
+      // Niepełny etat - ile brakuje do pełnego etatu
+      unfilledHours = Math.max(0, round(effectivePensum - nominalHours, 2));
+    }
+  }
+
+  // 5. Dyżury na przerwach
   const dutyExempt = Boolean(teacher.dutyExempt || teacher.isAdministrative);
   const suggestedDutyLimit = calculateSuggestedDutyLimit(
     boardHours,
@@ -391,11 +487,12 @@ export function calculateTeacherWorkload(
     ? teacher.maxDutyCount
     : suggestedDutyLimit;
 
-  // 5. Rozkład 40-godzinnego tygodnia pracy (w minutach zegarowych)
-  // Norma 40 godzin zegarowych = 2400 minut
+  // 6. Rozkład 40-godzinnego tygodnia pracy (w minutach zegarowych)
   const directTeachingMinutes = Math.round(hours45min * 45 + hours60min * 60);
-  const breakDutiesMinutes = Math.round(dutiesAssignedCount * 15); // średnio 15 minut na dyżur
-  const statutoryAndPrepMinutes = Math.max(0, 2400 - (directTeachingMinutes + breakDutiesMinutes));
+  const breakDutiesMinutes = Math.round(dutiesAssignedCount * 15);
+  const statutoryAndPrepMinutes = hasNoAssignments
+    ? 0
+    : Math.max(0, 2400 - (directTeachingMinutes + breakDutiesMinutes));
 
   return {
     teacherId: teacher.id,
@@ -407,14 +504,18 @@ export function calculateTeacherWorkload(
     nominalHours: round(nominalHours, 2),
     totalFte,
     ftePercent,
-    isCombinedPensum: pensumResult.isCombined,
+    isCombinedPensum: hasCustomPensum ? false : pensumResult.isCombined,
     basePensum: effectivePensum,
     averagedPensum: effectivePensum,
     overtimeHours,
+    secondContractFte,
+    secondContractHours,
+    overtimeHandling,
     unfilledHours,
     suggestedDutyLimit,
     effectiveDutyLimit,
     dutyExempt,
+    hasNoAssignments,
     timeEnvelope40h: {
       directTeachingMinutes,
       breakDutiesMinutes,
@@ -435,8 +536,11 @@ export interface SchoolWorkloadKPI {
   totalHours60min: number;
   totalCombinedHours: number;
   totalOvertimeHours: number;
+  totalSecondContractFte: number;
+  totalSecondContractHours: number;
   teachersWithCombinedPensum: number;
   teachersWithOvertime: number;
+  teachersWithSecondContract: number;
   totalSuggestedDuties: number;
   totalAssignedDuties: number;
 }
@@ -446,15 +550,20 @@ export function calculateSchoolWorkloadKPI(
   assignments: Assignment[] = [],
   specialAssignments: SpecialAssignment[] = [],
   dutiesCountMap: Record<string, number> = {},
-  baseDutyPerFullTime: number = 3
+  baseDutyPerFullTime: number = 3,
+  schoolBasePensum?: Partial<Record<StandardPositionType, number>>,
+  schoolDefaultOvertimeHandling?: 'overtime' | 'second_contract'
 ): SchoolWorkloadKPI {
   let totalFte = 0;
   let totalHours45min = 0;
   let totalHours60min = 0;
   let totalCombinedHours = 0;
   let totalOvertimeHours = 0;
+  let totalSecondContractFte = 0;
+  let totalSecondContractHours = 0;
   let teachersWithCombinedPensum = 0;
   let teachersWithOvertime = 0;
+  let teachersWithSecondContract = 0;
   let totalSuggestedDuties = 0;
   let totalAssignedDuties = 0;
   let activeTeachersCount = 0;
@@ -471,7 +580,9 @@ export function calculateSchoolWorkloadKPI(
       assignments,
       specialAssignments,
       dutiesAssigned,
-      baseDutyPerFullTime
+      baseDutyPerFullTime,
+      schoolBasePensum,
+      schoolDefaultOvertimeHandling
     );
 
     totalFte += analysis.totalFte;
@@ -479,8 +590,11 @@ export function calculateSchoolWorkloadKPI(
     totalHours60min += analysis.hours60min;
     totalCombinedHours += analysis.nominalHours;
     totalOvertimeHours += analysis.overtimeHours;
+    totalSecondContractFte += analysis.secondContractFte;
+    totalSecondContractHours += analysis.secondContractHours;
     if (analysis.isCombinedPensum) teachersWithCombinedPensum++;
     if (analysis.overtimeHours > 0) teachersWithOvertime++;
+    if (analysis.secondContractHours > 0) teachersWithSecondContract++;
     totalSuggestedDuties += analysis.effectiveDutyLimit;
   });
 
@@ -492,8 +606,11 @@ export function calculateSchoolWorkloadKPI(
     totalHours60min: round(totalHours60min, 1),
     totalCombinedHours: round(totalCombinedHours, 1),
     totalOvertimeHours: round(totalOvertimeHours, 2),
+    totalSecondContractFte: round(totalSecondContractFte, 4),
+    totalSecondContractHours: round(totalSecondContractHours, 2),
     teachersWithCombinedPensum,
     teachersWithOvertime,
+    teachersWithSecondContract,
     totalSuggestedDuties,
     totalAssignedDuties
   };

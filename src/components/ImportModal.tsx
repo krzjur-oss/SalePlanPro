@@ -38,6 +38,10 @@ import {
   MergeStrategy
 } from '../utils/mergeEngine';
 import { validateImportJson } from '../utils/validationSchemas';
+import * as XLSX from 'xlsx';
+
+/** Maksymalny limit rozmiaru importowanego pliku Excel / JSON (10 MB) */
+export const MAX_EXCEL_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 /**
  * Sprawdza czy plik .json posiada nagłówek wskazujący na szyfrowanie przed próbą zaimportowania do bazy danych.
@@ -181,6 +185,118 @@ export default function ImportModal({
     e.target.value = '';
 
     selectedFiles.forEach((file: File, idx: number) => {
+      // Limit rozmiaru pliku: 10 MB
+      if (file.size > MAX_EXCEL_FILE_SIZE) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+        const fileId = `file_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+        setFiles(prev => {
+          const next = [
+            ...prev,
+            {
+              id: fileId,
+              name: file.name,
+              rawContent: '',
+              isEncrypted: false,
+              payload: null,
+              config: null,
+              isValidSchema: false,
+              validationErrors: [`Rozmiar pliku "${file.name}" (${sizeMb} MB) przekracza maksymalny dopuszczalny limit 10 MB. Wybierz mniejszy plik.`],
+              validationWarnings: []
+            }
+          ];
+          if (!activeFileId) setActiveFileId(fileId);
+          return next;
+        });
+        return;
+      }
+
+      const fileNameLower = file.name.toLowerCase();
+      const isExcel = fileNameLower.endsWith('.xlsx') || 
+                      fileNameLower.endsWith('.xls') || 
+                      file.type.includes('spreadsheet') || 
+                      file.type.includes('excel');
+
+      if (isExcel) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          try {
+            const buffer = evt.target?.result as ArrayBuffer;
+            const wb = XLSX.read(buffer, { type: 'array' });
+            const fileId = `file_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+            const sheetNames = wb.SheetNames;
+
+            if (!sheetNames || sheetNames.length === 0) {
+              setFiles(prev => [
+                ...prev,
+                {
+                  id: fileId,
+                  name: file.name,
+                  rawContent: '',
+                  isEncrypted: false,
+                  payload: null,
+                  config: null,
+                  isValidSchema: false,
+                  validationErrors: ['Skoroszyt Excel nie zawiera żadnych arkuszy.'],
+                  validationWarnings: []
+                }
+              ]);
+              return;
+            }
+
+            let parsedPayload: ImportPayload | null = null;
+            let rawContent = '';
+            const firstSheet = wb.Sheets[sheetNames[0]];
+            const cellA1 = firstSheet && firstSheet['A1'] ? String(firstSheet['A1'].v || '') : '';
+            if (cellA1.startsWith('{') && cellA1.includes('"version"')) {
+              try {
+                rawContent = cellA1;
+                const raw = JSON.parse(cellA1);
+                parsedPayload = normalizeImportPayload(raw);
+              } catch (e) {}
+            }
+
+            const config = parsedPayload ? createDefaultFileMergeConfig(fileId, file.name, parsedPayload, files.length === 0) : null;
+
+            setFiles(prev => {
+              const next = [
+                ...prev,
+                {
+                  id: fileId,
+                  name: file.name,
+                  rawContent: rawContent,
+                  isEncrypted: false,
+                  payload: parsedPayload,
+                  config: config,
+                  isValidSchema: parsedPayload !== null,
+                  validationErrors: parsedPayload ? [] : [`Wczytano skoroszyt Excel zawierający arkusze: [${sheetNames.join(', ')}]. Dedykowany import przydziałów z arkuszy SIO/Vulcan/Librus dostępny jest w kreatorze „Import z SIO”.`],
+                  validationWarnings: [`Wczytano skoroszyt Excel (rozmiar: ${(file.size / 1024).toFixed(1)} KB, arkusze: ${sheetNames.join(', ')}).`]
+                }
+              ];
+              if (!activeFileId) setActiveFileId(fileId);
+              return next;
+            });
+          } catch (err) {
+            const fileId = `file_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`;
+            setFiles(prev => [
+              ...prev,
+              {
+                id: fileId,
+                name: file.name,
+                rawContent: '',
+                isEncrypted: false,
+                payload: null,
+                config: null,
+                isValidSchema: false,
+                validationErrors: [`Błąd parsowania skoroszytu Excel: ${err instanceof Error ? err.message : String(err)}`],
+                validationWarnings: []
+              }
+            ]);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (evt) => {
         const rawContent = evt.target?.result as string;
@@ -759,7 +875,7 @@ export default function ImportModal({
                       <input
                         type="file"
                         multiple
-                        accept=".json"
+                        accept=".json,.xlsx,.xls"
                         className="hidden"
                         onChange={handleAddMoreFiles}
                       />
@@ -772,15 +888,15 @@ export default function ImportModal({
                         <Upload size={24} />
                       </div>
                       <div>
-                        <p className="text-xs font-black text-slate-800 dark:text-slate-200">Wybierz pliki JSON</p>
-                        <p className="text-[10px] text-slate-400 mt-1">Możesz zaznaczyć kilka plików naraz do scalenia</p>
+                        <p className="text-xs font-black text-slate-800 dark:text-slate-200">Wybierz pliki JSON lub Excel</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Maks. 10 MB. Możesz zaznaczyć kilka plików naraz do scalenia</p>
                       </div>
                       <label className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition cursor-pointer shadow-xs">
                         Przeglądaj pliki
                         <input
                           type="file"
                           multiple
-                          accept=".json"
+                          accept=".json,.xlsx,.xls"
                           className="hidden"
                           onChange={handleAddMoreFiles}
                         />
@@ -876,11 +992,11 @@ export default function ImportModal({
 
                   {/* Drop / Add bottom bar */}
                   <label className="p-3 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition cursor-pointer bg-white/40 dark:bg-slate-900/40">
-                    <Plus size={14} /> Dodaj kolejny plik JSON
+                    <Plus size={14} /> Dodaj kolejny plik JSON / Excel
                     <input
                       type="file"
                       multiple
-                      accept=".json"
+                      accept=".json,.xlsx,.xls"
                       className="hidden"
                       onChange={handleAddMoreFiles}
                     />

@@ -11,6 +11,10 @@ import {
 } from 'lucide-react';
 import { AppState, Teacher, Class, Subject, Assignment } from '../types';
 import { uid, genAbbr, ensureUniqueAbbr, subjectAbbr } from '../utils';
+import * as XLSX from 'xlsx';
+
+/** Maksymalny limit rozmiaru importowanego pliku Excel / arkusza danych (10 MB) */
+export const MAX_EXCEL_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 const PALETTE_COLORS = [
   '#2563eb', '#16a34a', '#d97706', '#dc2626', '#7c3aed', 
@@ -33,6 +37,7 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
   const [delimiter, setDelimiter] = useState<string>(';');
   const [hasHeader, setHasHeader] = useState<boolean>(true);
   const [activeSubStep, setActiveSubStep] = useState<'map' | 'preview'>('map');
+  const [fileError, setFileError] = useState<string | null>(null);
 
   // Mappings
   const [teacherCol, setTeacherCol] = useState<number>(-1);
@@ -149,6 +154,70 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
     setActiveSubStep('map');
   };
 
+  const processUploadedFile = (uploadedFile: File) => {
+    setFileError(null);
+
+    // Limit rozmiaru pliku: 10 MB
+    if (uploadedFile.size > MAX_EXCEL_FILE_SIZE) {
+      const sizeMb = (uploadedFile.size / (1024 * 1024)).toFixed(1);
+      const msg = `Rozmiar pliku "${uploadedFile.name}" (${sizeMb} MB) przekracza maksymalny dopuszczalny limit 10 MB. Proszę wybrać mniejszy plik.`;
+      setFileError(msg);
+      if (onShowNotification) {
+        onShowNotification(msg, 'info');
+      }
+      return;
+    }
+
+    setFile(uploadedFile);
+
+    const fileNameLower = uploadedFile.name.toLowerCase();
+    const isExcel = fileNameLower.endsWith('.xlsx') || 
+                    fileNameLower.endsWith('.xls') || 
+                    uploadedFile.type.includes('spreadsheet') || 
+                    uploadedFile.type.includes('excel');
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        try {
+          const buffer = evt.target?.result as ArrayBuffer;
+          const wb = XLSX.read(buffer, { type: 'array' });
+          const firstSheetName = wb.SheetNames[0];
+          if (!firstSheetName) {
+            setFileError('Wskazany arkusz Excel nie zawiera żadnych zakładek z danymi.');
+            return;
+          }
+          const ws = wb.Sheets[firstSheetName];
+          // Konwersja arkusza Excel na ciąg CSV ze średnikami jako separator
+          const csvText = XLSX.utils.sheet_to_csv(ws, { FS: ';' });
+          if (!csvText || !csvText.trim()) {
+            setFileError('Arkusz Excel jest pusty lub nie zawiera czytelnych wierszy.');
+            return;
+          }
+          handleFileContent(csvText);
+        } catch (err) {
+          const errMsg = `Błąd odczytu pliku Excel: ${err instanceof Error ? err.message : String(err)}`;
+          setFileError(errMsg);
+        }
+      };
+      reader.onerror = () => {
+        setFileError('Nie udało się wczytać zawartości pliku z dysku.');
+      };
+      reader.readAsArrayBuffer(uploadedFile);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        if (evt.target?.result) {
+          handleFileContent(evt.target.result as string);
+        }
+      };
+      reader.onerror = () => {
+        setFileError('Nie udało się wczytać zawartości pliku z dysku.');
+      };
+      reader.readAsText(uploadedFile, 'UTF-8');
+    }
+  };
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -165,29 +234,13 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
     setDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      setFile(droppedFile);
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        if (evt.target?.result) {
-          handleFileContent(evt.target.result as string);
-        }
-      };
-      reader.readAsText(droppedFile, 'UTF-8');
+      processUploadedFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      setFile(selectedFile);
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        if (evt.target?.result) {
-          handleFileContent(evt.target.result as string);
-        }
-      };
-      reader.readAsText(selectedFile, 'UTF-8');
+      processUploadedFile(e.target.files[0]);
     }
   };
 
@@ -624,34 +677,48 @@ export default function SioImport({ appState, onChangeAppState, onClose, onShowN
 
       {/* STEP 1: UPLOAD ZONE */}
       {!parsedRows && (
-        <div 
-          className={`border-2 border-dashed rounded-2xl p-8 text-center transition ${
-            dragActive ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 hover:border-slate-300'
-          }`}
-          onDragEnter={handleDrag}
-          onDragOver={handleDrag}
-          onDragLeave={handleDrag}
-          onDrop={handleDrop}
-        >
-          <Upload className="mx-auto text-slate-300 mb-4 animate-bounce" size={40} />
-          <h4 className="text-xs font-bold text-slate-800">Przeciągnij i upuść plik CSV lub kliknij przycisk poniżej</h4>
-          <p className="text-[10px] text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
-            Plik powinien być w formacie CSV rozdzielanym średnikami (;) lub przecinkami (,) zawierającym kolumny przydziałów (np. klasa, nauczyciel, przedmiot, godziny).
-          </p>
+        <div className="space-y-4">
+          {fileError && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3 text-rose-700 animate-in fade-in duration-200">
+              <AlertTriangle className="shrink-0 mt-0.5" size={18} />
+              <div className="text-xs">
+                <span className="font-bold block">Błąd wczytywania pliku:</span>
+                <span className="text-[11px] mt-0.5 block">{fileError}</span>
+              </div>
+            </div>
+          )}
 
-          <input 
-            type="file" 
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept=".csv,.txt"
-            className="hidden" 
-          />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="mt-4 px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs transition inline-flex items-center gap-2 cursor-pointer"
+          <div 
+            className={`border-2 border-dashed rounded-2xl p-8 text-center transition ${
+              dragActive ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 hover:border-slate-300'
+            }`}
+            onDragEnter={handleDrag}
+            onDragOver={handleDrag}
+            onDragLeave={handleDrag}
+            onDrop={handleDrop}
           >
-            <FileSpreadsheet size={14} /> Wybierz plik z dysku
-          </button>
+            <Upload className="mx-auto text-slate-300 mb-4 animate-bounce" size={40} />
+            <h4 className="text-xs font-bold text-slate-800">
+              Przeciągnij i upuść plik arkusza Excel (.xlsx, .xls) lub CSV/TXT
+            </h4>
+            <p className="text-[10px] text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+              Maksymalny dopuszczalny rozmiar pliku: <span className="font-semibold text-slate-600">10 MB</span>. Obsługiwane formaty: skoroszyty Microsoft Excel (.xlsx, .xls) oraz pliki tekstowe rozdzielane średnikami lub przecinkami (.csv, .txt).
+            </p>
+
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".xlsx,.xls,.csv,.txt"
+              className="hidden" 
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-4 px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs transition inline-flex items-center gap-2 cursor-pointer"
+            >
+              <FileSpreadsheet size={14} /> Wybierz plik z dysku (Excel / CSV)
+            </button>
+          </div>
         </div>
       )}
 

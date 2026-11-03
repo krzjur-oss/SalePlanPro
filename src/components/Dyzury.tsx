@@ -4,7 +4,7 @@
  * Opis: Układanie, automatyczna optymalizacja i kontrola dyżurów na przerwach, nadzór szatni WF oraz ochrona klas pierwszych.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { AppState, MiejsceDyzuru, Przerwa, DyzurEntry, DyzuryState, SchedData, SchedCell, Teacher, SupportStaff } from '../types';
 import { esc, colKey, flattenColumns, uid } from '../utils';
 import { 
@@ -260,8 +260,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   }, [appState.teachers]);
 
   // Pomocnicza kalkulacja proporcji dyżurów:
-  // Zgodnie z decyzją: Proporcjonalnie do wymiaru etatu i godzin bezpośrednio przy tablicy
-  const getPersonFteProportion = (p: DutyPerson, hours: number): number => {
+  // Zgodnie z audytem: boardHours bezpośrednio odzwierciedla wymiar etatu przy tablicy (18h = 1.0)
+  // Nie mnożymy podwójnie przez min(1, FTE)
+  const getPersonFteProportion = useCallback((p: DutyPerson, hours: number): number => {
     if (p.isStaff) {
       // Pracownicy niepedagogiczni (Kodeks Pracy): pełny etat = 40h
       return hours >= 40 ? 1.0 : hours / 40;
@@ -281,11 +282,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       return 0;
     }
 
-    // Proporcja tablicy do pełnego etatu przedmiotowego (18h) oraz ułamek etatu
-    const boardRatio = Math.max(0, analysis.boardHours / 18);
-    const fteFactor = Math.min(1.0, analysis.totalFte);
-    return boardRatio * fteFactor;
-  };
+    // boardHours już odzwierciedla wymiar etatu przy tablicy (18h dydaktycznych = 1.0)
+    // Nie mnożymy podwójnie przez min(1, FTE)
+    if (analysis.boardHours > 0) {
+      return Math.max(0, analysis.boardHours / 18);
+    }
+    // W przypadku nauczycieli bez godzin tablicowych, ale z etatem (np. świetlica z dyżurami)
+    return Math.min(1.0, Math.max(0, analysis.totalFte));
+  }, [teacherMap, appState.planLekcji.assignments, appState.planLekcji.specialAssignments]);
 
   // Current duty allocation counts per teacher/staff
   const teacherDutyCounts = useMemo(() => {
@@ -390,7 +394,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     });
 
     return maxMins;
-  }, [eligiblePersonnel, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance, teacherMap]);
+  }, [eligiblePersonnel, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance, teacherMap, getPersonFteProportion]);
 
   // Memoized duty demand statistics
   const demandStats = useMemo(() => {
@@ -465,7 +469,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       totalAssignedMinutes,
       coveragePercent: weeklyMinutesNeeded > 0 ? Math.round((totalAssignedMinutes / weeklyMinutesNeeded) * 100) : 0
     };
-  }, [dyz.przerwy, dyz.miejsca, dyz.harmonogram, eligiblePersonnel, teacherHours, activeDay]);
+  }, [dyz.przerwy, dyz.miejsca, dyz.harmonogram, eligiblePersonnel, teacherHours, activeDay, getPersonFteProportion]);
 
 
 

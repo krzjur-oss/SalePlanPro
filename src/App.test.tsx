@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
-import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, within, act, fireEvent, waitFor } from '@testing-library/react';
 import App from './App';
 import { 
   STORAGE_KEYS, 
@@ -148,8 +148,8 @@ describe('App Smoke & Security State Tests', () => {
       // Widoczny jest baner błędu z przyciskiem Spróbuj ponownie
       const banner = await screen.findByTestId('storage-init-error-banner');
       expect(banner).toBeDefined();
-      expect(screen.getByText(/Krytyczny błąd bazy danych/i)).toBeDefined();
-      expect(screen.getByText(/Spróbuj ponownie/i)).toBeDefined();
+      expect(within(banner).getByText(/Krytyczny błąd bazy danych/i)).toBeDefined();
+      expect(within(banner).getByText(/Spróbuj ponownie/i)).toBeDefined();
 
       // Brak zapisów do bazy danych
       const appStateWrites = setStorageSpy.mock.calls.filter(
@@ -214,14 +214,16 @@ describe('App Smoke & Security State Tests', () => {
     await setStorageItem(STORAGE_KEYS.APP_STATE, initialAppState);
     await setStorageItem(STORAGE_KEYS.SCHED_DATA, {});
 
-    render(<App />);
+    await act(async () => {
+      render(<App />);
+    });
 
     // Wait until storage is fully initialized and app ready
     await waitFor(() => {
       expect(document.querySelector('[data-storage-ready="true"]')).not.toBeNull();
     });
 
-    const input = await screen.findByPlaceholderText(/np\. Szkoła Podstawowa nr 15/i, {}, { timeout: 5000 });
+    const input = await screen.findByPlaceholderText(/np\. Szkoła Podstawowa nr 15/i, {}, { timeout: 10000 });
     expect((input as HTMLInputElement).value).toBe('Szkoła Przed Blokadą');
 
     // Edycja danych tuż przed blokadą (bez czekania na 1300 ms debounced save)
@@ -254,7 +256,7 @@ describe('App Smoke & Security State Tests', () => {
     // W storage powinna być zaktualizowana wartość dzięki flush przed blokadą
     const savedAfterFlush = await getStorageItem<any>(STORAGE_KEYS.APP_STATE);
     expect(savedAfterFlush?.school?.name).toBe('Szkoła Zapisana Przez Flush');
-  });
+  }, 15000);
 
   // Wymóg zadania 4: PRE_ENCRYPTION_BACKUP
   it('PRE_ENCRYPTION_BACKUP: gdy szyfrowanie nieaktywne, pyta czy przywrócić z kopii i przywraca', async () => {

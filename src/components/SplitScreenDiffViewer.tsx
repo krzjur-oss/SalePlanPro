@@ -41,10 +41,14 @@ import {
   computeTeacherDiffs, 
   computeRoomDiffs, 
   computeDutyDiffs, 
+  buildTeacherLessonsBySlot,
+  buildRoomLessonsBySlot,
+  buildClassLessonsBySlot,
   applySlotTransfer, 
   findLessonInLessons, 
   extractSlotItem, 
   areSlotsEquivalent,
+  areSlotItemListsEquivalent,
   exportDiffToExcel 
 } from '../services/variantDiffService';
 
@@ -196,7 +200,20 @@ export default function SplitScreenDiffViewer({
     hourIdx: number,
     slotItem: DiffSlotItem | null
   ) => {
-    const updated = applySlotTransfer(toVariant, slotItem?.lesson, classId, dayIdx, hourIdx);
+    const fromVariant = toVariant.id === variantA?.id ? variantB : variantA;
+    const sourceAssignments = fromVariant?.data.assignments && fromVariant.data.assignments.length > 0
+      ? fromVariant.data.assignments
+      : appState.planLekcji.assignments;
+
+    const updated = applySlotTransfer(
+      toVariant, 
+      slotItem?.lesson, 
+      classId, 
+      dayIdx, 
+      hourIdx, 
+      slotItem?.lessonKey, 
+      sourceAssignments
+    );
     const newVariants = localVariants.map(v => v.id === updated.id ? updated : v);
     setLocalVariants(newVariants);
     if (onUpdateVariants) onUpdateVariants(newVariants);
@@ -250,48 +267,25 @@ export default function SplitScreenDiffViewer({
     });
   }, [allDiffs, searchTableQuery]);
 
-  // Pobranie lekcji dla danego slotu w wariancie
-  const getSlotData = (variant: PlanVariant | null, dayIdx: number, hourIdx: number): DiffSlotItem | null => {
-    if (!variant) return null;
-    if (scope === 'class') {
-      const slotNum = hours[hourIdx]?.num ?? (hourIdx + 1);
-      const les = findLessonInLessons(variant.data.lessons, selectedClassId, dayIdx, hourIdx, slotNum);
-      return extractSlotItem(les, variant, appState, lookups);
+  // Zindeksowane lekcje dla wybranego zakresu (dzień|godzina -> lista lekcji)
+  // Budowane raz w useMemo zamiast iteracji Object.entries w renderze siatki
+  const { lessonsBySlotA, lessonsBySlotB } = useMemo(() => {
+    let mapA = new Map<string, DiffSlotItem[]>();
+    let mapB = new Map<string, DiffSlotItem[]>();
+
+    if (scope === 'teacher' && selectedTeacherId) {
+      mapA = buildTeacherLessonsBySlot(variantA || undefined, selectedTeacherId, appState, lookups, hours);
+      mapB = buildTeacherLessonsBySlot(variantB || undefined, selectedTeacherId, appState, lookups, hours);
+    } else if (scope === 'room' && selectedRoomId) {
+      mapA = buildRoomLessonsBySlot(variantA || undefined, selectedRoomId, appState, lookups, hours);
+      mapB = buildRoomLessonsBySlot(variantB || undefined, selectedRoomId, appState, lookups, hours);
+    } else if (scope === 'class' && selectedClassId) {
+      mapA = buildClassLessonsBySlot(variantA || undefined, selectedClassId, appState, lookups, hours);
+      mapB = buildClassLessonsBySlot(variantB || undefined, selectedClassId, appState, lookups, hours);
     }
-    if (scope === 'teacher') {
-      const asgs = variant.data.assignments || pl.assignments;
-      let found: DiffSlotItem | null = null;
-      Object.entries(variant.data.lessons || {}).forEach(([key, les]) => {
-        const parts = key.split('|');
-        const lDay = parseInt(parts[1], 10);
-        const lHour = parseInt(parts[2], 10);
-        if (lDay === dayIdx && lHour === hourIdx) {
-          const asg = asgs.find(a => a.id === les.assignmentId);
-          if (asg && asg.teacherId === selectedTeacherId) {
-            found = extractSlotItem(les, variant, appState, lookups);
-          }
-        }
-      });
-      return found;
-    }
-    if (scope === 'room') {
-      const asgs = variant.data.assignments || pl.assignments;
-      let found: DiffSlotItem | null = null;
-      Object.entries(variant.data.lessons || {}).forEach(([key, les]) => {
-        const parts = key.split('|');
-        const lDay = parseInt(parts[1], 10);
-        const lHour = parseInt(parts[2], 10);
-        if (lDay === dayIdx && lHour === hourIdx) {
-          const asg = asgs.find(a => a.id === les.assignmentId);
-          if (asg && asg.roomId === selectedRoomId) {
-            found = extractSlotItem(les, variant, appState, lookups);
-          }
-        }
-      });
-      return found;
-    }
-    return null;
-  };
+
+    return { lessonsBySlotA: mapA, lessonsBySlotB: mapB };
+  }, [scope, selectedTeacherId, selectedRoomId, selectedClassId, variantA, variantB, appState, lookups, hours]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-50 text-slate-800 overflow-hidden font-sans">
@@ -813,9 +807,10 @@ export default function SplitScreenDiffViewer({
                             {h.start}
                           </td>
                           {DAYS_NAMES.map((_, dayIdx) => {
-                            const slotA = getSlotData(variantA, dayIdx, hIdx);
-                            const slotB = getSlotData(variantB, dayIdx, hIdx);
-                            const isDiff = !areSlotsEquivalent(slotA, slotB);
+                            const slotKey = `${dayIdx}|${hIdx}`;
+                            const slotItemsA = lessonsBySlotA.get(slotKey) || [];
+                            const slotItemsB = lessonsBySlotB.get(slotKey) || [];
+                            const isDiff = !areSlotItemListsEquivalent(slotItemsA, slotItemsB);
 
                             if (filterOnlyChanged && !isDiff) {
                               return (
@@ -834,33 +829,51 @@ export default function SplitScreenDiffViewer({
                                     : 'border-b border-slate-100'
                                 }`}
                               >
-                                {slotA ? (
-                                  <div className="p-2 rounded-lg bg-white border border-slate-200 text-left relative group shadow-2xs hover:border-slate-300 transition">
-                                    <div className="font-extrabold text-slate-900 text-[11px] leading-tight truncate">
-                                      {slotA.subject}
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                                      {slotA.teacherAbbr || ''}
-                                      {slotA.room ? ` • s. ${slotA.room}` : ''}
-                                    </div>
+                                {slotItemsA.length > 0 ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    {slotItemsA.map((slotA, idx) => (
+                                      <div key={slotA.lessonKey || `${slotA.classId}_${idx}`} className="p-2 rounded-lg bg-white border border-slate-200 text-left relative group shadow-2xs hover:border-slate-300 transition">
+                                        <div className="flex items-center justify-between gap-1">
+                                          <div className="font-extrabold text-slate-900 text-[11px] leading-tight truncate">
+                                            {slotA.subject}
+                                          </div>
+                                          {(slotA.groupName || slotA.group) && (
+                                            <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded">
+                                              {slotA.groupName || slotA.group}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
+                                          {scope !== 'teacher' && scope !== 'room' && (
+                                            <span>{slotA.teacherAbbr || ''}{slotA.room ? ` • s. ${slotA.room}` : ''}</span>
+                                          )}
+                                          {scope === 'teacher' && (
+                                            <span>{slotA.className || 'Klasa'}{slotA.room ? ` • s. ${slotA.room}` : ''}</span>
+                                          )}
+                                          {scope === 'room' && (
+                                            <span>{slotA.className || 'Klasa'}{slotA.teacherAbbr ? ` • ${slotA.teacherAbbr}` : ''}</span>
+                                          )}
+                                        </div>
 
-                                    {/* Przycisk kopiowania A -> B */}
-                                    {isDiff && variantB && (
-                                      <button
-                                        onClick={() => handleTransferSlot(
-                                          variantB!, 
-                                          selectedClassId, 
-                                          dayIdx, 
-                                          hIdx, 
-                                          slotA
+                                        {/* Przycisk kopiowania A -> B */}
+                                        {isDiff && variantB && (
+                                          <button
+                                            onClick={() => handleTransferSlot(
+                                              variantB!, 
+                                              slotA.classId || selectedClassId, 
+                                              dayIdx, 
+                                              hIdx, 
+                                              slotA
+                                            )}
+                                            className="opacity-0 group-hover:opacity-100 absolute right-1 top-1 p-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-black transition shadow-xs flex items-center gap-0.5 cursor-pointer"
+                                            title="Kopiuj tę lekcję z A do B"
+                                          >
+                                            <span>B</span>
+                                            <ArrowRight size={10} />
+                                          </button>
                                         )}
-                                        className="opacity-0 group-hover:opacity-100 absolute right-1 top-1 p-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-black transition shadow-xs flex items-center gap-0.5 cursor-pointer"
-                                        title="Kopiuj tę lekcję z A do B"
-                                      >
-                                        <span>B</span>
-                                        <ArrowRight size={10} />
-                                      </button>
-                                    )}
+                                      </div>
+                                    ))}
                                   </div>
                                 ) : (
                                   <div className="h-9 flex items-center justify-center text-slate-300 text-[10px] font-mono">
@@ -923,9 +936,10 @@ export default function SplitScreenDiffViewer({
                             {h.start}
                           </td>
                           {DAYS_NAMES.map((_, dayIdx) => {
-                            const slotA = getSlotData(variantA, dayIdx, hIdx);
-                            const slotB = getSlotData(variantB, dayIdx, hIdx);
-                            const isDiff = !areSlotsEquivalent(slotA, slotB);
+                            const slotKey = `${dayIdx}|${hIdx}`;
+                            const slotItemsA = lessonsBySlotA.get(slotKey) || [];
+                            const slotItemsB = lessonsBySlotB.get(slotKey) || [];
+                            const isDiff = !areSlotItemListsEquivalent(slotItemsA, slotItemsB);
 
                             if (filterOnlyChanged && !isDiff) {
                               return (
@@ -944,33 +958,51 @@ export default function SplitScreenDiffViewer({
                                     : 'border-b border-slate-100'
                                 }`}
                               >
-                                {slotB ? (
-                                  <div className="p-2 rounded-lg bg-white border border-slate-200 text-left relative group shadow-2xs hover:border-slate-300 transition">
-                                    <div className="font-extrabold text-slate-900 text-[11px] leading-tight truncate">
-                                      {slotB.subject}
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                                      {slotB.teacherAbbr || ''}
-                                      {slotB.room ? ` • s. ${slotB.room}` : ''}
-                                    </div>
+                                {slotItemsB.length > 0 ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    {slotItemsB.map((slotB, idx) => (
+                                      <div key={slotB.lessonKey || `${slotB.classId}_${idx}`} className="p-2 rounded-lg bg-white border border-slate-200 text-left relative group shadow-2xs hover:border-slate-300 transition">
+                                        <div className="flex items-center justify-between gap-1">
+                                          <div className="font-extrabold text-slate-900 text-[11px] leading-tight truncate">
+                                            {slotB.subject}
+                                          </div>
+                                          {(slotB.groupName || slotB.group) && (
+                                            <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded">
+                                              {slotB.groupName || slotB.group}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
+                                          {scope !== 'teacher' && scope !== 'room' && (
+                                            <span>{slotB.teacherAbbr || ''}{slotB.room ? ` • s. ${slotB.room}` : ''}</span>
+                                          )}
+                                          {scope === 'teacher' && (
+                                            <span>{slotB.className || 'Klasa'}{slotB.room ? ` • s. ${slotB.room}` : ''}</span>
+                                          )}
+                                          {scope === 'room' && (
+                                            <span>{slotB.className || 'Klasa'}{slotB.teacherAbbr ? ` • ${slotB.teacherAbbr}` : ''}</span>
+                                          )}
+                                        </div>
 
-                                    {/* Przycisk kopiowania B -> A */}
-                                    {isDiff && variantA && (
-                                      <button
-                                        onClick={() => handleTransferSlot(
-                                          variantA!, 
-                                          selectedClassId, 
-                                          dayIdx, 
-                                          hIdx, 
-                                          slotB
+                                        {/* Przycisk kopiowania B -> A */}
+                                        {isDiff && variantA && (
+                                          <button
+                                            onClick={() => handleTransferSlot(
+                                              variantA!, 
+                                              slotB.classId || selectedClassId, 
+                                              dayIdx, 
+                                              hIdx, 
+                                              slotB
+                                            )}
+                                            className="opacity-0 group-hover:opacity-100 absolute left-1 top-1 p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-black transition shadow-xs flex items-center gap-0.5 cursor-pointer"
+                                            title="Kopiuj tę lekcję z B do A"
+                                          >
+                                            <ArrowLeft size={10} />
+                                            <span>A</span>
+                                          </button>
                                         )}
-                                        className="opacity-0 group-hover:opacity-100 absolute left-1 top-1 p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-black transition shadow-xs flex items-center gap-0.5 cursor-pointer"
-                                        title="Kopiuj tę lekcję z B do A"
-                                      >
-                                        <ArrowLeft size={10} />
-                                        <span>A</span>
-                                      </button>
-                                    )}
+                                      </div>
+                                    ))}
                                   </div>
                                 ) : (
                                   <div className="h-9 flex items-center justify-center text-slate-300 text-[10px] font-mono">

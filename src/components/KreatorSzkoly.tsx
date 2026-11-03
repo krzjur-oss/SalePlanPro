@@ -19,7 +19,7 @@ import {
 import { 
   Building as BuildingIcon, School as SchoolIcon, Users, BookOpen, GraduationCap, ShieldAlert, BadgePlus,
   Trash2, Landmark, CheckCircle, ArrowRight, ArrowLeft, Plus, Users2, HelpCircle, Eye, Shield, MapPin, Sparkles, Layers,
-  Edit3, RefreshCw, X, Calendar, FileSpreadsheet, Upload, Search
+  Edit3, RefreshCw, X, Calendar, FileSpreadsheet, Upload, Search, AlertCircle
 } from 'lucide-react';
 import { uid, genAbbr, ensureUniqueAbbr, subjectAbbr } from '../utils';
 import { Z_INDEX_CLASSES } from '../styles/zIndex';
@@ -27,192 +27,24 @@ import SioImport from './SioImport';
 import StructureTemplatesModal from './StructureTemplatesModal';
 import { Bookmark } from 'lucide-react';
 import { TeacherWorkloadEditor } from './TeacherWorkloadEditor';
+import { 
+  PALETTE_COLORS, 
+  SCHOOL_TYPES_DICTIONARIES, 
+  getFloorAbbr, 
+  getFloorDisplayName, 
+  getDefaultSchoolYear, 
+  getDynamicSchoolYears 
+} from './kreator/constants';
+import { KreatorStepBuildings } from './kreator/KreatorStepBuildings';
+import { KreatorStepSubjects } from './kreator/KreatorStepSubjects';
+import { KreatorStepCorridors } from './kreator/KreatorStepCorridors';
+import { KreatorStepSummary } from './kreator/KreatorStepSummary';
 
-const PALETTE_COLORS = [
-  '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
-  '#16a34a', '#15803d', '#10b981', '#34d399', // Greens / Teals
-  '#d97706', '#b45309', '#f59e0b', '#fbbf24', // Ambers / Yellows
-  '#dc2626', '#b91c1c', '#f87171', '#ef4444', // Reds
-  '#e11d48', '#be123c', '#fb7185', '#fda4af', // Roses
-  '#7c3aed', '#6d28d9', '#8b5cf6', '#a78bfa', // Purples
-  '#db2777', '#c026d3', '#ec4899', '#f472b6', // Pinks
-  '#0d9488', '#0f766e', '#14b8a6', '#2dd4bf', // Teals
-  '#0891b2', '#06b6d4', '#22d3ee', '#0097a7', // Cyans / Turquoises
-  '#ea580c', '#d35400', '#f97316', '#fb923c', // Oranges
-  '#4f46e5', '#3949ab', '#6366f1', '#818cf8', // Indigos
-  '#65a30d', '#4d7c0f', '#84cc16', '#a3e635', // Limes
-  '#0284c7', '#0369a1', '#38bdf8', '#075985', // Sky blues
-  '#5b21b6', '#311b92', '#701a75', '#4a148c', // Deep rich shades
-  '#475569', '#334155', '#64748b', '#4b5563'  // Slate / Dark Grays
-];
 
-const getFloorAbbr = (floorOption: string, bld: Building | undefined): string => {
-  if (!bld || !bld.hasCustomStructure || !bld.customFloors || bld.customFloors.length === 0) {
-    return floorOption;
-  }
-  
-  const parterIndex = bld.customFloors.findIndex(f => {
-    const lf = f.toLowerCase();
-    return lf.includes('parter') || lf === '0' || lf.includes('ground') || lf.includes('zero');
-  });
 
-  const idx = bld.customFloors.indexOf(floorOption);
-  if (idx === -1) return floorOption;
 
-  if (parterIndex !== -1) {
-    const diff = idx - parterIndex;
-    return diff > 0 ? `${diff}` : `${diff}`;
-  } else {
-    const numMatch = floorOption.match(/-?\d+/);
-    if (numMatch) {
-      return numMatch[0];
-    }
-    const romanMatch = floorOption.match(/\b(I|II|III|IV|V|VI|VII|VIII|IX|X)\b/i);
-    if (romanMatch) {
-      const rom = romanMatch[1].toUpperCase();
-      const romanMap: Record<string, string> = {
-        I: '1', II: '2', III: '3', IV: '4', V: '5', VI: '6', VII: '7', VIII: '8', IX: '9', X: '10'
-      };
-      return romanMap[rom];
-    }
-    return idx.toString();
-  }
-};
 
-const getFloorDisplayName = (floorNum: string, bld: Building | undefined): string => {
-  if (bld?.hasCustomStructure) {
-    return floorNum;
-  }
-  const floorNames: Record<string, string> = {
-    '-1': 'Podziemie',
-    '0': 'Parter',
-    '1': 'Piętro I',
-    '2': 'Piętro II',
-    '3': 'Piętro III',
-    '4': 'Piętro IV'
-  };
-  return floorNames[floorNum] || `Piętro ${floorNum}`;
-};
 
-const getDefaultSchoolYear = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0 = Jan, 11 = Dec
-  if (month >= 4) { // May to Dec
-    return `${year}/${year + 1}`;
-  } else {
-    return `${year - 1}/${year}`;
-  }
-};
-
-const getDynamicSchoolYears = (extraYears: (string | undefined)[] = []): string[] => {
-  const currentYear = new Date().getFullYear();
-  const yearsSet = new Set<string>();
-  
-  // Generowanie lat szkolnych od bieżącego roku - 3 do + 6
-  for (let i = -3; i <= 6; i++) {
-    yearsSet.add(`${currentYear + i}/${currentYear + i + 1}`);
-  }
-  
-  // Add any extra years from state / database configuration
-  extraYears.forEach(y => {
-    if (y && typeof y === 'string' && y.trim().length > 0) {
-      yearsSet.add(y.trim());
-    }
-  });
-  
-  return Array.from(yearsSet).sort();
-};
-
-const SCHOOL_TYPES_DICTIONARIES: Record<string, { name: string; icon: string; subjects: { name: string; short: string; color: string; defaultGroupPattern?: string }[] }> = {
-  sp: {
-    name: "Szkoła Podstawowa",
-    icon: "🏫",
-    subjects: [
-      { name: "Język polski", short: "JP", color: "#dc2626" },
-      { name: "Matematyka", short: "MAT", color: "#16a34a" },
-      { name: "Język angielski", short: "ANG", color: "#2563eb" },
-      { name: "Biologia", short: "BIOL", color: "#059669" },
-      { name: "Chemia", short: "CHEM", color: "#d97706" },
-      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
-      { name: "Geografia", short: "GEOG", color: "#ea580c" },
-      { name: "Historia", short: "HIST", color: "#9333ea" },
-      { name: "Wiedza o społeczeństwie", short: "WOS", color: "#db2777" },
-      { name: "Informatyka", short: "INF", color: "#0d9488" },
-      { name: "Plastyka", short: "PLAS", color: "#eab308" },
-      { name: "Muzyka", short: "MUZ", color: "#f43f5e" },
-      { name: "Technika", short: "TECH", color: "#8b5cf6" },
-      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
-      { name: "Religia", short: "REL", color: "#14b8a6", defaultGroupPattern: "religia" },
-      { name: "Etyka", short: "ETY", color: "#64748b" },
-      { name: "Przyroda", short: "PRZY", color: "#22c55e" },
-      { name: "Edukacja dla bezpieczeństwa", short: "EDB", color: "#f97316" },
-      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" }
-    ]
-  },
-  lo: {
-    name: "Liceum Ogólnokształcące",
-    icon: "🏛️",
-    subjects: [
-      { name: "Język polski", short: "JP", color: "#dc2626" },
-      { name: "Matematyka", short: "MAT", color: "#16a34a" },
-      { name: "Język angielski", short: "ANG", color: "#2563eb" },
-      { name: "Język niemiecki", short: "NIEM", color: "#10b981", defaultGroupPattern: "niem" },
-      { name: "Biologia", short: "BIOL", color: "#059669" },
-      { name: "Chemia", short: "CHEM", color: "#d97706" },
-      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
-      { name: "Geografia", short: "GEOG", color: "#ea580c" },
-      { name: "Historia", short: "HIST", color: "#9333ea" },
-      { name: "Wiedza o społeczeństwie", short: "WOS", color: "#db2777" },
-      { name: "Informatyka", short: "INF", color: "#0d9488" },
-      { name: "Biznes i zarządzanie", short: "BIZ", color: "#0284c7" },
-      { name: "Historia i teraźniejszość", short: "HIT", color: "#475569" },
-      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
-      { name: "Religia", short: "REL", color: "#14b8a6", defaultGroupPattern: "religia" },
-      { name: "Edukacja dla bezpieczeństwa", short: "EDB", color: "#f97316" },
-      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" },
-      { name: "Filozofia", short: "FILO", color: "#a55eea" }
-    ]
-  },
-  tech: {
-    name: "Technikum",
-    icon: "⚙️",
-    subjects: [
-      { name: "Język polski", short: "JP", color: "#dc2626" },
-      { name: "Matematyka", short: "MAT", color: "#16a34a" },
-      { name: "Język angielski", short: "ANG", color: "#2563eb" },
-      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
-      { name: "Chemia", short: "CHEM", color: "#d97706" },
-      { name: "Geografia", short: "GEOG", color: "#ea580c" },
-      { name: "Historia", short: "HIST", color: "#9333ea" },
-      { name: "Informatyka", short: "INF", color: "#0d9488" },
-      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
-      { name: "Religia", short: "REL", color: "#14b8a6", defaultGroupPattern: "religia" },
-      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" },
-      { name: "Przedmioty zawodowe", short: "ZAW", color: "#2d3436" },
-      { name: "Język obcy zawodowy", short: "JOZ", color: "#57606f" },
-      { name: "Bezpieczeństwo i higiena pracy", short: "BHP", color: "#ff4757" }
-    ]
-  },
-  bs: {
-    name: "Szkoła Branżowa",
-    icon: "🔧",
-    subjects: [
-      { name: "Język polski", short: "JP", color: "#dc2626" },
-      { name: "Matematyka", short: "MAT", color: "#16a34a" },
-      { name: "Język angielski", short: "ANG", color: "#2563eb" },
-      { name: "Fizyka", short: "FIZ", color: "#7c3aed" },
-      { name: "Chemia", short: "CHEM", color: "#d97706" },
-      { name: "Geografia", short: "GEOG", color: "#ea580c" },
-      { name: "Historia", short: "HIST", color: "#9333ea" },
-      { name: "Informatyka", short: "INF", color: "#0d9488" },
-      { name: "Wychowanie fizyczne", short: "WF", color: "#475569", defaultGroupPattern: "wf" },
-      { name: "Godzina z wychowawcą", short: "GW", color: "#06b6d4" },
-      { name: "Przedmioty zawodowe", short: "ZAW", color: "#2d3436" },
-      { name: "Bezpieczeństwo i higiena pracy", short: "BHP", color: "#ff4757" }
-    ]
-  }
-};
 
 interface KreatorSzkolyProps {
   appState: AppState;
@@ -292,6 +124,12 @@ export default function KreatorSzkoly({
   const [schoolPhone, setSchoolPhone] = useState(appState.school.phone || '');
   const [schoolWeb, setSchoolWeb] = useState(appState.school.web || '');
   const [schoolYear, setSchoolYear] = useState(() => appState.yearLabel || getDefaultSchoolYear());
+  const [schoolBasePensum, setSchoolBasePensum] = useState<Partial<Record<StandardPositionType, number>>>(
+    () => appState.school.basePensumConfig || {}
+  );
+  const [schoolOvertimeDefaultHandling, setSchoolOvertimeDefaultHandling] = useState<'overtime' | 'second_contract'>(
+    () => appState.school.overtimeDefaultHandling || 'overtime'
+  );
 
   // --- Copy Year states and methods ---
   const [showCopyPanel, setShowCopyPanel] = useState(false);
@@ -542,6 +380,8 @@ export default function KreatorSzkoly({
     setSchoolShort(arch.config.school.short || '');
     setSchoolPhone(arch.config.school.phone || '');
     setSchoolWeb(arch.config.school.web || '');
+    setSchoolBasePensum(arch.config.school.basePensumConfig || {});
+    setSchoolOvertimeDefaultHandling(arch.config.school.overtimeDefaultHandling || 'overtime');
     setSchoolYear(arch.config.yearLabel || getDefaultSchoolYear());
     setHoursList(arch.config.planLekcji.hours || arch.config.timeslots || []);
 
@@ -738,7 +578,9 @@ export default function KreatorSzkoly({
         name: schoolName,
         short: schoolShort,
         phone: schoolPhone,
-        web: schoolWeb
+        web: schoolWeb,
+        basePensumConfig: Object.keys(schoolBasePensum).length > 0 ? schoolBasePensum : undefined,
+        overtimeDefaultHandling: schoolOvertimeDefaultHandling
       },
       planLekcji: {
         ...appState.planLekcji,
@@ -754,156 +596,6 @@ export default function KreatorSzkoly({
 
     showNoti(syncBreaks ? 'Zapisano informacje oraz zsynchronizowano dzwonki z przerwami dyżurów!' : 'Zapisano podstawowe informacje o dzwonkach i szkole');
     setActiveStep(2);
-  };
-
-  // --- Step 2 States (Buildings) ---
-  const [editingBldId, setEditingBldId] = useState<string | null>(null);
-  const [newBldName, setNewBldName] = useState('');
-  const [newBldAddress, setNewBldAddress] = useState('');
-  const [newBldIsZlecony, setNewBldIsZlecony] = useState(false); // multi flag used to signify outside/zlecony location
-  const [newBldSingleClassLimit, setNewBldSingleClassLimit] = useState(false); // limit do max 1 klasy na zajęciach
-  const [newBldHasCustomStructure, setNewBldHasCustomStructure] = useState(false);
-  const [newBldCustomFloors, setNewBldCustomFloors] = useState('');
-  const [newBldCustomSegments, setNewBldCustomSegments] = useState('');
-
-  const handleAddBuilding = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newBldName.trim()) return;
-
-    const parsedFloors = newBldHasCustomStructure 
-      ? newBldCustomFloors.split(',').map(s => s.trim()).filter(Boolean)
-      : [];
-    const parsedSegments = newBldHasCustomStructure 
-      ? newBldCustomSegments.split(',').map(s => s.trim()).filter(Boolean)
-      : [];
-
-    if (editingBldId) {
-      // Edit Mode
-      const nextBlds = appState.buildings.map(b => {
-        if (b.id === editingBldId) {
-          return {
-            ...b,
-            name: newBldName.trim(),
-            address: newBldAddress.trim() || undefined,
-            multi: newBldIsZlecony,
-            singleClassLimit: newBldSingleClassLimit,
-            hasCustomStructure: newBldHasCustomStructure,
-            customFloors: parsedFloors.length > 0 ? parsedFloors : undefined,
-            customSegments: parsedSegments.length > 0 ? parsedSegments : undefined
-          };
-        }
-        return b;
-      });
-
-      // Aktualizacja nazwy piętra dla zachowania zgodności
-      const bldIdx = appState.buildings.findIndex(b => b.id === editingBldId);
-      const nextFloors = appState.floors.map(f => {
-        if (f.buildingIdx === bldIdx && f.id === 'f_bld_' + editingBldId) {
-          return {
-            ...f,
-            name: 'Budynek: ' + newBldName.trim(),
-            color: newBldIsZlecony ? '#f43f5e' : '#2563eb'
-          };
-        }
-        return f;
-      });
-
-      onChangeAppState({
-        ...appState,
-        buildings: nextBlds,
-        floors: nextFloors
-      });
-
-      setEditingBldId(null);
-      setNewBldName('');
-      setNewBldAddress('');
-      setNewBldIsZlecony(false);
-      setNewBldSingleClassLimit(false);
-      setNewBldHasCustomStructure(false);
-      setNewBldCustomFloors('');
-      setNewBldCustomSegments('');
-      showNoti('Dane budynku zostały zaktualizowane pomyślnie');
-    } else {
-      // Add Mode
-      const newBld: Building = {
-        id: 'bld_' + uid(),
-        name: newBldName.trim(),
-        address: newBldAddress.trim() || undefined,
-        multi: newBldIsZlecony, // true means zlecony / wynajmowany np. orlik, basen
-        singleClassLimit: newBldSingleClassLimit,
-        hasCustomStructure: newBldHasCustomStructure,
-        customFloors: parsedFloors.length > 0 ? parsedFloors : undefined,
-        customSegments: parsedSegments.length > 0 ? parsedSegments : undefined
-      };
-
-      const nextBlds = [...appState.buildings, newBld];
-
-      // Create a matching Floor in floors list so we can layout columns in Plan Sal step
-      const nextFloors = [...appState.floors];
-      const bldIdx = nextBlds.length - 1;
-
-      if (!newBldHasCustomStructure) {
-        nextFloors.push({
-          id: 'f_bld_' + newBld.id,
-          name: 'Budynek: ' + newBld.name,
-          color: newBldIsZlecony ? '#f43f5e' : '#2563eb', // różowy dla lokalizacji zewnętrznych, niebieski dla lokalnych
-          buildingIdx: bldIdx,
-          segments: [
-            {
-              id: 'seg_bld_' + newBld.id,
-              name: 'Strefa Ogólna',
-              rooms: []
-            }
-          ]
-        });
-      }
-
-      onChangeAppState({
-        ...appState,
-        buildings: nextBlds,
-        floors: nextFloors
-      });
-
-      setNewBldName('');
-      setNewBldAddress('');
-      setNewBldIsZlecony(false);
-      setNewBldHasCustomStructure(false);
-      setNewBldCustomFloors('');
-      setNewBldCustomSegments('');
-      showNoti('Dodano budynek i powiązano z siatką sal');
-    }
-  };
-
-  const handleRemoveBuilding = (id: string, idx: number) => {
-    if (appState.buildings.length <= 1) {
-      showNoti('Szkoła musi posiadać przynajmniej jeden budynek.', 'info');
-      return;
-    }
-    
-    triggerConfirm(
-      'Usuwanie budynku',
-      'Czy na pewno chcesz usunąć ten budynek? Usunie to również przypisane piętra i sale.',
-      () => {
-        const nextBlds = appState.buildings.filter(b => b.id !== id);
-        // Remove floors matching compiling buildingIdx
-        const nextFloors = appState.floors
-          .filter(f => f.buildingIdx !== idx)
-          .map(f => {
-            // Adjust lower indices
-            if (f.buildingIdx > idx) {
-              return { ...f, buildingIdx: f.buildingIdx - 1 };
-            }
-            return f;
-          });
-
-        onChangeAppState({
-          ...appState,
-          buildings: nextBlds,
-          floors: nextFloors
-        });
-        showNoti('Usunięto budynek');
-      }
-    );
   };
 
   // --- Step 3 States (Rooms) ---
@@ -1385,191 +1077,6 @@ export default function KreatorSzkoly({
     );
   };
 
-  // --- Step 5 States (Subjects) ---
-  const [newSubjName, setNewSubjName] = useState('');
-  const [newSubjShort, setNewSubjShort] = useState('');
-  const [isSubjShortManual, setIsSubjShortManual] = useState(false);
-  const [newSubjColor, setNewSubjColor] = useState(() => PALETTE_COLORS[appState.subjects?.length % PALETTE_COLORS.length] || '#16a34a');
-  const [newSubjPattern, setNewSubjPattern] = useState('');
-  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
-
-  // Subject Dictionary states
-  const [selectedDictKey, setSelectedDictKey] = useState<string | null>(null);
-  const [dictSubjsSelected, setDictSubjsSelected] = useState<Record<string, boolean>>({});
-
-  const handleOpenDictionary = (key: string) => {
-    setSelectedDictKey(key);
-    const dict = SCHOOL_TYPES_DICTIONARIES[key];
-    if (dict) {
-      // Domyślne zaznaczenie wszystkich przedmiotów, które nie zostały jeszcze dodane
-      const initialSelected: Record<string, boolean> = {};
-      const existingShorts = new Set(appState.subjects.map(s => s.short.toUpperCase()));
-      dict.subjects.forEach(s => {
-        initialSelected[s.short] = !existingShorts.has(s.short.toUpperCase());
-      });
-      setDictSubjsSelected(initialSelected);
-    }
-  };
-
-  const handleImportSelectedSubjects = () => {
-    if (!selectedDictKey) return;
-    const dict = SCHOOL_TYPES_DICTIONARIES[selectedDictKey];
-    if (!dict) return;
-
-    // Filter down to selected items
-    const toImport = dict.subjects.filter(s => dictSubjsSelected[s.short]);
-    if (toImport.length === 0) {
-      showNoti('Nie wybrano żadnych przedmiotów do zaimportowania.', 'info');
-      return;
-    }
-
-    // Keep track of existing subject shorts to avoid duplicate additions
-    const existingShorts = new Set(appState.subjects.map(s => s.short.toUpperCase()));
-
-    let importCount = 0;
-    const newSubjects: Subject[] = [...appState.subjects];
-
-    toImport.forEach(s => {
-      if (!existingShorts.has(s.short.toUpperCase())) {
-        newSubjects.push({
-          id: 'sub_' + uid(),
-          name: s.name,
-          short: s.short.toUpperCase(),
-          color: s.color,
-          defaultGroupPattern: s.defaultGroupPattern
-        });
-        importCount++;
-      }
-    });
-
-    if (importCount > 0) {
-      onChangeAppState({
-        ...appState,
-        subjects: newSubjects,
-        planLekcji: {
-          ...appState.planLekcji,
-          subjects: newSubjects
-        }
-      });
-      showNoti(`Pomyślnie zaimportowano ${importCount} przedmiotów ze słownika!`, 'success');
-    } else {
-      showNoti('Wszystkie wybrane przedmioty już istnieją w Twojej bazie.', 'info');
-    }
-
-    setSelectedDictKey(null);
-    setDictSubjsSelected({});
-  };
-
-  const handleAddSubject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSubjName.trim() || !newSubjShort.trim()) return;
-
-    if (editingSubjectId) {
-      // Edycja przedmiotu
-      const nextSubjs = appState.subjects.map(s => {
-        if (s.id === editingSubjectId) {
-          return {
-            ...s,
-            name: newSubjName.trim(),
-            short: newSubjShort.trim().toUpperCase(),
-            color: newSubjColor,
-            defaultGroupPattern: newSubjPattern.trim() || undefined
-          };
-        }
-        return s;
-      });
-
-      onChangeAppState({
-        ...appState,
-        subjects: nextSubjs,
-        planLekcji: {
-          ...appState.planLekcji,
-          subjects: nextSubjs
-        }
-      });
-
-      setEditingSubjectId(null);
-      setNewSubjName('');
-      setNewSubjShort('');
-      setIsSubjShortManual(false);
-      setNewSubjPattern('');
-      const nextColor = PALETTE_COLORS[nextSubjs.length % PALETTE_COLORS.length] || '#16a34a';
-      setNewSubjColor(nextColor);
-      showNoti('Zaktualizowano dane przedmiotu');
-    } else {
-      // Dodawanie nowego przedmiotu
-      const newSubj: Subject = {
-        id: 'sub_' + uid(),
-        name: newSubjName.trim(),
-        short: newSubjShort.trim().toUpperCase(),
-        color: newSubjColor,
-        defaultGroupPattern: newSubjPattern.trim() || undefined
-      };
-
-      const nextSubjs = [...appState.subjects, newSubj];
-
-      onChangeAppState({
-        ...appState,
-        subjects: nextSubjs,
-        planLekcji: {
-          ...appState.planLekcji,
-          subjects: nextSubjs
-        }
-      });
-
-      setNewSubjName('');
-      setNewSubjShort('');
-      setIsSubjShortManual(false);
-      setNewSubjPattern('');
-      const nextColor = PALETTE_COLORS[nextSubjs.length % PALETTE_COLORS.length] || '#16a34a';
-      setNewSubjColor(nextColor);
-      showNoti(`Dodano przedmiot: ${newSubj.name}`);
-    }
-  };
-
-  const handleStartEditSubject = (sub: Subject) => {
-    setEditingSubjectId(sub.id);
-    setNewSubjName(sub.name);
-    setNewSubjShort(sub.short);
-    setIsSubjShortManual(true); // Treat existing as manual so it doesn't get auto-overwritten unless they want it to
-    setNewSubjColor(sub.color);
-    setNewSubjPattern(sub.defaultGroupPattern || '');
-  };
-
-  const handleCancelEditSubject = () => {
-    setEditingSubjectId(null);
-    setNewSubjName('');
-    setNewSubjShort('');
-    setIsSubjShortManual(false);
-    setNewSubjPattern('');
-    const nextColor = PALETTE_COLORS[appState.subjects.length % PALETTE_COLORS.length] || '#16a34a';
-    setNewSubjColor(nextColor);
-  };
-
-  const handleRemoveSubject = (id: string) => {
-    triggerConfirm(
-      'Usuwanie przedmiotu',
-      'Czy chcesz usunąć ten przedmiot z bazy? Usunie to również lekcje z tym przedmiotem.',
-      () => {
-        const nextSubjs = appState.subjects.filter(s => s.id !== id);
-
-        onChangeAppState({
-          ...appState,
-          subjects: nextSubjs,
-          planLekcji: {
-            ...appState.planLekcji,
-            subjects: nextSubjs,
-            assignments: appState.planLekcji.assignments.filter(a => a.subjectId !== id)
-          }
-        });
-        if (editingSubjectId === id) {
-          handleCancelEditSubject();
-        }
-        showNoti('Przedmiot został usunięty');
-      }
-    );
-  };
-
   // --- Step 6 States (Teachers) ---
   const [newTFirst, setNewTFirst] = useState('');
   const [newTLast, setNewTLast] = useState('');
@@ -1597,71 +1104,48 @@ export default function KreatorSzkoly({
   const [newTCustomPensum, setNewTCustomPensum] = useState<number | ''>('');
   const [newTMaxDutyCount, setNewTMaxDutyCount] = useState<number | ''>('');
   const [newTDutyExempt, setNewTDutyExempt] = useState(false);
+  const [newTOvertimeHandling, setNewTOvertimeHandling] = useState<'overtime' | 'second_contract' | undefined>(undefined);
 
   // Live preview kalkulacji pensum, etatu, nadgodzin i dyżurów
   const livePensumPreview = useMemo(() => {
-    if (newTWorkloadPositions.length === 0) {
-      const h = typeof newTMaxHours === 'number' ? newTMaxHours : 18;
-      const ot = typeof newTOvertimeHours === 'number' ? newTOvertimeHours : 0;
-      const fte = round((h + ot) / 18, 4);
-      return {
-        hours45min: h + ot,
-        hours60min: 0,
-        boardHours: h + ot,
-        totalHours: h + ot,
-        totalFte: fte,
-        ftePercent: round(fte * 100, 1),
-        averagedPensum: 18,
-        isCombined: false,
-        overtimeHours: ot,
-        suggestedDutyLimit: newTDutyExempt ? 0 : Math.round(3 * Math.min(1.0, fte))
-      };
-    }
+    const totalPosHours = newTWorkloadPositions.reduce((acc, p) => acc + p.hours, 0);
+    const nominalHours = totalPosHours > 0 ? totalPosHours : (typeof newTMaxHours === 'number' ? newTMaxHours : 18);
+    const ot = typeof newTOvertimeHours === 'number' ? newTOvertimeHours : 0;
 
-    const combined = calculateCombinedPensum(
-      newTWorkloadPositions.map(p => ({ hours: p.hours, basePensum: p.basePensum }))
-    );
-
-    let h45 = 0;
-    let h60 = 0;
-    let boardHours = 0;
-
-    newTWorkloadPositions.forEach(p => {
-      if (p.unitMinutes === 45) {
-        h45 += p.hours;
-      } else {
-        h60 += p.hours;
-      }
-      const meta = STANDARD_POSITIONS_META[p.type];
-      if (meta?.isBoardTeaching || p.type === 'przedmiotowy' || p.type === 'wspomagajacy' || p.type === 'doradca') {
-        boardHours += p.hours;
-      }
-    });
-
-    const effPensum = typeof newTCustomPensum === 'number' && newTCustomPensum > 0
-      ? newTCustomPensum
-      : combined.averagedPensum;
-
-    let overtime = combined.overtimeHours;
-    if (typeof newTOvertimeHours === 'number' && newTOvertimeHours > 0) {
-      overtime = newTOvertimeHours;
-    }
-
-    const suggestedDuty = newTDutyExempt ? 0 : Math.max(0, Math.round(3 * (boardHours / 18) * Math.min(1.0, combined.totalFte)));
-
-    return {
-      hours45min: round(h45, 1),
-      hours60min: round(h60, 1),
-      boardHours: round(boardHours, 1),
-      totalHours: combined.totalHours,
-      totalFte: combined.totalFte,
-      ftePercent: round(combined.totalFte * 100, 1),
-      averagedPensum: effPensum,
-      isCombined: combined.isCombined,
-      overtimeHours: overtime,
-      suggestedDutyLimit: suggestedDuty
+    const dummyTeacher: Teacher = {
+      id: editingTeacherId || 'preview_teacher',
+      first: newTFirst,
+      last: newTLast,
+      abbr: newTAbbr,
+      maxHours: nominalHours,
+      overtimeHours: ot,
+      overtimeHandling: newTOvertimeHandling,
+      workloadPositions: newTWorkloadPositions,
+      customPensum: typeof newTCustomPensum === 'number' && newTCustomPensum > 0 ? newTCustomPensum : undefined,
+      maxDutyCount: typeof newTMaxDutyCount === 'number' ? newTMaxDutyCount : undefined,
+      dutyExempt: newTDutyExempt,
+      nonTeachingHours: newTHasNonTeaching ? (typeof newTNonTeachingHours === 'number' ? newTNonTeachingHours : 0) : undefined,
+      nonTeachingRoles: newTHasNonTeaching ? newTNonTeachingRoles : undefined,
+      nonTeachingDutyEligible: newTHasNonTeaching ? newTNonTeachingDutyEligible : undefined
     };
-  }, [newTWorkloadPositions, newTCustomPensum, newTOvertimeHours, newTMaxHours, newTDutyExempt]);
+
+    return calculateTeacherWorkload(
+      dummyTeacher,
+      appState.planLekcji.assignments || [],
+      appState.planLekcji.specialAssignments || [],
+      0,
+      3,
+      schoolBasePensum || appState.school.basePensumConfig,
+      schoolOvertimeDefaultHandling || appState.school.overtimeDefaultHandling
+    );
+  }, [
+    newTWorkloadPositions, newTCustomPensum, newTOvertimeHours, newTMaxHours, newTDutyExempt,
+    newTOvertimeHandling, newTHasNonTeaching, newTNonTeachingHours, newTNonTeachingRoles,
+    newTNonTeachingDutyEligible, newTMaxDutyCount, editingTeacherId, newTFirst, newTLast, newTAbbr,
+    schoolBasePensum, appState.school.basePensumConfig,
+    schoolOvertimeDefaultHandling, appState.school.overtimeDefaultHandling,
+    appState.planLekcji.assignments, appState.planLekcji.specialAssignments
+  ]);
 
   // Podmoduł w Kroku 6: Nauczyciele vs Pracownicy niepedagogiczni
   const [staffTab, setStaffTab] = useState<'teachers' | 'support_staff'>('teachers');
@@ -1768,6 +1252,7 @@ export default function KreatorSzkoly({
     setNewTCustomPensum(t.customPensum ?? '');
     setNewTMaxDutyCount(t.maxDutyCount ?? '');
     setNewTDutyExempt(Boolean(t.dutyExempt));
+    setNewTOvertimeHandling(t.overtimeHandling);
 
     // Wczytanie lub wygenerowanie listy dostępnych slotów
     if (t.availability) {
@@ -1808,6 +1293,7 @@ export default function KreatorSzkoly({
     setNewTCustomPensum('');
     setNewTMaxDutyCount('');
     setNewTDutyExempt(false);
+    setNewTOvertimeHandling(undefined);
     const nextColor = PALETTE_COLORS[appState.teachers?.length % PALETTE_COLORS.length] || '#d97706';
     setNewTColor(nextColor);
   };
@@ -1854,6 +1340,7 @@ export default function KreatorSzkoly({
             abbr: formattedAbbr,
             maxHours: finalMaxHours,
             overtimeHours: finalOvertime || undefined,
+            overtimeHandling: newTOvertimeHandling,
             color: newTColor,
             availability: newTAvailability,
             inactive: newTInactive,
@@ -1902,6 +1389,7 @@ export default function KreatorSzkoly({
       setNewTCustomPensum('');
       setNewTMaxDutyCount('');
       setNewTDutyExempt(false);
+      setNewTOvertimeHandling(undefined);
       const nextColor = PALETTE_COLORS[nextT.length % PALETTE_COLORS.length] || '#d97706';
       setNewTColor(nextColor);
       showNoti('Zaktualizowano dane nauczyciela');
@@ -1914,6 +1402,7 @@ export default function KreatorSzkoly({
         abbr: formattedAbbr,
         maxHours: finalMaxHours,
         overtimeHours: finalOvertime || undefined,
+        overtimeHandling: newTOvertimeHandling,
         color: newTColor,
         inactive: newTInactive,
         inactiveComment: newTInactiveComment.trim(),
@@ -2291,102 +1780,6 @@ export default function KreatorSzkoly({
         showNoti(`Przeniesiono ${st.first} ${st.last} do kadry nauczycieli i specjalistów`);
       }
     );
-  };
-
-  // --- Step 7 States (Corridors / Duties) ---
-  const [newCorridorName, setNewCorridorName] = useState('');
-  const [newCorridorFloor, setNewCorridorFloor] = useState('');
-  const [newCorridorDesc, setNewCorridorDesc] = useState('');
-  const [newCorridorCount, setNewCorridorCount] = useState<number | ''>(1);
-  const [newCorridorConnectedRooms, setNewCorridorConnectedRooms] = useState<string[]>([]);
-  const [editingCorridorId, setEditingCorridorId] = useState<string | null>(null);
-
-  const handleStartEditCorridor = (place: MiejsceDyzuru) => {
-    setEditingCorridorId(place.id);
-    setNewCorridorName(place.name);
-    setNewCorridorFloor(place.floor || '');
-    setNewCorridorDesc(place.desc || '');
-    setNewCorridorCount(place.teachersNeeded || 1);
-    setNewCorridorConnectedRooms(place.connectedRooms || []);
-  };
-
-  const handleCancelEditCorridor = () => {
-    setEditingCorridorId(null);
-    setNewCorridorName('');
-    setNewCorridorFloor('');
-    setNewCorridorDesc('');
-    setNewCorridorCount(1);
-    setNewCorridorConnectedRooms([]);
-  };
-
-  const handleAddCorridorDuty = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCorridorName.trim()) return;
-
-    if (editingCorridorId) {
-      const updatedPlace: MiejsceDyzuru = {
-        id: editingCorridorId,
-        name: newCorridorName.trim(),
-        floor: newCorridorFloor.trim() || undefined,
-        desc: newCorridorDesc.trim() || undefined,
-        teachersNeeded: newCorridorCount === '' ? 1 : Number(newCorridorCount),
-        connectedRooms: newCorridorConnectedRooms
-      };
-
-      onChangeAppState({
-        ...appState,
-        dyzury: {
-          ...appState.dyzury,
-          miejsca: appState.dyzury.miejsca.map(m => m.id === editingCorridorId ? updatedPlace : m)
-        }
-      });
-
-      setEditingCorridorId(null);
-      setNewCorridorName('');
-      setNewCorridorFloor('');
-      setNewCorridorDesc('');
-      setNewCorridorCount(1);
-      setNewCorridorConnectedRooms([]);
-      showNoti(`Zaktualizowano punkt korytarzowy: ${updatedPlace.name}`);
-    } else {
-      const newPlace: MiejsceDyzuru = {
-        id: 'm_' + uid(),
-        name: newCorridorName.trim(),
-        floor: newCorridorFloor.trim() || undefined,
-        desc: newCorridorDesc.trim() || undefined,
-        teachersNeeded: newCorridorCount === '' ? 1 : Number(newCorridorCount),
-        connectedRooms: newCorridorConnectedRooms
-      };
-
-      onChangeAppState({
-        ...appState,
-        dyzury: {
-          ...appState.dyzury,
-          miejsca: [...appState.dyzury.miejsca, newPlace]
-        }
-      });
-
-      setNewCorridorName('');
-      setNewCorridorFloor('');
-      setNewCorridorDesc('');
-      setNewCorridorCount(1);
-      setNewCorridorConnectedRooms([]);
-      showNoti(`Dodano punkt korytarzowy: - wymagani dyżurny: ${newPlace.teachersNeeded}`);
-    }
-  };
-
-  const handleRemoveCorridor = (id: string) => {
-    onChangeAppState({
-      ...appState,
-      dyzury: {
-        ...appState.dyzury,
-        miejsca: appState.dyzury.miejsca.filter(m => m.id !== id)
-      }
-    });
-    if (editingCorridorId === id) {
-      handleCancelEditCorridor();
-    }
-    showNoti('Usunięto stanowisko dyżurów');
   };
 
   // --- Step 9 States (Assignments / Lesson assignment) ---
@@ -3869,6 +3262,155 @@ export default function KreatorSzkoly({
                 </div>
               </div>
 
+              {/* Sekcja: Wymiary pensum bazowego w szkole (uchwała organu prowadzącego) */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-5">
+                <div className="border-b border-slate-100 pb-3 flex flex-wrap justify-between items-center gap-2">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                      ⚖️ Wymiary pensum bazowego w szkole (uchwała organu prowadzącego)
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
+                      Dostosuj tygodniowy wymiar godzin dydaktycznych i opiekuńczych dla stanowisk w Twojej szkole.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSchoolBasePensum({})}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer"
+                    title="Przywróć domyślne wymiary pensum z Karty Nauczyciela"
+                  >
+                    <RefreshCw size={12} /> Przywróć ustawowe KN
+                  </button>
+                </div>
+
+                {/* Wyraźna notka prawna */}
+                <div className="p-3 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-start gap-2.5 text-amber-950">
+                  <AlertCircle size={17} className="text-amber-700 shrink-0 mt-0.5" />
+                  <div className="text-xs leading-relaxed">
+                    <span className="font-extrabold block text-amber-900 mb-0.5">
+                      Uwaga prawna: Weryfikacja przepisów i uchwały samorządu
+                    </span>
+                    Wymiary pensum bazowego (np. 18h dla nauczycieli przedmiotowych, 20h dla współorganizujących kształcenie, 26h dla świetlicy, 30h dla biblioteki) oraz jednostki czasu (45 min lekcyjne vs 60 min zegarowe) wynikają z art. 42 Karty Nauczyciela oraz uchwały organu prowadzącego daną szkołę (gminy / powiatu). Wszelkie wartości prawne należy każdorazowo potwierdzić w aktualnych przepisach i lokalnej uchwale.
+                  </div>
+                </div>
+
+                {/* Opcja domyślnego traktowania nadwyżki ponad 1,0 etatu w szkole */}
+                <div className="p-4 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wide block">
+                    Traktowanie nadwyżki ponad 1,0 etatu w szkole:
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    Określa jak domyślnie kwalifikowane są godziny powyżej pełnego etatu (1,0 FTE) w szkole.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition select-none ${
+                      schoolOvertimeDefaultHandling === 'overtime'
+                        ? 'bg-rose-50/80 border-rose-300 text-rose-950 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="schoolOvertimeDefault"
+                        value="overtime"
+                        checked={schoolOvertimeDefaultHandling === 'overtime'}
+                        onChange={() => setSchoolOvertimeDefaultHandling('overtime')}
+                        className="mt-1 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-xs font-bold block text-slate-900">
+                          Godziny ponadwymiarowe (nadgodziny)
+                        </span>
+                        <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
+                          Nadwyżka rozliczana jako godziny ponadwymiarowe nauczyciela (art. 35 KN).
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition select-none ${
+                      schoolOvertimeDefaultHandling === 'second_contract'
+                        ? 'bg-purple-50/80 border-purple-300 text-purple-950 shadow-2xs'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}>
+                      <input
+                        type="radio"
+                        name="schoolOvertimeDefault"
+                        value="second_contract"
+                        checked={schoolOvertimeDefaultHandling === 'second_contract'}
+                        onChange={() => setSchoolOvertimeDefaultHandling('second_contract')}
+                        className="mt-1 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-xs font-bold block text-slate-900">
+                          Drugi etat (odrębna umowa)
+                        </span>
+                        <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
+                          Nadwyżka traktowana jako odrębna umowa o pracę (FTE drugiego etatu), zalecana przy stanowiskach łączonych.
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Siatka pensum dla poszczególnych stanowisk */}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2.5">
+                    Bazowe wymiary pensum według stanowisk:
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {([
+                      { type: 'przedmiotowy' as const, label: 'Nauczyciel przedmiotowy (tablicowy)', defaultVal: 18, unit: '45 min', basis: 'art. 42 ust. 3 KN' },
+                      { type: 'wspomagajacy' as const, label: 'Współorganizujący kształcenie (wspomagający)', defaultVal: 20, unit: '45 min', basis: 'art. 42 ust. 3 KN' },
+                      { type: 'swietlica' as const, label: 'Wychowawca świetlicy szkolnej', defaultVal: 26, unit: '60 min', basis: 'art. 42 ust. 3 KN' },
+                      { type: 'biblioteka' as const, label: 'Nauczyciel bibliotekarz', defaultVal: 30, unit: '60 min', basis: 'art. 42 ust. 3 KN' },
+                      { type: 'specjalista' as const, label: 'Specjaliści (pedagog, psycholog, logopeda)', defaultVal: 22, unit: '60 min', basis: 'uchwała OP (maks. 22h)' },
+                      { type: 'doradca' as const, label: 'Doradca zawodowy', defaultVal: 22, unit: '45 min', basis: 'uchwała OP (maks. 22h)' }
+                    ]).map(item => {
+                      const currentVal = schoolBasePensum[item.type] ?? item.defaultVal;
+                      const isCustom = schoolBasePensum[item.type] !== undefined && schoolBasePensum[item.type] !== item.defaultVal;
+                      return (
+                        <div key={item.type} className={`p-3 rounded-xl border transition ${
+                          isCustom ? 'bg-indigo-50/50 border-indigo-300' : 'bg-slate-50 border-slate-200'
+                        }`}>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-bold text-slate-800 truncate" title={item.label}>{item.label}</span>
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${
+                              item.unit.includes('45') ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}>
+                              {item.unit}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <input
+                              type="number"
+                              min={1}
+                              max={40}
+                              value={currentVal}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setSchoolBasePensum(prev => {
+                                  const next = { ...prev };
+                                  if (val > 0) {
+                                    next[item.type] = val;
+                                  } else {
+                                    delete next[item.type];
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="w-20 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-black text-slate-900 text-center outline-none focus:border-indigo-500"
+                            />
+                            <span className="text-xs font-bold text-slate-500">godz./tydzień</span>
+                          </div>
+                          <span className="text-[9px] text-slate-400 mt-1.5 block">
+                            Podstawa: {item.basis} {isCustom && <strong className="text-indigo-600">(zmodyfikowane)</strong>}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end pt-2">
                 <button
                   onClick={handleSaveStep1}
@@ -3883,234 +3425,13 @@ export default function KreatorSzkoly({
 
           {/* STEP 2: Buildings */}
           {activeStep === 2 && (
-            <div className="max-w-7xl mx-auto space-y-6">
-              <div className="border-b border-slate-200 pb-4">
-                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 2</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">🏢 Budynki i Lokacje zewnętrzne</h2>
-                <p className="text-xs text-slate-500 mt-1">Szkoła może posiadać własny budynek główny oraz zewnętrzne lokacje zlecone (hala, basen, orlik).</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* Add building form */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 h-fit">
-                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">Dodaj budynek</h3>
-                  <form onSubmit={handleAddBuilding} className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold">Pełna nazwa budynku</label>
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="np. Hala Sportowa OSIR"
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                        value={newBldName}
-                        onChange={(e) => setNewBldName(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold">Adres lokacji</label>
-                      <input 
-                        type="text" 
-                        placeholder="np. ul. Lipowa 4, Gdynia"
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                        value={newBldAddress}
-                        onChange={(e) => setNewBldAddress(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                      <input 
-                        type="checkbox" 
-                        id="outerLoc" 
-                        checked={newBldIsZlecony}
-                        onChange={(e) => setNewBldIsZlecony(e.target.checked)}
-                        className="rounded accent-blue-600"
-                      />
-                      <label htmlFor="outerLoc" className="text-slate-600 text-xs font-bold leading-none cursor-pointer">
-                        Zlecona zewnętrzna / sportowa (hala, basen itp.)
-                      </label>
-                    </div>
-
-                    {newBldIsZlecony && (
-                      <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl space-y-1">
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="checkbox" 
-                            id="bldSingleClassLimit" 
-                            checked={newBldSingleClassLimit}
-                            onChange={(e) => setNewBldSingleClassLimit(e.target.checked)}
-                            className="rounded accent-amber-600"
-                          />
-                          <label htmlFor="bldSingleClassLimit" className="text-amber-900 text-xs font-bold leading-none cursor-pointer">
-                            Rygorystyczny limit klas (maks. 1 klasa jednocześnie)
-                          </label>
-                        </div>
-                        <p className="text-[10px] text-amber-700 font-medium pl-5">
-                          Gdy zaznaczone, system zgłosi konflikt przy próbie zaplanowania więcej niż 1 klasy w tym samym czasie. Jeśli odznaczone (np. duże boisko/orlik), wiele klas może ćwiczyć równolegle.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Optional custom structure division in Step 2 */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-slate-105">
-                      <input 
-                        type="checkbox" 
-                        id="customStructure" 
-                        checked={newBldHasCustomStructure}
-                        onChange={(e) => setNewBldHasCustomStructure(e.target.checked)}
-                        className="rounded accent-blue-600 cursor-pointer"
-                      />
-                      <label htmlFor="customStructure" className="text-slate-600 text-xs font-bold leading-none cursor-pointer">
-                        Zdefiniuj własne piętra i segmenty
-                      </label>
-                    </div>
-
-                    {newBldHasCustomStructure && (
-                      <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                        <div className="space-y-1">
-                          <label className="text-[9px] text-slate-500 font-bold uppercase">Piętra budynku (oddziel przecinkami)</label>
-                          <input 
-                            type="text" 
-                            required={newBldHasCustomStructure}
-                            placeholder="np. Parter, Piętro I, Piętro II"
-                            className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-700 outline-none"
-                            value={newBldCustomFloors}
-                            onChange={(e) => setNewBldCustomFloors(e.target.value)}
-                          />
-                          <p className="text-[8px] text-slate-400 font-bold">np: Parter, Piętro I, Piętro II</p>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] text-slate-500 font-bold uppercase">Segmenty (oddziel przecinkami)</label>
-                          <input 
-                            type="text" 
-                            placeholder="np. A, B, C"
-                            className="w-full px-2.5 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-700 outline-none"
-                            value={newBldCustomSegments}
-                            onChange={(e) => setNewBldCustomSegments(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 mt-3">
-                      <button type="submit" className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow flex items-center justify-center gap-1.5 transition">
-                        {editingBldId ? <RefreshCw size={14} /> : <Plus size={14} />} {editingBldId ? 'Zapisz zmiany' : 'Dodaj lokację'}
-                      </button>
-                      {editingBldId && (
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            setEditingBldId(null);
-                            setNewBldName('');
-                            setNewBldAddress('');
-                            setNewBldIsZlecony(false);
-                            setNewBldHasCustomStructure(false);
-                            setNewBldCustomFloors('');
-                            setNewBldCustomSegments('');
-                          }}
-                          className="py-2 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition"
-                        >
-                          Anuluj
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                </div>
-
-                {/* Building list database view */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm md:col-span-2 overflow-hidden">
-                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Lista zdefiniowanych budynków</h3>
-                    <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.buildings.length}</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 max-h-[350px] overflow-y-auto">
-                    {appState.buildings.map((b, idx) => (
-                      <div key={b.id} className="p-4 flex justify-between items-center hover:bg-slate-50/50">
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${b.multi ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
-                            <Landmark size={18} />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-black text-slate-950">{b.name}</span>
-                              {b.multi ? (
-                                <span className="bg-amber-100 border border-amber-200 text-amber-700 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Zlecony / Obiekt sportowy</span>
-                              ) : (
-                                <span className="bg-blue-100 border border-blue-200 text-blue-700 font-extrabold px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide">Własny</span>
-                              )}
-                              {b.multi && (
-                                b.singleClassLimit ? (
-                                  <span className="bg-rose-100 border border-rose-200 text-rose-700 font-bold px-1.5 py-0.5 rounded text-[9px]">Limit: 1 klasa</span>
-                                ) : (
-                                  <span className="bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold px-1.5 py-0.5 rounded text-[9px]">Bez limitu klas</span>
-                                )
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{b.address || 'Brak sprecyzowanego adresu'}</p>
-                            
-                            {/* Render custom building properties if they exist */}
-                            {b.hasCustomStructure && (
-                              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                {b.customFloors && b.customFloors.length > 0 && (
-                                  <div className="flex items-center gap-1 bg-slate-100 border border-slate-150 px-1.5 py-0.5 rounded text-[8px] font-bold text-slate-500 leading-none">
-                                    <span>🏢 Piętra:</span>
-                                    <span className="font-extrabold text-slate-700">{b.customFloors.join(', ')}</span>
-                                  </div>
-                                )}
-                                {b.customSegments && b.customSegments.length > 0 && (
-                                  <div className="flex items-center gap-1 bg-slate-100 border border-slate-150 px-1.5 py-0.5 rounded text-[8px] font-bold text-slate-500 leading-none">
-                                    <span>🧩 Segmenty:</span>
-                                    <span className="font-extrabold text-slate-700">{b.customSegments.join(', ')}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setEditingBldId(b.id);
-                              setNewBldName(b.name);
-                              setNewBldAddress(b.address || '');
-                              setNewBldIsZlecony(!!b.multi);
-                              setNewBldSingleClassLimit(!!b.singleClassLimit);
-                              setNewBldHasCustomStructure(!!b.hasCustomStructure);
-                              setNewBldCustomFloors(b.customFloors ? b.customFloors.join(', ') : '');
-                              setNewBldCustomSegments(b.customSegments ? b.customSegments.join(', ') : '');
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-blue-500 rounded transition-colors"
-                            title="Edytuj"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => handleRemoveBuilding(b.id, idx)}
-                            className="p-1.5 text-slate-400 hover:text-red-500 rounded transition-colors"
-                            title="Usuń"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {appState.buildings.length === 0 && (
-                      <p className="p-6 text-center text-xs text-slate-400">Brak budynków. Dodaj pierwszy powyżej!</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-2">
-                <button onClick={() => setActiveStep(1)} className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
-                  <ArrowLeft size={14} /> Wstecz
-                </button>
-                <button onClick={() => setActiveStep(3)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1.5 transition">
-                  Dalej: Pracownie i sale <ArrowRight size={14} />
-                </button>
-              </div>
-            </div>
+            <KreatorStepBuildings
+              appState={appState}
+              onChangeAppState={onChangeAppState}
+              setActiveStep={setActiveStep}
+              showNoti={showNoti}
+              triggerConfirm={triggerConfirm}
+            />
           )}
 
           {/* STEP 3: Classrooms and specific/special purpose rooms */}
@@ -4640,339 +3961,13 @@ export default function KreatorSzkoly({
 
           {/* STEP 5: Subjects */}
           {activeStep === 5 && (
-            <div className="max-w-7xl mx-auto space-y-6">
-              <div className="border-b border-slate-200 pb-4">
-                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 5</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">📚 Przedmioty szkolne i edukacyjne</h2>
-                <p className="text-xs text-slate-500 mt-1">Uporządkuj listę prowadzonych lekcji przedmiotowych i przydziel im kolory do wizualizacji na planach.</p>
-              </div>
-
-              {/* SŁOWNIKI PRZEDMIOTÓW (RODZAJE SZKÓŁ) */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5 shadow-xs">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="bg-blue-600 text-white p-1 rounded-md">
-                    <BookOpen size={16} />
-                  </div>
-                  <div className="text-left">
-                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">⚡ Słownik Przedmiotów • Szybki import dla rodzaju szkoły</h4>
-                    <p className="text-[10px] text-slate-500 font-semibold">Wybierz rodzaj szkoły, aby otworzyć gotowy słownik przedmiotów i błyskawicznie je dodać.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {Object.entries(SCHOOL_TYPES_DICTIONARIES).map(([key, dict]) => (
-                    <button
-                      key={key}
-                      onClick={() => handleOpenDictionary(key)}
-                      type="button"
-                      className="flex flex-col items-center justify-center p-3 bg-white hover:bg-slate-50 border border-slate-200 hover:border-blue-400 rounded-xl transition cursor-pointer text-center group shadow-xs"
-                    >
-                      <span className="text-2xl mb-1.5 group-hover:scale-110 transition duration-150">{dict.icon}</span>
-                      <span className="text-xs font-black text-slate-900 leading-tight block">{dict.name}</span>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-wider">{dict.subjects.length} przedmiotów</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* Form column */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit">
-                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">
-                    {editingSubjectId ? '📝 Edytuj Przedmiot' : '➕ Dodaj Przedmiot'}
-                  </h3>
-                  <form onSubmit={handleAddSubject} className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold">Pełna nazwa przedmiotu *</label>
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="np. Język niemiecki"
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                        value={newSubjName}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setNewSubjName(val);
-                          if (!isSubjShortManual) {
-                            setNewSubjShort(subjectAbbr(val));
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold">Skrót tablicowy (maks. 5 znaków) *</label>
-                      <input 
-                        type="text" 
-                        required
-                        maxLength={5}
-                        placeholder="np. NIEM"
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold"
-                        value={newSubjShort}
-                        onChange={(e) => {
-                          setNewSubjShort(e.target.value);
-                          setIsSubjShortManual(true);
-                        }}
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold block">Słowo kluczowe podgrupy (opcjonalne)</label>
-                      <input 
-                        type="text" 
-                        placeholder="np. religia, ang, niem, wf"
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-indigo-600 placeholder-slate-300"
-                        value={newSubjPattern}
-                        onChange={(e) => setNewSubjPattern(e.target.value)}
-                      />
-                      <p className="text-[9px] text-slate-400 leading-normal pt-1">
-                        Służy do automatycznego przypisywania podgrupy klasy (np. wpisanie <strong>religia</strong> sprawi, że zajęcia z religii domyślnie trafią do podgrupy "religia" w danej klasie).
-                      </p>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold block mb-1.5">Kolor kafelka przedmiotu (Wybierz spośród 60 kolorów)</label>
-                      <div className="grid grid-cols-8 gap-1 max-h-24 overflow-y-auto p-1.5 border border-slate-200 bg-slate-50 rounded-lg">
-                        {PALETTE_COLORS.map(c => (
-                          <button
-                            type="button"
-                            key={c}
-                            onClick={() => setNewSubjColor(c)}
-                            className={`w-5 h-5 rounded border shrink-0 transition ${
-                              newSubjColor === c ? 'ring-2 ring-blue-500 scale-110 shadow-sm' : 'border-slate-200 hover:scale-110'
-                            }`}
-                            style={{ backgroundColor: c }}
-                            title={c}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button 
-                        type="submit" 
-                        className={`grow py-2 text-white font-bold text-xs rounded-lg shadow mt-2 transition cursor-pointer ${
-                          editingSubjectId ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'
-                        }`}
-                      >
-                        {editingSubjectId ? 'Zaktualizuj dane' : 'Zarejestruj przedmiot'}
-                      </button>
-                      {editingSubjectId && (
-                        <button 
-                          type="button" 
-                          onClick={handleCancelEditSubject}
-                          className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg mt-2 cursor-pointer transition"
-                        >
-                          Anuluj
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                </div>
-
-                {/* Databases list */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm md:col-span-2 overflow-hidden">
-                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Planowany kanon przedmiotowy</h3>
-                    <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.subjects.length}</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
-                    {appState.subjects.map((sub) => (
-                      <div key={sub.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <span className="w-9 h-9 text-white font-mono font-black text-[10px] rounded-lg tracking-wider flex items-center justify-center border shadow-sm shrink-0" style={{ backgroundColor: sub.color || '#cbd5e1' }}>
-                            {sub.short}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs font-black text-slate-900 leading-none truncate" title={sub.name}>{sub.name}</span>
-                              {sub.defaultGroupPattern && (
-                                <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[8.5px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide shrink-0">
-                                  Grupa: {sub.defaultGroupPattern}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate">Identyfikator planowy: {sub.id}</p>
-                          </div>
-                        </div>
-                        <div className="flex gap-1 shrink-0">
-                          <button 
-                            onClick={() => handleStartEditSubject(sub)}
-                            className="p-1 px-2 text-slate-400 hover:text-indigo-600 rounded select-none cursor-pointer"
-                            title="Edytuj przedmiot"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button 
-                            onClick={() => handleRemoveSubject(sub.id)}
-                            className="p-1 px-2 text-slate-400 hover:text-red-500 rounded select-none cursor-pointer"
-                            title="Usuń przedmiot"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {appState.subjects.length === 0 && (
-                      <p className="p-10 text-center text-xs text-slate-400">Brak przedmiotów lekcyjnych.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-2">
-                <button onClick={() => setActiveStep(4)} className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
-                  <ArrowLeft size={14} /> Wstecz
-                </button>
-                <button onClick={() => setActiveStep(6)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1.5 transition">
-                  Dalej: Nauczyciele <ArrowRight size={14} />
-                </button>
-              </div>
-
-              {/* Słownik Przedmiotów - Podgląd i wybór przedmiotów modal */}
-              {selectedDictKey && (() => {
-                const dict = SCHOOL_TYPES_DICTIONARIES[selectedDictKey];
-                if (!dict) return null;
-                
-                const existingShorts = new Set(appState.subjects.map(s => s.short.toUpperCase()));
-                const subjectsList = dict.subjects;
-
-                return (
-                  <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 ${Z_INDEX_CLASSES.MODAL} no-print`}>
-                    <div className="bg-white border border-slate-200 rounded-3xl max-w-xl w-full max-h-[85vh] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-150">
-                      {/* Modal Header */}
-                      <div className="bg-slate-900 text-white p-5 px-6 flex items-center justify-between border-b border-slate-800 shrink-0">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{dict.icon}</span>
-                          <div className="text-left">
-                            <span className="text-[9px] text-blue-400 block uppercase font-black tracking-wider">Kanon przedmiotów</span>
-                            <h3 className="text-base font-black uppercase text-white leading-tight">
-                              Słownik: {dict.name}
-                            </h3>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setSelectedDictKey(null)}
-                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-
-                      {/* Modal Body */}
-                      <div className="p-6 overflow-y-auto flex-1 bg-slate-50 space-y-4">
-                        <p className="text-xs text-slate-500 leading-normal font-medium text-left">
-                          Zaznacz przedmioty ze słownika, które chcesz zaimportować do swojej szkoły. Przedmioty już istniejące w Twojej konfiguracji (z tym samym skrótem) są automatycznie ignorowane.
-                        </p>
-
-                        {/* Selection helpers */}
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const allSelected: Record<string, boolean> = {};
-                              subjectsList.forEach(s => {
-                                allSelected[s.short] = true;
-                              });
-                              setDictSubjsSelected(allSelected);
-                            }}
-                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase"
-                          >
-                            Zaznacz wszystkie
-                          </button>
-                          <span className="text-slate-300">|</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDictSubjsSelected({});
-                            }}
-                            className="text-[10px] font-bold text-slate-500 hover:text-slate-600 uppercase"
-                          >
-                            Odznacz wszystkie
-                          </button>
-                        </div>
-
-                        {/* Grid checklist */}
-                        <div className="border border-slate-200 rounded-xl bg-white divide-y divide-slate-100 overflow-hidden shadow-xs">
-                          {subjectsList.map((s, idx) => {
-                            const exists = existingShorts.has(s.short.toUpperCase());
-                            const isSelected = !!dictSubjsSelected[s.short];
-                            return (
-                              <label
-                                key={idx}
-                                className={`flex items-center justify-between p-3 cursor-pointer transition select-none ${
-                                  exists ? 'bg-slate-50 opacity-60' : isSelected ? 'bg-blue-50/40 hover:bg-blue-50/60' : 'hover:bg-slate-50/50'
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="checkbox"
-                                    disabled={exists}
-                                    checked={isSelected && !exists}
-                                    onChange={(e) => {
-                                      setDictSubjsSelected(prev => ({
-                                        ...prev,
-                                        [s.short]: e.target.checked
-                                      }));
-                                    }}
-                                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
-                                  />
-                                  <span
-                                    className="w-8 h-8 text-white font-mono font-black text-[9px] rounded-lg tracking-wider flex items-center justify-center border shadow-xs"
-                                    style={{ backgroundColor: s.color }}
-                                  >
-                                    {s.short}
-                                  </span>
-                                  <div className="text-left">
-                                    <span className="text-xs font-black text-slate-900 block leading-tight">{s.name}</span>
-                                    {s.defaultGroupPattern && (
-                                      <span className="inline-block bg-indigo-50 text-indigo-700 text-[8px] font-black px-1 py-0 rounded uppercase mt-0.5 tracking-wide">
-                                        Podgrupa: {s.defaultGroupPattern}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div>
-                                  {exists ? (
-                                    <span className="bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
-                                      Już dodany
-                                    </span>
-                                  ) : (
-                                    <span className={`text-[10px] font-black uppercase ${isSelected ? 'text-blue-600' : 'text-slate-300'}`}>
-                                      {isSelected ? 'Wybrany' : 'Pomiń'}
-                                    </span>
-                                  )}
-                                </div>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Modal Footer */}
-                      <div className="bg-slate-50 border-t border-slate-200 p-4 px-6 flex justify-between items-center shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedDictKey(null)}
-                          className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition"
-                        >
-                          Anuluj
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleImportSelectedSubjects}
-                          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-lg shadow-sm transition flex items-center gap-1.5"
-                        >
-                          <BookOpen size={14} />
-                          Zaimportuj wybrane przedmioty ({subjectsList.filter(s => dictSubjsSelected[s.short] && !existingShorts.has(s.short.toUpperCase())).length})
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
+            <KreatorStepSubjects
+              appState={appState}
+              onChangeAppState={onChangeAppState}
+              setActiveStep={setActiveStep}
+              showNoti={showNoti}
+              triggerConfirm={triggerConfirm}
+            />
           )}
 
           {/* STEP 6: Teachers & limits */}
@@ -5099,6 +4094,10 @@ export default function KreatorSzkoly({
                       onChangeMaxHours={setNewTMaxHours}
                       overtimeHours={newTOvertimeHours}
                       onChangeOvertimeHours={setNewTOvertimeHours}
+                      overtimeHandling={newTOvertimeHandling}
+                      onChangeOvertimeHandling={setNewTOvertimeHandling}
+                      schoolBasePensum={schoolBasePensum}
+                      onChangeSchoolBasePensum={setSchoolBasePensum}
                     />
 
                     <div className="bg-slate-100/50 p-2.5 rounded-lg border border-slate-200 space-y-2 mt-1">
@@ -6483,6 +5482,10 @@ export default function KreatorSzkoly({
                                 onChangeMaxHours={setNewTMaxHours}
                                 overtimeHours={newTOvertimeHours}
                                 onChangeOvertimeHours={setNewTOvertimeHours}
+                                overtimeHandling={newTOvertimeHandling}
+                                onChangeOvertimeHandling={setNewTOvertimeHandling}
+                                schoolBasePensum={schoolBasePensum}
+                                onChangeSchoolBasePensum={setSchoolBasePensum}
                               />
                             </div>
 
@@ -6814,194 +5817,12 @@ export default function KreatorSzkoly({
 
           {/* STEP 7: Corridor places & duty settings */}
           {activeStep === 7 && (
-            <div className="max-w-7xl mx-auto space-y-6">
-              <div className="border-b border-slate-200 pb-4">
-                <span className="bg-blue-100 text-blue-700 font-bold text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 7</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">🚪 Dyżury korytarzowe</h2>
-                <p className="text-xs text-slate-500 mt-1">Stwórz punkty dyżurów korytarzowych/schodowych ze szczegółowym określeniem ilu nauczycieli powinno jednocześnie pilnować porządku na danej przerwie.</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* Addition Form */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm h-fit">
-                  <h3 className="text-xs font-black text-slate-900 mb-3 uppercase tracking-wider">
-                    {editingCorridorId ? '✏️ Edytuj punkt dyżurów' : 'Dodaj punkt dyżurów'}
-                  </h3>
-                  <form onSubmit={handleAddCorridorDuty} className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold">Lokalizacja / Schody / Plac *</label>
-                      <input 
-                        type="text" 
-                        required
-                        placeholder="np. Korytarz parter - przy szatni"
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                        value={newCorridorName}
-                        onChange={(e) => setNewCorridorName(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold">Piętro (opcjonalnie)</label>
-                        <input 
-                          type="text" 
-                          placeholder="np. Parter"
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                          value={newCorridorFloor}
-                          onChange={(e) => setNewCorridorFloor(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400 font-bold">Dyżurantów (Wymagani)</label>
-                        <input 
-                          type="number" 
-                          required
-                          min={1}
-                          max={4}
-                          className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none font-bold text-blue-600"
-                          value={newCorridorCount}
-                          onChange={(e) => setNewCorridorCount(e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1))}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-slate-400 font-bold">Krótki opis / Zadania</label>
-                      <input 
-                        type="text" 
-                        placeholder="np. Nadzór szafek i wyjścia głównego"
-                        className="w-full px-3 py-1.5 border border-slate-200 bg-slate-50 rounded-lg text-xs outline-none"
-                        value={newCorridorDesc}
-                        onChange={(e) => setNewCorridorDesc(e.target.value)}
-                      />
-                    </div>
-
-                    {/* Checkbox pills for connecting classrooms */}
-                    <div className="space-y-1.5 border-t border-slate-100 pt-2.5">
-                      <label className="text-[10px] text-slate-500 font-bold block">🚪 Sale z wejściem na ten korytarz:</label>
-                      {appState.planLekcji.rooms.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1.5 bg-slate-50 border border-slate-100 rounded-lg">
-                          {appState.planLekcji.rooms.map(rm => {
-                            const isSel = newCorridorConnectedRooms.includes(rm.name);
-                            return (
-                              <button
-                                key={rm.id}
-                                type="button"
-                                onClick={() => {
-                                  if (isSel) {
-                                    setNewCorridorConnectedRooms(newCorridorConnectedRooms.filter(x => x !== rm.name));
-                                  } else {
-                                    setNewCorridorConnectedRooms([...newCorridorConnectedRooms, rm.name]);
-                                  }
-                                }}
-                                className={`px-2 py-1 rounded text-[10px] font-bold border transition duration-150 shrink-0 ${
-                                  isSel
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
-                                }`}
-                              >
-                                {rm.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-slate-400 italic">Brak zdefiniowanych sal. Dodaj je najpierw w Kroku 3.</p>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2 mt-2">
-                      <button type="submit" className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow transition">
-                        {editingCorridorId ? 'Zapisz zmiany' : 'Dodaj punkt dyżuru'}
-                      </button>
-                      {editingCorridorId && (
-                        <button 
-                          type="button" 
-                          onClick={handleCancelEditCorridor}
-                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-lg transition"
-                        >
-                          Anuluj
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                </div>
-
-                {/* Summary corridors rendering */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm md:col-span-2 overflow-hidden">
-                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                    <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Planowane punkty dozorowania porządku</h3>
-                    <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-black">{appState.dyzury.miejsca.length}</span>
-                  </div>
-                  <div className="divide-y divide-slate-100 max-h-[640px] overflow-y-auto">
-                    {appState.dyzury.miejsca.map(place => (
-                      <div key={place.id} className="p-3.5 flex justify-between items-center hover:bg-slate-50/50 w-full min-w-0 gap-4">
-                        <div className="flex items-start gap-3 min-w-0 flex-1">
-                          <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-100">
-                            <Shield size={16} />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <span className="text-xs font-bold text-slate-900 leading-none block truncate" title={place.name}>{place.name}</span>
-                            <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                              {place.floor && <span className="text-[10px] text-slate-400 font-semibold shrink-0">{place.floor}</span>}
-                              <span className="bg-indigo-100 text-indigo-800 font-black px-1.5 py-0.2 rounded text-[9px] uppercase shrink-0">
-                                Potrzeba: {place.teachersNeeded || 1} {place.teachersNeeded === 1 ? 'nauczyciel' : 'nauczycieli'}
-                              </span>
-                            </div>
-                            {place.desc && <p className="text-[10px] text-slate-400 font-semibold mt-1 break-words">{place.desc}</p>}
-                            
-                            {/* Connected classroom badges */}
-                            {place.connectedRooms && place.connectedRooms.length > 0 && (
-                              <div className="flex flex-wrap items-center gap-1 mt-2">
-                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider shrink-0">Przyległe sale:</span>
-                                {place.connectedRooms.map(rm => (
-                                  <span key={rm} className="px-1.5 py-0.2 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[9px] font-mono font-bold animate-fade-in shrink-0">
-                                    🚪 {rm}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button 
-                            type="button"
-                            onClick={() => handleStartEditCorridor(place)}
-                            className={`p-1 px-2 rounded transition-colors ${
-                              editingCorridorId === place.id 
-                                ? 'text-blue-600 bg-blue-50' 
-                                : 'text-slate-400 hover:text-blue-600 hover:bg-slate-100'
-                            }`}
-                            title="Edytuj"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => handleRemoveCorridor(place.id)}
-                            className="p-1 px-2 text-slate-400 hover:text-red-500 rounded hover:bg-slate-100 transition-colors"
-                            title="Usuń"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {appState.dyzury.miejsca.length === 0 && (
-                      <p className="p-10 text-center text-xs text-slate-400">Brak punktów nadzoru.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-2">
-                <button onClick={() => setActiveStep(6)} className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition">
-                  <ArrowLeft size={14} /> Wstecz
-                </button>
-                <button onClick={() => setActiveStep(8)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow flex items-center gap-1.5 transition">
-                  Dalej: Uczniowie i wsparcie <ArrowRight size={14} />
-                </button>
-              </div>
-            </div>
+            <KreatorStepCorridors
+              appState={appState}
+              onChangeAppState={onChangeAppState}
+              setActiveStep={setActiveStep}
+              showNoti={showNoti}
+            />
           )}
 
           {/* STEP 8: Defining Pupils / Students with special needs (IPET, NI, Rewalidacja, Korekcyjne) */}
@@ -8914,129 +7735,12 @@ export default function KreatorSzkoly({
 
           {/* STEP 10: Summary & launch instructions */}
           {activeStep === 10 && (
-            <div className="max-w-7xl mx-auto space-y-6 animate-fade-in">
-              <div className="border-b border-slate-200 pb-4 text-center">
-                <span className="bg-emerald-100 text-emerald-800 font-black text-[10px] px-2.5 py-1 rounded-full uppercase">Krok 10: Finalizacja</span>
-                <h2 className="text-xl font-black text-slate-900 mt-2">🏁 Dane wprowadzone poprawnie!</h2>
-                <p className="text-xs text-slate-500 mt-1">Końcowe podsumowanie bazy danych oraz wytyczne ułożenia planu lekcji.</p>
-              </div>
-
-              {/* Stats bento layout */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Budynki</span>
-                  <span className="text-2xl font-black text-slate-800">{statsSummary.blds}</span>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Sale / Gabinety</span>
-                  <span className="text-2xl font-black text-slate-800">{statsSummary.rooms}</span>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Klasy</span>
-                  <span className="text-2xl font-black text-slate-800">{statsSummary.classes}</span>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Nauczyciele</span>
-                  <span className="text-2xl font-black text-slate-800">{statsSummary.teachers}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Przedmioty</span>
-                  <span className="text-2xl font-black text-slate-800">{statsSummary.subjects}</span>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Stanowiska dyżurów</span>
-                  <span className="text-2xl font-black text-slate-800">{statsSummary.corridors}</span>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm col-span-2 sm:col-span-1">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Godzin łącznie</span>
-                  <span className="text-2xl font-black text-slate-800 text-blue-600">{statsSummary.totalHours} h</span>
-                </div>
-              </div>
-
-              {/* Special education stats */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm flex flex-col justify-center">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Zdefiniowani uczniowie wsparcia</span>
-                  <span className="text-2xl font-black text-indigo-750 text-indigo-600">{statsSummary.specialStudents}</span>
-                </div>
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl text-center shadow-sm flex flex-col justify-center">
-                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wide">Wymiar lekcji indywidualnych</span>
-                  <span className="text-2xl font-black text-indigo-750 text-indigo-600">{statsSummary.specialHours} h/tyg</span>
-                </div>
-              </div>
-
-              {/* Detailed Polish guide for scheduling next phases */}
-              <div className="bg-blue-50 border border-blue-200 p-6 rounded-2xl space-y-4">
-                <h3 className="text-xs font-black text-blue-900 uppercase tracking-widest flex items-center gap-1.5 select-none font-sans">
-                  <HelpCircle size={15} /> Jak krok po kroku ułożyć teraz harmonogram lekcji?
-                </h3>
-                
-                <div className="space-y-3.5 text-slate-700 text-xs">
-                  <div className="flex gap-2.5 items-start">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black text-[9px] flex items-center justify-center shrink-0 mt-0.5">1</span>
-                    <div>
-                      <h4 className="font-bold text-blue-950">Etap 1: Plan Klas (Solfeggio planowania lekcji)</h4>
-                      <p className="text-slate-600 mt-0.5 leading-relaxed">Przejdź do zakładki <strong>„Etap 1: Plan Klas”</strong>. Tutaj przydzielasz lekcje do dni i godzin dla poszczególnych oddziałów. Wybierz klasę z menu bocznego, przeciągaj przydziały do komórek planu lekcji i eliminuj konflikty nauczycielskie w czasie rzeczywistym.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2.5 items-start">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black text-[9px] flex items-center justify-center shrink-0 mt-0.5">2</span>
-                    <div>
-                      <h4 className="font-bold text-blue-950">Zsynchronizuj ułożone lekcje z siatką sal</h4>
-                      <p className="text-slate-600 mt-0.5 leading-relaxed">Po ułożeniu Planu Klas skorzystaj z przycisku <strong>„Przenieś do Planu Sal”</strong> w nagłówku. System weźmie ułożone jednostki lekcyjne i przeniesie je do bazy gabinetów.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2.5 items-start">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black text-[9px] flex items-center justify-center shrink-0 mt-0.5">3</span>
-                    <div>
-                      <h4 className="font-bold text-blue-950">Etap 2: Przypisanie gabinetów dla lekcji</h4>
-                      <p className="text-slate-600 mt-0.5 leading-relaxed">W zakładce <strong>„Etap 2: Plan Sal”</strong> dokonujesz ostatecznego rozmieszczenia lekcji w gabinetach lekcyjnych, salach sportowych, basenach lub pracowniach komputerowych. Pozwoli to uniknąć konfliktatów lokalowych.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2.5 items-start">
-                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black text-[9px] flex items-center justify-center shrink-0 mt-0.5">4</span>
-                    <div>
-                      <h4 className="font-bold text-blue-950">Etap 3: Dyżury korytarzowe i schodowe</h4>
-                      <p className="text-slate-600 mt-0.5 leading-relaxed">W zakładce <strong>„Etap 3: Dyżury”</strong> przypisujesz nauczycieli na przerwach korytarzowych. Program wykorzystuje wprowadzoną wymaganą liczbę nauczycieli i pozwala na losowanie lub ręczne obsadzanie pozycji na dyżurach.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action routes */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-2 justify-center">
-                <button 
-                  onClick={() => setActiveStep(9)}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 transition cursor-pointer border border-slate-300"
-                >
-                  <ArrowLeft size={14} /> Wstecz: Przydziały lekcyjne
-                </button>
-                <button 
-                  onClick={() => setIsTemplateModalOpen(true)}
-                  className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-md transition cursor-pointer"
-                >
-                  <Bookmark size={14} /> 💾 Zapisz tę strukturę jako Szablon
-                </button>
-                <button 
-                  onClick={() => onNavigateToTab('plan_klas')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow-md transition"
-                >
-                  <ArrowRight size={14} className="animate-bounce" /> Przejdź do Etapu 1: Plan Klas
-                </button>
-                <button 
-                  onClick={() => onNavigateToTab('dyzury')}
-                  className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs p-3 px-5 rounded-2xl flex items-center justify-center gap-1.5 shadow transition"
-                >
-                  Zobacz Dyżury Nauczycieli
-                </button>
-              </div>
-            </div>
+            <KreatorStepSummary
+              statsSummary={statsSummary}
+              setActiveStep={setActiveStep}
+              onOpenTemplates={() => setIsTemplateModalOpen(true)}
+              onNavigateToTab={onNavigateToTab}
+            />
           )}
 
         </div>

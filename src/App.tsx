@@ -2221,6 +2221,21 @@ export default function App() {
     // Reset so same files can be selected again
     e.target.value = '';
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+    const oversized = files.filter(f => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      const file = oversized[0];
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      setPendingImportFiles([{
+        name: file.name,
+        content: JSON.stringify({
+          error: `Rozmiar pliku "${file.name}" (${sizeMb} MB) przekracza maksymalny dopuszczalny limit 10 MB. Wybierz mniejszy plik.`
+        })
+      }]);
+      setShowImportModal(true);
+      return;
+    }
+
     const loadedFiles: { name: string; content: string }[] = [];
     let readCount = 0;
 
@@ -2873,7 +2888,7 @@ export default function App() {
                 <input 
                   type="file" 
                   multiple
-                  accept=".json" 
+                  accept=".json,.xlsx,.xls" 
                   className="hidden" 
                   onChange={handleImportBackup} 
                 />

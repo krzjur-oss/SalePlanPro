@@ -12,11 +12,11 @@
 
 import React, { useState } from 'react';
 import { TeacherWorkloadPosition, StandardPositionType } from '../types';
-import { STANDARD_POSITIONS_META, round } from '../utils/workloadUtils';
+import { STANDARD_POSITIONS_META, round, distributeHoursAcrossRoles, getStandardPositionsMeta } from '../utils/workloadUtils';
 import { uid } from '../utils';
 import { 
   Plus, Trash2, Sliders, Shield, BookOpen, Clock, AlertCircle, CheckCircle2, 
-  HelpCircle, Sparkles, ChevronDown, ChevronUp, Scale
+  HelpCircle, Sparkles, ChevronDown, ChevronUp, Scale, Split, Building2, RotateCcw
 } from 'lucide-react';
 
 export interface TeacherWorkloadEditorProps {
@@ -26,12 +26,17 @@ export interface TeacherWorkloadEditorProps {
     hours45min: number;
     hours60min: number;
     boardHours: number;
-    totalHours: number;
+    totalHours?: number;
+    nominalHours?: number;
     totalFte: number;
     ftePercent: number;
     averagedPensum: number;
-    isCombined: boolean;
+    isCombined?: boolean;
+    isCombinedPensum?: boolean;
     overtimeHours: number;
+    secondContractFte?: number;
+    secondContractHours?: number;
+    overtimeHandling?: 'overtime' | 'second_contract';
     suggestedDutyLimit: number;
   };
   dutyExempt: boolean;
@@ -44,6 +49,10 @@ export interface TeacherWorkloadEditorProps {
   onChangeMaxHours: (hours: number | '') => void;
   overtimeHours: number | '';
   onChangeOvertimeHours: (hours: number | '') => void;
+  overtimeHandling?: 'overtime' | 'second_contract';
+  onChangeOvertimeHandling?: (handling: 'overtime' | 'second_contract') => void;
+  schoolBasePensum?: Partial<Record<StandardPositionType, number>>;
+  onChangeSchoolBasePensum?: (config: Partial<Record<StandardPositionType, number>>) => void;
 }
 
 export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
@@ -59,13 +68,44 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
   maxHours,
   onChangeMaxHours,
   overtimeHours,
-  onChangeOvertimeHours
+  onChangeOvertimeHours,
+  overtimeHandling,
+  onChangeOvertimeHandling,
+  schoolBasePensum,
+  onChangeSchoolBasePensum
 }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showSplitTools, setShowSplitTools] = useState(false);
+  const [showSchoolPensumModal, setShowSchoolPensumModal] = useState(false);
+  const [splitPoolHours, setSplitPoolHours] = useState<number | ''>('');
+
+  const metaMap = getStandardPositionsMeta(schoolBasePensum);
+
+  const activePositions = positions.filter(p => p.hours > 0);
+  const distinctTypes = new Set(activePositions.map(p => p.type));
+  const isSingleType = distinctTypes.size <= 1;
+  const currentHandling = overtimeHandling || livePreview.overtimeHandling || (isSingleType ? 'overtime' : 'second_contract');
+
+  // Ręczny i automatyczny podział puli godzin bez gubienia reszty
+  const handleAutoDistribute = () => {
+    if (positions.length <= 1) return;
+    const pool = typeof splitPoolHours === 'number' && splitPoolHours > 0
+      ? splitPoolHours
+      : positions.reduce((sum, p) => sum + p.hours, 0);
+    if (pool <= 0) return;
+
+    const distributed = distributeHoursAcrossRoles(pool, positions.length, 1);
+    const updated = positions.map((p, idx) => ({
+      ...p,
+      hours: distributed[idx] ?? p.hours
+    }));
+    onChangePositions(updated);
+    onChangeMaxHours(pool);
+  };
 
   // Szybkie szablony (presets)
   const applyPreset = (type: StandardPositionType, customHours?: number) => {
-    const meta = STANDARD_POSITIONS_META[type];
+    const meta = metaMap[type] || STANDARD_POSITIONS_META[type];
     const hours = customHours ?? meta.defaultPensum;
 
     onChangePositions([
@@ -84,13 +124,15 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
   };
 
   const applyCombinedPreset = () => {
+    const p18 = metaMap.przedmiotowy.defaultPensum;
+    const p26 = metaMap.swietlica.defaultPensum;
     onChangePositions([
       {
         id: 'pos_' + uid(),
         type: 'przedmiotowy',
         title: 'Przedmiot lekcyjny (np. matematyka)',
         hours: 10,
-        basePensum: 18,
+        basePensum: p18,
         unitMinutes: 45
       },
       {
@@ -98,7 +140,7 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
         type: 'swietlica',
         title: 'Świetlica szkolna',
         hours: 10,
-        basePensum: 26,
+        basePensum: p26,
         unitMinutes: 60
       }
     ]);
@@ -109,12 +151,12 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
 
   const addPosition = () => {
     const defaultType: StandardPositionType = 'przedmiotowy';
-    const meta = STANDARD_POSITIONS_META[defaultType];
+    const meta = metaMap[defaultType] || STANDARD_POSITIONS_META[defaultType];
     const newPos: TeacherWorkloadPosition = {
       id: 'pos_' + uid(),
       type: defaultType,
       title: 'Zajęcia dydaktyczne',
-      hours: 18,
+      hours: meta.defaultPensum,
       basePensum: meta.defaultPensum,
       unitMinutes: meta.unitMinutes
     };
@@ -128,7 +170,7 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
 
       // Jeśli zmieniono typ stanowiska, zaktualizuj domyślne pensum i jednostkę czasu
       if (updates.type && updates.type !== p.type) {
-        const meta = STANDARD_POSITIONS_META[updates.type];
+        const meta = metaMap[updates.type] || STANDARD_POSITIONS_META[updates.type];
         updated.basePensum = meta.defaultPensum;
         updated.unitMinutes = meta.unitMinutes;
         if (!updates.title || p.title === STANDARD_POSITIONS_META[p.type]?.label.split('(')[0].trim()) {
@@ -145,10 +187,26 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
     onChangePositions(next);
   };
 
+  const handleUpdateSchoolBasePensum = (type: StandardPositionType, val: number) => {
+    if (!onChangeSchoolBasePensum) return;
+    const nextConfig = { ...(schoolBasePensum || {}) };
+    if (val > 0) {
+      nextConfig[type] = val;
+    } else {
+      delete nextConfig[type];
+    }
+    onChangeSchoolBasePensum(nextConfig);
+  };
+
+  const handleResetSchoolPensum = () => {
+    if (!onChangeSchoolBasePensum) return;
+    onChangeSchoolBasePensum({});
+  };
+
   return (
     <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3.5 space-y-3.5">
       {/* Nagłówek sekcji */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-slate-200/80 pb-2 gap-2">
         <div className="flex items-center gap-2">
           <div className="p-1 bg-amber-100 text-amber-800 rounded-lg">
             <Scale size={15} />
@@ -163,16 +221,109 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="text-[10.5px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-slate-200/60 transition cursor-pointer"
-        >
-          <Sliders size={12} />
-          <span>{showAdvanced ? 'Mniej' : 'Opcje zaawansowane'}</span>
-          {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        </button>
+        <div className="flex items-center gap-1.5">
+          {onChangeSchoolBasePensum && (
+            <button
+              type="button"
+              onClick={() => setShowSchoolPensumModal(!showSchoolPensumModal)}
+              className={`text-[10.5px] font-bold flex items-center gap-1 px-2 py-0.5 rounded-md border transition cursor-pointer ${
+                showSchoolPensumModal 
+                  ? 'bg-indigo-100 text-indigo-900 border-indigo-300' 
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+              title="Edycja pensum bazowych w szkole według uchwały organu prowadzącego"
+            >
+              <Building2 size={12} className="text-indigo-600" />
+              <span>Pensum szkoły (uchwała OP)</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="text-[10.5px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-slate-200/60 transition cursor-pointer"
+          >
+            <Sliders size={12} />
+            <span>{showAdvanced ? 'Mniej' : 'Opcje zaawansowane'}</span>
+            {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        </div>
       </div>
+
+      {/* Baner informacyjny o przepisach prawnych */}
+      <div className="p-2.5 bg-amber-50/90 border border-amber-200/90 rounded-xl flex items-start gap-2.5 text-amber-950">
+        <AlertCircle size={15} className="text-amber-700 shrink-0 mt-0.5" />
+        <div className="text-[10px] leading-relaxed">
+          <span className="font-extrabold block text-amber-900 mb-0.5">
+            ⚖️ Karta Nauczyciela (art. 42 i art. 35) & uchwała organu prowadzącego
+          </span>
+          Wymiary pensum bazowego (np. 18h przedmiotowy, 20h wspomagający, 26h świetlica, 30h biblioteka, maks. 22h specjaliści) oraz jednostki czasu (45 min lekcyjne vs 60 min zegarowe) wynikają z ustawy oraz uchwały właściwej gminy/powiatu. Wartości prawne należy każdorazowo potwierdzić w aktualnych przepisach i lokalnej uchwale.
+        </div>
+      </div>
+
+      {/* Panel edycji pensum bazowego szkoły (uchwała organu prowadzącego) */}
+      {showSchoolPensumModal && onChangeSchoolBasePensum && (
+        <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2.5 animate-in fade-in duration-150">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Building2 size={14} className="text-indigo-700" />
+              <span className="text-[11px] font-black text-indigo-950 uppercase tracking-wide">
+                Wymiary pensum w Twojej szkole (uchwała organu prowadzącego)
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetSchoolPensum}
+              className="text-[9.5px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-indigo-100 transition cursor-pointer"
+              title="Przywróć domyślne pensum ustawowe z Karty Nauczyciela"
+            >
+              <RotateCcw size={11} /> Przywróć ustawowe KN
+            </button>
+          </div>
+
+          <p className="text-[9.5px] text-indigo-900/80 leading-normal">
+            Organ prowadzący szkołę (rada gminy lub powiatu) w drodze uchwały określa tygodniowy obowiązkowy wymiar godzin m.in. dla pedagogów, psychologów, logopedów oraz doradców zawodowych (maks. 22h). Wprowadzone tutaj wartości zostaną zastosowane jako domyślne w całej szkole.
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-1">
+            {(['przedmiotowy', 'wspomagajacy', 'swietlica', 'biblioteka', 'specjalista', 'doradca'] as StandardPositionType[]).map((type) => {
+              const meta = metaMap[type];
+              const customVal = schoolBasePensum?.[type];
+              return (
+                <div key={type} className="bg-white p-2 rounded-lg border border-indigo-100 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-extrabold text-slate-700 truncate" title={meta.label}>
+                      {meta.label.split('(')[0].trim()}
+                    </span>
+                    <span className="text-[8px] font-bold px-1 rounded bg-slate-100 text-slate-500">
+                      {meta.unitMinutes}m
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={1}
+                      max={40}
+                      step={1}
+                      value={customVal ?? meta.defaultPensum}
+                      onChange={(e) => handleUpdateSchoolBasePensum(type, parseInt(e.target.value) || 0)}
+                      className={`w-full px-1.5 py-0.5 text-xs font-black border rounded text-center outline-none ${
+                        customVal !== undefined && customVal !== STANDARD_POSITIONS_META[type].defaultPensum
+                          ? 'border-indigo-500 bg-indigo-50/50 text-indigo-900'
+                          : 'border-slate-200 bg-white text-slate-800'
+                      }`}
+                    />
+                    <span className="text-[9px] text-slate-400 font-bold">h</span>
+                  </div>
+                  <span className="text-[8px] text-slate-400 block truncate" title={meta.legalBasis}>
+                    KN: {STANDARD_POSITIONS_META[type].defaultPensum}h
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Szybkie szablony (Presets) */}
       <div className="space-y-1.5">
@@ -237,14 +388,67 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
           <label className="text-[9.5px] text-slate-500 font-extrabold uppercase tracking-wider">
             Przydział godzin i stanowisk ({positions.length}):
           </label>
-          <button
-            type="button"
-            onClick={addPosition}
-            className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 transition cursor-pointer"
-          >
-            <Plus size={12} /> Dodaj stanowisko (pensum łączone)
-          </button>
+          <div className="flex items-center gap-1.5">
+            {positions.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setShowSplitTools(!showSplitTools)}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded transition flex items-center gap-1 cursor-pointer ${
+                  showSplitTools 
+                    ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+                title="Ręczny i automatyczny podział puli godzin między stanowiska"
+              >
+                <Split size={12} />
+                <span>Ręczny podział puli</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={addPosition}
+              className="text-[10px] font-black text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 transition cursor-pointer"
+            >
+              <Plus size={12} /> Dodaj stanowisko (pensum łączone)
+            </button>
+          </div>
         </div>
+
+        {/* Narzędzie podziału puli godzin bez gubienia reszty */}
+        {showSplitTools && positions.length > 1 && (
+          <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg space-y-1.5 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-extrabold text-amber-900">
+                Podział łącznej puli godzin na {positions.length} role (ostatnia rola otrzymuje resztę):
+              </span>
+              <span className="font-bold text-slate-500">
+                Aktualna suma: <strong>{positions.reduce((sum, p) => sum + p.hours, 0).toFixed(1)}h</strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={50}
+                step={0.1}
+                placeholder="np. 10.0"
+                value={splitPoolHours}
+                onChange={(e) => setSplitPoolHours(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                className="w-24 px-2 py-1 text-xs border border-amber-300 rounded bg-white font-bold text-slate-800 outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAutoDistribute}
+                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10.5px] font-bold shadow-2xs transition cursor-pointer"
+              >
+                Rozdziel na role (bez reszty)
+              </button>
+              <span className="text-[9px] text-slate-500">
+                Możesz również edytować godziny poszczególnych ról poniżej (krok 0.1h).
+              </span>
+            </div>
+          </div>
+        )}
 
         {positions.length === 0 ? (
           <div className="p-3 bg-white border border-slate-200 rounded-lg text-center space-y-1">
@@ -252,7 +456,7 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
               Brak zdefiniowanych stanowisk szczegółowych.
             </p>
             <p className="text-[10px] text-slate-400">
-              Używany jest domyślny wymiar pensum dydaktycznego: <strong>18 godzin tygodniowo (45 min)</strong>.
+              Nauczyciel bez przydziałów posiada 0h obciążenia dydaktycznego i etat 0 FTE.
             </p>
           </div>
         ) : (
@@ -297,9 +501,9 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
                     <div className="sm:col-span-2 flex items-center gap-1">
                       <input
                         type="number"
-                        min={0.5}
+                        min={0}
                         max={40}
-                        step={0.5}
+                        step={0.1}
                         value={pos.hours}
                         onChange={(e) => updatePosition(pos.id, { hours: parseFloat(e.target.value) || 0 })}
                         className="w-16 px-2 py-1 text-[11px] font-black border border-slate-200 rounded bg-white text-slate-900 outline-none text-center"
@@ -348,7 +552,7 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
             <Sparkles size={13} className="text-indigo-600" />
             Rozliczenie tygodniowe:
           </span>
-          {livePreview.isCombined && (
+          {(livePreview.isCombined || livePreview.isCombinedPensum) && (
             <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-black px-2 py-0.5 rounded-full shadow-2xs">
               ⚡ Pensum łączone (uśrednione)
             </span>
@@ -383,17 +587,91 @@ export const TeacherWorkloadEditor: React.FC<TeacherWorkloadEditorProps> = ({
               {livePreview.averagedPensum}h
             </div>
             <span className="text-[8.5px] text-slate-400 font-medium">
-              {livePreview.isCombined ? 'uśrednione ze wzoru' : 'bazowe'}
+              {(livePreview.isCombined || livePreview.isCombinedPensum) ? 'uśrednione ze wzoru' : 'bazowe'}
             </span>
           </div>
 
-          {/* Nadgodziny */}
+          {/* Nadwyżka ponad 1,0 etatu (Nadgodziny vs Drugi etat) */}
           <div className="bg-white/90 p-2 rounded-lg border border-indigo-100">
-            <span className="text-[8.5px] font-bold text-slate-400 uppercase block">Nadgodziny</span>
-            <div className={`text-xs font-black ${livePreview.overtimeHours > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-              {livePreview.overtimeHours > 0 ? `+${livePreview.overtimeHours}h` : '0h'}
+            <span className="text-[8.5px] font-bold text-slate-400 uppercase block truncate" title={currentHandling === 'overtime' ? 'Godziny ponadwymiarowe' : 'Drugi etat (odrębna umowa)'}>
+              {currentHandling === 'overtime' ? 'Nadgodziny' : 'Drugi etat'}
+            </span>
+            <div className={`text-xs font-black ${
+              currentHandling === 'overtime'
+                ? (livePreview.overtimeHours > 0 ? 'text-rose-600' : 'text-emerald-600')
+                : ((livePreview.secondContractFte ?? 0) > 0 ? 'text-purple-600' : 'text-emerald-600')
+            }`}>
+              {currentHandling === 'overtime'
+                ? (livePreview.overtimeHours > 0 ? `+${livePreview.overtimeHours}h` : '0h')
+                : ((livePreview.secondContractFte ?? 0) > 0 ? `+${(livePreview.secondContractFte ?? 0).toFixed(2)} FTE` : '0 FTE')
+              }
             </div>
-            <span className="text-[8.5px] text-slate-400 font-medium">ponad etat</span>
+            <span className="text-[8.5px] text-slate-400 font-medium truncate block">
+              {currentHandling === 'overtime'
+                ? 'ponad 1,0 etatu'
+                : ((livePreview.secondContractHours ?? 0) > 0 ? `+${livePreview.secondContractHours}h w odr. umowie` : 'w ramach 1 etatu')
+              }
+            </span>
+          </div>
+        </div>
+
+        {/* Przełącznik: Kwalifikacja nadwyżki ponad 1,0 etatu */}
+        <div className="bg-white/95 p-2.5 rounded-lg border border-indigo-100 space-y-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-1">
+            <label className="text-[9.5px] font-black text-slate-700 uppercase tracking-wide flex items-center gap-1">
+              <span>⚖️</span> Traktuj nadwyżkę ponad 1,0 etatu jako:
+            </label>
+            <span className="text-[8.5px] font-semibold text-slate-400">
+              {isSingleType ? '(Jednorodne stanowisko — domyślnie nadgodziny)' : '(Stanowiska łączone — domyślnie drugi etat)'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition select-none ${
+              currentHandling === 'overtime'
+                ? 'bg-rose-50/70 border-rose-300 text-rose-900 shadow-2xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}>
+              <input
+                type="radio"
+                name="overtimeHandlingChoice"
+                value="overtime"
+                checked={currentHandling === 'overtime'}
+                onChange={() => onChangeOvertimeHandling && onChangeOvertimeHandling('overtime')}
+                className="mt-0.5 text-rose-600 focus:ring-rose-500 cursor-pointer"
+              />
+              <div className="min-w-0">
+                <span className="text-[10.5px] font-black block">
+                  Godziny ponadwymiarowe (nadgodziny)
+                </span>
+                <span className="text-[8.5px] text-slate-500 block leading-tight">
+                  Płatne z pensum bazowego / uśrednionego jako przekroczenie tygodniowego etatu.
+                </span>
+              </div>
+            </label>
+
+            <label className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition select-none ${
+              currentHandling === 'second_contract'
+                ? 'bg-purple-50/70 border-purple-300 text-purple-900 shadow-2xs'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}>
+              <input
+                type="radio"
+                name="overtimeHandlingChoice"
+                value="second_contract"
+                checked={currentHandling === 'second_contract'}
+                onChange={() => onChangeOvertimeHandling && onChangeOvertimeHandling('second_contract')}
+                className="mt-0.5 text-purple-600 focus:ring-purple-500 cursor-pointer"
+              />
+              <div className="min-w-0">
+                <span className="text-[10.5px] font-black block">
+                  Drugi etat (odrębna umowa o pracę)
+                </span>
+                <span className="text-[8.5px] text-slate-500 block leading-tight">
+                  Rozliczane jako odrębna część etatu (FTE) na osobnym stanowisku wg art. 42 KN.
+                </span>
+              </div>
+            </label>
           </div>
         </div>
 

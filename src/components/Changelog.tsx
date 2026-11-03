@@ -31,7 +31,7 @@ export default function Changelog() {
   const versions: Version[] = [
     {
       version: 'v3.10.0',
-      date: 'Listopad 2026',
+      date: '2 listopada 2026',
       title: 'Kompleksowa Reforma Pensum i Nadgodzin w Szkole Podstawowej (Karta Nauczyciela art. 42) oraz Moduł 4: Porównywanie Wariantów Split-Screen Diff',
       description: 'Przełomowe wydanie v3.10.0 wprowadzające pełne odzwierciedlenie przepisów o czasie pracy nauczycieli w szkole podstawowej: zróżnicowane pensum (przedmiotowe 18h, wspomagający 20h, świetlica 26h, bibliotekarz 30h, specjaliści i doradcy 22h, pracownicy niepedagogiczni 40h), proporcjonalny wzór pensum łączonego, rozróżnienie jednostek czasu (45 min lekcyjne vs 60 min świetlicowe/opiekuńcze), wyliczanie sugerowanego limitu dyżurów korytarzowych wg godzin tablicowych, kontrolę 40-godzinnego budżetu czasu pracy, nowy edytor TeacherWorkloadEditor w Kreatorze Szkoły, a także Moduł 4: tryb porównywania wariantów planu lekcji Split-Screen Diff z funkcją cherry-pickingu zajęć.',
       badge: 'Najnowsza',

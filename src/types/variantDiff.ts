@@ -26,7 +26,11 @@ export interface DiffSlotItem {
   roomId?: string;
   className?: string;
   classId?: string;
+  groupId?: string;
+  groupName?: string;
+  group?: string;
   lesson?: Lesson;
+  lessonKey?: string;
   note?: string;
   isUnneeded?: boolean;
 }
