@@ -1,4 +1,4 @@
-# SalePlan Pro v3.10.0 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.11.0 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -245,7 +245,15 @@ Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym a
 ## 📈 Podsumowanie Statusu Prac
 
 ### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Kompleksowa Reforma Pensum i Obliczania Nadgodzin w Szkole Podstawowej (Karta Nauczyciela art. 42 • v3.10.0)**:
+1.  **Modularyzacja Architektury, Optymalizacja Wariantów Diff oraz Integracja Pensum w Dyżurach (v3.11.0)**:
+    *   **Modularyzacja komponentów monolitycznych**: Dekompozycja `KreatorSzkoly.tsx` na niezależne podkomponenty (`KreatorStepBuildings`, `KreatorStepSubjects`, `KreatorStepCorridors`, `KreatorStepSummary`, `constants.ts`) oraz `PlanKlas.tsx` na dedykowane moduły (`PlanKlasAssignTab`, `PlanKlasTeachersTab`, `PlanKlasSpeSlotModal`, `PlanKlasEditCellModal`) – zmniejszenie złożoności o ponad 2400 linii i znaczące przyspieszenie renderowania.
+    *   **Optymalizacja silnika Split-Screen Diff**: Budowanie zbiorów zmienionych nauczycieli i sal bezpośrednio ze zmian oddziałów w `computeAllDiffs` bez nadmiarowych podwójnych wywołań.
+    *   **Indeksowanie slotów wg sal i nauczycieli (`lessonsBySlot`)**: Wprowadzenie jednolinijkowego indeksu `dzień|godzina -> lista lekcji` zamiast powtarzanych przeszukiwań `Object.entries`, z pełną obsługą podziału na grupy.
+    *   **Ścisła ekwiwalencja komórek planu**: Rozszerzenie reguł `areSlotsEquivalent` o identyfikator oddziału (`classId`) oraz przynależność do grup.
+    *   **Sanityzacja eksportu diff do Excela**: Bezpieczne oczyszczanie nazw plików ze znaków specjalnych `/[\\/:*?"<>|]/g` oraz ochrona przed przekroczeniem limitu długości ścieżki.
+    *   **Integracja pensum w kalkulatorze limitów dyżurów**: Przekazywanie szkolnego pensum bazowego (`appState.school.basePensumConfig`) oraz reguł nadgodzin (`appState.school.overtimeDefaultHandling`) w funkcji `getPersonFteProportion` w module `Dyzury.tsx`.
+    *   **Audyt i higiena kodu**: Usunięcie zbędnych zmiennych w `calculateTeacherWorkload`, zabezpieczenie plików tymczasowych w `.gitignore`, pełna zgodność ESLint/TypeScript oraz 100% zdanych testów w 20 pakietach Vitest.
+2.  **Kompleksowa Reforma Pensum i Obliczania Nadgodzin w Szkole Podstawowej (Karta Nauczyciela art. 42 • v3.10.0)**:
     *   **Zróżnicowane pensum wg stanowisk w SP**: Przedmiotowy 18h, wspomagający 20h, świetlica 26h, biblioteka 30h, specjaliści (pedagog, psycholog, logopeda, terapeuta) 22h, doradca 22h oraz obsługa niepedagogiczna 40h (Kodeks Pracy).
     *   **Wzór pensum łączonego**: Proporcjonalna formuła organu prowadzącego $P = \sum h_i / \sum (h_i / P_i)$ z dynamicznym wyliczaniem ułamka etatu (FTE) i godzin ponadwymiarowych (nadgodzin).
     *   **Zróżnicowanie jednostek czasu (45 min lekcyjne vs 60 min świetlica/opieka)**: Prezentacja w odrębnych kolumnach w tabelach obciążeń, statystykach i arkuszach Excel `.xlsx`.

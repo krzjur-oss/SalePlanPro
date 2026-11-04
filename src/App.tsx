@@ -1213,7 +1213,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.10.0';
+  const CURRENT_VERSION = '3.11.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -3346,9 +3346,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.10.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.11.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Reforma pensum i nadgodzin SP (Karta Nauczyciela art. 42), wzór pensum łączonego, zróżnicowanie 45/60 min oraz Moduł 4: Porównywanie wariantów Split-Screen Diff.
+                  Modularyzacja architektury Kreatora i Planu Klas, optymalizacja indeksów wariantu Diff oraz integracja pensum w kalkulatorze dyżurów.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

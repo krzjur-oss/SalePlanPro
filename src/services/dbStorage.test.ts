@@ -147,7 +147,7 @@ describe('dbStorage Encryption & Rollback Tests', () => {
   it('enableDatabaseEncryption backs up data before migration and verifies every key', async () => {
     // 1. Initial plaintext data
     const originalAppState = { school: { name: 'Szkoła Przed Szyfrowaniem' } };
-    localStorage.setItem(STORAGE_KEYS.APP_STATE, JSON.stringify(originalAppState));
+    await setStorageItem(STORAGE_KEYS.APP_STATE, originalAppState);
 
     const password = 'NewEncryptionPassword2026!';
 

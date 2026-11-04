@@ -950,7 +950,8 @@ export async function clearAllStorage(): Promise<void> {
         const store = tx.objectStore(STORE_NAME);
         const req = store.clear();
 
-        req.onsuccess = () => resolve();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
         req.onerror = () => reject(req.error);
       } catch (err) {
         reject(err);

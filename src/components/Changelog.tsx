@@ -30,11 +30,28 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.11.0',
+      date: '4 listopada 2026',
+      title: 'Modularyzacja Architektury (Kreator i Plan Klas), Optymalizacja Silnika Diff i Wariantów, Integracja Pensum w Dyżurach',
+      description: 'Wydanie v3.11.0 wprowadza gruntowną modularyzację monolitycznych komponentów programu (zmniejszenie objętości kodu o ponad 2400 linii i podział na niezależne podmoduły w Kreatorze Szkoły i Planie Klas), optymalizację silnika porównywania wariantów Split-Screen Diff (indeksowanie slotów wg sal/nauczycieli, obsługa grup i sanityzacja eksportu Excel) oraz bezpośrednie uwzględnienie pensum bazowego szkoły w kalkulatorze limitów dyżurów.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'improvement', text: 'Modularyzacja KreatorSzkoly.tsx: Dekompozycja kroków kreatora na niezależne komponenty (KreatorStepBuildings, KreatorStepSubjects, KreatorStepCorridors, KreatorStepSummary) oraz moduł wspólnych stałych constants.ts.', badgeText: 'Architektura' },
+        { type: 'improvement', text: 'Modularyzacja PlanKlas.tsx: Wydzielenie zakładek i okien dialogowych (PlanKlasAssignTab, PlanKlasTeachersTab, PlanKlasSpeSlotModal, PlanKlasEditCellModal) z zachowaniem pełnej spójności stanu i responsywności.', badgeText: 'Plan Klas' },
+        { type: 'improvement', text: 'Optymalizacja obliczeń Split-Screen Diff: W computeAllDiffs zbiory zmienionych nauczycieli i sal budowane są bezpośrednio ze zmian oddziałów bez nadmiarowych podwójnych przeliczeń.', badgeText: 'Silnik Diff' },
+        { type: 'improvement', text: 'Jednoliniowy indeks slotów (lessonsBySlot): W widokach porównania wariantów wg sal i nauczycieli zastosowano szybki indeks dzień|godzina zamiast wielokrotnego przeszukiwania tablic.', badgeText: 'Wydajność' },
+        { type: 'fix', text: 'Precyzyjna ekwiwalencja komórek planu: Rozszerzono funkcję areSlotsEquivalent o weryfikację identyfikatora oddziału (classId) oraz podziału na grupy.', badgeText: 'Detekcja zmian' },
+        { type: 'fix', text: 'Sanityzacja nazw plików eksportu Excel: Bezpieczne czyszczenie znaków specjalnych (\\ / : * ? " < > |) oraz kontrola maksymalnej długości nazwy pliku raportu diff.', badgeText: 'Eksport Excel' },
+        { type: 'improvement', text: 'Integracja pensum bazowego w module Dyżurów: W Dyzury.tsx funkcja getPersonFteProportion przekazuje szkolne pensum bazowe (basePensumConfig) i zasady nadgodzin (overtimeDefaultHandling) do kalkulatora obciążenia.', badgeText: 'Dyżury & Pensum' },
+        { type: 'security', text: 'Optymalizacja silnika i czyszczenie repozytorium: Usunięcie zbędnych zmiennych w kalkulatorze obciążeń, zabezpieczenie konfiguracji środowiska w .gitignore oraz pomyślny audyt 20 pakietów testowych.', badgeText: 'Audyt & Bezpieczeństwo' }
+      ]
+    },
+    {
       version: 'v3.10.0',
       date: '2 listopada 2026',
       title: 'Kompleksowa Reforma Pensum i Nadgodzin w Szkole Podstawowej (Karta Nauczyciela art. 42) oraz Moduł 4: Porównywanie Wariantów Split-Screen Diff',
       description: 'Przełomowe wydanie v3.10.0 wprowadzające pełne odzwierciedlenie przepisów o czasie pracy nauczycieli w szkole podstawowej: zróżnicowane pensum (przedmiotowe 18h, wspomagający 20h, świetlica 26h, bibliotekarz 30h, specjaliści i doradcy 22h, pracownicy niepedagogiczni 40h), proporcjonalny wzór pensum łączonego, rozróżnienie jednostek czasu (45 min lekcyjne vs 60 min świetlicowe/opiekuńcze), wyliczanie sugerowanego limitu dyżurów korytarzowych wg godzin tablicowych, kontrolę 40-godzinnego budżetu czasu pracy, nowy edytor TeacherWorkloadEditor w Kreatorze Szkoły, a także Moduł 4: tryb porównywania wariantów planu lekcji Split-Screen Diff z funkcją cherry-pickingu zajęć.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Zróżnicowane pensum wg stanowisk i funkcji (Karta Nauczyciela art. 42 ust. 3): Nauczyciel przedmiotowy (18h), współorganizujący kształcenie (20h), świetlica (26h), biblioteka (30h), pedagog/psycholog/logopeda/terapeuta (maks. 22h), doradca zawodowy (maks. 22h) oraz obsługa niepedagogiczna (40h wg Kodeksu Pracy).', badgeText: 'Karta Nauczyciela' },
         { type: 'feature', text: 'Proporcjonalny wzór pensum łączonego: Obliczanie uśrednionego pensum przy łączeniu etatów wg reguły organu prowadzącego: P = Σh_i / Σ(h_i / P_i), z precyzyjnym wyznaczaniem ułamka etatu (FTE) oraz godzin ponadwymiarowych (nadgodzin).', badgeText: 'Pensum łączone' },
