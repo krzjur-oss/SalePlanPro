@@ -619,4 +619,118 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
 
     unsubTabB();
   });
+
+  describe('commitState: atomic transaction, promise queue, and Web Locks', () => {
+    it('atomowo zapisuje APP_STATE, SCHED_DATA i STATE_META w pojedynczej transakcji', async () => {
+      const { commitState, getStorageItem, STORAGE_KEYS } = await import('./persistence');
+
+      const app = createSampleAppState('Szkoła Atomowa Commit');
+      const sched = createSampleSchedData();
+
+      const success = await commitState(app, sched, {
+        revision: 4,
+        tabId: 'tab_atomic_1',
+        tabLabel: 'Karta Atomowa'
+      });
+      expect(success).toBe(true);
+
+      const savedApp = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+      const savedSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
+      const savedMeta = await getStorageItem<any>(STORAGE_KEYS.STATE_META);
+
+      expect(savedApp?.school?.name).toBe('Szkoła Atomowa Commit');
+      expect((savedApp as any).revision).toBe(4);
+      expect((savedApp as any).tabId).toBe('tab_atomic_1');
+      expect(savedSched).not.toBeNull();
+      expect(savedMeta?.revision).toBe(4);
+      expect(savedMeta?.tabId).toBe('tab_atomic_1');
+      expect(savedMeta?.tabLabel).toBe('Karta Atomowa');
+    });
+
+    it('porównuje rewizję wewnątrz transakcji i odrzuca zapis przy konflikcie', async () => {
+      const { commitState, getStorageItem, STORAGE_KEYS } = await import('./persistence');
+
+      // 1. Zapis bazowy w rewizji 10 przez inną kartę (tab_remote)
+      const appRemote = createSampleAppState('Szkoła z Karty Zdalnej');
+      const schedRemote = createSampleSchedData();
+      const savedRemote = await commitState(appRemote, schedRemote, {
+        revision: 10,
+        tabId: 'tab_remote_10'
+      });
+      expect(savedRemote).toBe(true);
+
+      // 2. Próba zapisu przez lokalną kartę z przestarzałą bazą rewizji 8 (brak forceOverwrite)
+      const appLocalStale = createSampleAppState('Szkoła Próba Nadpisania');
+      const schedLocalStale = createSampleSchedData();
+      const conflictResult = await commitState(appLocalStale, schedLocalStale, {
+        baseRevision: 8,
+        tabId: 'tab_local_stale',
+        forceOverwrite: false
+      });
+
+      // Zapis musi zostać odrzucony
+      expect(conflictResult).toBe(false);
+
+      // Stan bazy danych pozostał nienaruszony (rewizja 10, nazwa ze zdalnej karty)
+      const currentMeta = await getStorageItem<any>(STORAGE_KEYS.STATE_META);
+      const currentApp = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+      expect(currentMeta?.revision).toBe(10);
+      expect(currentMeta?.tabId).toBe('tab_remote_10');
+      expect(currentApp?.school?.name).toBe('Szkoła z Karty Zdalnej');
+    });
+
+    it('kolejka promisów: ostatni zapis wygrywa, a oczekujące promisy są łączone', async () => {
+      const { commitState, getStorageItem, STORAGE_KEYS } = await import('./persistence');
+
+      const app1 = createSampleAppState('Wersja Kolejki 1');
+      const app2 = createSampleAppState('Wersja Kolejki 2');
+      const app3 = createSampleAppState('Wersja Kolejki 3 (Wygrywa)');
+      const sched = createSampleSchedData();
+
+      // Równoległe wysłanie 3 zapisów w tym samym ticku
+      const p1 = commitState(app1, sched, { forceOverwrite: true });
+      const p2 = commitState(app2, sched, { forceOverwrite: true });
+      const p3 = commitState(app3, sched, { forceOverwrite: true });
+
+      const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+
+      // Wszystkie wywołania kończą się sukcesem (łączone)
+      expect(r1).toBe(true);
+      expect(r2).toBe(true);
+      expect(r3).toBe(true);
+
+      // Ostateczny stan bazy to ostatni zapis (Wersja 3)
+      const finalApp = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
+      expect(finalApp?.school?.name).toBe('Wersja Kolejki 3 (Wygrywa)');
+    });
+
+    it('używa navigator.locks.request("saleplan-write", ...) gdy API jest dostępne', async () => {
+      const lockRequestSpy = vi.fn(async (_name: string, callback: () => Promise<any>) => {
+        return await callback();
+      });
+
+      const originalLocks = (navigator as any).locks;
+      Object.defineProperty(navigator, 'locks', {
+        value: { request: lockRequestSpy },
+        configurable: true,
+        writable: true
+      });
+
+      try {
+        const { commitState } = await import('./persistence');
+        const app = createSampleAppState('Szkoła z Blokadą WebLock');
+        const sched = createSampleSchedData();
+
+        const success = await commitState(app, sched, { forceOverwrite: true });
+        expect(success).toBe(true);
+        expect(lockRequestSpy).toHaveBeenCalledWith('saleplan-write', expect.any(Function));
+      } finally {
+        Object.defineProperty(navigator, 'locks', {
+          value: originalLocks,
+          configurable: true,
+          writable: true
+        });
+      }
+    });
+  });
 });

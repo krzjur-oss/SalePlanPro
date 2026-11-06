@@ -16,13 +16,13 @@ function swVersioningPlugin(): Plugin {
     name: 'sw-versioning-plugin',
     generateBundle(options, bundle) {
       const assetKeys = Object.keys(bundle);
-      // Generate a unique, deterministic build ID based on timestamp and chunk hashes
+      // Generate a unique, deterministic build ID based on chunk hashes (deterministic, without Date.now())
       const contentDigest = crypto
         .createHash('sha256')
         .update(assetKeys.sort().join('|'))
         .digest('hex')
         .substring(0, 10);
-      const buildId = `v_${Date.now().toString(36)}_${contentDigest}`;
+      const buildId = `v_${contentDigest}`;
 
       const swPath = path.resolve(__dirname, 'public/sw.js');
       if (fs.existsSync(swPath)) {

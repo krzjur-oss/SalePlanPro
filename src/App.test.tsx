@@ -23,9 +23,11 @@ import {
   isDatabaseEncryptionActive,
   isSessionUnlocked
 } from './lib/crypto';
+import { resetStoragePersistFlag } from './services/persistence';
 
 describe('App Smoke & Security State Tests', () => {
   beforeEach(async () => {
+    resetStoragePersistFlag();
     localStorage.clear();
     sessionStorage.clear();
     removeStorageEncryptionMeta();
@@ -289,6 +291,152 @@ describe('App Smoke & Security State Tests', () => {
     await waitFor(async () => {
       const backupAfter = await getRawItem(STORAGE_KEYS.PRE_ENCRYPTION_BACKUP);
       expect(backupAfter).toBeNull();
+    });
+  });
+
+  it('beforeunload ustawia event.returnValue gdy saveStatus !== "saved", a visibilitychange wywołuje flushNow', async () => {
+    const initialAppState = {
+      yearKey: 'y_2025_2026',
+      yearLabel: '2025/2026',
+      school: { name: 'Szkoła Test Unload' },
+      hours: ['1'],
+      timeslots: [{ num: 1, start: '08:00', end: '08:45' }],
+      classes: [],
+      teachers: [],
+      subjects: [],
+      homerooms: {},
+      planLekcji: { classes: [], teachers: [], rooms: [], assignments: [], lessons: {} },
+      dyzury: { miejsca: [], przerwy: [], harmonogram: {}, settings: { autoBalance: true, maxPerTeacher: 2, excludeTeachers: [] } }
+    };
+    await setStorageItem(STORAGE_KEYS.APP_STATE, initialAppState);
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, {});
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-storage-ready="true"]')).not.toBeNull();
+    });
+
+    const input = await screen.findByPlaceholderText(/np\. Szkoła Podstawowa nr 15/i);
+
+    // 1. Zmiana stanu powoduje przejście saveStatus do 'dirty'
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'Szkoła Zmiana Nieutrwalona' } });
+    });
+    const nextBtn = screen.getByText(/Zapisz i Przejdź Dalej/i);
+    await act(async () => {
+      fireEvent.click(nextBtn);
+    });
+
+    // 2. Wysłanie zdarzenia beforeunload przy saveStatus !== 'saved'
+    const beforeUnloadEvt = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+    window.dispatchEvent(beforeUnloadEvt);
+
+    // W jsdom event.defaultPrevented jest ustawiane na true, a event.returnValue jest zdefiniowane
+    expect(beforeUnloadEvt.defaultPrevented).toBe(true);
+    expect(beforeUnloadEvt.returnValue).toBeDefined();
+
+    // 3. Wywołanie visibilitychange (hidden) wywołuje flushNow natychmiast
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    // Weryfikacja, że dane zostały zapisane
+    await waitFor(async () => {
+      const saved = await getStorageItem<any>(STORAGE_KEYS.APP_STATE);
+      expect(saved?.school?.name).toBe('Szkoła Zmiana Nieutrwalona');
+    });
+
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'visible',
+      configurable: true
+    });
+  });
+
+  it('wywołuje navigator.storage.persist() po pierwszym udanym zapisie', async () => {
+    const persistMock = vi.fn().mockResolvedValue(true);
+    Object.defineProperty(navigator, 'storage', {
+      value: {
+        persist: persistMock,
+        estimate: vi.fn().mockResolvedValue({ usage: 5000, quota: 10000000 })
+      },
+      configurable: true,
+      writable: true
+    });
+
+    const initialAppState = {
+      yearKey: 'y_2025_2026',
+      yearLabel: '2025/2026',
+      school: { name: 'Szkoła Test Persist', short: 'STP' },
+      hours: ['1'],
+      timeslots: [{ num: 1, start: '08:00', end: '08:45' }],
+      classes: [],
+      teachers: [],
+      subjects: [],
+      homerooms: {},
+      planLekcji: { classes: [], teachers: [], rooms: [], assignments: [], lessons: {} },
+      dyzury: { miejsca: [], przerwy: [], harmonogram: {}, settings: { autoBalance: true, maxPerTeacher: 2, excludeTeachers: [] } }
+    };
+    await setStorageItem(STORAGE_KEYS.APP_STATE, initialAppState);
+    await setStorageItem(STORAGE_KEYS.SCHED_DATA, {});
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-storage-ready="true"]')).not.toBeNull();
+    });
+
+    // Wymuszenie flushNow
+    await act(async () => {
+      if ((window as any).__saleplanFlushNow) {
+        await (window as any).__saleplanFlushNow();
+      }
+    });
+
+    expect(persistMock).toHaveBeenCalled();
+  });
+
+  it('przerzedza wersje autozapisu zachowując maksymalnie 3 z godziny oraz 1 ze starszych dób', async () => {
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    const currentBase = new Date(now);
+    currentBase.setMinutes(30, 0, 0);
+    const hourBase = currentBase.getTime();
+
+    // 1. Dodaj 5 wersji z tej samej godziny (minuty 30, 29, 28, 27, 26 - powinny zostać tylko 3 najnowsze)
+    for (let i = 0; i < 5; i++) {
+      const ts = hourBase - (i * 60 * 1000);
+      await setStorageItem(`autosave_${ts}`, {
+        id: `autosave-${ts}`,
+        timestamp: new Date(ts).toISOString(),
+        appState: { school: { name: `Wersja Godzina ${i}` } },
+        schedData: {}
+      });
+    }
+
+    // 2. Dodaj 3 wersje ze wczoraj (starsze niż 24h) - powinna zostać tylko 1 najnowsza
+    const yesterdayBase = hourBase - oneDay - (2 * oneHour);
+    for (let i = 0; i < 3; i++) {
+      const ts = yesterdayBase - (i * 60 * 1000);
+      await setStorageItem(`autosave_${ts}`, {
+        id: `autosave-${ts}`,
+        timestamp: new Date(ts).toISOString(),
+        appState: { school: { name: `Wersja Wczoraj ${i}` } },
+        schedData: {}
+      });
+    }
+
+    render(<App />);
+
+    await waitFor(async () => {
+      const allKeys = await dbStorage.getAllStorageKeys();
+      const autosaveKeys = allKeys.filter(k => k.startsWith('autosave_'));
+      // Z bieżącej godziny zostają 3, a z doby wczorajszej zostaje 1 -> łącznie 4
+      expect(autosaveKeys.length).toBe(4);
     });
   });
 });

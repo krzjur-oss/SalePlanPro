@@ -13,12 +13,17 @@ import {
   getDemoAppState, getDemoSchedData, downloadFile, getStorageSize, formatBytes, mergeClassNames 
 } from './utils';
 import {
-  STORAGE_KEYS, getStorageItem, getStorageItemSync, setStorageItem, removeStorageItem,
+  STORAGE_KEYS, getStorageItem, getStorageItemDetailed, getStorageItemSync, setStorageItem, removeStorageItem,
   clearAllStorage, migrateFromLocalStorage, getDetailedStorageStats, StorageStatistics,
-  isDatabaseEncryptionActive, isSessionUnlocked, StorageLockedError, removeStorageEncryptionMeta,
-  migrateAllStoredItemsToV2, cleanSchedDataMeta, writeSyncMirror, getRawItem, removeRawItem
+  isDatabaseEncryptionActive, isSessionUnlocked, StorageLockedError, StorageWriteBlockedError,
+  isWriteBlocked, setWriteBlocked, getBlockedWrites, removeStorageEncryptionMeta,
+  migrateAllStoredItemsToV2, cleanSchedDataMeta, writeSyncMirror, getRawItem, removeRawItem,
+  saveRecoveryBackup, getAllStorageKeys
 } from './services/dbStorage';
-import { persistAppStateAndSchedWithConflictCheck as persistWithConflictCheck } from './services/persistence';
+import {
+  persistAppStateAndSchedWithConflictCheck as persistWithConflictCheck,
+  maybeRequestStoragePersist
+} from './services/persistence';
 import UnlockScreen from './components/UnlockScreen';
 import ExportModal, { ExportOptions } from './components/ExportModal';
 import ImportModal from './components/ImportModal';
@@ -204,6 +209,10 @@ export default function App() {
     return [];
   });
 
+  const lastAutosaveTimeRef = useRef<number>(0);
+  const editCountSinceAutosaveRef = useRef<number>(0);
+  const lastAutosaveRevisionRef = useRef<number>(0);
+
   const [historyLogs, setHistoryLogs] = useState<AppEventLog[]>(() => {
     const saved = getStorageItemSync<AppEventLog[]>(STORAGE_KEYS.HISTORY_LOGS);
     if (saved && Array.isArray(saved)) {
@@ -245,12 +254,60 @@ export default function App() {
     formattedQuota: 'Pojemność nieograniczona'
   });
 
-  const refreshStorageStats = async () => {
+  const statsDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchStorageStats = useCallback(async () => {
     try {
+      if (typeof navigator !== 'undefined' && navigator.storage && typeof navigator.storage.estimate === 'function') {
+        const estimate = await navigator.storage.estimate();
+        const usedBytes = estimate.usage ?? 0;
+        const quotaBytes = estimate.quota ?? 1024 * 1024 * 1024;
+        const availableBytes = Math.max(0, quotaBytes - usedBytes);
+        const percentage = quotaBytes > 0 ? (usedBytes / quotaBytes) * 100 : 0;
+        setStorageStats({
+          usedBytes,
+          quotaBytes,
+          availableBytes,
+          percentage,
+          isIndexedDB: true,
+          formattedUsed: formatBytes(usedBytes),
+          formattedQuota: formatBytes(quotaBytes)
+        });
+        return;
+      }
       const stats = await getDetailedStorageStats();
       setStorageStats(stats);
-    } catch (e) {}
-  };
+    } catch (e) {
+      console.warn('[Storage] Nie udało się odświeżyć statystyk pamięci:', e);
+    }
+  }, []);
+
+  const refreshStorageStats = useCallback((immediate?: boolean) => {
+    if (immediate === true) {
+      if (statsDebounceTimerRef.current) {
+        clearTimeout(statsDebounceTimerRef.current);
+        statsDebounceTimerRef.current = null;
+      }
+      fetchStorageStats();
+      return;
+    }
+    if (statsDebounceTimerRef.current) {
+      clearTimeout(statsDebounceTimerRef.current);
+    }
+    statsDebounceTimerRef.current = setTimeout(() => {
+      statsDebounceTimerRef.current = null;
+      fetchStorageStats();
+    }, 30000);
+  }, [fetchStorageStats]);
+
+  useEffect(() => {
+    return () => {
+      if (statsDebounceTimerRef.current) {
+        clearTimeout(statsDebounceTimerRef.current);
+        statsDebounceTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     return isDatabaseEncryptionActive() && !isSessionUnlocked();
@@ -262,6 +319,7 @@ export default function App() {
     key: string;
     rawContent: string;
   } | null>(null);
+  const [blockedWrites, setBlockedWrites] = useState<Record<string, boolean>>(() => getBlockedWrites());
 
   // ── MULTI-TAB BROADCASTCHANNEL 'saleplan-state' & CONFLICT RESOLUTION ──
   const [showConflictModal, setShowConflictModal] = useState<boolean>(false);
@@ -306,32 +364,23 @@ export default function App() {
       // Zabezpieczenie: gdy baza NIE jest zaszyfrowana, sprawdź czy fizycznie obecne rekordy nie są uszkodzone
       const isEncrypted = isDatabaseEncryptionActive();
       if (!isEncrypted) {
-        const rawAppState = await getRawItem(STORAGE_KEYS.APP_STATE);
-        const parsedAppState = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
-        if (rawAppState !== null && rawAppState !== undefined && parsedAppState === null) {
-          let parsedRaw: unknown = rawAppState;
-          if (typeof rawAppState === 'string') {
-            try {
-              parsedRaw = JSON.parse(rawAppState);
-            } catch {
-              parsedRaw = null;
-            }
-          }
-
+        const appStateResult = await getStorageItemDetailed<AppState>(STORAGE_KEYS.APP_STATE);
+        if (appStateResult.status === 'corrupted') {
           let migratedSuccessfully = false;
-          if (parsedRaw && typeof parsedRaw === 'object' && !Array.isArray(parsedRaw)) {
-            const zodCheck = AppStateSchema.safeParse(parsedRaw);
+          const rawAppState = appStateResult.rawContent;
+          if (rawAppState && typeof rawAppState === 'object' && !Array.isArray(rawAppState)) {
+            const zodCheck = AppStateSchema.safeParse(rawAppState);
             if (!zodCheck.success) {
               console.warn('[App initStorage] Walidacja schematu APP_STATE nie powiodła się. Błędy Zod (parsed.error.issues):', zodCheck.error.issues);
             }
 
             try {
-              const normalized = sanitizeAppState(parsedRaw);
+              const normalized = sanitizeAppState(rawAppState);
               const normalizedCheck = AppStateSchema.safeParse(normalized);
               if (normalizedCheck.success) {
-                const backupKey = `${STORAGE_KEYS.APP_STATE}_recovery_backup_${Date.now()}`;
-                await setStorageItem(backupKey, rawAppState).catch(() => {});
-                await setStorageItem(STORAGE_KEYS.APP_STATE, normalizedCheck.data);
+                const backupKey = await saveRecoveryBackup(STORAGE_KEYS.APP_STATE, rawAppState).catch(() => `${STORAGE_KEYS.APP_STATE}_recovery_backup_${Date.now()}`);
+                setWriteBlocked(STORAGE_KEYS.APP_STATE, false);
+                await setStorageItem(STORAGE_KEYS.APP_STATE, normalizedCheck.data, { force: true });
                 console.info('[App initStorage] Pomyślnie znormalizowano i zmigrowano strukturę APP_STATE. Kopia zapasowa:', backupKey);
                 migratedSuccessfully = true;
               }
@@ -341,6 +390,7 @@ export default function App() {
           }
 
           if (!migratedSuccessfully) {
+            setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.APP_STATE]: true }));
             setCorruptDataModal({
               key: STORAGE_KEYS.APP_STATE,
               rawContent: typeof rawAppState === 'string' ? rawAppState : JSON.stringify(rawAppState, null, 2)
@@ -352,32 +402,23 @@ export default function App() {
           }
         }
 
-        const rawSched = await getRawItem(STORAGE_KEYS.SCHED_DATA);
-        const parsedSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
-        if (rawSched !== null && rawSched !== undefined && parsedSched === null) {
-          let parsedRawSched: unknown = rawSched;
-          if (typeof rawSched === 'string') {
-            try {
-              parsedRawSched = JSON.parse(rawSched);
-            } catch {
-              parsedRawSched = null;
-            }
-          }
-
+        const schedResult = await getStorageItemDetailed<SchedData>(STORAGE_KEYS.SCHED_DATA);
+        if (schedResult.status === 'corrupted') {
           let schedMigratedSuccessfully = false;
-          if (parsedRawSched && typeof parsedRawSched === 'object') {
-            const zodSchedCheck = SchedDataSchema.safeParse(parsedRawSched);
+          const rawSched = schedResult.rawContent;
+          if (rawSched && typeof rawSched === 'object') {
+            const zodSchedCheck = SchedDataSchema.safeParse(rawSched);
             if (!zodSchedCheck.success) {
               console.warn('[App initStorage] Walidacja schematu SCHED_DATA nie powiodła się. Błędy Zod (parsed.error.issues):', zodSchedCheck.error.issues);
             }
 
             try {
-              const cleanedSched = cleanSchedDataMeta(parsedRawSched as SchedData);
+              const cleanedSched = cleanSchedDataMeta(rawSched as SchedData);
               const cleanedCheck = SchedDataSchema.safeParse(cleanedSched);
               if (cleanedCheck.success) {
-                const backupKey = `${STORAGE_KEYS.SCHED_DATA}_recovery_backup_${Date.now()}`;
-                await setStorageItem(backupKey, rawSched).catch(() => {});
-                await setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanedCheck.data);
+                const backupKey = await saveRecoveryBackup(STORAGE_KEYS.SCHED_DATA, rawSched).catch(() => `${STORAGE_KEYS.SCHED_DATA}_recovery_backup_${Date.now()}`);
+                setWriteBlocked(STORAGE_KEYS.SCHED_DATA, false);
+                await setStorageItem(STORAGE_KEYS.SCHED_DATA, cleanedCheck.data, { force: true });
                 console.info('[App initStorage] Pomyślnie znormalizowano i zmigrowano strukturę SCHED_DATA. Kopia zapasowa:', backupKey);
                 schedMigratedSuccessfully = true;
               }
@@ -387,6 +428,7 @@ export default function App() {
           }
 
           if (!schedMigratedSuccessfully) {
+            setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.SCHED_DATA]: true }));
             setCorruptDataModal({
               key: STORAGE_KEYS.SCHED_DATA,
               rawContent: typeof rawSched === 'string' ? rawSched : JSON.stringify(rawSched, null, 2)
@@ -472,26 +514,105 @@ export default function App() {
         schedData: targetSchedData
       };
 
-      const idbArchive = await getStorageItem<ArchiveEntry[]>(STORAGE_KEYS.ARCHIVE);
-      if (idbArchive && Array.isArray(idbArchive)) {
-        setArchive(idbArchive);
+      const archiveRes = await getStorageItemDetailed<ArchiveEntry[]>(STORAGE_KEYS.ARCHIVE);
+      if (archiveRes.status === 'found') {
+        if (Array.isArray(archiveRes.data)) {
+          setArchive(archiveRes.data);
+        }
+        if (archiveRes.quarantinedCount && archiveRes.quarantinedCount > 0) {
+          notify(`Zabezpieczono ${archiveRes.quarantinedCount} uszkodzonych wpisów archiwum w kopii ratunkowej.`, 'info');
+        }
+      } else if (archiveRes.status === 'corrupted') {
+        setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.ARCHIVE]: true }));
+        setCorruptDataModal({
+          key: STORAGE_KEYS.ARCHIVE,
+          rawContent: typeof archiveRes.rawContent === 'string' ? archiveRes.rawContent : JSON.stringify(archiveRes.rawContent, null, 2)
+        });
+        setStorageInitError('Wykryto uszkodzone dane archiwum (ARCHIVE). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        storageReadyRef.current = false;
+        setStorageReady(false);
+        return;
       }
-      const idbSnaps = await getStorageItem<SnapshotEntry[]>(STORAGE_KEYS.SNAPSHOTS);
-      if (idbSnaps && Array.isArray(idbSnaps)) {
-        setSnapshots(idbSnaps);
+
+      const snapsRes = await getStorageItemDetailed<SnapshotEntry[]>(STORAGE_KEYS.SNAPSHOTS);
+      if (snapsRes.status === 'found') {
+        if (Array.isArray(snapsRes.data)) {
+          setSnapshots(snapsRes.data);
+        }
+        if (snapsRes.quarantinedCount && snapsRes.quarantinedCount > 0) {
+          notify(`Zabezpieczono ${snapsRes.quarantinedCount} uszkodzonych punktów przywracania w kopii ratunkowej.`, 'info');
+        }
+      } else if (snapsRes.status === 'corrupted') {
+        setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.SNAPSHOTS]: true }));
+        setCorruptDataModal({
+          key: STORAGE_KEYS.SNAPSHOTS,
+          rawContent: typeof snapsRes.rawContent === 'string' ? snapsRes.rawContent : JSON.stringify(snapsRes.rawContent, null, 2)
+        });
+        setStorageInitError('Wykryto uszkodzone dane punktów przywracania (SNAPSHOTS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        storageReadyRef.current = false;
+        setStorageReady(false);
+        return;
       }
-      const idbAutosaves = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS);
-      if (idbAutosaves && Array.isArray(idbAutosaves)) {
-        setAutosaveVersions(idbAutosaves);
+
+      const autosavesRes = await getStorageItemDetailed<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS);
+      if (autosavesRes.status === 'found') {
+        if (Array.isArray(autosavesRes.data) && autosavesRes.data.length > 0) {
+          // Migracja istniejących wersji do formatu osobnych kluczy autosave_<ts>
+          for (const item of autosavesRes.data) {
+            if (item && item.timestamp) {
+              const ts = new Date(item.timestamp).getTime();
+              if (!isNaN(ts) && ts > 0) {
+                await setStorageItem(`autosave_${ts}`, item);
+              }
+            }
+          }
+        }
+        if (autosavesRes.quarantinedCount && autosavesRes.quarantinedCount > 0) {
+          notify(`Zabezpieczono ${autosavesRes.quarantinedCount} uszkodzonych wersji autozapisu w kopii ratunkowej.`, 'info');
+        }
+      } else if (autosavesRes.status === 'corrupted') {
+        setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.AUTOSAVE_VERSIONS]: true }));
+        setCorruptDataModal({
+          key: STORAGE_KEYS.AUTOSAVE_VERSIONS,
+          rawContent: typeof autosavesRes.rawContent === 'string' ? autosavesRes.rawContent : JSON.stringify(autosavesRes.rawContent, null, 2)
+        });
+        setStorageInitError('Wykryto uszkodzone dane autozapisu (AUTOSAVE_VERSIONS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        storageReadyRef.current = false;
+        setStorageReady(false);
+        return;
       }
+
+      // Wczytanie z bazy danych wszystkich kluczy autosave_* z uwzględnieniem przerzedzania (3/godz, 1/doba)
+      const prunedAutosaves = await pruneAutosaveVersions();
+      if (prunedAutosaves.length > 0) {
+        setAutosaveVersions(prunedAutosaves);
+      }
+
       const idbLogs = await getStorageItem<AppEventLog[]>(STORAGE_KEYS.HISTORY_LOGS);
       if (idbLogs && Array.isArray(idbLogs) && idbLogs.length > 0) {
         setHistoryLogs(idbLogs);
       }
-      const idbVariants = await getStorageItem<PlanVariant[]>(STORAGE_KEYS.PLAN_VARIANTS);
-      if (idbVariants && Array.isArray(idbVariants) && idbVariants.length > 0) {
-        setPlanVariants(idbVariants);
+
+      const variantsRes = await getStorageItemDetailed<PlanVariant[]>(STORAGE_KEYS.PLAN_VARIANTS);
+      if (variantsRes.status === 'found') {
+        if (Array.isArray(variantsRes.data) && variantsRes.data.length > 0) {
+          setPlanVariants(variantsRes.data);
+        }
+        if (variantsRes.quarantinedCount && variantsRes.quarantinedCount > 0) {
+          notify(`Zabezpieczono ${variantsRes.quarantinedCount} uszkodzonych wariantów planu w kopii ratunkowej.`, 'info');
+        }
+      } else if (variantsRes.status === 'corrupted') {
+        setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.PLAN_VARIANTS]: true }));
+        setCorruptDataModal({
+          key: STORAGE_KEYS.PLAN_VARIANTS,
+          rawContent: typeof variantsRes.rawContent === 'string' ? variantsRes.rawContent : JSON.stringify(variantsRes.rawContent, null, 2)
+        });
+        setStorageInitError('Wykryto uszkodzone dane wariantów planu (PLAN_VARIANTS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        storageReadyRef.current = false;
+        setStorageReady(false);
+        return;
       }
+
       const idbActiveVarId = await getStorageItem<string>(STORAGE_KEYS.ACTIVE_VARIANT_ID);
       if (idbActiveVarId) {
         setActiveVariantId(idbActiveVarId);
@@ -653,35 +774,146 @@ export default function App() {
     setSnapshots(newSnaps);
   };
 
-  const pushAutosaveVersion = async (newAppState: AppState, newSchedData: SchedData) => {
-    if (!storageReadyRef.current || isLocked) return;
+  /**
+   * Przerzedzanie kopii autozapisu:
+   * - Z ostatnich 24 godzin: zachowuje do 3 najnowszych wersji na godzinę
+   * - Starsze niż 24 godziny: zachowuje 1 najnowszą wersję na dobę
+   * Nadmiarowe klucze są usuwane z bazy danych.
+   */
+  const pruneAutosaveVersions = async (): Promise<AutosaveVersion[]> => {
     try {
-      const saved = await getStorageItem<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS) || autosaveVersions;
-      let versions: AutosaveVersion[] = Array.isArray(saved) ? saved : [];
+      const allKeys = await getAllStorageKeys();
+      const autosaveKeys = allKeys.filter(k => k.startsWith('autosave_'));
+      if (autosaveKeys.length === 0) return [];
 
-      // Sprawdzenie, czy stan faktycznie uległ zmianie względem ostatniej wersji
-      if (versions.length > 0) {
-        const last = versions[0];
-        const currentHash = JSON.stringify({ appState: newAppState, schedData: newSchedData });
-        const lastHash = JSON.stringify({ appState: last.appState, schedData: last.schedData });
-        if (currentHash === lastHash) {
-          return; // No real change, don't duplicate
+      interface AutosaveItem {
+        key: string;
+        ts: number;
+        version: AutosaveVersion;
+      }
+      const items: AutosaveItem[] = [];
+
+      for (const k of autosaveKeys) {
+        try {
+          const v = await getStorageItem<AutosaveVersion>(k);
+          if (v && v.timestamp) {
+            const rawTs = parseInt(k.replace('autosave_', ''), 10);
+            const stampTs = new Date(v.timestamp).getTime();
+            const ts = !isNaN(rawTs) && rawTs > 0 ? rawTs : (!isNaN(stampTs) ? stampTs : 0);
+            items.push({ key: k, ts, version: v });
+          }
+        } catch {}
+      }
+
+      // Sortowanie chronologicznie: od najnowszej do najstarszej
+      items.sort((a, b) => b.ts - a.ts);
+
+      const now = Date.now();
+      const oneDayAgo = now - 24 * 60 * 60 * 1000;
+
+      const hourlyCounts = new Map<string, number>();
+      const dailyCounts = new Map<string, number>();
+
+      const keptItems: AutosaveItem[] = [];
+      const keysToDelete: string[] = [];
+
+      for (const item of items) {
+        const d = new Date(item.ts);
+        const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const hourKey = `${dayKey}-${String(d.getHours()).padStart(2, '0')}`;
+
+        if (item.ts >= oneDayAgo) {
+          // Ostatnie 24h: zachowaj do 3 z danej godziny
+          const count = hourlyCounts.get(hourKey) || 0;
+          if (count < 3) {
+            hourlyCounts.set(hourKey, count + 1);
+            keptItems.push(item);
+          } else {
+            keysToDelete.push(item.key);
+          }
+        } else {
+          // Starsze niż 24h: zachowaj 1 z danej doby
+          const count = dailyCounts.get(dayKey) || 0;
+          if (count < 1) {
+            dailyCounts.set(dayKey, count + 1);
+            keptItems.push(item);
+          } else {
+            keysToDelete.push(item.key);
+          }
         }
       }
 
+      // Usunięcie nadmiarowych kluczy
+      for (const k of keysToDelete) {
+        try {
+          await removeStorageItem(k);
+        } catch (err) {
+          console.warn(`[Autosave] Błąd usuwania starej wersji ${k}:`, err);
+        }
+      }
+
+      return keptItems.map(i => i.version);
+    } catch (e) {
+      console.warn('[Autosave] Błąd procedury przerzedzania autozapisu:', e);
+      return [];
+    }
+  };
+
+  /**
+   * Zapisuje nową wersję autozapisu do osobnego klucza autosave_<ts>:
+   * - Porównanie po numerze rewizji (zamiast JSON.stringify)
+   * - Tworzy nową wersję co najwyżej co 5 minut LUB po 50 zmianach (lub wymuszenie force)
+   * - Przeprowadza automatyczne przerzedzanie (3 z godziny, 1 z doby)
+   */
+  const pushAutosaveVersion = async (
+    newAppState: AppState,
+    newSchedData: SchedData,
+    options?: { force?: boolean }
+  ) => {
+    if (!storageReadyRef.current || isLocked || blockedWrites[STORAGE_KEYS.AUTOSAVE_VERSIONS] || isWriteBlocked(STORAGE_KEYS.AUTOSAVE_VERSIONS)) {
+      if (blockedWrites[STORAGE_KEYS.AUTOSAVE_VERSIONS] || isWriteBlocked(STORAGE_KEYS.AUTOSAVE_VERSIONS)) {
+        console.warn('Pominięto autozapis – zapis klucza AUTOSAVE_VERSIONS jest zablokowany z powodu uszkodzonych danych.');
+      }
+      return;
+    }
+
+    try {
+      // 1. Porównanie po numerze rewizji zamiast JSON.stringify
+      const currentRev = (newAppState as any).revision ?? multiTabStateService.getLocalRevision(STORAGE_KEYS.APP_STATE);
+      if (!options?.force && currentRev > 0 && currentRev === lastAutosaveRevisionRef.current) {
+        return; // Brak nowej rewizji, nie powielaj
+      }
+
+      // 2. Wersja tworzona co najwyżej co 5 minut (300 000 ms) LUB po 50 zmianach
+      const now = Date.now();
+      const timeDiff = now - lastAutosaveTimeRef.current;
+      const editCount = editCountSinceAutosaveRef.current;
+
+      if (!options?.force && lastAutosaveTimeRef.current > 0 && timeDiff < 5 * 60 * 1000 && editCount < 50) {
+        return;
+      }
+
+      // 3. Każda wersja jako osobny klucz autosave_<ts>
+      const autosaveKey = `autosave_${now}`;
       const newVersion: AutosaveVersion = {
-        id: `autosave-${Date.now()}`,
-        timestamp: new Date().toISOString(),
+        id: `autosave-${now}`,
+        timestamp: new Date(now).toISOString(),
         appState: JSON.parse(JSON.stringify(newAppState)),
         schedData: JSON.parse(JSON.stringify(newSchedData)),
+        revision: currentRev
       };
 
-      const nextVersions = [newVersion, ...versions].slice(0, 5); // Rozszerzono z 3 do 5 wersji dzięki pamięci IndexedDB
-      await setStorageItem(STORAGE_KEYS.AUTOSAVE_VERSIONS, nextVersions);
+      await setStorageItem(autosaveKey, newVersion);
+      lastAutosaveTimeRef.current = now;
+      editCountSinceAutosaveRef.current = 0;
+      lastAutosaveRevisionRef.current = currentRev;
+
+      // 4. Przerzedzanie (3 z godziny, 1 z doby)
+      const nextVersions = await pruneAutosaveVersions();
       setAutosaveVersions(nextVersions);
     } catch (e) {
+      if (e instanceof StorageWriteBlockedError) return;
       console.error('Błąd podczas wersjonowania autozapisu:', e);
-      throw e;
     }
   };
 
@@ -695,7 +927,7 @@ export default function App() {
 
   // Zapewnienie domyślnego wariantu planu, jeśli magazyn był pusty
   useEffect(() => {
-    if (!storageReady || isLocked) return;
+    if (!storageReady || isLocked || blockedWrites[STORAGE_KEYS.PLAN_VARIANTS] || isWriteBlocked(STORAGE_KEYS.PLAN_VARIANTS)) return;
     if (planVariants.length === 0 && appState.planLekcji) {
       const defaultVar: PlanVariant = {
         id: 'default_semestr_1',
@@ -727,11 +959,11 @@ export default function App() {
       setStorageItem(STORAGE_KEYS.ACTIVE_VARIANT_ID, defaultVar.id).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Default variant creation only triggers upon initial storage readiness or core structural changes
-  }, [storageReady, isLocked, appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
+  }, [storageReady, isLocked, blockedWrites, appState.planLekcji.classes.length, appState.planLekcji.teachers.length]);
 
   // Opóźniony automatyczny zapis zmian roboczych do aktywnego wariantu
   useEffect(() => {
-    if (!storageReady || isLocked) return;
+    if (!storageReady || isLocked || blockedWrites[STORAGE_KEYS.PLAN_VARIANTS] || isWriteBlocked(STORAGE_KEYS.PLAN_VARIANTS)) return;
     if (!activeVariantId || planVariants.length === 0) return;
 
     const timer = setTimeout(() => {
@@ -771,7 +1003,7 @@ export default function App() {
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Debounce auto-save only responds to substantive schedule data changes without thrashing on structural lengths
-  }, [storageReady, isLocked, appState.planLekcji.lessons, appState.planLekcji.assignments, appState.dyzury?.harmonogram, schedData, activeVariantId]);
+  }, [storageReady, isLocked, blockedWrites, appState.planLekcji.lessons, appState.planLekcji.assignments, appState.dyzury?.harmonogram, schedData, activeVariantId]);
 
   const handleSwitchVariant = (targetVariantId: string) => {
     const target = planVariants.find(v => v.id === targetVariantId);
@@ -1321,18 +1553,7 @@ export default function App() {
     historyLogs
   });
 
-  // Keep lastValidBackupRef updated when state is stable and not in restoring state
-  useEffect(() => {
-    if (!isRestoring) {
-      lastValidBackupRef.current = {
-        appState: JSON.parse(JSON.stringify(appState)),
-        schedData: JSON.parse(JSON.stringify(schedData)),
-        archive: JSON.parse(JSON.stringify(archive)),
-        snapshots: JSON.parse(JSON.stringify(snapshots)),
-        historyLogs: JSON.parse(JSON.stringify(historyLogs))
-      };
-    }
-  }, [appState, schedData, archive, snapshots, historyLogs, isRestoring]);
+  // lastValidBackupRef jest aktualizowany TYLKO bezpośrednio przed operacjami importu lub przywracania danych
 
   // Safety watchdog timer for isRestoring: prevents infinite loading screens
   useEffect(() => {
@@ -1486,6 +1707,48 @@ export default function App() {
     });
   };
 
+  const saveStatusRef = useRef(saveStatus);
+  saveStatusRef.current = saveStatus;
+
+  /**
+   * Wykonuje natychmiastowy zapis (flush) bieżącego stanu przez kolejkę z persistence (P3).
+   */
+  const flushNow = useCallback(async (): Promise<boolean> => {
+    if (!storageReadyRef.current || isLocked) return false;
+    try {
+      setSaveStatus('saving');
+      const saved = await persistAppStateAndSchedWithConflictCheck(
+        stateRef.current.appState,
+        stateRef.current.schedData,
+        { forceOverwrite: false }
+      );
+      if (saved) {
+        await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
+        setSaveStatus('saved');
+        refreshStorageStats();
+      } else {
+        setSaveStatus('dirty');
+      }
+      return saved;
+    } catch (e: unknown) {
+      console.error('Błąd zapisu flushNow:', e);
+      setSaveStatus('error');
+      return false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Flush now reads latest data via stateRef and stable helper references
+  }, [isLocked]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__saleplanFlushNow = flushNow;
+    }
+    return () => {
+      if (typeof window !== 'undefined' && (window as any).__saleplanFlushNow === flushNow) {
+        delete (window as any).__saleplanFlushNow;
+      }
+    };
+  }, [flushNow]);
+
   const handleLoadIncomingFromConflict = async () => {
     try {
       if (conflictData?.dbAppState) {
@@ -1603,11 +1866,14 @@ export default function App() {
     }
 
     setSaveStatus('dirty');
+    editCountSinceAutosaveRef.current += 1;
+
+    let innerTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handler = setTimeout(() => {
       setSaveStatus('saving');
       // Elegant micro-delay to allow visual status feedback
-      setTimeout(async () => {
+      innerTimer = setTimeout(async () => {
         try {
           const saved = await persistAppStateAndSchedWithConflictCheck(
             stateRef.current.appState,
@@ -1634,6 +1900,9 @@ export default function App() {
 
     return () => {
       clearTimeout(handler);
+      if (innerTimer) {
+        clearTimeout(innerTimer);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Debounced autosave effect triggers solely on substantive state/sched edits and storage status
   }, [appState, schedData, storageReady, isLocked]);
@@ -1675,9 +1944,31 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- Instant save on tab switch triggers on currentTab transitions
   }, [currentTab, storageReady, isLocked]);
 
-  // Unload fallback to secure any unsaved drafts instantly (Task 4)
+  // Unload & lifecycle fallback to secure drafts instantly on visibilitychange, pagehide, and beforeunload
   useEffect(() => {
-    const handleBeforeUnload = () => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushNow().catch((err) => {
+          console.warn('Błąd flushNow przy visibilitychange (hidden):', err);
+        });
+      }
+    };
+
+    const handlePageHide = () => {
+      if (!isDatabaseEncryptionActive()) {
+        try {
+          writeSyncMirror(STORAGE_KEYS.APP_STATE, stateRef.current.appState);
+          writeSyncMirror(STORAGE_KEYS.SCHED_DATA, stateRef.current.schedData);
+        } catch (e) {
+          console.warn('Błąd synchronicznego zapisu lustra przy pagehide:', e);
+        }
+      }
+      flushNow().catch((err) => {
+        console.warn('Błąd flushNow przy pagehide:', err);
+      });
+    };
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!storageReadyRef.current || isLocked) return;
       
       // 1 & 2. Synchroniczne lustro do localStorage tylko gdy szyfrowanie NIE jest aktywne
@@ -1690,49 +1981,55 @@ export default function App() {
         }
       }
 
-      // 3. Asynchroniczny zapis przez persistAppStateAndSchedWithConflictCheck (z forceOverwrite: false)
-      try {
-        persistAppStateAndSchedWithConflictCheck(
-          stateRef.current.appState,
-          stateRef.current.schedData,
-          { forceOverwrite: false }
-        ).catch((e) => {
-          console.warn('Błąd zapisu asynchronicznego przy beforeunload:', e);
-        });
-      } catch (e) {
-        console.error('Błąd zapisu przy opuszczeniu strony', e);
+      // 3. Asynchroniczny zapis przez flushNow (kolejka z P3)
+      flushNow().catch((e) => {
+        console.warn('Błąd zapisu asynchronicznego przy beforeunload:', e);
+      });
+
+      // 4. W beforeunload ustaw event.returnValue, gdy saveStatus !== 'saved'
+      if (saveStatusRef.current !== 'saved') {
+        event.preventDefault();
+        event.returnValue = 'Wprowadzone zmiany nie zostały jeszcze trwale zapisane.';
+        return 'Wprowadzone zmiany nie zostały jeszcze trwale zapisane.';
       }
     };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handlePageHide);
     window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handlePageHide);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Unload fallback runs on window beforeunload using stateRef
-  }, [isLocked]);
+  }, [flushNow, isLocked]);
 
   // Sync archive immediately (low frequency, separate key)
   useEffect(() => {
-    if (!storageReady || isLocked) return;
+    if (!storageReady || isLocked || blockedWrites[STORAGE_KEYS.ARCHIVE] || isWriteBlocked(STORAGE_KEYS.ARCHIVE)) return;
     setStorageItem(STORAGE_KEYS.ARCHIVE, archive)
-      .then(refreshStorageStats)
+      .then(() => refreshStorageStats())
       .catch((e: unknown) => {
+        if (e instanceof StorageWriteBlockedError) return;
         console.error('Błąd zapisu archiwum', e);
         setSaveStatus('error');
         notify('Nie udało się zapisać archiwum w bazie danych!', 'err');
       });
-  }, [archive, storageReady, isLocked]);
+  }, [archive, storageReady, isLocked, blockedWrites, refreshStorageStats]);
 
   // Sync snapshots immediately
   useEffect(() => {
-    if (!storageReady || isLocked) return;
+    if (!storageReady || isLocked || blockedWrites[STORAGE_KEYS.SNAPSHOTS] || isWriteBlocked(STORAGE_KEYS.SNAPSHOTS)) return;
     setStorageItem(STORAGE_KEYS.SNAPSHOTS, snapshots)
-      .then(refreshStorageStats)
+      .then(() => refreshStorageStats())
       .catch((e: unknown) => {
+        if (e instanceof StorageWriteBlockedError) return;
         console.error('Błąd zapisu punktów przywracania', e);
         setSaveStatus('error');
         notify('Nie udało się zapisać punktów przywracania!', 'err');
       });
-  }, [snapshots, storageReady, isLocked]);
+  }, [snapshots, storageReady, isLocked, blockedWrites, refreshStorageStats]);
 
   // ── UNDO / REDO STATE HANDLERS ──
   const pushToUndo = (stateToSave: SchedData) => {
@@ -2077,14 +2374,17 @@ export default function App() {
 
   const handleRestoreSnapshotState = async (restoredAppState: AppState, restoredSchedData: SchedData) => {
     const startTime = performance.now();
-    setIsRestoring(true);
 
-    // Save previous snapshot for atomic rollback in case of error
-    const preRestoreState = JSON.parse(JSON.stringify(appState));
-    const preRestoreSched = JSON.parse(JSON.stringify(schedData));
-    const preRestoreArchive = JSON.parse(JSON.stringify(archive));
-    const preRestoreSnapshots = JSON.parse(JSON.stringify(snapshots));
-    const preRestoreLogs = JSON.parse(JSON.stringify(historyLogs));
+    // Aktualizacja lastValidBackupRef TYLKO przed importem/przywracaniem stanu
+    lastValidBackupRef.current = {
+      appState: JSON.parse(JSON.stringify(appState)),
+      schedData: JSON.parse(JSON.stringify(schedData)),
+      archive: JSON.parse(JSON.stringify(archive)),
+      snapshots: JSON.parse(JSON.stringify(snapshots)),
+      historyLogs: JSON.parse(JSON.stringify(historyLogs))
+    };
+
+    setIsRestoring(true);
 
     try {
       if (import.meta.env.DEV) {
@@ -2102,15 +2402,6 @@ export default function App() {
 
       refreshStorageStats();
 
-      // Update backup ref
-      lastValidBackupRef.current = {
-        appState: JSON.parse(JSON.stringify(sanitizedState)),
-        schedData: JSON.parse(JSON.stringify(sanitizedSched)),
-        archive: JSON.parse(JSON.stringify(archive)),
-        snapshots: JSON.parse(JSON.stringify(snapshots)),
-        historyLogs: JSON.parse(JSON.stringify(historyLogs))
-      };
-
       const duration = performance.now() - startTime;
       if (import.meta.env.DEV) {
         console.log(`✅ Synchronizacja stanów i struktur zakończona pomyślnie.`);
@@ -2126,21 +2417,24 @@ export default function App() {
       );
     } catch (err: unknown) {
       console.error('❌ Błąd podczas procedury przywracania punktu:', err);
-      // Automatic rollback to preRestore state
-      setAppState(sortAppState(preRestoreState));
-      setSchedData(preRestoreSched);
-      setArchive(preRestoreArchive);
-      setSnapshots(preRestoreSnapshots);
-      setHistoryLogs(preRestoreLogs);
+      // Automatic rollback to lastValidBackupRef state
+      const backup = lastValidBackupRef.current;
+      if (backup) {
+        setAppState(sortAppState(backup.appState));
+        setSchedData(backup.schedData);
+        setArchive(backup.archive);
+        setSnapshots(backup.snapshots);
+        setHistoryLogs(backup.historyLogs);
 
-      await Promise.all([
-        setStorageItem(STORAGE_KEYS.APP_STATE, preRestoreState),
-        setStorageItem(STORAGE_KEYS.SCHED_DATA, preRestoreSched),
-        setStorageItem(STORAGE_KEYS.ARCHIVE, preRestoreArchive),
-        setStorageItem(STORAGE_KEYS.SNAPSHOTS, preRestoreSnapshots),
-        setStorageItem(STORAGE_KEYS.HISTORY_LOGS, preRestoreLogs)
-      ]);
-      refreshStorageStats();
+        await Promise.all([
+          setStorageItem(STORAGE_KEYS.APP_STATE, backup.appState),
+          setStorageItem(STORAGE_KEYS.SCHED_DATA, backup.schedData),
+          setStorageItem(STORAGE_KEYS.ARCHIVE, backup.archive),
+          setStorageItem(STORAGE_KEYS.SNAPSHOTS, backup.snapshots),
+          setStorageItem(STORAGE_KEYS.HISTORY_LOGS, backup.historyLogs)
+        ]);
+        refreshStorageStats();
+      }
 
       const errMsg = (err as Error)?.message || 'Nieprawidłowa struktura danych lub brak spójności ID.';
       notify(`Błąd przywracania: ${errMsg} Automatycznie wycofano zmiany (Rollback).`, 'err');
@@ -2264,13 +2558,16 @@ export default function App() {
     mergedLogs: AppEventLog[];
     overallReport: string[];
   }) => {
-    setIsRestoring(true);
+    // Aktualizacja lastValidBackupRef TYLKO przed importem/przywracaniem stanu
+    lastValidBackupRef.current = {
+      appState: JSON.parse(JSON.stringify(appState)),
+      schedData: JSON.parse(JSON.stringify(schedData)),
+      archive: JSON.parse(JSON.stringify(archive)),
+      snapshots: JSON.parse(JSON.stringify(snapshots)),
+      historyLogs: JSON.parse(JSON.stringify(historyLogs))
+    };
 
-    const preImportState = JSON.parse(JSON.stringify(appState));
-    const preImportSched = JSON.parse(JSON.stringify(schedData));
-    const preImportArchive = JSON.parse(JSON.stringify(archive));
-    const preImportSnapshots = JSON.parse(JSON.stringify(snapshots));
-    const preImportLogs = JSON.parse(JSON.stringify(historyLogs));
+    setIsRestoring(true);
 
     try {
       // Validate and sanitize merged data before committing
@@ -2295,15 +2592,6 @@ export default function App() {
       setShowImportModal(false);
       setPendingImportFiles([]);
 
-      // Update backup ref
-      lastValidBackupRef.current = {
-        appState: JSON.parse(JSON.stringify(sanitizedState)),
-        schedData: JSON.parse(JSON.stringify(sanitizedSched)),
-        archive: JSON.parse(JSON.stringify(result.mergedArchive)),
-        snapshots: JSON.parse(JSON.stringify(result.mergedSnapshots)),
-        historyLogs: JSON.parse(JSON.stringify(result.mergedLogs))
-      };
-
       const summaryText = result.overallReport.length > 0 
         ? result.overallReport.join(' | ') 
         : 'Pomyślnie scalono dane';
@@ -2316,20 +2604,23 @@ export default function App() {
       );
     } catch (err: unknown) {
       console.error('❌ Błąd podczas scalania i importu danych:', err);
-      // Automatic rollback to previous stable state
-      setAppState(sortAppState(preImportState));
-      setSchedData(preImportSched);
-      setArchive(preImportArchive);
-      setSnapshots(preImportSnapshots);
-      setHistoryLogs(preImportLogs);
+      // Automatic rollback to lastValidBackupRef state
+      const backup = lastValidBackupRef.current;
+      if (backup) {
+        setAppState(sortAppState(backup.appState));
+        setSchedData(backup.schedData);
+        setArchive(backup.archive);
+        setSnapshots(backup.snapshots);
+        setHistoryLogs(backup.historyLogs);
 
-      await Promise.all([
-        persistAppStateAndSchedWithConflictCheck(preImportState, preImportSched, { forceOverwrite: true }),
-        setStorageItem(STORAGE_KEYS.ARCHIVE, preImportArchive),
-        setStorageItem(STORAGE_KEYS.SNAPSHOTS, preImportSnapshots),
-        setStorageItem(STORAGE_KEYS.HISTORY_LOGS, preImportLogs)
-      ]);
-      refreshStorageStats();
+        await Promise.all([
+          persistAppStateAndSchedWithConflictCheck(backup.appState, backup.schedData, { forceOverwrite: true }),
+          setStorageItem(STORAGE_KEYS.ARCHIVE, backup.archive),
+          setStorageItem(STORAGE_KEYS.SNAPSHOTS, backup.snapshots),
+          setStorageItem(STORAGE_KEYS.HISTORY_LOGS, backup.historyLogs)
+        ]);
+        refreshStorageStats();
+      }
 
       setShowImportModal(false);
       setPendingImportFiles([]);
@@ -2405,7 +2696,7 @@ export default function App() {
   if (isCompanionMode) {
     return (
       <>
-        <SWUpdateBanner />
+        <SWUpdateBanner flush={flushNow} onBeforeUpdate={flushNow} />
         <Suspense fallback={
           <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-slate-100 font-sans">
             <div className="flex flex-col items-center gap-3">
@@ -2426,7 +2717,7 @@ export default function App() {
 
   return (
     <div data-storage-ready={storageReady ? 'true' : 'false'} className={`flex flex-col h-screen w-screen bg-slate-100 font-sans overflow-hidden print:h-auto print:w-full print:overflow-visible print:block print:static ${isRestoring ? 'pointer-events-none select-none' : ''}`}>
-      <SWUpdateBanner />
+      <SWUpdateBanner flush={flushNow} onBeforeUpdate={flushNow} />
       <MultiTabRefreshBanner
         visible={showRefreshBanner}
         remoteRevision={remoteRevision}
@@ -3086,7 +3377,7 @@ export default function App() {
           <div 
             className="flex items-center gap-2.5 w-full sm:w-auto bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800/80 shadow-xs cursor-pointer hover:border-slate-700 transition"
             title="Aplikacja korzysta z lokalnej bazy IndexedDB zdejmującej limit 5 MB. Dane przechowywane są w 100% lokalnie na Twoim komputerze."
-            onClick={refreshStorageStats}
+            onClick={() => refreshStorageStats(true)}
           >
             <div className="flex items-center gap-1.5 text-indigo-400 font-bold shrink-0 text-xs">
               <Database size={13} className="text-indigo-400" />
@@ -3274,14 +3565,51 @@ export default function App() {
               </button>
               <button
                 type="button"
+                onClick={() => {
+                  setCorruptDataModal(null);
+                  notify('Zapisy dla tego klucza pozostają zablokowane. Żadne dane nie zostaną nadpisane.', 'info');
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border border-slate-700"
+              >
+                Zachowaj blokadę
+              </button>
+              <button
+                type="button"
                 onClick={async () => {
                   if (confirm('Czy na pewno chcesz zastąpić uszkodzone dane stanem początkowym? Ta operacja jest nieodwracalna.')) {
+                    const keyToReset = corruptDataModal.key;
                     setCorruptDataModal(null);
                     setStorageInitError(null);
+                    setWriteBlocked(keyToReset, false);
+                    setBlockedWrites(prev => {
+                      const next = { ...prev };
+                      delete next[keyToReset];
+                      return next;
+                    });
                     storageReadyRef.current = true;
                     setStorageReady(true);
                     hydratedRef.current = { appState, schedData };
-                    await setStorageItem(corruptDataModal.key, corruptDataModal.key === STORAGE_KEYS.SCHED_DATA ? schedData : appState);
+
+                    let fallbackVal: unknown = null;
+                    if (keyToReset === STORAGE_KEYS.SCHED_DATA) fallbackVal = schedData;
+                    else if (keyToReset === STORAGE_KEYS.APP_STATE) fallbackVal = appState;
+                    else if (keyToReset === STORAGE_KEYS.PLAN_VARIANTS) fallbackVal = planVariants;
+                    else if (keyToReset === STORAGE_KEYS.ARCHIVE) { fallbackVal = []; setArchive([]); }
+                    else if (keyToReset === STORAGE_KEYS.SNAPSHOTS) { fallbackVal = []; setSnapshots([]); }
+                    else if (keyToReset === STORAGE_KEYS.AUTOSAVE_VERSIONS) {
+                      fallbackVal = [];
+                      setAutosaveVersions([]);
+                      const allStorageKeys = await getAllStorageKeys();
+                      for (const k of allStorageKeys) {
+                        if (k.startsWith('autosave_')) {
+                          await removeStorageItem(k).catch(() => {});
+                        }
+                      }
+                    }
+
+                    if (fallbackVal !== null) {
+                      await setStorageItem(keyToReset, fallbackVal, { force: true });
+                    }
                     notify('Zastąpiono uszkodzone dane stanem początkowym.', 'ok');
                   }
                 }}

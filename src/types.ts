@@ -484,6 +484,7 @@ export interface AutosaveVersion {
   timestamp: string;
   appState: AppState;
   schedData: SchedData;
+  revision?: number;
 }
 
 export interface UndoEntry {

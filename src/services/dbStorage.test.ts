@@ -18,7 +18,20 @@ import {
   hasSchedDataMeta,
   getIsIndexedDBAvailable,
   getConsecutiveIdbErrors,
-  resetIdbErrorCounter
+  resetIdbErrorCounter,
+  getStorageItemDetailed,
+  isWriteBlocked,
+  setWriteBlocked,
+  clearBlockedWrites,
+  StorageWriteBlockedError,
+  changeDatabaseEncryptionPassword,
+  ENCRYPTED_KEYS,
+  UNENCRYPTED_STORAGE_KEYS,
+  listManagedKeys,
+  saveRecoveryBackup,
+  MAX_RECOVERY_BACKUPS,
+  pruneRecoveryBackups,
+  getAllStorageKeys
 } from './dbStorage';
 import {
   setupStorageEncryptionMeta,
@@ -378,5 +391,237 @@ describe('dbStorage Encryption & Rollback Tests', () => {
       consoleErrorSpy.mockRestore();
       consoleWarnSpy.mockRestore();
     }
+  });
+
+  describe('Rozdzielenie przypadków braku klucza i uszkodzonych danych oraz blokada zapisu', () => {
+    beforeEach(() => {
+      clearBlockedWrites();
+    });
+
+    it('poprawnie rozróżnia brak klucza (missing) od uszkodzonych danych (corrupted)', async () => {
+      // 1. Brak klucza
+      const missingRes = await getStorageItemDetailed('klucz_ktory_nie_istnieje');
+      expect(missingRes.status).toBe('missing');
+      if (missingRes.status === 'missing') {
+        expect(missingRes.data).toBeNull();
+      }
+      expect(isWriteBlocked('klucz_ktory_nie_istnieje')).toBe(false);
+
+      // 2. Klucz istnieje, ale walidacja odrzuciła dane
+      localStorage.setItem(STORAGE_KEYS.APP_STATE, JSON.stringify({
+        school: 'nie_obiekt_lecz_string',
+        teachers: 'nie_tablica'
+      }));
+
+      const corruptedRes = await getStorageItemDetailed(STORAGE_KEYS.APP_STATE);
+      expect(corruptedRes.status).toBe('corrupted');
+      expect(isWriteBlocked(STORAGE_KEYS.APP_STATE)).toBe(true);
+      if (corruptedRes.status === 'corrupted') {
+        expect(corruptedRes.backupKey).toBeDefined();
+      }
+
+      // Zwykłe wywołanie getStorageItem zwraca null, a klucz ma flagę zablokowanego zapisu
+      const val = await getStorageItem(STORAGE_KEYS.APP_STATE);
+      expect(val).toBeNull();
+      expect(isWriteBlocked(STORAGE_KEYS.APP_STATE)).toBe(true);
+    });
+
+    it('tablica z jednym uszkodzonym wpisem nie jest nadpisywana [] (element-by-element)', async () => {
+      const validSnapshot = {
+        id: 'snap-100',
+        name: 'Wersja Robocza Semestr I',
+        createdAt: '2026-09-01T08:00:00.000Z',
+        appState: { school: { name: 'Szkoła Testowa' } },
+        schedData: {}
+      };
+
+      const corruptedSnapshot = {
+        id: 999999, // Błąd: id musi być stringiem
+        name: null,
+        uszkodzonePole: true
+      };
+
+      // Zapisujemy bezpośrednio surową tablicę z 1 poprawnym i 1 uszkodzonym elementem
+      localStorage.setItem(STORAGE_KEYS.SNAPSHOTS, JSON.stringify([validSnapshot, corruptedSnapshot]));
+
+      // Odczyt szczegółowy
+      const detailed = await getStorageItemDetailed<any[]>(STORAGE_KEYS.SNAPSHOTS);
+      expect(detailed.status).toBe('found');
+      if (detailed.status === 'found') {
+        expect(detailed.data).toHaveLength(1);
+        expect(detailed.data[0].id).toBe('snap-100');
+        expect(detailed.quarantinedCount).toBe(1);
+        expect(detailed.backupKey).toMatch(/^saleplan_v3_snapshots_recovery_backup_/);
+
+        // Sprawdzenie, czy uszkodzony element trafił do kopii ratunkowej
+        const backupRaw = localStorage.getItem(detailed.backupKey!);
+        expect(backupRaw).toContain('999999');
+      }
+
+      // Zwykłe wywołanie getStorageItem zwraca tablicę z poprawnym elementem (NIE pustą []!)
+      const retrieved = await getStorageItem<any[]>(STORAGE_KEYS.SNAPSHOTS);
+      expect(retrieved).not.toBeNull();
+      expect(retrieved).toHaveLength(1);
+      expect(retrieved![0].id).toBe('snap-100');
+      expect(retrieved).not.toEqual([]);
+
+      // Zapis nie jest blokowany, bo udało się odzyskać poprawne dane
+      expect(isWriteBlocked(STORAGE_KEYS.SNAPSHOTS)).toBe(false);
+    });
+
+    it('tablica ze wszystkimi uszkodzonymi wpisami blokuje zapisy i nie pozwala nadpisać []', async () => {
+      const allCorrupted = [
+        { id: 111, broken: true },
+        { id: 222, broken: true }
+      ];
+
+      localStorage.setItem(STORAGE_KEYS.ARCHIVE, JSON.stringify(allCorrupted));
+
+      const detailed = await getStorageItemDetailed<any[]>(STORAGE_KEYS.ARCHIVE);
+      expect(detailed.status).toBe('corrupted');
+      expect(isWriteBlocked(STORAGE_KEYS.ARCHIVE)).toBe(true);
+
+      // getStorageItem zwraca null
+      const standardRead = await getStorageItem(STORAGE_KEYS.ARCHIVE);
+      expect(standardRead).toBeNull();
+
+      // Próba nadpisania klucza pustą tablicą [] z efektu jest blokowana
+      await expect(setStorageItem(STORAGE_KEYS.ARCHIVE, []))
+        .rejects.toThrow(StorageWriteBlockedError);
+
+      // Po decyzji użytkownika i odblokowaniu zapis jest możliwy
+      setWriteBlocked(STORAGE_KEYS.ARCHIVE, false);
+      expect(isWriteBlocked(STORAGE_KEYS.ARCHIVE)).toBe(false);
+      await expect(setStorageItem(STORAGE_KEYS.ARCHIVE, [])).resolves.not.toThrow();
+    });
+
+    it('zapis zablokowanego klucza jest dozwolony przy użyciu flagi force: true', async () => {
+      setWriteBlocked(STORAGE_KEYS.AUTOSAVE_VERSIONS, true);
+      expect(isWriteBlocked(STORAGE_KEYS.AUTOSAVE_VERSIONS)).toBe(true);
+
+      // Zwykły zapis zostaje odrzucony
+      await expect(setStorageItem(STORAGE_KEYS.AUTOSAVE_VERSIONS, []))
+        .rejects.toThrow(StorageWriteBlockedError);
+
+      // Wymuszony zapis przez force: true (np. z poziomu modalu naprawczego)
+      await expect(setStorageItem(STORAGE_KEYS.AUTOSAVE_VERSIONS, [], { force: true }))
+        .resolves.not.toThrow();
+    });
+  });
+
+  describe('Zarządzanie kluczami i szyfrowaniem (ENCRYPTED_KEYS, listManagedKeys, kopie recovery, DAILY_SUBSTITUTIONS)', () => {
+    it('ENCRYPTED_KEYS zawiera wszystkie klucze poza wykluczonymi i obejmuje DAILY_SUBSTITUTIONS', () => {
+      expect(ENCRYPTED_KEYS).toContain(STORAGE_KEYS.DAILY_SUBSTITUTIONS);
+      expect(ENCRYPTED_KEYS).toContain(STORAGE_KEYS.APP_STATE);
+      expect(ENCRYPTED_KEYS).toContain(STORAGE_KEYS.SCHED_DATA);
+
+      // Wykluczone klucze nie mogą znajdować się w ENCRYPTED_KEYS
+      for (const unencryptedKey of UNENCRYPTED_STORAGE_KEYS) {
+        expect(ENCRYPTED_KEYS).not.toContain(unencryptedKey);
+      }
+
+      // Wszystkie klucze z STORAGE_KEYS są albo w ENCRYPTED_KEYS, albo w UNENCRYPTED_STORAGE_KEYS
+      const allStorageKeyValues = Object.values(STORAGE_KEYS);
+      for (const k of allStorageKeyValues) {
+        const isEncrypted = ENCRYPTED_KEYS.includes(k);
+        const isUnencrypted = (UNENCRYPTED_STORAGE_KEYS as readonly string[]).includes(k);
+        expect(isEncrypted !== isUnencrypted).toBe(true);
+      }
+    });
+
+    it('listManagedKeys zwraca ENCRYPTED_KEYS oraz istniejące kopie recovery backup', async () => {
+      const keysInitial = await listManagedKeys();
+      for (const k of ENCRYPTED_KEYS) {
+        expect(keysInitial).toContain(k);
+      }
+
+      // Utwórz sztuczną kopię ratunkową
+      const customBackupKey = await saveRecoveryBackup(STORAGE_KEYS.SNAPSHOTS, [{ id: 'test-backup' }]);
+      const keysWithBackup = await listManagedKeys();
+      expect(keysWithBackup).toContain(customBackupKey);
+    });
+
+    it('ogranicza liczbę kopii recovery do 3 per klucz, usuwając najstarsze', async () => {
+      const baseKey = STORAGE_KEYS.ARCHIVE;
+
+      // Zapisz 5 kopii zapasowych dla tego samego klucza
+      const b1 = await saveRecoveryBackup(baseKey, { v: 1 });
+      const b2 = await saveRecoveryBackup(baseKey, { v: 2 });
+      const b3 = await saveRecoveryBackup(baseKey, { v: 3 });
+      const b4 = await saveRecoveryBackup(baseKey, { v: 4 });
+      const b5 = await saveRecoveryBackup(baseKey, { v: 5 });
+
+      const allKeys = await getAllStorageKeys();
+      const archiveBackups = allKeys.filter(k => k.startsWith(`${baseKey}_recovery_backup_`));
+
+      // Liczba kopii nie przekracza MAX_RECOVERY_BACKUPS (3)
+      expect(archiveBackups.length).toBeLessThanOrEqual(MAX_RECOVERY_BACKUPS);
+      expect(archiveBackups).toHaveLength(3);
+
+      // Najstarsze b1 i b2 powinny zostać usunięte, a najnowsze b3, b4, b5 zachowane
+      expect(archiveBackups).not.toContain(b1);
+      expect(archiveBackups).not.toContain(b2);
+      expect(archiveBackups).toContain(b3);
+      expect(archiveBackups).toContain(b4);
+      expect(archiveBackups).toContain(b5);
+    });
+
+    it('po zmianie hasła DAILY_SUBSTITUTIONS daje się odczytać', async () => {
+      const testSubstitutions = {
+        '2026-09-15': {
+          date: '2026-09-15',
+          dayOfWeek: 2,
+          substitutions: [
+            {
+              id: 'sub-test-1',
+              lessonHourId: 'h_2',
+              absentTeacherId: 'teacher-101',
+              substituteTeacherId: 'teacher-202',
+              classroom: 'sala-12',
+              reason: 'L4 - zwolnienie lekarskie'
+            }
+          ]
+        }
+      };
+
+      // 1. Zapis jawny przed szyfrowaniem
+      await setStorageItem(STORAGE_KEYS.DAILY_SUBSTITUTIONS, testSubstitutions);
+      const initialRead = await getStorageItem<typeof testSubstitutions>(STORAGE_KEYS.DAILY_SUBSTITUTIONS);
+      expect(initialRead).toEqual(testSubstitutions);
+
+      // 2. Aktywacja szyfrowania bazy danych pierwszym hasłem
+      const oldPassword = 'OldMasterPassword!2026';
+      await enableDatabaseEncryption(oldPassword);
+      expect(isDatabaseEncryptionActive()).toBe(true);
+      expect(isSessionUnlocked()).toBe(true);
+
+      // Odczyt z pierwszym hasłem
+      const readWithOldPass = await getStorageItem<typeof testSubstitutions>(STORAGE_KEYS.DAILY_SUBSTITUTIONS);
+      expect(readWithOldPass).toEqual(testSubstitutions);
+
+      // 3. Zmiana hasła głównego na nowe hasło
+      const newPassword = 'NewMasterPassword!2027';
+      const changed = await changeDatabaseEncryptionPassword(oldPassword, newPassword);
+      expect(changed).toBe(true);
+
+      // 4. Blokada sesji – odczyt musi zwrócić null
+      lockSession();
+      expect(isSessionUnlocked()).toBe(false);
+      const readWhileLocked = await getStorageItem(STORAGE_KEYS.DAILY_SUBSTITUTIONS);
+      expect(readWhileLocked).toBeNull();
+
+      // 5. Odblokowanie nowym hasłem
+      const unlocked = await verifyMasterPassword(newPassword);
+      expect(unlocked).toBe(true);
+      expect(isSessionUnlocked()).toBe(true);
+
+      // 6. Odczyt po zmianie hasła zwraca dokładnie nienaruszone dane DAILY_SUBSTITUTIONS
+      const restoredAfterPassChange = await getStorageItem<typeof testSubstitutions>(STORAGE_KEYS.DAILY_SUBSTITUTIONS);
+      expect(restoredAfterPassChange).toEqual(testSubstitutions);
+
+      // Sprzątanie: wyłączenie szyfrowania
+      await disableDatabaseEncryption(newPassword);
+      expect(isDatabaseEncryptionActive()).toBe(false);
+    });
   });
 });

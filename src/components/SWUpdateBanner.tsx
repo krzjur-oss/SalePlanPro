@@ -7,10 +7,16 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, X, Sparkles } from 'lucide-react';
 
-export const SWUpdateBanner: React.FC = () => {
+export interface SWUpdateBannerProps {
+  onBeforeUpdate?: () => Promise<unknown> | unknown;
+  flush?: () => Promise<unknown> | unknown;
+}
+
+export const SWUpdateBanner: React.FC<SWUpdateBannerProps> = ({ onBeforeUpdate, flush }) => {
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const userTriggeredReloadRef = React.useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
@@ -40,18 +46,39 @@ export const SWUpdateBanner: React.FC = () => {
     });
 
     let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!refreshing) {
+    const handleControllerChange = () => {
+      // controllerchange przeładowuje stronę tylko po uprzednim kliknięciu użytkownika w przycisk aktualizacji
+      if (userTriggeredReloadRef.current && !refreshing) {
         refreshing = true;
         window.location.reload();
       }
-    });
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+    return () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+    };
   }, []);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
+    setIsUpdating(true);
+    userTriggeredReloadRef.current = true;
+
+    // Przed postMessage('SKIP_WAITING') wywołaj flush
+    try {
+      const flushFn = onBeforeUpdate || flush || (typeof window !== 'undefined' ? (window as any).__saleplanFlushNow : undefined);
+      if (typeof flushFn === 'function') {
+        await flushFn();
+      }
+    } catch (err) {
+      console.warn('[SWUpdateBanner] Błąd podczas wywoływania flush przed SKIP_WAITING:', err);
+    }
+
     if (waitingWorker) {
-      setIsUpdating(true);
-      waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      waitingWorker.postMessage('SKIP_WAITING');
+      try {
+        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+      } catch {}
     } else {
       window.location.reload();
     }

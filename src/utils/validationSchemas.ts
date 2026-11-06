@@ -561,3 +561,21 @@ export function getStorageSchemaForKey(key: string): z.ZodTypeAny | null {
   }
 }
 
+/**
+ * Returns item-level Zod schema for array storage collections that support element-by-element recovery.
+ */
+export function getStorageItemSchemaForKey(key: string): z.ZodTypeAny | null {
+  switch (key) {
+    case 'saleplan_v3_archive':
+      return ArchiveEntrySchema;
+    case 'saleplan_v3_snapshots':
+      return SnapshotEntrySchema;
+    case 'saleplan_v3_autosave_versions':
+      return AutosaveVersionSchema;
+    case 'saleplan_v3_plan_variants':
+      return PlanVariantSchema;
+    default:
+      return null;
+  }
+}
+

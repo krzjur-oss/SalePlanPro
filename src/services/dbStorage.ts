@@ -18,7 +18,7 @@
 
 const DB_NAME = 'SalePlanProDB';
 const DB_VERSION = 1;
-const STORE_NAME = 'app_data';
+export const STORE_NAME = 'app_data';
 
 import { 
   encryptText, 
@@ -44,7 +44,7 @@ import {
   PBKDF2_ITERATIONS_V1,
   PBKDF2_ITERATIONS_V2
 } from '../lib/crypto';
-import { getStorageSchemaForKey } from '../utils/validationSchemas';
+import { getStorageSchemaForKey, getStorageItemSchemaForKey } from '../utils/validationSchemas';
 
 export { 
   isDatabaseEncryptionActive,
@@ -81,6 +81,22 @@ export const STORAGE_KEYS = {
   PENDING_CHANGES_BACKUP: 'saleplan_v3_pending_changes_backup',
   DAILY_SUBSTITUTIONS: 'saleplan_v3_daily_substitutions',
 } as const;
+
+export const UNENCRYPTED_STORAGE_KEYS = [
+  STORAGE_KEYS.STORAGE_ENC_META,
+  STORAGE_KEYS.MIGRATION_DONE,
+  STORAGE_KEYS.LAST_SEEN_VERSION,
+  STORAGE_KEYS.TERMS_ACCEPTED,
+  STORAGE_KEYS.PRE_ENCRYPTION_BACKUP,
+] as const;
+
+export const ENCRYPTED_KEYS: readonly string[] = (Object.values(STORAGE_KEYS) as string[]).filter(
+  (k) => !(UNENCRYPTED_STORAGE_KEYS as readonly string[]).includes(k)
+);
+
+export function isKeyEncrypted(key: string): boolean {
+  return ENCRYPTED_KEYS.includes(key) || key.includes('_recovery_backup_') || key.startsWith('autosave_');
+}
 
 /**
  * Checks if a SchedData record contains legacy or extraneous meta fields (revision, tabId, _revision, _tabId).
@@ -188,7 +204,7 @@ export function getConsecutiveIdbErrors(): number {
 /**
  * Open or initialize the IndexedDB database
  */
-function getDB(): Promise<IDBDatabase> {
+export function getDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
 
   if (typeof window === 'undefined' || !window.indexedDB) {
@@ -355,6 +371,151 @@ export async function removeRawItem(key: string): Promise<void> {
 }
 
 /**
+ * Internal helper to retrieve all key names from IndexedDB and localStorage
+ */
+export async function getAllStorageKeys(): Promise<string[]> {
+  const keysSet = new Set<string>();
+
+  // 1. IndexedDB keys
+  if (isIndexedDBAvailable) {
+    try {
+      const db = await getDB();
+      await new Promise<void>((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.getAllKeys();
+          req.onsuccess = () => {
+            if (Array.isArray(req.result)) {
+              for (const k of req.result) {
+                keysSet.add(String(k));
+              }
+            }
+            resolve();
+          };
+          req.onerror = () => resolve();
+        } catch {
+          resolve();
+        }
+      });
+    } catch {}
+  }
+
+  // 2. localStorage keys
+  try {
+    if (typeof localStorage !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k) {
+          keysSet.add(k);
+        }
+      }
+    }
+  } catch {}
+
+  return Array.from(keysSet);
+}
+
+export const MAX_RECOVERY_BACKUPS = 3;
+
+/**
+ * Extracts numeric timestamp from a recovery backup key:
+ * e.g. "saleplan_v3_snapshots_recovery_backup_1793824146325" -> 1793824146325
+ */
+export function getBackupTimestamp(key: string): number {
+  const match = key.match(/_recovery_backup_(\d+)$/);
+  if (match) {
+    return parseInt(match[1], 10);
+  }
+  return 0;
+}
+
+/**
+ * Prunes recovery backup keys so that at most MAX_RECOVERY_BACKUPS (3) copies exist per key.
+ * Older backups are removed from both IndexedDB and localStorage.
+ */
+export async function pruneRecoveryBackups(baseKey?: string): Promise<void> {
+  try {
+    const allKeys = await getAllStorageKeys();
+    const backupKeys = allKeys.filter(k => k.includes('_recovery_backup_'));
+
+    // Group backup keys by baseKey prefix
+    const groups = new Map<string, string[]>();
+    for (const k of backupKeys) {
+      const idx = k.indexOf('_recovery_backup_');
+      const prefix = k.substring(0, idx);
+      if (baseKey && prefix !== baseKey) {
+        continue;
+      }
+      const list = groups.get(prefix) || [];
+      list.push(k);
+      groups.set(prefix, list);
+    }
+
+    for (const [, keys] of groups) {
+      if (keys.length > MAX_RECOVERY_BACKUPS) {
+        // Sort ascending: oldest timestamp first
+        keys.sort((a, b) => {
+          const tA = getBackupTimestamp(a);
+          const tB = getBackupTimestamp(b);
+          if (tA !== tB) return tA - tB;
+          return a.localeCompare(b);
+        });
+
+        const excessCount = keys.length - MAX_RECOVERY_BACKUPS;
+        const keysToDelete = keys.slice(0, excessCount);
+
+        for (const k of keysToDelete) {
+          await removeRawItem(k);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Błąd podczas czyszczenia starych kopii ratunkowych:', err);
+  }
+}
+
+let lastBackupTimestamp = 0;
+
+/**
+ * Persists recovery backup data and enforces maximum 3 backup copies for the key.
+ * Returns the generated backupKey.
+ */
+export async function saveRecoveryBackup(key: string, data: unknown): Promise<string> {
+  let timestamp = Date.now();
+  if (timestamp <= lastBackupTimestamp) {
+    timestamp = lastBackupTimestamp + 1;
+  }
+  lastBackupTimestamp = timestamp;
+
+  const backupKey = `${key}_recovery_backup_${timestamp}`;
+  await setRawItem(backupKey, data);
+  await pruneRecoveryBackups(key);
+  return backupKey;
+}
+
+/**
+ * Returns all keys managed by SalePlan Pro:
+ * - All standard ENCRYPTED_KEYS
+ * - Any dynamically generated recovery backup keys (*_recovery_backup_*)
+ */
+export async function listManagedKeys(): Promise<string[]> {
+  await pruneRecoveryBackups();
+  const managedSet = new Set<string>(ENCRYPTED_KEYS);
+
+  try {
+    const allKeys = await getAllStorageKeys();
+    for (const k of allKeys) {
+      if (k.includes('_recovery_backup_') || k.startsWith('autosave_')) {
+        managedSet.add(k);
+      }
+    }
+  } catch {}
+
+  return Array.from(managedSet);
+}
+
+/**
  * Helper to process retrieved raw value, handling transparent AES-GCM decryption if encrypted.
  * - Uses in-memory CryptoKey for 'encrypted-v2' (sub-millisecond instant decryption)
  * - Seamlessly decrypts 'encrypted-v1' payloads (100,000 iterations)
@@ -434,114 +595,234 @@ async function processRetrievedValue<T>(rawVal: unknown, key?: string): Promise<
   return rawVal as T;
 }
 
+let blockedWrites: Record<string, boolean> = {};
+
+export function isWriteBlocked(key: string): boolean {
+  return !!blockedWrites[key];
+}
+
+export function setWriteBlocked(key: string, blocked: boolean): void {
+  if (blocked) {
+    blockedWrites[key] = true;
+  } else {
+    delete blockedWrites[key];
+  }
+}
+
+export function getBlockedWrites(): Record<string, boolean> {
+  return { ...blockedWrites };
+}
+
+export function clearBlockedWrites(): void {
+  blockedWrites = {};
+}
+
+export class StorageWriteBlockedError extends Error {
+  readonly key: string;
+  constructor(key: string) {
+    super(`Zapis klucza "${key}" jest zablokowany z powodu wykrycia uszkodzonych danych.`);
+    this.name = 'StorageWriteBlockedError';
+    this.key = key;
+  }
+}
+
+export type StorageReadResult<T = unknown> =
+  | { status: 'missing'; data: null }
+  | { status: 'found'; data: T; quarantinedCount?: number; backupKey?: string }
+  | { status: 'corrupted'; rawContent: unknown; error: unknown; backupKey?: string };
+
+/**
+ * Detailed read from storage distinguishing between:
+ * - 'missing': Key does not exist in IndexedDB or localStorage
+ * - 'found': Key exists and data passed integrity/validation
+ * - 'corrupted': Key exists, but data could not be decrypted, parsed, or failed Zod validation
+ *
+ * For array keys (SNAPSHOTS, ARCHIVE, AUTOSAVE_VERSIONS, PLAN_VARIANTS), validates element-by-element:
+ * discards bad entries, saves them to a recovery backup, and returns valid entries.
+ */
+export async function getStorageItemDetailed<T = unknown>(key: string): Promise<StorageReadResult<T>> {
+  let rawResult: unknown = undefined;
+  let keyFound = false;
+
+  if (isIndexedDBAvailable) {
+    try {
+      const db = await getDB();
+      const idbResult = await new Promise<{ found: boolean; value: unknown }>((resolve) => {
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.get(key);
+          req.onsuccess = () => {
+            if (req.result !== undefined && req.result !== null) {
+              resolve({ found: true, value: req.result });
+            } else {
+              resolve({ found: false, value: undefined });
+            }
+          };
+          req.onerror = () => resolve({ found: false, value: undefined });
+        } catch {
+          resolve({ found: false, value: undefined });
+        }
+      });
+
+      if (idbResult.found) {
+        keyFound = true;
+        rawResult = idbResult.value;
+      }
+    } catch {
+      // IndexedDB connection error, fall through to localStorage
+    }
+  }
+
+  if (!keyFound) {
+    try {
+      const localVal = localStorage.getItem(key);
+      if (localVal !== null) {
+        keyFound = true;
+        try {
+          rawResult = JSON.parse(localVal);
+        } catch {
+          rawResult = localVal;
+        }
+      }
+    } catch {}
+  }
+
+  // 1. Brak klucza w IndexedDB i localStorage
+  if (!keyFound) {
+    return { status: 'missing', data: null };
+  }
+
+  // 2. Obsługa bazy zaszyfrowanej
+  if (isEncryptedObject(rawResult)) {
+    const sessionKey = getSessionCryptoKey();
+    const pwd = getSessionPassword();
+    if (!sessionKey && !pwd) {
+      // Baza jest zaszyfrowana, a sesja zablokowana – nie oznaczaj jako uszkodzenie
+      return { status: 'missing', data: null };
+    }
+  }
+
+  let val: unknown;
+  try {
+    val = await processRetrievedValue<T>(rawResult, key);
+  } catch (decryptErr) {
+    const backupKey = await saveRecoveryBackup(key, rawResult);
+    setWriteBlocked(key, true);
+    return {
+      status: 'corrupted',
+      rawContent: rawResult,
+      error: decryptErr,
+      backupKey
+    };
+  }
+
+  if (val === null || val === undefined) {
+    const backupKey = await saveRecoveryBackup(key, rawResult);
+    setWriteBlocked(key, true);
+    return {
+      status: 'corrupted',
+      rawContent: rawResult,
+      error: new Error(`Nie udało się przetworzyć danych dla klucza "${key}"`),
+      backupKey
+    };
+  }
+
+  // Sanityzacja wsteczna dla SCHED_DATA
+  if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
+    val = cleanSchedDataMeta(val, key);
+    try {
+      await setRawItem(key, val);
+    } catch {}
+  }
+
+  // 3. Walidacja element po elemencie dla tablic (SNAPSHOTS, ARCHIVE, AUTOSAVE_VERSIONS, PLAN_VARIANTS)
+  const itemSchema = getStorageItemSchemaForKey(key);
+  if (itemSchema) {
+    if (!Array.isArray(val)) {
+      const backupKey = await saveRecoveryBackup(key, val);
+      setWriteBlocked(key, true);
+      return {
+        status: 'corrupted',
+        rawContent: val,
+        error: new Error(`Klucz "${key}" powinien zawierać tablicę, znaleziono ${typeof val}`),
+        backupKey
+      };
+    }
+
+    const validItems: unknown[] = [];
+    const invalidItems: unknown[] = [];
+
+    for (const item of val) {
+      const check = itemSchema.safeParse(item);
+      if (check.success) {
+        validItems.push(check.data);
+      } else {
+        invalidItems.push(item);
+      }
+    }
+
+    let backupKey: string | undefined;
+    if (invalidItems.length > 0) {
+      backupKey = await saveRecoveryBackup(key, invalidItems);
+      console.warn(`[dbStorage] Wykryto ${invalidItems.length} uszkodzonych elementów w kluczu "${key}". Zapisano kopię ratunkową w "${backupKey}".`);
+    }
+
+    if (val.length > 0 && validItems.length === 0) {
+      // Tablica zawierała elementy, ale żaden nie spełnił schematu Zod
+      setWriteBlocked(key, true);
+      return {
+        status: 'corrupted',
+        rawContent: val,
+        error: new Error(`Wszystkie wpisy w tablicy dla klucza "${key}" są uszkodzone.`),
+        backupKey
+      };
+    }
+
+    return {
+      status: 'found',
+      data: validItems as T,
+      quarantinedCount: invalidItems.length,
+      backupKey
+    };
+  }
+
+  // 4. Walidacja Zod dla obiektów i pozostałych kluczy
+  const schema = getStorageSchemaForKey(key);
+  if (schema) {
+    const parsed = schema.safeParse(val);
+    if (!parsed.success) {
+      const backupKey = await saveRecoveryBackup(key, val);
+      setWriteBlocked(key, true);
+      console.warn(`[dbStorage] Błąd walidacji danych ze storage dla klucza "${key}":`, parsed.error.issues);
+      return {
+        status: 'corrupted',
+        rawContent: val,
+        error: parsed.error,
+        backupKey
+      };
+    }
+    return {
+      status: 'found',
+      data: parsed.data as T
+    };
+  }
+
+  return {
+    status: 'found',
+    data: val as T
+  };
+}
+
 /**
  * Get an item from storage (tries IndexedDB first, falls back to localStorage or in-memory)
  */
 export async function getStorageItem<T = unknown>(key: string): Promise<T | null> {
-  try {
-    const db = await getDB();
-    const rawResult = await new Promise<unknown>((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.get(key);
-
-        req.onsuccess = () => {
-          if (req.result !== undefined && req.result !== null) {
-            resolve(req.result);
-          } else {
-            // Sprawdzenie zapasowego wpisu w localStorage w przypadku braku w IndexedDB
-            try {
-              const localVal = localStorage.getItem(key);
-              if (localVal !== null) {
-                try {
-                  const parsed = JSON.parse(localVal);
-                  // Migracja niezaszyfrowanego elementu w tle do IndexedDB
-                  if (!isEncryptedObject(parsed)) {
-                    setStorageItem(key, parsed).catch(() => {});
-                  }
-                  resolve(parsed);
-                  return;
-                } catch {
-                  resolve(localVal);
-                  return;
-                }
-              }
-            } catch {}
-            resolve(null);
-          }
-        };
-
-        req.onerror = () => {
-          try {
-            const val = localStorage.getItem(key);
-            resolve(val ? JSON.parse(val) : null);
-          } catch {
-            resolve(null);
-          }
-        };
-      } catch (err) {
-        console.warn(`Error reading key "${key}" from IndexedDB:`, err);
-        try {
-          const val = localStorage.getItem(key);
-          resolve(val ? JSON.parse(val) : null);
-        } catch {
-          resolve(null);
-        }
-      }
-    });
-
-    let val = await processRetrievedValue<T>(rawResult, key);
-    if (val === null || val === undefined) return null;
-
-    // Sanityzacja zgodności wstecznej: usunięcie revision/tabId z SCHED_DATA przed walidacją Zod
-    if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
-      val = cleanSchedDataMeta(val, key);
-      // Zapis oczyszczonej wersji do IndexedDB oraz lustra localStorage
-      try {
-        await setStorageItem(key, val);
-      } catch {}
-    }
-
-    const schema = getStorageSchemaForKey(key);
-    if (schema) {
-      const parsed = schema.safeParse(val);
-      if (!parsed.success) {
-        console.warn(`[dbStorage] Błąd walidacji danych ze storage dla klucza "${key}":`, parsed.error.issues);
-        return null;
-      }
-      return parsed.data as T;
-    }
-    return val;
-  } catch {
-    try {
-      const valLocal = localStorage.getItem(key);
-      const parsedLocal = valLocal ? JSON.parse(valLocal) : null;
-      let val = await processRetrievedValue<T>(parsedLocal, key);
-      if (val === null || val === undefined) return null;
-
-      // Sanityzacja zgodności wstecznej: usunięcie revision/tabId z SCHED_DATA przed walidacją Zod
-      if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
-        val = cleanSchedDataMeta(val, key);
-        try {
-          await setStorageItem(key, val);
-        } catch {}
-      }
-
-      const schema = getStorageSchemaForKey(key);
-      if (schema) {
-        const parsed = schema.safeParse(val);
-        if (!parsed.success) {
-          console.warn(`[dbStorage] Błąd walidacji danych ze storage dla klucza "${key}":`, parsed.error.issues);
-          return null;
-        }
-        return parsed.data as T;
-      }
-      return val;
-    } catch {
-      return null;
-    }
+  const result = await getStorageItemDetailed<T>(key);
+  if (result.status === 'found') {
+    return result.data;
   }
+  return null;
 }
 
 /**
@@ -562,6 +843,11 @@ export function getStorageItemSync<T = unknown>(key: string): T | null {
           try {
             localStorage.setItem(key, JSON.stringify(parsed));
           } catch {}
+        }
+        const itemSchema = getStorageItemSchemaForKey(key);
+        if (itemSchema && Array.isArray(parsed)) {
+          const valid = parsed.filter(item => itemSchema.safeParse(item).success);
+          return valid as unknown as T;
         }
         return parsed as T;
       } catch {
@@ -587,11 +873,22 @@ export class StorageWriteError extends Error {
 }
 
 /**
- * Save an item to storage (persists to IndexedDB and syncs to localStorage when size permits).
- * If database encryption is active, encrypts data with AES-256 GCM using the session CryptoKey.
- * Eliminates PBKDF2 derivation overhead during normal writes.
+ * Prepares and encrypts a value for database storage outside of an IndexedDB transaction.
+ * - Enforces write blocking on corrupted keys unless force=true
+ * - Automatically strips sched meta keys
+ * - Encrypts with AES-256 GCM if encryption is active and key is in ENCRYPTED_KEYS
+ * - Preserves revision and tabId on the outer encrypted object for STATE_META for synchronous inspection
  */
-export async function setStorageItem<T = unknown>(key: string, value: T): Promise<void> {
+export async function prepareValueForStorage(
+  key: string,
+  value: unknown,
+  options?: { force?: boolean }
+): Promise<unknown> {
+  if (isWriteBlocked(key) && !options?.force) {
+    console.warn(`[dbStorage] Zapis klucza "${key}" został zablokowany z powodu wykrycia uszkodzonych danych.`);
+    throw new StorageWriteBlockedError(key);
+  }
+
   let valueToStore: unknown = value;
   if (key === STORAGE_KEYS.SCHED_DATA) {
     valueToStore = cleanSchedDataMeta(value, key);
@@ -600,11 +897,7 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
   // Sprawdzenie, czy szyfrowanie jest aktywne i czy dany klucz podlega szyfrowaniu
   if (
     isDatabaseEncryptionActive() &&
-    key !== STORAGE_KEYS.STORAGE_ENC_META &&
-    key !== STORAGE_KEYS.MIGRATION_DONE &&
-    key !== STORAGE_KEYS.LAST_SEEN_VERSION &&
-    key !== STORAGE_KEYS.TERMS_ACCEPTED &&
-    key !== STORAGE_KEYS.PRE_ENCRYPTION_BACKUP
+    isKeyEncrypted(key)
   ) {
     let sessionKey = getSessionCryptoKey();
     const pwd = getSessionPassword();
@@ -631,18 +924,41 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
       // Losowy 12-bajtowy wektor IV dla każdego zapisu
       const { iv, ciphertext } = await encryptWithKey(serialized, sessionKey);
       
-      valueToStore = {
+      const payload: Record<string, unknown> = {
         type: 'encrypted-v2',
         iterations: meta?.iterations || PBKDF2_ITERATIONS_V2,
         salt: meta?.salt || '',
         iv,
         ciphertext
       };
+
+      if (key === STORAGE_KEYS.STATE_META && valueToStore && typeof valueToStore === 'object') {
+        const metaObj = valueToStore as Record<string, unknown>;
+        if (typeof metaObj.revision === 'number') payload.revision = metaObj.revision;
+        if (typeof metaObj.tabId === 'string') payload.tabId = metaObj.tabId;
+      }
+
+      return payload;
     } catch (err) {
       console.error(`Błąd szyfrowania dla klucza "${key}":`, err);
       throw new StorageLockedError(`Szyfrowanie dla klucza "${key}" nie powiodło się: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  return valueToStore;
+}
+
+/**
+ * Save an item to storage (persists to IndexedDB and syncs to localStorage when size permits).
+ * If database encryption is active, encrypts data with AES-256 GCM using the session CryptoKey.
+ * Eliminates PBKDF2 derivation overhead during normal writes.
+ */
+export async function setStorageItem<T = unknown>(
+  key: string,
+  value: T,
+  options?: { force?: boolean }
+): Promise<void> {
+  const valueToStore = await prepareValueForStorage(key, value, options);
 
   let idbWriteSucceeded = false;
 
@@ -711,18 +1027,7 @@ export async function setStorageItem<T = unknown>(key: string, value: T): Promis
  * - Automatically rolls back all data to plaintext on any verification failure
  */
 export async function enableDatabaseEncryption(password: string): Promise<void> {
-  const keysToEncrypt = [
-    STORAGE_KEYS.APP_STATE,
-    STORAGE_KEYS.SCHED_DATA,
-    STORAGE_KEYS.STATE_META,
-    STORAGE_KEYS.ARCHIVE,
-    STORAGE_KEYS.SNAPSHOTS,
-    STORAGE_KEYS.AUTOSAVE_VERSIONS,
-    STORAGE_KEYS.HISTORY_LOGS,
-    STORAGE_KEYS.STRUCTURE_TEMPLATES,
-    STORAGE_KEYS.PLAN_VARIANTS,
-    STORAGE_KEYS.ACTIVE_VARIANT_ID,
-  ];
+  const keysToEncrypt = await listManagedKeys();
 
   // 1. Pobranie wszystkich bieżących danych jawnych
   const currentData: Record<string, unknown> = {};
@@ -795,18 +1100,7 @@ export async function disableDatabaseEncryption(password: string): Promise<boole
   const isValid = await verifyMasterPassword(password);
   if (!isValid) return false;
 
-  const keysToDecrypt = [
-    STORAGE_KEYS.APP_STATE,
-    STORAGE_KEYS.SCHED_DATA,
-    STORAGE_KEYS.STATE_META,
-    STORAGE_KEYS.ARCHIVE,
-    STORAGE_KEYS.SNAPSHOTS,
-    STORAGE_KEYS.AUTOSAVE_VERSIONS,
-    STORAGE_KEYS.HISTORY_LOGS,
-    STORAGE_KEYS.STRUCTURE_TEMPLATES,
-    STORAGE_KEYS.PLAN_VARIANTS,
-    STORAGE_KEYS.ACTIVE_VARIANT_ID,
-  ];
+  const keysToDecrypt = await listManagedKeys();
 
   const currentData: Record<string, unknown> = {};
   for (const k of keysToDecrypt) {
@@ -838,18 +1132,7 @@ export async function changeDatabaseEncryptionPassword(oldPass: string, newPass:
   const isValid = await verifyMasterPassword(oldPass);
   if (!isValid) return false;
 
-  const keys = [
-    STORAGE_KEYS.APP_STATE,
-    STORAGE_KEYS.SCHED_DATA,
-    STORAGE_KEYS.STATE_META,
-    STORAGE_KEYS.ARCHIVE,
-    STORAGE_KEYS.SNAPSHOTS,
-    STORAGE_KEYS.AUTOSAVE_VERSIONS,
-    STORAGE_KEYS.HISTORY_LOGS,
-    STORAGE_KEYS.STRUCTURE_TEMPLATES,
-    STORAGE_KEYS.PLAN_VARIANTS,
-    STORAGE_KEYS.ACTIVE_VARIANT_ID,
-  ];
+  const keys = await listManagedKeys();
 
   const currentData: Record<string, unknown> = {};
   for (const k of keys) {
@@ -883,18 +1166,7 @@ export async function migrateAllStoredItemsToV2(): Promise<number> {
     return 0;
   }
 
-  const keys = [
-    STORAGE_KEYS.APP_STATE,
-    STORAGE_KEYS.SCHED_DATA,
-    STORAGE_KEYS.STATE_META,
-    STORAGE_KEYS.ARCHIVE,
-    STORAGE_KEYS.SNAPSHOTS,
-    STORAGE_KEYS.AUTOSAVE_VERSIONS,
-    STORAGE_KEYS.HISTORY_LOGS,
-    STORAGE_KEYS.STRUCTURE_TEMPLATES,
-    STORAGE_KEYS.PLAN_VARIANTS,
-    STORAGE_KEYS.ACTIVE_VARIANT_ID,
-  ];
+  const keys = await listManagedKeys();
 
   let migrated = 0;
   for (const k of keys) {
@@ -942,6 +1214,8 @@ export async function removeStorageItem(key: string): Promise<void> {
  * Clear all application storage
  */
 export async function clearAllStorage(): Promise<void> {
+  clearBlockedWrites();
+  const managedKeys = await listManagedKeys().catch(() => Array.from(ENCRYPTED_KEYS));
   try {
     const db = await getDB();
     await new Promise<void>((resolve, reject) => {
@@ -962,9 +1236,18 @@ export async function clearAllStorage(): Promise<void> {
   }
 
   try {
-    Object.values(STORAGE_KEYS).forEach(k => {
+    const allKeysToClear = new Set<string>([...Object.values(STORAGE_KEYS), ...managedKeys]);
+    allKeysToClear.forEach(k => {
       try { localStorage.removeItem(k); } catch {}
     });
+    if (typeof localStorage !== 'undefined') {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.includes('_recovery_backup_')) {
+          localStorage.removeItem(k);
+        }
+      }
+    }
   } catch {}
 }
 

@@ -6,9 +6,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   multiTabStateService,
-  persistAppStateAndSchedWithConflictCheck,
   MULTI_TAB_STATE_CHANNEL
 } from './multiTabStateService';
+import { persistAppStateAndSchedWithConflictCheck } from './persistence';
 import type { AppState, SchedData } from '../types';
 import { STORAGE_KEYS, setStorageItem, getStorageItem, cleanSchedDataMeta, hasSchedDataMeta } from './dbStorage';
 
@@ -86,15 +86,14 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
     const myTabId = multiTabStateService.getTabId();
     const otherTabId = 'tab_other_window_999';
 
-    // Simulate other tab saving revision 4 in IndexedDB/storage
-    const otherTabState = {
-      school: { name: 'Szkoła Po Zmianach w Karcie B' },
+    // Inna karta zapisała nowszą rewizję 4 w STATE_META
+    await setStorageItem(STORAGE_KEYS.STATE_META, {
       revision: 4,
       tabId: otherTabId,
-    };
-    await setStorageItem(STORAGE_KEYS.APP_STATE, otherTabState);
+      updatedAt: new Date().toISOString()
+    });
 
-    // My tab is at revision 2
+    // Moja karta ma lokalną rewizję 2
     multiTabStateService.setLocalRevision(2, STORAGE_KEYS.APP_STATE);
 
     const check = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, 2);
@@ -107,14 +106,13 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
   it('does NOT flag conflict when database revision is from the same tab', async () => {
     const myTabId = multiTabStateService.getTabId();
 
-    const mySavedState = {
-      school: { name: 'Szkoła Moja' },
+    await setStorageItem(STORAGE_KEYS.STATE_META, {
       revision: 3,
       tabId: myTabId,
-    };
-    await setStorageItem(STORAGE_KEYS.APP_STATE, mySavedState);
+      updatedAt: new Date().toISOString()
+    });
 
-    // My tab is saving next revision 4
+    // Moja karta zapisuje rewizję 4 przy bazie o rewizji 3 z tej samej karty
     multiTabStateService.setLocalRevision(3, STORAGE_KEYS.APP_STATE);
 
     const check = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, 3);
@@ -124,16 +122,40 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
   it('does NOT flag conflict when database revision is older or equal', async () => {
     const otherTabId = 'tab_older_window';
 
-    const olderState = {
-      school: { name: 'Starszy Stan' },
+    await setStorageItem(STORAGE_KEYS.STATE_META, {
       revision: 1,
-      tabId: otherTabId
-    };
-    await setStorageItem(STORAGE_KEYS.APP_STATE, olderState);
+      tabId: otherTabId,
+      updatedAt: new Date().toISOString()
+    });
 
     multiTabStateService.setLocalRevision(2, STORAGE_KEYS.APP_STATE);
 
     const check = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, 2);
+    expect(check.hasConflict).toBe(false);
+  });
+
+  it('czyta wyłącznie STATE_META i ignoruje zawartość oraz rewizję rekordu APP_STATE', async () => {
+    const otherTabId = 'tab_another_tab_xyz';
+
+    // W APP_STATE celowo zapisujemy wyższą rewizję 999
+    await setStorageItem(STORAGE_KEYS.APP_STATE, {
+      school: { name: 'Ignorowany rekord APP_STATE' },
+      revision: 999,
+      tabId: otherTabId
+    });
+
+    // Ale w STATE_META zapisujemy rewizję 1 (mniejszą lub równą rewizji lokalnej)
+    await setStorageItem(STORAGE_KEYS.STATE_META, {
+      revision: 1,
+      tabId: otherTabId,
+      updatedAt: new Date().toISOString()
+    });
+
+    multiTabStateService.setLocalRevision(2, STORAGE_KEYS.APP_STATE);
+
+    const check = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, 2);
+    // checkSaveConflict czyta wyłącznie STATE_META, więc rewizja to 1, brak konfliktu
+    expect(check.dbRevision).toBe(1);
     expect(check.hasConflict).toBe(false);
   });
 
