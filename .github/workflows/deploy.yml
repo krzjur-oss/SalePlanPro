@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -18,12 +18,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  # 1. Job budowania i testów – nie blokuje środowiska github-pages podczas testów
+  build:
     runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -52,23 +49,19 @@ jobs:
       - name: Ensure .nojekyll exists
         run: touch dist/.nojekyll
 
-      # 1. Oficjalne wdrożenie GitHub Pages (rozwiązuje błąd kroku deploy-pages)
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
+      - name: Upload artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
+  # 2. Dedykowany job wdrożenia – oficjalna struktura GitHub Pages Actions
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      # 2. Zapasowe wypchnięcie na gałąź gh-pages (jeśli w Settings wybrano 'Deploy from a branch')
-      - name: Deploy to gh-pages branch (fallback)
-        uses: JamesIves/github-pages-deploy-action@v4
-        continue-on-error: true
-        with:
-          folder: dist
-          branch: gh-pages
