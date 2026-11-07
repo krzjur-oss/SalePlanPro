@@ -12,8 +12,11 @@
  * - Niewyodrębnialny sesyjny klucz CryptoKey w pamięci RAM (brak narzutu PBKDF2 przy zapisie)
  * - Pełna zgodność wsteczna z ładunkami 'encrypted-v1' i automatyczna migracja do v2
  * - Kopia zapasowa przed szyfrowaniem (pre-encryption backup) i automatyczny rollback
+ * - Wyodrębniona stała ENCRYPTED_KEYS oraz funkcja listManagedKeys() obejmująca recovery backups
+ * - Bezpieczna zmiana hasła bez utraty kluczy zastępstw (DAILY_SUBSTITUTIONS)
+ * - Ochrona przed uszkodzeniem: kopia do *_recovery_backup_ (max 3) i selektywna blokada wadliwego klucza (blockedWrites)
  * - Brak zapisywania haseł w sessionStorage
- * - Detekcja limitu pamięci za pomocą navigator.storage.estimate()
+ * - Szacowanie pamięci navigator.storage.estimate() z debouncem 30s i żądanie trwałej pamięci navigator.storage.persist()
  */
 
 const DB_NAME = 'SalePlanProDB';

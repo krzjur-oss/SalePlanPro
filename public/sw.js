@@ -1,7 +1,9 @@
 /**
  * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
  * Moduł: PWA Service Worker (public/sw.js)
- * Opis: Obsługa trybu offline (Cache-First), pre-cache powłoki aplikacji oraz płynna aktualizacja zasobów.
+ * Opis: Obsługa trybu offline: dynamiczny pre-cache CURRENT_ASSETS (błąd przerywa instalację),
+ * czysty Cache-First dla /assets/* z event.waitUntil, wyścig nawigacji z timeoutem 3 s
+ * oraz płynna aktualizacja zasobów bez przeładowania w tle.
  */
 const BASE_PATH = self.location.pathname.substring(0, self.location.pathname.lastIndexOf('/') + 1);
 

@@ -30,11 +30,30 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.12.0',
+      date: '7 listopada 2026',
+      title: 'Atomowa Architektura Trwałości Danych, Niezawodny Autozapis z Przerzedzaniem (3/h, 1/doba), Wzmocnione PWA i Oficjalny Pipeline GitHub Pages',
+      description: 'Przełomowe wydanie v3.12.0 wprowadza fundamentalną modernizację silnika trwałości danych i niezawodności w środowisku przeglądarkowym i wielu kartach: pojedynczą atomową transakcję IndexedDB (commitState) z weryfikacją rewizji i szyfrowaniem poza transakcją, kolejkę zapisu z koordynacją Web Locks (saleplan-write), wykrywanie konfliktów oparte wyłącznie na lekkich metadanych STATE_META, bezstratny autozapis w dyskretnych kluczach autosave_<ts> z algorytmem redukcji (3 z bieżącej godziny, 1 z doby), natychmiastowe zrzucanie bufora (flushNow) na zdarzeniach visibilitychange i pagehide z ostrzeżeniem beforeunload, bezpieczną aktualizację Service Workera po potwierdzeniu przez użytkownika, czysty tryb Cache-First z wyścigiem nawigacji (timeout 3 s) oraz oficjalny dwuetapowy workflow wdrażania GitHub Actions.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Atomowa transakcja zapisu stanu commitState(): APP_STATE, SCHED_DATA i STATE_META zapisywane w jednej niepodzielnej transakcji IndexedDB z porównaniem rewizji; szyfrowanie danych przeniesione poza transakcję, co eliminuje timeouty bazy.', badgeText: 'IndexedDB Atomicity' },
+        { type: 'feature', text: 'Kolejka zapisu i koordynacja Web Locks (saleplan-write): Wszystkie operacje zapisu przechodzą przez pojedynczą kolejkę promisów (ostatni stan wygrywa, oczekujące wywołania łączone), a między kartami synchronizowane są przez navigator.locks.', badgeText: 'Web Locks API' },
+        { type: 'feature', text: 'Nowa architektura autozapisu (pushAutosaveVersion): Wersje zapisywane pod osobnymi kluczami autosave_<ts> nie częściej niż co 5 min lub po 50 zmianach, z porównaniem rewizji zamiast kosztownego JSON.stringify oraz algorytmem redukcji (3/h, 1/doba).', badgeText: 'Autozapis & Przerzedzanie' },
+        { type: 'improvement', text: 'Optymalizacja detekcji konfliktów kart: checkSaveConflict odczytuje wyłącznie lekki rekord STATE_META, eliminując zbędne narzuty pobierania i deszyfrowania całych planów lekcji.', badgeText: 'Multi-Tab Sync' },
+        { type: 'improvement', text: 'Wymuszone opróżnianie bufora zapisu (flushNow): Natychmiastowy zapis stanu na zdarzeniach visibilitychange (hidden) i pagehide oraz blokada opuszczenia karty w beforeunload, gdy saveStatus !== saved.', badgeText: 'Zero utraty danych' },
+        { type: 'security', text: 'Ochrona przed uszkodzeniem bazy i selektywna blokada: Rozdzielenie braku klucza od błędu walidacji Zod z zapisem uszkodzonych rekordów do *_recovery_backup_ (max 3 kopie) i blokadą zapisu tylko dla wadliwego klucza.', badgeText: 'Zod & Resilience' },
+        { type: 'security', text: 'Zarządzanie kluczami i transparentna zmiana hasła: Wyodrębnienie ENCRYPTED_KEYS i listManagedKeys() w dbStorage; zmiana hasła szyfrowania w pełni zachowuje DAILY_SUBSTITUTIONS i wszystkie klucze dynamiczne.', badgeText: 'Kryptografia v2' },
+        { type: 'improvement', text: 'Szacowanie pamięci i persystencja: Funkcja refreshStorageStats z 30-sekundowym debounce oparta na navigator.storage.estimate() oraz żądanie trwałego magazynu navigator.storage.persist() po pierwszym zapisie.', badgeText: 'Storage API' },
+        { type: 'improvement', text: 'Wzmocnione PWA Service Worker: Pre-cache dynamicznych zasobów CURRENT_ASSETS (błąd przerywa instalację), czysty Cache-First dla /assets/* z event.waitUntil, wyścig nawigacji z 3 s timeoutem i deterministyczny buildId.', badgeText: 'PWA Service Worker' },
+        { type: 'improvement', text: 'Oficjalny dwuetapowy pipeline GitHub Actions: Rozdzielenie build i deploy w deploy.yml z dedykowanym środowiskiem github-pages, obsługą .nojekyll i eliminacją błędów Deployment cancelled.', badgeText: 'CI/CD GitHub Pages' }
+      ]
+    },
+    {
       version: 'v3.11.0',
       date: '4 listopada 2026',
       title: 'Modularyzacja Architektury (Kreator i Plan Klas), Optymalizacja Silnika Diff i Wariantów, Integracja Pensum w Dyżurach',
       description: 'Wydanie v3.11.0 wprowadza gruntowną modularyzację monolitycznych komponentów programu (zmniejszenie objętości kodu o ponad 2400 linii i podział na niezależne podmoduły w Kreatorze Szkoły i Planie Klas), optymalizację silnika porównywania wariantów Split-Screen Diff (indeksowanie slotów wg sal/nauczycieli, obsługa grup i sanityzacja eksportu Excel) oraz bezpośrednie uwzględnienie pensum bazowego szkoły w kalkulatorze limitów dyżurów.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'improvement', text: 'Modularyzacja KreatorSzkoly.tsx: Dekompozycja kroków kreatora na niezależne komponenty (KreatorStepBuildings, KreatorStepSubjects, KreatorStepCorridors, KreatorStepSummary) oraz moduł wspólnych stałych constants.ts.', badgeText: 'Architektura' },
         { type: 'improvement', text: 'Modularyzacja PlanKlas.tsx: Wydzielenie zakładek i okien dialogowych (PlanKlasAssignTab, PlanKlasTeachersTab, PlanKlasSpeSlotModal, PlanKlasEditCellModal) z zachowaniem pełnej spójności stanu i responsywności.', badgeText: 'Plan Klas' },
