@@ -331,6 +331,7 @@ export const SnapshotEntrySchema = z.object({
   id: z.string(),
   name: z.string(),
   createdAt: z.string(),
+  isManual: z.boolean().optional(),
   appState: AppStateSchema,
   schedData: z.record(z.string(), z.unknown()).optional().default({}),
   comment: z.string().optional(),

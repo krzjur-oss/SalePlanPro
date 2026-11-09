@@ -16,6 +16,7 @@ import {
   Class 
 } from '../types';
 import { SwapSlotItem } from '../components/SwapAssistantModal';
+import { detectConflicts } from '../utils/conflictEngine';
 
 export const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
@@ -312,31 +313,36 @@ export function findSwapAndMoveSuggestions(params: {
         let teacherFree = true;
         let classFree = true;
 
-        // 1. Sprawdź dostępność nauczyciela źródłowego
-        if (sourceTeacher) {
-          // Czy ma inną klasę o tej porze?
-          Object.entries(pl.lessons).forEach(([k, l]) => {
-            if (k === sourceKey) return;
-            const parts = k.split('|');
-            if (parseInt(parts[1], 10) === d && parseInt(parts[2], 10) === h) {
-              const asg = assignmentsMap.get(l.assignmentId);
-              if (asg && asg.teacherId === sourceTeacher.id) {
-                teacherFree = false;
-                const otherCls = classesMap.get(parts[0])?.name || parts[0];
-                conflictDetails.push(`Nauczyciel ${sourceTeacher.abbr || sourceTeacher.last} uczy w tym czasie klasę ${otherCls}`);
-              }
-            }
-          });
+        // 1. Sprawdź dostępność i konflikty po przeniesieniu do nowego slotu (detectConflicts)
+        const sourceGroupId = source.assignment?.groupId || (source.key ? source.key.split('|')[3] : undefined);
+        const newTargetKey = sourceGroupId
+          ? `${source.classId}|${d}|${h}|${sourceGroupId}`
+          : `${source.classId}|${d}|${h}`;
 
-          // Dyspozycyjność nauczyciela (availability)
-          if (sourceTeacher.availability && sourceTeacher.availability.length > 0) {
-            const slotCode = `${d}-${h}`;
-            if (!sourceTeacher.availability.includes(slotCode)) {
-              teacherFree = false;
-              conflictDetails.push(`Nauczyciel ma oznaczoną niedostępność w ${dayName} na lekcji ${h + 1}`);
-            }
-          }
+        const simulatedLessons: LessonsState = { ...pl.lessons };
+        if (sourceKey) delete simulatedLessons[sourceKey];
+        if (source.lesson) {
+          simulatedLessons[newTargetKey] = source.lesson;
         }
+
+        const simulatedPL: PlanLekcjiState = {
+          ...pl,
+          lessons: simulatedLessons
+        };
+
+        const simConflicts = detectConflicts(simulatedPL);
+        const relatedConflicts = simConflicts.filter(c => c.lessonKeys.includes(newTargetKey));
+        relatedConflicts.forEach(c => {
+          if (!conflictDetails.includes(c.message)) {
+            conflictDetails.push(c.message);
+          }
+          if (c.type === 'teacher' || c.type === 'availability') {
+            teacherFree = false;
+          }
+          if (c.type === 'class') {
+            classFree = false;
+          }
+        });
 
         // 2. Sprawdź dostępność sal w slocie docelowym
         const freeRooms = getFreeRoomsForSlot(pl, d, h, {
@@ -356,12 +362,6 @@ export function findSwapAndMoveSuggestions(params: {
         let gapsDeltaClass = 0;
 
         if (sourceTeacher) {
-          // Symulacja stanu po przeniesieniu
-          const simulatedLessons: LessonsState = { ...pl.lessons };
-          if (sourceKey) delete simulatedLessons[sourceKey];
-          const newKey = `${source.classId}|${d}|${h}`;
-          if (source.lesson) simulatedLessons[newKey] = source.lesson;
-
           const newGapsSourceDay = calculateTeacherGaps(sourceTeacher.id, source.day, simulatedLessons, assignmentsMap, totalHours).gapsCount;
           const newGapsTargetDay = calculateTeacherGaps(sourceTeacher.id, d, simulatedLessons, assignmentsMap, totalHours).gapsCount;
 
@@ -475,64 +475,38 @@ export function findSwapAndMoveSuggestions(params: {
 
         const conflictDetails: string[] = [];
 
-        // 1. Sprawdź nauczyciela źródłowego w terminie docelowym (d, h)
-        if (sourceTeacher) {
-          Object.entries(pl.lessons).forEach(([k, l]) => {
-            if (k === sourceKey || k === targetItem.key) return;
-            const parts = k.split('|');
-            if (parseInt(parts[1], 10) === d && parseInt(parts[2], 10) === h) {
-              const asg = assignmentsMap.get(l.assignmentId);
-              if (asg && asg.teacherId === sourceTeacher.id) {
-                const otherCls = classesMap.get(parts[0])?.name || parts[0];
-                conflictDetails.push(`Nauczyciel ${sourceTeacher.abbr || sourceTeacher.last} uczy w tym czasie klasę ${otherCls}`);
-              }
-            }
-          });
+        // Sprawdzenie konfliktów po zamianie lekcji A ⇄ B za pomocą detectConflicts
+        const sourceGroupId = source.assignment?.groupId || (source.key ? source.key.split('|')[3] : undefined);
+        const newSourceKey = sourceGroupId
+          ? `${source.classId}|${d}|${h}|${sourceGroupId}`
+          : `${source.classId}|${d}|${h}`;
 
-          if (sourceTeacher.availability && sourceTeacher.availability.length > 0) {
-            const slotCode = `${d}-${h}`;
-            if (!sourceTeacher.availability.includes(slotCode)) {
-              conflictDetails.push(`Nauczyciel ${sourceTeacher.abbr} ma niedostępność w ${dayName} g. ${h + 1}`);
-            }
+        const targetGroupId = targetAsg?.groupId || (targetItem.key.split('|')[3] || null);
+        const newTargetKey = targetGroupId
+          ? `${source.classId}|${source.day}|${source.hour}|${targetGroupId}`
+          : `${source.classId}|${source.day}|${source.hour}`;
+
+        const simSwapLessons: LessonsState = { ...pl.lessons };
+        if (sourceKey) delete simSwapLessons[sourceKey];
+        delete simSwapLessons[targetItem.key];
+
+        if (source.lesson) simSwapLessons[newSourceKey] = source.lesson;
+        simSwapLessons[newTargetKey] = targetItem.lesson;
+
+        const simSwapPL: PlanLekcjiState = {
+          ...pl,
+          lessons: simSwapLessons
+        };
+
+        const swapConflicts = detectConflicts(simSwapPL);
+        const relevantSwapConflicts = swapConflicts.filter(c => 
+          c.lessonKeys.includes(newSourceKey) || c.lessonKeys.includes(newTargetKey)
+        );
+        relevantSwapConflicts.forEach(c => {
+          if (!conflictDetails.includes(c.message)) {
+            conflictDetails.push(c.message);
           }
-        }
-
-        // 2. Sprawdź nauczyciela docelowego w terminie źródłowym (source.day, source.hour)
-        if (targetTeacher) {
-          Object.entries(pl.lessons).forEach(([k, l]) => {
-            if (k === sourceKey || k === targetItem.key) return;
-            const parts = k.split('|');
-            if (parseInt(parts[1], 10) === source.day && parseInt(parts[2], 10) === source.hour) {
-              const asg = assignmentsMap.get(l.assignmentId);
-              if (asg && asg.teacherId === targetTeacher.id) {
-                const otherCls = classesMap.get(parts[0])?.name || parts[0];
-                conflictDetails.push(`Nauczyciel ${targetTeacher.abbr || targetTeacher.last} uczy w tym czasie klasę ${otherCls}`);
-              }
-            }
-          });
-
-          if (targetTeacher.availability && targetTeacher.availability.length > 0) {
-            const slotCode = `${source.day}-${source.hour}`;
-            if (!targetTeacher.availability.includes(slotCode)) {
-              conflictDetails.push(`Nauczyciel ${targetTeacher.abbr} ma niedostępność w terminie źródłowym`);
-            }
-          }
-        }
-
-        // 3. Sprawdź konflikt sal w przypadku zamiany
-        // Czy sala docelowa może przejść do slotu źródłowego?
-        if (targetRoom) {
-          Object.entries(pl.lessons).forEach(([k, l]) => {
-            if (k === sourceKey || k === targetItem.key) return;
-            const parts = k.split('|');
-            if (parseInt(parts[1], 10) === source.day && parseInt(parts[2], 10) === source.hour) {
-              const asg = assignmentsMap.get(l.assignmentId);
-              if (asg && asg.roomId === targetRoom.id) {
-                conflictDetails.push(`Sala ${targetRoom.name} jest w terminie źródłowym zajęta`);
-              }
-            }
-          });
-        }
+        });
 
         // Kalkulacja Score
         let score = 70;

@@ -31,6 +31,7 @@ import {
   SupportStaff
 } from '../types';
 import { sanitizeProtoPollution } from './validationSchemas';
+import { detectConflicts } from './conflictEngine';
 
 export interface ImportPayload {
   version?: string;
@@ -1008,6 +1009,16 @@ export async function executeMultiFileMerge(
 
     if (report.length > 0) {
       overallReport.push(`[${config.fileName}]: ${report.join(', ')}`);
+    }
+  }
+
+  // Kontrola konfliktów po scaleniu za pomocą silnika ConflictEngine
+  if (mergedState.planLekcji) {
+    const postMergeConflicts = detectConflicts(mergedState.planLekcji);
+    if (postMergeConflicts.length > 0) {
+      overallReport.push(`[Ostrzeżenie o kolizjach po scaleniu]: Wykryto ${postMergeConflicts.length} potencjalnych konfliktów w połączonym planie lekcji.`);
+      const sample = postMergeConflicts.slice(0, 3).map(c => `• [${c.type}] ${c.message}`).join(' ');
+      overallReport.push(`Przykłady kolizji: ${sample}`);
     }
   }
 

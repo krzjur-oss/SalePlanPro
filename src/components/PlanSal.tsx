@@ -2,6 +2,9 @@
  * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
  * Moduł: Plan Sal – Przypisanie Gabinetów Lekcyjnych (PlanSal)
  * Opis: Weryfikacja obłożenia pracowni przedmiotowych, wykrywanie kolizji sal oraz automatyczny optymalizator gabinetów.
+ * Funkcjonalności v3.13.0:
+ * - Bezpośrednie mapowanie grup i oddziałów oparte na _bridgeMeta.classId i _bridgeMeta.groupId (bez parsowania ciągów tekstowych)
+ * - Pełna obsługa grup międzyoddziałowych (linkedGroupIds)
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -841,8 +844,13 @@ export default function PlanSal({
       id: string;
       className: string;
       rawClassName: string;
+      classId: string;
+      teacherId?: string | null;
+      subjectId?: string;
       groupId?: string | null;
       groupName?: string;
+      linkedClassIds?: string[];
+      linkedGroupIds?: string[];
       subject: string;
       teacherAbbr: string;
       suppTeacherAbbr?: string;
@@ -896,8 +904,13 @@ export default function PlanSal({
             id: `${lessonKey}-${asg.id}`,
             className: displayClassName,
             rawClassName: cls.name,
+            classId: cls.id,
+            teacherId: asg.teacherId,
+            subjectId: asg.subjectId,
             groupId: asg.groupId || null,
             groupName,
+            linkedClassIds: asg.linkedClassIds,
+            linkedGroupIds: asg.linkedGroupIds,
             subject,
             teacherAbbr: teacher?.abbr || '',
             suppTeacherAbbr: suppTeacher?.abbr || undefined,
@@ -1047,6 +1060,8 @@ export default function PlanSal({
     interface ClassLocationItem {
       colKey: string;
       slotIdx?: number;
+      classId?: string;
+      groupId?: string | null;
       baseClass: string;
       groupName: string | null;
       display: string;
@@ -1147,25 +1162,94 @@ export default function PlanSal({
             }
           }
 
-          // Register class entries (group-aware)
-          const classNames = slot.classes || (slot.className ? [slot.className] : []);
-          const parsedClasses: { baseClass: string; groupName: string | null; display: string }[] = [];
-          classNames.forEach(rawCls => {
-            if (rawCls) {
-              parsedClasses.push(...parseClassWithGroup(rawCls));
-            }
-          });
-
+          // Register class entries via _bridgeMeta.classId / _bridgeMeta.groupId (with fallback to parsed string)
           const hList = classHourLocations.get(h) || [];
-          parsedClasses.forEach(pc => {
-            hList.push({
-              colKey: cKey,
-              slotIdx: isSport ? slIdx : undefined,
-              baseClass: pc.baseClass,
-              groupName: pc.groupName,
-              display: pc.display
+
+          if (slot._bridgeMeta?.classId) {
+            const metaClassId = slot._bridgeMeta.classId;
+            const metaGroupId = slot._bridgeMeta.groupId || null;
+            const metaClass = appState.planLekcji.classes.find(c => c.id === metaClassId);
+            const baseClass = metaClass?.name || slot.className || metaClassId;
+            const grpObj = metaGroupId ? groupsMap.get(metaGroupId) : null;
+            const groupName = grpObj ? grpObj.name : (metaGroupId || null);
+            const display = groupName ? `${baseClass} (${groupName})` : baseClass;
+
+            const targetsInSlot: { classId: string; groupId: string | null; baseClass: string; groupName: string | null; display: string }[] = [
+              { classId: metaClassId, groupId: metaGroupId, baseClass, groupName, display }
+            ];
+
+            // Obsługa linkedGroupIds (grupy międzyoddziałowe w PlanSal)
+            if (slot._bridgeMeta.linkedGroupIds && slot._bridgeMeta.linkedGroupIds.length > 0) {
+              slot._bridgeMeta.linkedGroupIds.forEach(lgId => {
+                const lgObj = groupsMap.get(lgId);
+                const lgClassId = lgObj?.classId || slot._bridgeMeta?.linkedClassIds?.[0] || metaClassId;
+                const lgClass = appState.planLekcji.classes.find(c => c.id === lgClassId);
+                const lgBaseClass = lgClass?.name || lgClassId;
+                const lgGroupName = lgObj?.name || lgId;
+                const lgDisplay = `${lgBaseClass} (${lgGroupName})`;
+                if (!targetsInSlot.some(t => t.classId === lgClassId && t.groupId === lgId)) {
+                  targetsInSlot.push({
+                    classId: lgClassId,
+                    groupId: lgId,
+                    baseClass: lgBaseClass,
+                    groupName: lgGroupName,
+                    display: lgDisplay
+                  });
+                }
+              });
+            }
+
+            // Obsługa linkedClassIds (klasy powiązane)
+            if (slot._bridgeMeta.linkedClassIds && slot._bridgeMeta.linkedClassIds.length > 0) {
+              slot._bridgeMeta.linkedClassIds.forEach(lcId => {
+                if (!targetsInSlot.some(t => t.classId === lcId)) {
+                  const lcClass = appState.planLekcji.classes.find(c => c.id === lcId);
+                  const lcBaseClass = lcClass?.name || lcId;
+                  const lcDisplay = metaGroupId && groupName ? `${lcBaseClass} (${groupName})` : lcBaseClass;
+                  targetsInSlot.push({
+                    classId: lcId,
+                    groupId: metaGroupId,
+                    baseClass: lcBaseClass,
+                    groupName: groupName,
+                    display: lcDisplay
+                  });
+                }
+              });
+            }
+
+            targetsInSlot.forEach(target => {
+              hList.push({
+                colKey: cKey,
+                slotIdx: isSport ? slIdx : undefined,
+                classId: target.classId,
+                groupId: target.groupId,
+                baseClass: target.baseClass,
+                groupName: target.groupName,
+                display: target.display
+              });
             });
-          });
+          } else {
+            // Fallback dla starszych danych bez metadanych
+            const classNames = slot.classes || (slot.className ? [slot.className] : []);
+            classNames.forEach(rawCls => {
+              if (rawCls) {
+                const parsedClasses = parseClassWithGroup(rawCls);
+                parsedClasses.forEach(pc => {
+                  const foundClass = appState.planLekcji.classes.find(c => c.name.toUpperCase().trim() === pc.baseClass.toUpperCase().trim());
+                  hList.push({
+                    colKey: cKey,
+                    slotIdx: isSport ? slIdx : undefined,
+                    classId: foundClass?.id,
+                    groupId: null,
+                    baseClass: pc.baseClass,
+                    groupName: pc.groupName,
+                    display: pc.display
+                  });
+                });
+              }
+            });
+          }
+
           classHourLocations.set(h, hList);
         });
       });
@@ -1209,14 +1293,15 @@ export default function PlanSal({
 
     // For Classes (Group-aware overlap detection across different rooms):
     classHourLocations.forEach((items, h) => {
-      const byBaseClass = new Map<string, ClassLocationItem[]>();
+      const byClassKey = new Map<string, ClassLocationItem[]>();
       items.forEach(item => {
-        const list = byBaseClass.get(item.baseClass) || [];
+        const cKey = (item.classId || item.baseClass).toUpperCase().trim();
+        const list = byClassKey.get(cKey) || [];
         list.push(item);
-        byBaseClass.set(item.baseClass, list);
+        byClassKey.set(cKey, list);
       });
 
-      byBaseClass.forEach((clsItems) => {
+      byClassKey.forEach((clsItems) => {
         if (clsItems.length <= 1) return;
 
         for (let i = 0; i < clsItems.length; i++) {
@@ -1226,11 +1311,30 @@ export default function PlanSal({
 
             if (itemA.colKey === itemB.colKey) continue;
 
-            // Conflict if either is the whole class, or both are the exact same group
-            const isConflict = 
-              itemA.groupName === null || 
-              itemB.groupName === null || 
-              itemA.groupName === itemB.groupName;
+            const isWholeA = !itemA.groupId && !itemA.groupName;
+            const isWholeB = !itemB.groupId && !itemB.groupName;
+
+            let isConflict = false;
+            if (isWholeA || isWholeB) {
+              isConflict = true;
+            } else if ((itemA.groupId && itemB.groupId && itemA.groupId === itemB.groupId) ||
+                       (itemA.groupName && itemB.groupName && itemA.groupName.toUpperCase().trim() === itemB.groupName.toUpperCase().trim())) {
+              isConflict = true;
+            } else if (itemA.groupId && itemB.groupId && itemA.groupId !== itemB.groupId) {
+              // Sprawdzamy partitionId i studentIds
+              const grpA = groupsMap.get(itemA.groupId);
+              const grpB = groupsMap.get(itemB.groupId);
+              const studentsA = grpA?.studentIds;
+              const studentsB = grpB?.studentIds;
+
+              if (Array.isArray(studentsA) && Array.isArray(studentsB) && studentsA.length > 0 && studentsB.length > 0) {
+                if (studentsA.some(s => studentsB.includes(s))) {
+                  isConflict = true;
+                }
+              } else if (grpA?.partitionId && grpB?.partitionId && grpA.partitionId !== grpB.partitionId) {
+                isConflict = true;
+              }
+            }
 
             if (isConflict) {
               const colA = allCols.find(x => colKey(x) === itemA.colKey);
@@ -1484,7 +1588,7 @@ export default function PlanSal({
       detected,       // key: "h|cKey", value: array of description strings
       slotConflicts   // key: "h|cKey|slotIdx", value: array of description strings
     };
-  }, [currentDayData, appState, activeDay, assignmentsMap, roomsMap]);
+  }, [currentDayData, appState, activeDay, assignmentsMap, roomsMap, groupsMap]);
 
   // ── HANDLING MODAL ACTIONS ──
 
@@ -1982,11 +2086,19 @@ export default function PlanSal({
                       className: lesson.className,
                       classes: [lesson.className],
                       teacherAbbr: lesson.teacherAbbr,
+                      supportTeacherAbbr: lesson.suppTeacherAbbr,
                       subject: lesson.subject,
                       _bridgeMeta: {
+                        classId: lesson.classId,
+                        groupId: lesson.groupId || null,
+                        teacherId: lesson.teacherId,
+                        subjectId: lesson.subjectId,
+                        linkedClassIds: lesson.linkedClassIds,
+                        linkedGroupIds: lesson.linkedGroupIds,
                         className: lesson.className,
                         subject: lesson.subject,
-                        teacherAbbr: lesson.teacherAbbr
+                        teacherAbbr: lesson.teacherAbbr,
+                        supportTeacherAbbr: lesson.suppTeacherAbbr
                       }
                     }
                   }}

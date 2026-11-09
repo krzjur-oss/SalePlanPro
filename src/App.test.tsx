@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import React from 'react';
 import { render, screen, within, act, fireEvent, waitFor } from '@testing-library/react';
-import App from './App';
+import App, { pruneAutosaveVersions } from './App';
 import { 
   STORAGE_KEYS, 
   clearAllStorage, 
@@ -439,4 +439,87 @@ describe('App Smoke & Security State Tests', () => {
       expect(autosaveKeys.length).toBe(4);
     });
   });
+
+  it('500 wersji z różnych dni -> po przerzedzeniu <= 72 + 14', async () => {
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    // Generujemy 500 wersji rozłożonych na różne przedziały czasowe:
+    // - Ostatnie 24h: 24 godziny * 10 wersji na godzinę = 240 wersji (powinno zostać max 24 * 3 = 72)
+    // - Dni 2..14 (starsze niż 24h, ale <= 14 dni): 13 dób * 10 wersji na dobę = 130 wersji (powinno zostać max 13 * 1 = 13)
+    // - Dni 15..27 (starsze niż 14 dni): 13 dób * 10 wersji na dobę = 130 wersji (powinny zostać usunięte wszystkie = 0)
+    // Łącznie: 240 + 130 + 130 = 500 wersji
+    let count = 0;
+
+    // Grupa 1: ostatnie 24h (240 wersji)
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 10; m++) {
+        const ts = now - (h * oneHour) - (m * 2 * 60 * 1000);
+        await setStorageItem(`autosave_${ts}`, {
+          id: `autosave-${ts}`,
+          timestamp: new Date(ts).toISOString(),
+          appState: { school: { name: `Szkoła ${count}` } },
+          schedData: {}
+        });
+        count++;
+      }
+    }
+
+    // Grupa 2: dni 2..14 (130 wersji)
+    for (let d = 1; d <= 13; d++) {
+      for (let v = 0; v < 10; v++) {
+        const ts = now - (d * oneDay) - (2 * oneHour) - (v * 10 * 60 * 1000);
+        await setStorageItem(`autosave_${ts}`, {
+          id: `autosave-${ts}`,
+          timestamp: new Date(ts).toISOString(),
+          appState: { school: { name: `Szkoła ${count}` } },
+          schedData: {}
+        });
+        count++;
+      }
+    }
+
+    // Grupa 3: dni 15..27 (130 wersji - starsze niż 14 dni)
+    for (let d = 15; d <= 27; d++) {
+      for (let v = 0; v < 10; v++) {
+        const ts = now - (d * oneDay) - (v * 10 * 60 * 1000);
+        await setStorageItem(`autosave_${ts}`, {
+          id: `autosave-${ts}`,
+          timestamp: new Date(ts).toISOString(),
+          appState: { school: { name: `Szkoła ${count}` } },
+          schedData: {}
+        });
+        count++;
+      }
+    }
+
+    expect(count).toBe(500);
+
+    const initialKeys = (await dbStorage.getAllStorageKeys()).filter(k => k.startsWith('autosave_'));
+    expect(initialKeys.length).toBe(500);
+
+    // Wywołanie procedury przerzedzania
+    const prunedResults = await pruneAutosaveVersions();
+
+    const remainingKeys = (await dbStorage.getAllStorageKeys()).filter(k => k.startsWith('autosave_'));
+    // Maksymalnie: 72 (z ostatnich 24h: 24h * 3) + 14 (ze starszych dób do 14 dni wstecz) = 86 (czyli <= 72 + 14)
+    expect(remainingKeys.length).toBeLessThanOrEqual(72 + 14);
+    expect(prunedResults.length).toBe(remainingKeys.length);
+
+    // Weryfikacja: brak wersji starszych niż 14 dni
+    const fourteenDaysAgo = now - 14 * 24 * 60 * 60 * 1000;
+    for (const key of remainingKeys) {
+      const ts = parseInt(key.replace('autosave_', ''), 10);
+      expect(ts).toBeGreaterThanOrEqual(fourteenDaysAgo);
+    }
+
+    // Weryfikacja: zwrócone obiekty to lekkie metadane bez ciężkiego appState/schedData w pamięci podręcznej
+    for (const meta of prunedResults) {
+      expect(meta.appState).toBeUndefined();
+      expect(meta.schedData).toBeUndefined();
+      expect(meta.key).toBeDefined();
+    }
+  });
 });
+

@@ -144,7 +144,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
     const testSnapshots = createSampleSnapshots(testAppState, testSchedData);
 
     const savedStateAndSched = await persistAppStateAndSchedWithConflictCheck(testAppState, testSchedData);
-    expect(savedStateAndSched).toBe(true);
+    expect(savedStateAndSched.status).toBe('ok');
 
     await setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, testVariants);
     await setStorageItem(STORAGE_KEYS.SNAPSHOTS, testSnapshots);
@@ -215,7 +215,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
     const testSnapshots = createSampleSnapshots(testAppState, testSchedData);
 
     const saved = await persistAppStateAndSchedWithConflictCheck(testAppState, testSchedData);
-    expect(saved).toBe(true);
+    expect(saved.status).toBe('ok');
 
     await setStorageItem(STORAGE_KEYS.PLAN_VARIANTS, testVariants);
     await setStorageItem(STORAGE_KEYS.SNAPSHOTS, testSnapshots);
@@ -305,7 +305,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
 
     const stateTab1 = createSampleAppState('Szkoła Tab 1 - Pierwotna');
     const savedTab1 = await persistenceTab1.persistAppStateAndSchedWithConflictCheck(stateTab1, planTab1);
-    expect(savedTab1).toBe(true);
+    expect(savedTab1.status).toBe('ok');
     expect(multiTabStateService.getLocalRevision()).toBe(2);
 
     // ── KROK 2: Karta 2 ładuje bazę i wprowadza swoje zmiany (Rewizja 3) ──
@@ -348,7 +348,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
 
     // Karta 2 zapisuje rewizję 3
     const savedTab2 = await persistenceTab2.persistAppStateAndSchedWithConflictCheck(updatedStateTab2, updatedPlanTab2);
-    expect(savedTab2).toBe(true);
+    expect(savedTab2.status).toBe('ok');
     expect(multiTab2.multiTabStateService.getLocalRevision()).toBe(3);
 
     // ── KROK 3: Karta 1 (mając nieświadomą, starszą lokalną rewizję 2) próbuje zapisać własne zmiany ──
@@ -391,7 +391,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
     );
 
     // Asercja: konflikt został wykryty, zapis został zablokowany
-    expect(saveResultTab1Conflict).toBe(false);
+    expect(saveResultTab1Conflict.status).toBe('conflict');
     expect(conflictReported).toBe(true);
     expect(conflictDbRevision).toBe(3);
     expect(conflictConflictingSched).not.toBeNull();
@@ -431,7 +431,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
       mergedPlan,
       false
     );
-    expect(saveMergedSuccess).toBe(true);
+    expect(saveMergedSuccess.status).toBe('ok');
     expect(multiTab1Retry.multiTabStateService.getLocalRevision()).toBe(4);
 
     // ── KROK 5: Ostateczna weryfikacja bazy po ponownym resecie modułów ──
@@ -483,7 +483,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
 
     // 1. Zapis początkowy
     const initialSaved = await persistence.persistAppStateAndSchedWithConflictCheck(testAppState, testSchedData);
-    expect(initialSaved).toBe(true);
+    expect(initialSaved.status).toBe('ok');
 
     // 2. Bezpośrednie wywołanie writeSyncMirror musi zostać odrzucone
     const mirrorStateRes = persistence.writeSyncMirror(persistence.STORAGE_KEYS.APP_STATE, testAppState);
@@ -504,7 +504,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
       testSchedData,
       { forceOverwrite: false }
     );
-    expect(unloadSaveSuccess).toBe(true);
+    expect(unloadSaveSuccess.status).toBe('ok');
 
     // 4. Weryfikacja localStorage: ŻADEN jawny tekst (nazwa szkoły, przedmioty) nie może tam trafić
     const localAppState = localStorage.getItem(persistence.STORAGE_KEYS.APP_STATE);
@@ -596,7 +596,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
       importedSchedData,
       { forceOverwrite: true }
     );
-    expect(importSuccess).toBe(true);
+    expect(importSuccess.status).toBe('ok');
 
     // Oczekiwanie na rozgłoszenie wiadomości przez BroadcastChannel
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -632,7 +632,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
         tabId: 'tab_atomic_1',
         tabLabel: 'Karta Atomowa'
       });
-      expect(success).toBe(true);
+      expect(success.status).toBe('ok');
 
       const savedApp = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
       const savedSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
@@ -657,7 +657,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
         revision: 10,
         tabId: 'tab_remote_10'
       });
-      expect(savedRemote).toBe(true);
+      expect(savedRemote.status).toBe('ok');
 
       // 2. Próba zapisu przez lokalną kartę z przestarzałą bazą rewizji 8 (brak forceOverwrite)
       const appLocalStale = createSampleAppState('Szkoła Próba Nadpisania');
@@ -668,8 +668,8 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
         forceOverwrite: false
       });
 
-      // Zapis musi zostać odrzucony
-      expect(conflictResult).toBe(false);
+      // Zapis musi zostać odrzucony jako conflict
+      expect(conflictResult.status).toBe('conflict');
 
       // Stan bazy danych pozostał nienaruszony (rewizja 10, nazwa ze zdalnej karty)
       const currentMeta = await getStorageItem<any>(STORAGE_KEYS.STATE_META);
@@ -695,9 +695,9 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
       const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
 
       // Wszystkie wywołania kończą się sukcesem (łączone)
-      expect(r1).toBe(true);
-      expect(r2).toBe(true);
-      expect(r3).toBe(true);
+      expect(r1.status).toBe('ok');
+      expect(r2.status).toBe('ok');
+      expect(r3.status).toBe('ok');
 
       // Ostateczny stan bazy to ostatni zapis (Wersja 3)
       const finalApp = await getStorageItem<AppState>(STORAGE_KEYS.APP_STATE);
@@ -722,7 +722,7 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
         const sched = createSampleSchedData();
 
         const success = await commitState(app, sched, { forceOverwrite: true });
-        expect(success).toBe(true);
+        expect(success.status).toBe('ok');
         expect(lockRequestSpy).toHaveBeenCalledWith('saleplan-write', expect.any(Function));
       } finally {
         Object.defineProperty(navigator, 'locks', {
@@ -730,6 +730,115 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
           configurable: true,
           writable: true
         });
+      }
+    });
+
+    it('tx.onabort z QuotaExceededError zwraca { status: "error" } z komunikatem "brak miejsca", a nie "conflict"', async () => {
+      const { executeCommit } = await import('./persistence');
+      const { getDB } = await import('./dbStorage');
+
+      const app = createSampleAppState('Szkoła Przekroczenie Quota');
+      const sched = createSampleSchedData();
+
+      const db = await getDB();
+      const originalTransaction = db.transaction.bind(db);
+
+      const quotaError = new DOMException('Quota exceeded', 'QuotaExceededError');
+
+      db.transaction = vi.fn(() => {
+        const fakeTx: any = {
+          error: quotaError,
+          objectStore: vi.fn(() => ({
+            get: vi.fn(() => {
+              const req: any = {};
+              queueMicrotask(() => {
+                req.result = null;
+                if (typeof req.onsuccess === 'function') req.onsuccess({ target: req });
+              });
+              return req;
+            }),
+            put: vi.fn()
+          })),
+          abort: vi.fn()
+        };
+        queueMicrotask(() => {
+          fakeTx.error = quotaError;
+          if (typeof fakeTx.onabort === 'function') {
+            fakeTx.onabort(new Event('abort'));
+          }
+        });
+        return fakeTx;
+      }) as any;
+
+      try {
+        const result = await executeCommit(app, sched);
+        expect(result.status).toBe('error');
+        expect(result.status).not.toBe('conflict');
+        const errMsg = result.error instanceof Error ? result.error.message : String(result.error);
+        expect(errMsg.toLowerCase()).toContain('brak miejsca');
+      } finally {
+        db.transaction = originalTransaction;
+      }
+    });
+
+    it('błąd getDB() zwraca { status: "error" } i nie kończy się sukcesem (true)', async () => {
+      const dbStorageModule = await import('./dbStorage');
+      const persistence = await import('./persistence');
+
+      const app = createSampleAppState('Szkoła Błąd IDB Connect');
+      const sched = createSampleSchedData();
+
+      const getDbSpy = vi.spyOn(dbStorageModule, 'getDB').mockRejectedValueOnce(
+        new Error('Baza IndexedDB jest uszkodzona lub niedostępna')
+      );
+
+      try {
+        const result = await persistence.executeCommit(app, sched);
+        expect(result.status).toBe('error');
+        expect((result as any)).not.toBe(true);
+        expect(result.error).toBeDefined();
+      } finally {
+        getDbSpy.mockRestore();
+      }
+    });
+
+    it('getStorageItemDetailed rozróżnia błąd odczytu IDB (status: "error") od braku klucza i blokuje zapis tego klucza', async () => {
+      const { getStorageItemDetailed, isWriteBlocked, setWriteBlocked, getDB, STORE_NAME } = await import('./dbStorage');
+
+      const testKey = 'test_idb_read_error_key';
+      setWriteBlocked(testKey, false);
+
+      const db = await getDB();
+      const originalTransaction = db.transaction.bind(db);
+
+      // Symulacja błędu odczytu req.onerror w getStorageItemDetailed
+      db.transaction = vi.fn((_storeNames, mode) => {
+        const tx = originalTransaction(STORE_NAME, mode as any);
+        return {
+          ...tx,
+          objectStore: vi.fn(() => ({
+            get: vi.fn(() => {
+              const req: any = {};
+              queueMicrotask(() => {
+                req.error = new DOMException('Błąd we/wy bazy danych', 'UnknownError');
+                if (typeof req.onerror === 'function') {
+                  req.onerror(new Event('error'));
+                }
+              });
+              return req;
+            })
+          }))
+        };
+      }) as any;
+
+      try {
+        const readResult = await getStorageItemDetailed(testKey);
+        expect(readResult.status).toBe('error');
+        expect(readResult.status).not.toBe('missing');
+        expect(isWriteBlocked(testKey)).toBe(true);
+      } finally {
+        db.transaction = originalTransaction;
+        setWriteBlocked(testKey, false);
       }
     });
   });

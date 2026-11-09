@@ -185,7 +185,7 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
     };
 
     const saved = await persistAppStateAndSchedWithConflictCheck(sampleAppState as unknown as AppState, sampleSchedData as unknown as SchedData);
-    expect(saved).toBe(true);
+    expect(saved.status).toBe('ok');
 
     // getStorageItem dla SCHED_DATA musi zwrócić poprawny obiekt zgodny ze schematem SchedDataSchema
     const retrievedSched = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
@@ -268,7 +268,7 @@ describe('multiTabStateService Multi-Tab Conflict & Revision Tests', () => {
     // Tab A can now save its next revision 3 without conflict
     const appStateA = { school: { name: 'Szkoła Zsynchronizowana' } };
     const saveSuccess = await persistAppStateAndSchedWithConflictCheck(appStateA as unknown as AppState, cleanedSched);
-    expect(saveSuccess).toBe(true);
+    expect(saveSuccess.status).toBe('ok');
 
     const finalSched = await getStorageItem<any>(STORAGE_KEYS.SCHED_DATA);
     expect(finalSched['y_2025_2026']['1']['h_2']['r_102'].className).toBe('2B');

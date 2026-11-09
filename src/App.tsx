@@ -22,7 +22,8 @@ import {
 } from './services/dbStorage';
 import {
   persistAppStateAndSchedWithConflictCheck as persistWithConflictCheck,
-  maybeRequestStoragePersist
+  maybeRequestStoragePersist,
+  CommitResult
 } from './services/persistence';
 import UnlockScreen from './components/UnlockScreen';
 import ExportModal, { ExportOptions } from './components/ExportModal';
@@ -33,6 +34,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { sanitizeAppState, ImportPayload } from './utils/mergeEngine';
 import { StateMeta, AppStateSchema, SchedDataSchema } from './utils/validationSchemas';
 import { anonymizeBackupPayload, AnonymizationSummary } from './utils/anonymization';
+import { pruneSnapshots } from './utils/snapshotUtils';
 import { SalePlanLogoMark } from './components/SalePlanLogo';
 
 const PlanKlas = lazy(() => import('./components/PlanKlas'));
@@ -167,6 +169,105 @@ function sortAppState(rawInput: unknown): AppState {
   };
 }
 
+/**
+ * Przerzedzanie kopii autozapisu:
+ * - Z ostatnich 24 godzin: zachowuje do 3 najnowszych wersji na godzinę
+ * - Od 24 godzin do 14 dni wstecz: zachowuje 1 najnowszą wersję na dobę
+ * - Starsze niż 14 dni: bezwzględnie usuwa z bazy danych
+ * Wylistowanie kluczy autosave_* przez getAllStorageKeys() bez czytania zawartości (znacznik czasu brany z nazwy klucza).
+ * W stanie Reacta trzymane są tylko metadane (lekki stan pamięci).
+ * Nadmiarowe klucze są usuwane z bazy danych.
+ */
+export const pruneAutosaveVersions = async (): Promise<AutosaveVersion[]> => {
+  try {
+    const allKeys = await getAllStorageKeys();
+    const autosaveKeys = allKeys.filter(k => k.startsWith('autosave_'));
+    if (autosaveKeys.length === 0) return [];
+
+    interface AutosaveKeyItem {
+      key: string;
+      ts: number;
+    }
+    const items: AutosaveKeyItem[] = [];
+
+    // Wylistowanie kluczy bez czytania zawartości – znacznik czasu bierzemy bezpośrednio z nazwy klucza autosave_<ts>
+    for (const k of autosaveKeys) {
+      const rawTs = parseInt(k.replace('autosave_', ''), 10);
+      if (!isNaN(rawTs) && rawTs > 0) {
+        items.push({ key: k, ts: rawTs });
+      }
+    }
+
+    // Sortowanie chronologicznie: od najnowszej do najstarszej
+    items.sort((a, b) => b.ts - a.ts);
+
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    const oneDay = 24 * oneHour;
+    const fourteenDaysAgo = now - 14 * oneDay;
+
+    const hourlyCounts = new Map<number, number>();
+    const dailyCounts = new Map<number, number>();
+
+    const keptItems: AutosaveKeyItem[] = [];
+    const keysToDelete: string[] = [];
+
+    for (const item of items) {
+      // Wersje starsze niż 14 dni: bezwzględnie usuwamy
+      if (item.ts < fourteenDaysAgo) {
+        keysToDelete.push(item.key);
+        continue;
+      }
+
+      const ageMs = now - item.ts;
+      if (ageMs < oneDay) {
+        // Ostatnie 24h (24 okna 1-godzinne): do 3 wersji na godzinę (maks. 72)
+        const hourBucket = Math.floor(ageMs / oneHour);
+        const count = hourlyCounts.get(hourBucket) || 0;
+        if (count < 3) {
+          hourlyCounts.set(hourBucket, count + 1);
+          keptItems.push(item);
+        } else {
+          keysToDelete.push(item.key);
+        }
+      } else {
+        // Od 24h do 14 dni wstecz (14 okien 24-godzinnych): 1 wersja na dobę (maks. 14)
+        const dayBucket = Math.floor(ageMs / oneDay);
+        if (dayBucket <= 14) {
+          const count = dailyCounts.get(dayBucket) || 0;
+          if (count < 1) {
+            dailyCounts.set(dayBucket, count + 1);
+            keptItems.push(item);
+          } else {
+            keysToDelete.push(item.key);
+          }
+        } else {
+          keysToDelete.push(item.key);
+        }
+      }
+    }
+
+    // Usunięcie nadmiarowych kluczy
+    for (const k of keysToDelete) {
+      try {
+        await removeStorageItem(k);
+      } catch (err) {
+        console.warn(`[Autosave] Błąd usuwania starej wersji ${k}:`, err);
+      }
+    }
+
+    // Zwracaj wyłącznie lekkie metadane (appState/schedData wczytywane dopiero przy przywracaniu)
+    return keptItems.map(i => ({
+      id: `autosave-${i.ts}`,
+      timestamp: new Date(i.ts).toISOString(),
+      key: i.key
+    }));
+  } catch (e) {
+    console.warn('[Autosave] Błąd procedury przerzedzania autozapisu:', e);
+    return [];
+  }
+};
+
 export default function App() {
   // ── HOOKS STATE ──
   const [appState, setAppState] = useState<AppState>(() => {
@@ -201,13 +302,7 @@ export default function App() {
     return [];
   });
 
-  const [autosaveVersions, setAutosaveVersions] = useState<AutosaveVersion[]>(() => {
-    const saved = getStorageItemSync<AutosaveVersion[]>(STORAGE_KEYS.AUTOSAVE_VERSIONS);
-    if (saved && Array.isArray(saved)) {
-      return saved;
-    }
-    return [];
-  });
+  const [autosaveVersions, setAutosaveVersions] = useState<AutosaveVersion[]>([]);
 
   const lastAutosaveTimeRef = useRef<number>(0);
   const editCountSinceAutosaveRef = useRef<number>(0);
@@ -365,6 +460,13 @@ export default function App() {
       const isEncrypted = isDatabaseEncryptionActive();
       if (!isEncrypted) {
         const appStateResult = await getStorageItemDetailed<AppState>(STORAGE_KEYS.APP_STATE);
+        if (appStateResult.status === 'error') {
+          setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.APP_STATE]: true }));
+          setStorageInitError(`Błąd odczytu bazy IndexedDB dla klucza APP_STATE: ${appStateResult.error}. Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.`);
+          storageReadyRef.current = false;
+          setStorageReady(false);
+          return;
+        }
         if (appStateResult.status === 'corrupted') {
           let migratedSuccessfully = false;
           const rawAppState = appStateResult.rawContent;
@@ -403,6 +505,13 @@ export default function App() {
         }
 
         const schedResult = await getStorageItemDetailed<SchedData>(STORAGE_KEYS.SCHED_DATA);
+        if (schedResult.status === 'error') {
+          setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.SCHED_DATA]: true }));
+          setStorageInitError(`Błąd odczytu bazy IndexedDB dla klucza SCHED_DATA: ${schedResult.error}. Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.`);
+          storageReadyRef.current = false;
+          setStorageReady(false);
+          return;
+        }
         if (schedResult.status === 'corrupted') {
           let schedMigratedSuccessfully = false;
           const rawSched = schedResult.rawContent;
@@ -522,13 +631,13 @@ export default function App() {
         if (archiveRes.quarantinedCount && archiveRes.quarantinedCount > 0) {
           notify(`Zabezpieczono ${archiveRes.quarantinedCount} uszkodzonych wpisów archiwum w kopii ratunkowej.`, 'info');
         }
-      } else if (archiveRes.status === 'corrupted') {
+      } else if (archiveRes.status === 'error' || archiveRes.status === 'corrupted') {
         setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.ARCHIVE]: true }));
         setCorruptDataModal({
           key: STORAGE_KEYS.ARCHIVE,
-          rawContent: typeof archiveRes.rawContent === 'string' ? archiveRes.rawContent : JSON.stringify(archiveRes.rawContent, null, 2)
+          rawContent: archiveRes.status === 'error' ? String(archiveRes.error) : (typeof archiveRes.rawContent === 'string' ? archiveRes.rawContent : JSON.stringify(archiveRes.rawContent, null, 2))
         });
-        setStorageInitError('Wykryto uszkodzone dane archiwum (ARCHIVE). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        setStorageInitError('Wykryto błąd odczytu lub uszkodzenie archiwum (ARCHIVE). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
         storageReadyRef.current = false;
         setStorageReady(false);
         return;
@@ -537,18 +646,18 @@ export default function App() {
       const snapsRes = await getStorageItemDetailed<SnapshotEntry[]>(STORAGE_KEYS.SNAPSHOTS);
       if (snapsRes.status === 'found') {
         if (Array.isArray(snapsRes.data)) {
-          setSnapshots(snapsRes.data);
+          setSnapshots(pruneSnapshots(snapsRes.data));
         }
         if (snapsRes.quarantinedCount && snapsRes.quarantinedCount > 0) {
           notify(`Zabezpieczono ${snapsRes.quarantinedCount} uszkodzonych punktów przywracania w kopii ratunkowej.`, 'info');
         }
-      } else if (snapsRes.status === 'corrupted') {
+      } else if (snapsRes.status === 'error' || snapsRes.status === 'corrupted') {
         setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.SNAPSHOTS]: true }));
         setCorruptDataModal({
           key: STORAGE_KEYS.SNAPSHOTS,
-          rawContent: typeof snapsRes.rawContent === 'string' ? snapsRes.rawContent : JSON.stringify(snapsRes.rawContent, null, 2)
+          rawContent: snapsRes.status === 'error' ? String(snapsRes.error) : (typeof snapsRes.rawContent === 'string' ? snapsRes.rawContent : JSON.stringify(snapsRes.rawContent, null, 2))
         });
-        setStorageInitError('Wykryto uszkodzone dane punktów przywracania (SNAPSHOTS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        setStorageInitError('Wykryto błąd odczytu lub uszkodzenie punktów przywracania (SNAPSHOTS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
         storageReadyRef.current = false;
         setStorageReady(false);
         return;
@@ -566,17 +675,19 @@ export default function App() {
               }
             }
           }
+          // Po udanej migracji usuń stary zbiorczy klucz AUTOSAVE_VERSIONS
+          await removeStorageItem(STORAGE_KEYS.AUTOSAVE_VERSIONS);
         }
         if (autosavesRes.quarantinedCount && autosavesRes.quarantinedCount > 0) {
           notify(`Zabezpieczono ${autosavesRes.quarantinedCount} uszkodzonych wersji autozapisu w kopii ratunkowej.`, 'info');
         }
-      } else if (autosavesRes.status === 'corrupted') {
+      } else if (autosavesRes.status === 'error' || autosavesRes.status === 'corrupted') {
         setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.AUTOSAVE_VERSIONS]: true }));
         setCorruptDataModal({
           key: STORAGE_KEYS.AUTOSAVE_VERSIONS,
-          rawContent: typeof autosavesRes.rawContent === 'string' ? autosavesRes.rawContent : JSON.stringify(autosavesRes.rawContent, null, 2)
+          rawContent: autosavesRes.status === 'error' ? String(autosavesRes.error) : (typeof autosavesRes.rawContent === 'string' ? autosavesRes.rawContent : JSON.stringify(autosavesRes.rawContent, null, 2))
         });
-        setStorageInitError('Wykryto uszkodzone dane autozapisu (AUTOSAVE_VERSIONS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        setStorageInitError('Wykryto błąd odczytu lub uszkodzenie autozapisu (AUTOSAVE_VERSIONS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
         storageReadyRef.current = false;
         setStorageReady(false);
         return;
@@ -601,13 +712,13 @@ export default function App() {
         if (variantsRes.quarantinedCount && variantsRes.quarantinedCount > 0) {
           notify(`Zabezpieczono ${variantsRes.quarantinedCount} uszkodzonych wariantów planu w kopii ratunkowej.`, 'info');
         }
-      } else if (variantsRes.status === 'corrupted') {
+      } else if (variantsRes.status === 'error' || variantsRes.status === 'corrupted') {
         setBlockedWrites(prev => ({ ...prev, [STORAGE_KEYS.PLAN_VARIANTS]: true }));
         setCorruptDataModal({
           key: STORAGE_KEYS.PLAN_VARIANTS,
-          rawContent: typeof variantsRes.rawContent === 'string' ? variantsRes.rawContent : JSON.stringify(variantsRes.rawContent, null, 2)
+          rawContent: variantsRes.status === 'error' ? String(variantsRes.error) : (typeof variantsRes.rawContent === 'string' ? variantsRes.rawContent : JSON.stringify(variantsRes.rawContent, null, 2))
         });
-        setStorageInitError('Wykryto uszkodzone dane wariantów planu (PLAN_VARIANTS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
+        setStorageInitError('Wykryto błąd odczytu lub uszkodzenie wariantów planu (PLAN_VARIANTS). Zapisy bazy danych zostały wstrzymane dla bezpieczeństwa.');
         storageReadyRef.current = false;
         setStorageReady(false);
         return;
@@ -746,8 +857,9 @@ export default function App() {
   };
 
   const handleChangeSnapshots = (newSnaps: SnapshotEntry[]) => {
-    if (newSnaps.length > snapshots.length) {
-      const added = newSnaps.find(n => !snapshots.some(s => s && s.id === n.id));
+    const prunedSnaps = pruneSnapshots(newSnaps);
+    if (prunedSnaps.length > snapshots.length) {
+      const added = prunedSnaps.find(n => !snapshots.some(s => s && s.id === n.id));
       if (added) {
         addEventLog(
           'snapshot_create',
@@ -755,8 +867,8 @@ export default function App() {
           `Nazwa: "${added.name}".` + (added.comment ? ` Komentarz: "${added.comment}"` : '')
         );
       }
-    } else if (newSnaps.length < snapshots.length) {
-      const deleted = snapshots.find(s => s && !newSnaps.some(n => n.id === s.id));
+    } else if (prunedSnaps.length < snapshots.length) {
+      const deleted = snapshots.find(s => s && !prunedSnaps.some(n => n.id === s.id));
       if (deleted) {
         addEventLog(
           'snapshot_delete',
@@ -764,99 +876,14 @@ export default function App() {
           `Nazwa: "${deleted.name}".`
         );
       }
-    } else if (newSnaps.length === 0 && snapshots.length > 0) {
+    } else if (prunedSnaps.length === 0 && snapshots.length > 0) {
       addEventLog(
         'snapshot_delete',
         'Wyczyszczono wszystkie punkty przywracania',
         'Usunięto bezpowrotnie wszystkie zapisane kopie zapasowe planu.'
       );
     }
-    setSnapshots(newSnaps);
-  };
-
-  /**
-   * Przerzedzanie kopii autozapisu:
-   * - Z ostatnich 24 godzin: zachowuje do 3 najnowszych wersji na godzinę
-   * - Starsze niż 24 godziny: zachowuje 1 najnowszą wersję na dobę
-   * Nadmiarowe klucze są usuwane z bazy danych.
-   */
-  const pruneAutosaveVersions = async (): Promise<AutosaveVersion[]> => {
-    try {
-      const allKeys = await getAllStorageKeys();
-      const autosaveKeys = allKeys.filter(k => k.startsWith('autosave_'));
-      if (autosaveKeys.length === 0) return [];
-
-      interface AutosaveItem {
-        key: string;
-        ts: number;
-        version: AutosaveVersion;
-      }
-      const items: AutosaveItem[] = [];
-
-      for (const k of autosaveKeys) {
-        try {
-          const v = await getStorageItem<AutosaveVersion>(k);
-          if (v && v.timestamp) {
-            const rawTs = parseInt(k.replace('autosave_', ''), 10);
-            const stampTs = new Date(v.timestamp).getTime();
-            const ts = !isNaN(rawTs) && rawTs > 0 ? rawTs : (!isNaN(stampTs) ? stampTs : 0);
-            items.push({ key: k, ts, version: v });
-          }
-        } catch {}
-      }
-
-      // Sortowanie chronologicznie: od najnowszej do najstarszej
-      items.sort((a, b) => b.ts - a.ts);
-
-      const now = Date.now();
-      const oneDayAgo = now - 24 * 60 * 60 * 1000;
-
-      const hourlyCounts = new Map<string, number>();
-      const dailyCounts = new Map<string, number>();
-
-      const keptItems: AutosaveItem[] = [];
-      const keysToDelete: string[] = [];
-
-      for (const item of items) {
-        const d = new Date(item.ts);
-        const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const hourKey = `${dayKey}-${String(d.getHours()).padStart(2, '0')}`;
-
-        if (item.ts >= oneDayAgo) {
-          // Ostatnie 24h: zachowaj do 3 z danej godziny
-          const count = hourlyCounts.get(hourKey) || 0;
-          if (count < 3) {
-            hourlyCounts.set(hourKey, count + 1);
-            keptItems.push(item);
-          } else {
-            keysToDelete.push(item.key);
-          }
-        } else {
-          // Starsze niż 24h: zachowaj 1 z danej doby
-          const count = dailyCounts.get(dayKey) || 0;
-          if (count < 1) {
-            dailyCounts.set(dayKey, count + 1);
-            keptItems.push(item);
-          } else {
-            keysToDelete.push(item.key);
-          }
-        }
-      }
-
-      // Usunięcie nadmiarowych kluczy
-      for (const k of keysToDelete) {
-        try {
-          await removeStorageItem(k);
-        } catch (err) {
-          console.warn(`[Autosave] Błąd usuwania starej wersji ${k}:`, err);
-        }
-      }
-
-      return keptItems.map(i => i.version);
-    } catch (e) {
-      console.warn('[Autosave] Błąd procedury przerzedzania autozapisu:', e);
-      return [];
-    }
+    setSnapshots(prunedSnaps);
   };
 
   /**
@@ -1445,7 +1472,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.12.0';
+  const CURRENT_VERSION = '3.13.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -1677,8 +1704,10 @@ export default function App() {
     targetAppState: AppState,
     targetSchedData: SchedData,
     forceOverwriteOrOptions: boolean | { forceOverwrite?: boolean } = false
-  ): Promise<boolean> => {
-    if (!storageReadyRef.current || isLocked) return false;
+  ): Promise<CommitResult> => {
+    if (!storageReadyRef.current || isLocked) {
+      return { status: 'error', error: new Error('Baza danych nie jest gotowa lub sesja jest zablokowana.') };
+    }
     const forceOverwrite = typeof forceOverwriteOrOptions === 'boolean'
       ? forceOverwriteOrOptions
       : (forceOverwriteOrOptions?.forceOverwrite ?? false);
@@ -1717,19 +1746,24 @@ export default function App() {
     if (!storageReadyRef.current || isLocked) return false;
     try {
       setSaveStatus('saving');
-      const saved = await persistAppStateAndSchedWithConflictCheck(
+      const res = await persistAppStateAndSchedWithConflictCheck(
         stateRef.current.appState,
         stateRef.current.schedData,
         { forceOverwrite: false }
       );
-      if (saved) {
+      if (res.status === 'ok') {
         await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
         setSaveStatus('saved');
         refreshStorageStats();
+        return true;
+      } else if (res.status === 'error') {
+        setSaveStatus('error');
+        return false;
       } else {
+        // conflict
         setSaveStatus('dirty');
+        return false;
       }
-      return saved;
     } catch (e: unknown) {
       console.error('Błąd zapisu flushNow:', e);
       setSaveStatus('error');
@@ -1791,6 +1825,7 @@ export default function App() {
       id: 'conflict_' + Date.now(),
       name: `Kopia z innej karty (przed nadpisaniem) - Rewizja #${otherTabRev}`,
       createdAt: new Date().toISOString(),
+      isManual: false, // Automatyczna kopia robocza – podlega limitowi 30 kopii
       appState: conflictData.dbAppState,
       schedData: cleanSchedDataMeta(conflictData.dbSchedData || {}),
       comment: `Automatyczna kopia zapasowa utworzona podczas rozwiązywania konfliktu w wielu kartach. Karta "${otherTabId}" zapisała rewizję #${otherTabRev}, która została zastąpiona wersją z bieżącej karty.`,
@@ -1802,7 +1837,7 @@ export default function App() {
     };
 
     setSnapshots(prev => {
-      const updated = [snapshotCopy, ...prev];
+      const updated = pruneSnapshots([snapshotCopy, ...prev]);
       setStorageItem(STORAGE_KEYS.SNAPSHOTS, updated).catch(() => {});
       return updated;
     });
@@ -1810,12 +1845,12 @@ export default function App() {
     // 2. Bezpieczny zapis własnej wersji z nową rewizją
     setSaveStatus('saving');
     try {
-      const saved = await persistAppStateAndSchedWithConflictCheck(
+      const res = await persistAppStateAndSchedWithConflictCheck(
         stateRef.current.appState,
         stateRef.current.schedData,
         true // force overwrite
       );
-      if (saved) {
+      if (res.status === 'ok') {
         await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
         setSaveStatus('saved');
         refreshStorageStats();
@@ -1824,6 +1859,9 @@ export default function App() {
         setConflictData(null);
         removeStorageItem(STORAGE_KEYS.PENDING_CHANGES_BACKUP).catch(() => {});
         notify('Zachowano Twoją wersję planu. Kopia z innej karty została bezpiecznie zapisana w Punktach Przywracania.', 'ok');
+      } else if (res.status === 'error') {
+        setSaveStatus('error');
+        notify('Nie udało się zapisać własnej wersji planu.', 'err');
       }
     } catch (e) {
       console.error('Błąd zachowywania własnej wersji:', e);
@@ -1875,14 +1913,26 @@ export default function App() {
       // Elegant micro-delay to allow visual status feedback
       innerTimer = setTimeout(async () => {
         try {
-          const saved = await persistAppStateAndSchedWithConflictCheck(
+          const res = await persistAppStateAndSchedWithConflictCheck(
             stateRef.current.appState,
             stateRef.current.schedData
           );
-          if (saved) {
+          if (res.status === 'ok') {
             await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
             setSaveStatus('saved');
             refreshStorageStats();
+          } else if (res.status === 'error') {
+            setSaveStatus('error');
+            const isLockedErr = res.error instanceof StorageLockedError || (res.error as { name?: string })?.name === 'StorageLockedError';
+            notify(
+              isLockedErr 
+                ? 'Baza danych jest zablokowana. Wprowadź hasło, aby zapisać zmiany.' 
+                : 'Błąd zapisu: Nie udało się utrwalić zmian w bazie danych!',
+              'err'
+            );
+          } else {
+            // conflict
+            setSaveStatus('dirty');
           }
         } catch (e: unknown) {
           console.error('Błąd zapisu autozapisu', e);
@@ -1918,15 +1968,19 @@ export default function App() {
     const saveOnTabSwitch = async () => {
       try {
         setSaveStatus('saving');
-        const saved = await persistAppStateAndSchedWithConflictCheck(
+        const res = await persistAppStateAndSchedWithConflictCheck(
           stateRef.current.appState,
           stateRef.current.schedData
         );
-        if (saved) {
+        if (res.status === 'ok') {
           await pushAutosaveVersion(stateRef.current.appState, stateRef.current.schedData);
           setSaveStatus('saved');
           refreshStorageStats();
           addEventLog('other', 'Automatyczny zapis przy zmianie zakładki', `Zapisano stan programu w bazie IndexedDB przy przełączeniu na zakładkę "${currentTab}".`);
+        } else if (res.status === 'error') {
+          setSaveStatus('error');
+        } else {
+          setSaveStatus('dirty');
         }
       } catch (e: unknown) {
         console.error('Błąd natychmiastowego zapisu przy zmianie zakładki', e);
@@ -2578,13 +2632,14 @@ export default function App() {
       handleUpdateAppState(sanitizedState);
       setSchedData(sanitizedSched);
       setArchive(result.mergedArchive);
-      setSnapshots(result.mergedSnapshots);
+      const prunedMergedSnapshots = pruneSnapshots(result.mergedSnapshots);
+      setSnapshots(prunedMergedSnapshots);
       setHistoryLogs(result.mergedLogs);
 
       await Promise.all([
         persistAppStateAndSchedWithConflictCheck(sanitizedState, sanitizedSched, { forceOverwrite: true }),
         setStorageItem(STORAGE_KEYS.ARCHIVE, result.mergedArchive),
-        setStorageItem(STORAGE_KEYS.SNAPSHOTS, result.mergedSnapshots),
+        setStorageItem(STORAGE_KEYS.SNAPSHOTS, prunedMergedSnapshots),
         setStorageItem(STORAGE_KEYS.HISTORY_LOGS, result.mergedLogs)
       ]);
 
@@ -3674,9 +3729,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.12.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.13.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Atomowa trwałość IndexedDB i Web Locks, autozapis dyskretny z redukcją (3/h, 1/doba), bezpieczny flush i wzmocnione PWA.
+                  Czysty silnik detekcji konfliktów i partycje grup, inteligentny generator planu z salami, rotacja 30 migawek i bezpieczny dziennik błędów.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

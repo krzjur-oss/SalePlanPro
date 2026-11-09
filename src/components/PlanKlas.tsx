@@ -23,6 +23,7 @@ import { PlanKlasAssignTab } from './planKlas/PlanKlasAssignTab';
 import { PlanKlasTeachersTab } from './planKlas/PlanKlasTeachersTab';
 import { PlanKlasSpeSlotModal } from './planKlas/PlanKlasSpeSlotModal';
 import { PlanKlasEditCellModal } from './planKlas/PlanKlasEditCellModal';
+import { detectConflicts, detectConflictsMap } from '../utils/conflictEngine';
 
 const PALETTE_COLORS = [
   '#2563eb', '#1d4ed8', '#3b82f6', '#60a5fa', // Blues
@@ -499,81 +500,52 @@ export default function PlanKlas({
     const conflictsAtoB: string[] = [];
     const conflictsBtoA: string[] = [];
 
-    // Sprawdzenie dostępności nauczyciela źródłowego w docelowym slocie
-    if (source.teacher) {
-      Object.entries(pl.lessons).forEach(([k, l]) => {
-        if (k === source.key || k === target.key) return;
-        const [cId, d, h] = k.split('|');
-        if (parseInt(d, 10) === target.day && parseInt(h, 10) === target.hour) {
-          const asg = pl.assignments.find(a => a.id === l.assignmentId);
-          if (asg && asg.teacherId === source.teacher?.id) {
-            const otherCls = classesMap.get(cId)?.name || cId;
-            conflictsAtoB.push(`Nauczyciel ${source.teacher.first} ${source.teacher.last} uczy już w tym czasie klasę ${otherCls}`);
-          }
-        }
-      });
+    // 1. Symulacja przeniesienia source do target (A -> B)
+    if (source.assignment) {
+      const simLessonsA: Record<string, Lesson> = { ...pl.lessons };
+      if (source.key) delete simLessonsA[source.key];
+      const targetKey = source.assignment.groupId
+        ? `${target.classId}|${target.day}|${target.hour}|${source.assignment.groupId}`
+        : `${target.classId}|${target.day}|${target.hour}`;
+      simLessonsA[targetKey] = {
+        assignmentId: source.assignment.id,
+        locked: false,
+        supportTeacherId: source.lesson?.supportTeacherId
+      };
 
-      if (source.teacher.availability && source.teacher.availability.length > 0) {
-        const slotCode = `${target.day}-${target.hour}`;
-        if (!source.teacher.availability.includes(slotCode)) {
-          conflictsAtoB.push(`Nauczyciel ${source.teacher.first} ${source.teacher.last} ma niedostępność w tym terminie`);
-        }
-      }
-    }
-
-    // Sprawdzenie dostępności sali źródłowej w docelowym slocie
-    if (source.room) {
-      Object.entries(pl.lessons).forEach(([k, l]) => {
-        if (k === source.key || k === target.key) return;
-        const [cId, d, h] = k.split('|');
-        if (parseInt(d, 10) === target.day && parseInt(h, 10) === target.hour) {
-          const asg = pl.assignments.find(a => a.id === l.assignmentId);
-          if (asg && asg.roomId === source.room?.id) {
-            const otherCls = classesMap.get(cId)?.name || cId;
-            conflictsAtoB.push(`Sala ${source.room.name} jest w tym czasie zajęta przez klasę ${otherCls}`);
-          }
+      const resA = detectConflicts({ ...pl, lessons: simLessonsA });
+      resA.forEach(c => {
+        if (c.lessonKeys.includes(targetKey)) {
+          conflictsAtoB.push(c.message);
         }
       });
     }
 
-    // Sprawdzenie nauczyciela docelowego w slocie źródłowym
-    if (target.teacher) {
-      Object.entries(pl.lessons).forEach(([k, l]) => {
-        if (k === source.key || k === target.key) return;
-        const [cId, d, h] = k.split('|');
-        if (parseInt(d, 10) === source.day && parseInt(h, 10) === source.hour) {
-          const asg = pl.assignments.find(a => a.id === l.assignmentId);
-          if (asg && asg.teacherId === target.teacher?.id) {
-            const otherCls = classesMap.get(cId)?.name || cId;
-            conflictsBtoA.push(`Nauczyciel ${target.teacher.first} ${target.teacher.last} uczy już w tym czasie klasę ${otherCls}`);
-          }
-        }
-      });
+    // 2. Symulacja przeniesienia target do source (B -> A)
+    if (target.assignment) {
+      const simLessonsB: Record<string, Lesson> = { ...pl.lessons };
+      if (target.key) delete simLessonsB[target.key];
+      const sourceKey = target.assignment.groupId
+        ? `${source.classId}|${source.day}|${source.hour}|${target.assignment.groupId}`
+        : `${source.classId}|${source.day}|${source.hour}`;
+      simLessonsB[sourceKey] = {
+        assignmentId: target.assignment.id,
+        locked: false,
+        supportTeacherId: target.lesson?.supportTeacherId
+      };
 
-      if (target.teacher.availability && target.teacher.availability.length > 0) {
-        const slotCode = `${source.day}-${source.hour}`;
-        if (!target.teacher.availability.includes(slotCode)) {
-          conflictsBtoA.push(`Nauczyciel ${target.teacher.first} ${target.teacher.last} ma niedostępność w tym terminie`);
-        }
-      }
-    }
-
-    // Sprawdzenie dostępności sali docelowej w slocie źródłowym
-    if (target.room) {
-      Object.entries(pl.lessons).forEach(([k, l]) => {
-        if (k === source.key || k === target.key) return;
-        const [cId, d, h] = k.split('|');
-        if (parseInt(d, 10) === source.day && parseInt(h, 10) === source.hour) {
-          const asg = pl.assignments.find(a => a.id === l.assignmentId);
-          if (asg && asg.roomId === target.room?.id) {
-            const otherCls = classesMap.get(cId)?.name || cId;
-            conflictsBtoA.push(`Sala ${target.room.name} jest w tym czasie zajęta przez klasę ${otherCls}`);
-          }
+      const resB = detectConflicts({ ...pl, lessons: simLessonsB });
+      resB.forEach(c => {
+        if (c.lessonKeys.includes(sourceKey)) {
+          conflictsBtoA.push(c.message);
         }
       });
     }
 
-    return { conflictsAtoB, conflictsBtoA };
+    return {
+      conflictsAtoB: Array.from(new Set(conflictsAtoB)),
+      conflictsBtoA: Array.from(new Set(conflictsBtoA))
+    };
   };
 
   const handleSelectSwapTarget = (targetItem: SwapSlotItem) => {
@@ -728,180 +700,10 @@ export default function PlanKlas({
     });
   }, [pl.classes, selectedGradeFilters, onlyWithUnassignedOnDay, unassignedDayFilter, classHasUnplacedOnDay]);
 
-  // Conflicts checking
+  // Conflicts checking via conflictEngine
   const conflicts = useMemo(() => {
-    // teacherSlots: "teacherId|day|hour" -> Array of { key, classId, role: string }
-    const teacherSlots = new Map<string, { key: string; classId: string; role: string }[]>();
-    // roomSlots: "roomId|day|hour" -> Array of { key, classId }
-    const roomSlots = new Map<string, { key: string; classId: string }[]>();
-
-    // key -> array of error messages
-    const detected = new Map<string, string[]>();
-
-    Object.entries(pl.lessons).forEach(([key, lesson]) => {
-      const parts = key.split('|');
-      const classId = parts[0];
-      const day = parts[1];
-      const hour = parts[2];
-      const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-      if (!asg) return;
-
-      const slotKey = `${day}|${hour}`;
-
-      // Check availability of teacher
-      if (asg.teacherId) {
-        const teacher = teachersMap.get(asg.teacherId);
-        if (teacher && teacher.availability) {
-          const checkCode = `${day}-${hour}`;
-          if (!teacher.availability.includes(checkCode)) {
-            const desc = `⚠️ Niedostępność nauczyciela: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
-            const existing = detected.get(key) || [];
-            if (!existing.includes(desc)) {
-              existing.push(desc);
-              detected.set(key, existing);
-            }
-          }
-        }
-      }
-
-      // Check availability of support teacher
-      if (lesson.supportTeacherId) {
-        const supportTeacher = teachersMap.get(lesson.supportTeacherId);
-        if (supportTeacher && supportTeacher.availability) {
-          const checkCode = `${day}-${hour}`;
-          if (!supportTeacher.availability.includes(checkCode)) {
-            const desc = `⚠️ Niedostępność nauczyciela wsp.: ${supportTeacher.first} ${supportTeacher.last} (${supportTeacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
-            const existing = detected.get(key) || [];
-            if (!existing.includes(desc)) {
-              existing.push(desc);
-              detected.set(key, existing);
-            }
-          }
-        }
-      }
-
-      if (asg.teacherId) {
-        const tKey = `${asg.teacherId}|${slotKey}`;
-        const existing = teacherSlots.get(tKey) || [];
-        existing.push({ key, classId, role: 'prowadzący' });
-        teacherSlots.set(tKey, existing);
-      }
-
-      if (lesson.supportTeacherId) {
-        const tKey = `${lesson.supportTeacherId}|${slotKey}`;
-        const existing = teacherSlots.get(tKey) || [];
-        existing.push({ key, classId, role: 'wspomagający' });
-        teacherSlots.set(tKey, existing);
-      }
-
-      if (asg.roomId) {
-        const rKey = `${asg.roomId}|${slotKey}`;
-        const existing = roomSlots.get(rKey) || [];
-        existing.push({ key, classId });
-        roomSlots.set(rKey, existing);
-      }
-    });
-
-    // Check teacher conflicts (same teacher assigned to multiple classes/groups at the same time)
-    teacherSlots.forEach((list, tKey) => {
-      if (list.length > 1) {
-        const [teacherId] = tKey.split('|');
-        const teacher = teachersMap.get(teacherId);
-        const tName = teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nauczyciel';
-
-        list.forEach((item) => {
-          // Find other lessons at this slot with different assignment
-          const otherItems = list.filter(x => {
-            if (x.key === item.key) return false;
-            const itemL = pl.lessons[item.key];
-            const xL = pl.lessons[x.key];
-            if (itemL && xL && itemL.assignmentId === xL.assignmentId) {
-              return false; // same joint lesson assignment - NOT a teacher conflict!
-            }
-            return true;
-          });
-          if (otherItems.length > 0) {
-            const descriptions = otherItems.map(oi => {
-              const otherClassName = classesMap.get(oi.classId)?.name || 'Inna klasa';
-              const otherLesson = pl.lessons[oi.key];
-              const otherAsg = otherLesson ? pl.assignments.find(a => a.id === otherLesson.assignmentId) : null;
-              const otherGroup = otherAsg?.groupId ? pl.schoolGroups?.find(g => g.id === otherAsg.groupId) : null;
-              const roleName = oi.role === 'wspomagający' ? 'wspomagający' : 'prowadzący';
-              
-              if (oi.classId === item.classId) {
-                return `${roleName} w innej grupie (${otherGroup?.name || 'inna gr.'})`;
-              }
-              return `${roleName} w kl. ${otherClassName}${otherGroup ? ` (gr. ${otherGroup.name})` : ''}`;
-            });
-            const desc = `Konflikt Nauczyciela: ${tName} jest zajęty równolegle (${descriptions.join(', ')})`;
-            const existing = detected.get(item.key) || [];
-            if (!existing.includes(desc)) {
-              existing.push(desc);
-              detected.set(item.key, existing);
-            }
-          }
-        });
-      }
-    });
-
-    // Check room conflicts (same room assigned to multiple classes/groups at the same time)
-    roomSlots.forEach((list, rKey) => {
-      if (list.length > 1) {
-        const [roomId] = rKey.split('|');
-        const room = roomsMap.get(roomId);
-        const rName = room?.name || 'Sala';
-        const isSport = isSportsFacility(room);
-        const hasSingleClassLimit = room?.singleClassLimit === true;
-
-        list.forEach((item) => {
-          const otherEntries = list.filter(x => {
-            if (x.key === item.key) return false;
-            const itemL = pl.lessons[item.key];
-            const xL = pl.lessons[x.key];
-            if (itemL && xL && itemL.assignmentId === xL.assignmentId) {
-              return false; // same joint lesson assignment - NOT a room conflict!
-            }
-            // For sports facilities (gyms, sports halls, pools, etc.):
-            if (isSport) {
-              // If without strict single-class limit: multiple classes and multiple groups are allowed without conflict!
-              if (!hasSingleClassLimit) {
-                return false;
-              }
-              // If strict single-class limit is set: multiple groups of the SAME class are still allowed!
-              if (x.classId === item.classId) {
-                return false;
-              }
-            }
-            return true;
-          });
-
-          if (otherEntries.length > 0) {
-            const conflictLabels = otherEntries.map(oi => {
-              const otherClass = classesMap.get(oi.classId);
-              const otherLesson = pl.lessons[oi.key];
-              const otherAsg = otherLesson ? pl.assignments.find(a => a.id === otherLesson.assignmentId) : null;
-              const otherGroup = otherAsg?.groupId ? pl.schoolGroups?.find(g => g.id === otherAsg.groupId) : null;
-              if (oi.classId === item.classId) {
-                return `inna grupa tej klasy (${otherGroup?.name || 'inna gr.'})`;
-              }
-              return `kl. ${otherClass?.name || 'Inna'}${otherGroup ? ` (gr. ${otherGroup.name})` : ''}`;
-            });
-            const uniqueConflictLabels = Array.from(new Set(conflictLabels));
-            const desc = isSport && hasSingleClassLimit
-              ? `Limit sali sportowej: Obiekt ${rName} ma limit 1 klasy, a przypisano także: ${uniqueConflictLabels.join(', ')}`
-              : `Konflikt Sali: Sala ${rName} jest zajęta w tym samym czasie przez: ${uniqueConflictLabels.join(', ')}`;
-            const existing = detected.get(item.key) || [];
-            if (!existing.includes(desc)) {
-              existing.push(desc);
-              detected.set(item.key, existing);
-            }
-          }
-        });
-      }
-    });
-
-    return detected;
-  }, [pl.lessons, pl.assignments, pl.schoolGroups, teachersMap, roomsMap, classesMap]);
+    return detectConflictsMap(pl);
+  }, [pl]);
 
   // ── HANDLERS ──
 
@@ -1419,7 +1221,35 @@ export default function PlanKlas({
       }
     }
 
-    const allInvolved = asg ? [asg.classId, ...(asg.linkedClassIds || [])] : [classIdToUse];
+    // Zbieramy wszystkie cele (klasa + grupa) dla tego przydziału z uwzględnieniem linkedGroupIds i linkedClassIds
+    const targets: { classId: string; groupId: string | null }[] = [];
+    if (asg) {
+      targets.push({ classId: asg.classId, groupId: asg.groupId || null });
+
+      // Grupy powiązane (linkedGroupIds - np. grupy międzyoddziałowe z innych klas)
+      if (asg.linkedGroupIds && asg.linkedGroupIds.length > 0) {
+        asg.linkedGroupIds.forEach(lgId => {
+          const grpObj = pl.schoolGroups?.find(g => g.id === lgId);
+          const grpClassId = grpObj?.classId || asg.linkedClassIds?.[0] || asg.classId;
+          if (!targets.some(t => t.classId === grpClassId && t.groupId === lgId)) {
+            targets.push({ classId: grpClassId, groupId: lgId });
+          }
+        });
+      }
+
+      // Klasy powiązane (linkedClassIds)
+      if (asg.linkedClassIds && asg.linkedClassIds.length > 0) {
+        asg.linkedClassIds.forEach(lcId => {
+          if (!targets.some(t => t.classId === lcId)) {
+            targets.push({ classId: lcId, groupId: asg.groupId || null });
+          }
+        });
+      }
+    } else {
+      targets.push({ classId: classIdToUse, groupId: null });
+    }
+
+    const allInvolved = Array.from(new Set(targets.map(t => t.classId)));
 
     // Real-time Room conflict detection
     if (asg && asg.roomId) {
@@ -1479,42 +1309,69 @@ export default function PlanKlas({
       }
     }
 
-    allInvolved.forEach(clsId => {
-      // Znalezienie wszystkich istniejących kluczy lekcji w tym slocie
+    // Zbieramy lekcje, które zostałyby usunięte w tym slocie
+    const keysToRemove: string[] = [];
+    targets.forEach(target => {
       const existingSlotKeys = Object.keys(updatedLessons).filter(k => {
         const p = k.split('|');
-        return p[0] === clsId && parseInt(p[1], 10) === day && parseInt(p[2], 10) === hour;
+        return p[0] === target.classId && parseInt(p[1], 10) === day && parseInt(p[2], 10) === hour;
       });
 
-      if (asg && asg.groupId) {
-        // Group lesson: remove whole-class lesson or lesson of the exact same group
+      if (target.groupId) {
+        // Lekcja grupy: usuwa lekcję całej klasy lub lekcję dokładnie tej samej grupy
         existingSlotKeys.forEach(exKey => {
           const exLesson = updatedLessons[exKey];
           const exAsg = exLesson ? pl.assignments.find(a => a.id === exLesson.assignmentId) : null;
-          if (!exAsg || !exAsg.groupId || exAsg.groupId === asg.groupId) {
-            delete updatedLessons[exKey];
+          const exGroupId = exKey.split('|')[3] || exAsg?.groupId || null;
+          if (!exGroupId || exGroupId === target.groupId) {
+            if (!keysToRemove.includes(exKey)) {
+              keysToRemove.push(exKey);
+            }
           }
         });
-
-        const targetKey = `${clsId}|${day}|${hour}|${asg.groupId}`;
-        updatedLessons[targetKey] = {
-          assignmentId: assignId,
-          locked: false,
-          supportTeacherId: defaultSupportTeacherId
-        };
       } else {
-        // Whole class lesson: replace all lessons in this slot
+        // Lekcja całej klasy: usuwa wszystkie istniejące lekcje w tym slocie
         existingSlotKeys.forEach(exKey => {
-          delete updatedLessons[exKey];
+          if (!keysToRemove.includes(exKey)) {
+            keysToRemove.push(exKey);
+          }
         });
-
-        const targetKey = `${clsId}|${day}|${hour}`;
-        updatedLessons[targetKey] = {
-          assignmentId: assignId,
-          locked: false,
-          supportTeacherId: defaultSupportTeacherId
-        };
       }
+    });
+
+    if (keysToRemove.length > 0) {
+      const removedDescriptions = keysToRemove.map(k => {
+        const l = updatedLessons[k];
+        const a = l ? pl.assignments.find(as => as.id === l.assignmentId) : null;
+        const subj = a?.subjectId ? pl.subjects.find(s => s.id === a.subjectId)?.name || 'Lekcja' : 'Lekcja';
+        const tch = a?.teacherId ? teachersMap.get(a.teacherId)?.abbr || '' : '';
+        const rm = a?.roomId ? roomsMap.get(a.roomId)?.name || '' : '';
+        const grp = a?.groupId ? pl.schoolGroups?.find(g => g.id === a.groupId)?.name : null;
+        const cls = pl.classes.find(c => c.id === k.split('|')[0])?.name || '';
+        return `• ${cls}: ${subj}${grp ? ` (gr. ${grp})` : ''}${tch ? ` [${tch}]` : ''}${rm ? ` s. ${rm}` : ''}`;
+      });
+
+      const dayName = DAYS[day] || `Dzień ${day + 1}`;
+      const hourNum = pl.hours[hour]?.num || (hour + 1);
+      const confirmMsg = `W wybranym terminie (${dayName}, lekcja ${hourNum}) znajdują się już lekcje:\n${removedDescriptions.join('\n')}\n\nCzy na pewno chcesz zastąpić i usunąć te lekcje?`;
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+      keysToRemove.forEach(k => {
+        delete updatedLessons[k];
+      });
+    }
+
+    targets.forEach(target => {
+      const targetKey = target.groupId
+        ? `${target.classId}|${day}|${hour}|${target.groupId}`
+        : `${target.classId}|${day}|${hour}`;
+
+      updatedLessons[targetKey] = {
+        assignmentId: assignId,
+        locked: false,
+        supportTeacherId: defaultSupportTeacherId
+      };
     });
 
     const updatedPL = {

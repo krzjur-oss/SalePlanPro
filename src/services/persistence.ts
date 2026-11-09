@@ -26,6 +26,11 @@ import {
 import { AppState, SchedData } from '../types';
 import { StateMeta } from '../utils/validationSchemas';
 
+export type CommitResult = {
+  status: 'ok' | 'conflict' | 'error';
+  error?: unknown;
+};
+
 export interface PersistOptions {
   forceOverwrite?: boolean;
   baseRevision?: number;
@@ -46,7 +51,7 @@ interface QueuedTask {
   app: AppState;
   sched: SchedData;
   meta?: CommitStateOptions;
-  resolvers: { resolve: (val: boolean) => void; reject: (err: unknown) => void }[];
+  resolvers: { resolve: (val: CommitResult) => void; reject: (err: unknown) => void }[];
 }
 
 let isProcessingQueue = false;
@@ -61,8 +66,8 @@ function enqueueWrite(
   app: AppState,
   sched: SchedData,
   meta?: CommitStateOptions
-): Promise<boolean> {
-  return new Promise<boolean>((resolve, reject) => {
+): Promise<CommitResult> {
+  return new Promise<CommitResult>((resolve, reject) => {
     if (!isProcessingQueue) {
       isProcessingQueue = true;
       executeWithLock(app, sched, meta)
@@ -71,7 +76,7 @@ function enqueueWrite(
           processNextInQueue();
         })
         .catch((err) => {
-          reject(err);
+          resolve({ status: 'error', error: err });
           processNextInQueue();
         });
     } else {
@@ -113,7 +118,7 @@ function processNextInQueue() {
     })
     .catch((err) => {
       for (const r of current.resolvers) {
-        r.reject(err);
+        r.resolve({ status: 'error', error: err });
       }
       processNextInQueue();
     });
@@ -126,7 +131,7 @@ async function executeWithLock(
   app: AppState,
   sched: SchedData,
   meta?: CommitStateOptions
-): Promise<boolean> {
+): Promise<CommitResult> {
   if (
     typeof navigator !== 'undefined' &&
     navigator.locks &&
@@ -144,13 +149,15 @@ async function executeWithLock(
  * 1. Szyfrowanie danych poza transakcją IndexedDB
  * 2. Pojedyncza atomowa transakcja IndexedDB dla APP_STATE, SCHED_DATA i STATE_META
  *    z synchronicznym porównaniem rewizji wewnątrz transakcji
- * 3. Zapis lustra w localStorage oraz rozgłoszenie STATE_COMMITTED
+ * 3. Zapis pojedynczego lustra w localStorage oraz rozgłoszenie STATE_COMMITTED
+ *
+ * Zwraca obiekt { status: 'ok' | 'conflict' | 'error', error? }
  */
-async function executeCommit(
+export async function executeCommit(
   app: AppState,
   sched: SchedData,
   meta?: CommitStateOptions
-): Promise<boolean> {
+): Promise<CommitResult> {
   const ctx = multiTabStateService.getTabContext();
   const baseRev = meta?.baseRevision !== undefined
     ? meta.baseRevision
@@ -176,104 +183,120 @@ async function executeCommit(
   const cleanSched = cleanSchedDataMeta(sched);
 
   // 1. SZYFROWANIE POZA TRANSAKCJĄ (asynchroniczne WebCrypto przed otwarciem transakcji IDB)
-  const preparedApp = await prepareValueForStorage(STORAGE_KEYS.APP_STATE, enrichedApp, { force: meta?.forceOverwrite });
-  const preparedSched = await prepareValueForStorage(STORAGE_KEYS.SCHED_DATA, cleanSched, { force: meta?.forceOverwrite });
-  const preparedMeta = await prepareValueForStorage(STORAGE_KEYS.STATE_META, stateMetaRecord, { force: meta?.forceOverwrite });
+  let preparedApp: unknown;
+  let preparedSched: unknown;
+  let preparedMeta: unknown;
+  try {
+    preparedApp = await prepareValueForStorage(STORAGE_KEYS.APP_STATE, enrichedApp, { force: meta?.forceOverwrite });
+    preparedSched = await prepareValueForStorage(STORAGE_KEYS.SCHED_DATA, cleanSched, { force: meta?.forceOverwrite });
+    preparedMeta = await prepareValueForStorage(STORAGE_KEYS.STATE_META, stateMetaRecord, { force: meta?.forceOverwrite });
+  } catch (prepErr) {
+    return { status: 'error', error: prepErr };
+  }
 
   // 2. POJEDYNCZA TRANSAKCJA INDEXEDDB (APP_STATE, SCHED_DATA, STATE_META)
-  let commitSuccess = false;
-
+  let db: IDBDatabase;
   try {
-    const db = await getDB();
-    commitSuccess = await new Promise<boolean>((resolve, reject) => {
-      try {
-        const tx = db.transaction([STORE_NAME], 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
+    db = await getDB();
+  } catch (dbErr) {
+    // Błąd getDB() nie może kończyć się true - zwracamy status 'error'
+    console.error('[persistence] Błąd połączenia getDB() w executeCommit:', dbErr);
+    return { status: 'error', error: dbErr };
+  }
 
-        const metaReq = store.get(STORAGE_KEYS.STATE_META);
-        let hasConflict = false;
+  const txResult = await new Promise<CommitResult>((resolve) => {
+    try {
+      const tx = db.transaction([STORE_NAME], 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
 
-        metaReq.onsuccess = () => {
-          const existingRecord = metaReq.result;
-          const dbRev = multiTabStateService.extractRevision(existingRecord);
-          const dbTabId = multiTabStateService.extractTabId(existingRecord);
-          const myTabId = stateMetaRecord.tabId;
+      const metaReq = store.get(STORAGE_KEYS.STATE_META);
+      let hasConflict = false;
 
-          // Porównanie rewizji w tej samej transakcji
-          if (
-            !meta?.forceOverwrite &&
-            existingRecord &&
-            dbTabId &&
-            dbTabId !== myTabId &&
-            dbRev > baseRev
-          ) {
-            hasConflict = true;
-            return; // Brak zapisu w transakcji
-          }
+      metaReq.onsuccess = () => {
+        const existingRecord = metaReq.result;
+        const dbRev = multiTabStateService.extractRevision(existingRecord);
+        const dbTabId = multiTabStateService.extractTabId(existingRecord);
+        const myTabId = stateMetaRecord.tabId;
 
-          // Atomowy zapis wszystkich 3 kluczy
-          store.put(preparedApp, STORAGE_KEYS.APP_STATE);
-          store.put(preparedSched, STORAGE_KEYS.SCHED_DATA);
-          store.put(preparedMeta, STORAGE_KEYS.STATE_META);
-        };
+        // Porównanie rewizji w tej samej transakcji
+        if (
+          !meta?.forceOverwrite &&
+          existingRecord &&
+          dbTabId &&
+          dbTabId !== myTabId &&
+          dbRev > baseRev
+        ) {
+          hasConflict = true;
+          return; // Brak zapisu w transakcji
+        }
 
-        metaReq.onerror = () => {
-          reject(metaReq.error);
-        };
+        // Atomowy zapis wszystkich 3 kluczy
+        store.put(preparedApp, STORAGE_KEYS.APP_STATE);
+        store.put(preparedSched, STORAGE_KEYS.SCHED_DATA);
+        store.put(preparedMeta, STORAGE_KEYS.STATE_META);
+      };
 
-        tx.oncomplete = () => {
-          resolve(!hasConflict);
-        };
+      metaReq.onerror = () => {
+        resolve({ status: 'error', error: metaReq.error });
+      };
 
-        tx.onerror = () => {
-          reject(tx.error);
-        };
+      tx.oncomplete = () => {
+        if (hasConflict) {
+          resolve({ status: 'conflict' });
+        } else {
+          resolve({ status: 'ok' });
+        }
+      };
 
-        tx.onabort = () => {
-          resolve(false);
-        };
-      } catch (err) {
-        reject(err);
-      }
-    });
-  } catch (idbErr) {
-    console.warn('[persistence] IndexedDB commitState błąd lub brak IDB, fallback do localStorage:', idbErr);
-    if (!meta?.forceOverwrite && typeof localStorage !== 'undefined') {
-      const rawLocalMeta = localStorage.getItem(STORAGE_KEYS.STATE_META);
-      if (rawLocalMeta) {
-        try {
-          const parsed = JSON.parse(rawLocalMeta);
-          const dbRev = multiTabStateService.extractRevision(parsed);
-          const dbTabId = multiTabStateService.extractTabId(parsed);
-          if (dbTabId && dbTabId !== stateMetaRecord.tabId && dbRev > baseRev) {
-            return false;
-          }
-        } catch {}
-      }
+      tx.onerror = () => {
+        const err = tx.error;
+        const isQuota =
+          err?.name === 'QuotaExceededError' ||
+          (err && String(err).includes('QuotaExceeded')) ||
+          (err && String(err).toLowerCase().includes('quota'));
+        if (isQuota) {
+          resolve({
+            status: 'error',
+            error: new Error('Brak miejsca na dysku (QuotaExceededError)')
+          });
+        } else {
+          resolve({ status: 'error', error: err });
+        }
+      };
+
+      tx.onabort = () => {
+        // tx.onabort z QuotaExceededError ma dawać error z komunikatem „brak miejsca”, a nie conflict
+        const err = tx.error;
+        const isQuota =
+          err?.name === 'QuotaExceededError' ||
+          (err && String(err).includes('QuotaExceeded')) ||
+          (err && String(err).toLowerCase().includes('quota'));
+        if (isQuota) {
+          resolve({
+            status: 'error',
+            error: new Error('Brak miejsca na dysku (QuotaExceededError)')
+          });
+        } else if (hasConflict) {
+          resolve({ status: 'conflict' });
+        } else if (err) {
+          resolve({ status: 'error', error: err });
+        } else {
+          resolve({ status: 'error', error: new Error('Transakcja bazy danych została przerwana (abort)') });
+        }
+      };
+    } catch (err) {
+      resolve({ status: 'error', error: err });
     }
-    commitSuccess = true;
+  });
+
+  if (txResult.status !== 'ok') {
+    return txResult;
   }
 
-  if (!commitSuccess) {
-    return false;
-  }
-
-  // 3. Synchronizacja lustra w localStorage
+  // 3. Pojedynczy zapis lustra w localStorage (usunięto podwójne serializeAndSet)
   writeSyncMirror(STORAGE_KEYS.APP_STATE, preparedApp);
   writeSyncMirror(STORAGE_KEYS.SCHED_DATA, preparedSched);
   writeSyncMirror(STORAGE_KEYS.STATE_META, preparedMeta);
-
-  try {
-    const serializeAndSet = (k: string, val: unknown) => {
-      const s = typeof val === 'string' ? val : JSON.stringify(val);
-      if (s.length < 2.5 * 1024 * 1024) {
-        localStorage.setItem(k, s);
-      }
-    };
-    serializeAndSet(STORAGE_KEYS.APP_STATE, preparedApp);
-    serializeAndSet(STORAGE_KEYS.SCHED_DATA, preparedSched);
-    serializeAndSet(STORAGE_KEYS.STATE_META, preparedMeta);
-  } catch {}
 
   // 4. Aktualizacja licznika rewizji i powiadomienie pozostałych kart
   multiTabStateService.setLocalRevision(nextRev, STORAGE_KEYS.APP_STATE);
@@ -286,7 +309,7 @@ async function executeCommit(
   // 5. Zgłoszenie żądania trwałego magazynu (navigator.storage.persist()) po pierwszym udanym zapisie
   maybeRequestStoragePersist();
 
-  return true;
+  return { status: 'ok' };
 }
 
 let hasRequestedStoragePersist = false;
@@ -313,12 +336,13 @@ export function resetStoragePersistFlag(): void {
  * Atomowo zatwierdza stan aplikacji (app, sched, meta) w pojedynczej transakcji IndexedDB.
  * Wszystkie wywołania zapisu przechodzą przez wspólną kolejkę promisów
  * z koordynacją blokady navigator.locks ('saleplan-write') pomiędzy kartami.
+ * Zwraca obiekt { status: 'ok' | 'conflict' | 'error', error? }.
  */
 export async function commitState(
   app: AppState,
   sched: SchedData,
   meta?: CommitStateOptions
-): Promise<boolean> {
+): Promise<CommitResult> {
   return enqueueWrite(app, sched, meta);
 }
 
@@ -326,13 +350,13 @@ export async function commitState(
  * Zapisuje AppState oraz SchedData do bazy danych z weryfikacją konfliktów wielu kart.
  * Korzysta pod spodem z atomowego commitState.
  *
- * @returns true w przypadku sukcesu zapisu, false jeśli wykryto konflikt.
+ * @returns obiekt CommitResult ({ status: 'ok' | 'conflict' | 'error', error? })
  */
 export async function persistAppStateAndSchedWithConflictCheck(
   targetAppState: AppState,
   targetSchedData: SchedData,
   options?: PersistOptions | boolean
-): Promise<boolean> {
+): Promise<CommitResult> {
   const opts: PersistOptions = typeof options === 'boolean'
     ? { forceOverwrite: options }
     : (options || {});
@@ -353,9 +377,9 @@ export async function persistAppStateAndSchedWithConflictCheck(
     activeSectionName: opts.activeSectionName || ctx.sectionName
   };
 
-  const success = await commitState(targetAppState, targetSchedData, meta);
+  const result = await commitState(targetAppState, targetSchedData, meta);
 
-  if (!success && !opts.forceOverwrite && opts.onConflict) {
+  if (result.status === 'conflict' && !opts.forceOverwrite && opts.onConflict) {
     const conflict = await multiTabStateService.checkSaveConflict(STORAGE_KEYS.APP_STATE, currentLocalRev);
     let conflictingSched: SchedData | null = null;
     try {
@@ -368,7 +392,7 @@ export async function persistAppStateAndSchedWithConflictCheck(
     opts.onConflict(conflict, conflictingSched);
   }
 
-  return success;
+  return result;
 }
 
 // Re-export common storage primitives for convenience

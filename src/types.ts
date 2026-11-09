@@ -138,12 +138,15 @@ export interface SchoolGroup {
   name: string;
   color?: string;
   classId?: string;
+  partitionId?: string;
+  studentIds?: string[];
 }
 
 export interface Assignment {
   id: string;
   classId: string;
   teacherId: string | null;
+  supportTeacherId?: string | null;
   subjectId: string;
   roomId: string | null;
   hoursPerWeek: number;
@@ -261,7 +264,13 @@ export interface SchedCell {
     subjectId?: string | null;
     roomId?: string | null;
     groupId?: string | null;
+    linkedClassIds?: string[];
+    linkedGroupIds?: string[];
     suggestedRoom?: string | null;
+    className?: string;
+    subject?: string;
+    teacherAbbr?: string;
+    supportTeacherAbbr?: string;
   };
 }
 
@@ -469,6 +478,7 @@ export interface SnapshotEntry {
   id: string;
   name: string;
   createdAt: string;
+  isManual?: boolean;
   appState: AppState;
   schedData: SchedData;
   comment?: string;
@@ -482,9 +492,16 @@ export interface SnapshotEntry {
 export interface AutosaveVersion {
   id: string;
   timestamp: string;
-  appState: AppState;
-  schedData: SchedData;
+  appState?: AppState;
+  schedData?: SchedData;
   revision?: number;
+  key?: string;
+  stats?: {
+    lessonsCount?: number;
+    teachersCount?: number;
+    classesCount?: number;
+    yearLabel?: string;
+  };
 }
 
 export interface UndoEntry {

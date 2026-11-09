@@ -30,11 +30,30 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.13.0',
+      date: '9 listopada 2026',
+      title: 'Niezależny Silnik Detekcji Konfliktów, Partycje Grup i Międzyoddziały, Inteligentny Generator z Dostępnością Sal, Rotacja 30 Migawek i Bezpieczny Dziennik Błędów',
+      description: 'Wydanie v3.13.0 wprowadza zaawansowany silnik detekcji konfliktów (detectConflicts) z pełną obsługą partycji grup (partitionId/studentIds), grup międzyoddziałowych (linkedGroupIds) oraz nauczycieli wspomagających i sal sportowych. Rozbudowano generator planu o wielowymiarowy model zajętości grup, oddziałów powiązanych i sal lekcyjnych. Wprowadzono limit 30 punktów przywracania z bezwzględną ochroną kopii ręcznych i dynamicznym ostrzeżeniem o rozmiarze, bezpieczny dziennik błędów w dbStorage z limitem 50 wpisów i obcinaniem stosu do 1 kB, a także szyfrowanie i deduplikację kopii ratunkowych w IndexedDB.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Niezależny silnik detekcji konfliktów (conflictEngine): Czysta, modułowa funkcja detectConflicts(planLekcji) precyzyjnie weryfikująca kolizje nauczycieli, sal, oddziałów i dostępności; ten sam assignmentId traktowany jest jako legalna lekcja łączona, a lekcje całej klasy kolidują z grupami.', badgeText: 'Conflict Engine' },
+        { type: 'feature', text: 'Partycje grup (partitionId) i grupy międzyoddziałowe (linkedGroupIds): Grupy o tym samym partitionId wykluczają się i mogą odbywać się równolegle; grupy o różnych partycjach kolidują przy wspólnych uczniach (studentIds). Pełna obsługa grup międzyoddziałowych w generatorze, Planie Sal i Planie Klas.', badgeText: 'Partycje & Grupy' },
+        { type: 'feature', text: 'Udoskonalony generator planu lekcji (PlanGenerator): Zastąpienie prostego classBusy zaawansowanym modelem zajętości grup (klasa|dzień|godzina|groupId), preferencja równoległego układania grup tej samej klasy, weryfikacja oddziałów powiązanych (linkedClassIds), nauczycieli wspomagających oraz sal (z uwzględnieniem sal sportowych).', badgeText: 'Generator Planu' },
+        { type: 'feature', text: 'Limit 30 punktów przywracania i ostrzeżenie o rozmiarze (SnapshotManager): Ograniczenie do 30 migawek z automatyczną rotacją najstarszych kopii automatycznych, bezwzględną ochroną migawek ręcznych (isManual: true), obliczaniem rozmiaru pamięci oraz alertem przy zbliżaniu się do limitu lub rozmiarze > 10 MB.', badgeText: 'Punkty Przywracania' },
+        { type: 'improvement', text: 'Dziennik błędów zintegrowany z dbStorage: Przeniesienie rejestracji błędów z main.tsx do dbStorage z limitem 50 najnowszych wpisów, automatycznym skracaniem śladu stosu do 1 kB (... [skrócono do 1 kB]) oraz asynchronicznym zapisem w IndexedDB.', badgeText: 'Dziennik Błędów' },
+        { type: 'improvement', text: 'Optymalizacja autozapisu w App.tsx: Przerzedzanie wersji do 3/h przez 24 h i 1/dobę przez 14 dni; w stanie Reacta przechowywane są tylko metadane, a pełny stan wczytywany jest asynchronicznie dopiero przy przywracaniu; usunięcie starego klucza AUTOSAVE_VERSIONS po migracji.', badgeText: 'Autozapis & Pamięć' },
+        { type: 'improvement', text: 'Plan Sal bez parsowania tekstu: Zastąpienie podatnego na błędy parsowania łańcuchów 5A (gr1) jednoznacznymi metadanymi _bridgeMeta.classId oraz _bridgeMeta.groupId z bezpośrednim mapowaniem grup w siatce sal.', badgeText: 'Plan Sal' },
+        { type: 'improvement', text: 'Bezpieczne wstawianie lekcji: placeAssignmentOnCell wyświetla czytelne potwierdzenie z listą usuwanych lekcji zamiast cichego kasowania istniejących przydziałów.', badgeText: 'Ergonomia Edycji' },
+        { type: 'security', text: 'Szyfrowanie i deduplikacja kopii ratunkowych: Funkcja saveRecoveryBackup szyfruje kopie przez setStorageItem przy odblokowanej sesji i oblicza skrót hash zawartości, zapobiegając duplikowaniu identycznych kopii awaryjnych.', badgeText: 'Kryptografia & IDB' },
+        { type: 'security', text: 'Precyzyjna obsługa błędów transakcji w persistence.ts: executeCommit zwraca obiekt stanu { status, error }, QuotaExceededError zgłasza czytelny brak miejsca na dysku, a błąd getDB() nie kończy się fałszywym statusem powodzenia.', badgeText: 'Trwałość Transakcji' }
+      ]
+    },
+    {
       version: 'v3.12.0',
       date: '7 listopada 2026',
       title: 'Atomowa Architektura Trwałości Danych, Niezawodny Autozapis z Przerzedzaniem (3/h, 1/doba), Wzmocnione PWA i Oficjalny Pipeline GitHub Pages',
       description: 'Przełomowe wydanie v3.12.0 wprowadza fundamentalną modernizację silnika trwałości danych i niezawodności w środowisku przeglądarkowym i wielu kartach: pojedynczą atomową transakcję IndexedDB (commitState) z weryfikacją rewizji i szyfrowaniem poza transakcją, kolejkę zapisu z koordynacją Web Locks (saleplan-write), wykrywanie konfliktów oparte wyłącznie na lekkich metadanych STATE_META, bezstratny autozapis w dyskretnych kluczach autosave_<ts> z algorytmem redukcji (3 z bieżącej godziny, 1 z doby), natychmiastowe zrzucanie bufora (flushNow) na zdarzeniach visibilitychange i pagehide z ostrzeżeniem beforeunload, bezpieczną aktualizację Service Workera po potwierdzeniu przez użytkownika, czysty tryb Cache-First z wyścigiem nawigacji (timeout 3 s) oraz oficjalny dwuetapowy workflow wdrażania GitHub Actions.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Atomowa transakcja zapisu stanu commitState(): APP_STATE, SCHED_DATA i STATE_META zapisywane w jednej niepodzielnej transakcji IndexedDB z porównaniem rewizji; szyfrowanie danych przeniesione poza transakcję, co eliminuje timeouty bazy.', badgeText: 'IndexedDB Atomicity' },
         { type: 'feature', text: 'Kolejka zapisu i koordynacja Web Locks (saleplan-write): Wszystkie operacje zapisu przechodzą przez pojedynczą kolejkę promisów (ostatni stan wygrywa, oczekujące wywołania łączone), a między kartami synchronizowane są przez navigator.locks.', badgeText: 'Web Locks API' },

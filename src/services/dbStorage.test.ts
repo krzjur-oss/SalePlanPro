@@ -31,7 +31,9 @@ import {
   saveRecoveryBackup,
   MAX_RECOVERY_BACKUPS,
   pruneRecoveryBackups,
-  getAllStorageKeys
+  getAllStorageKeys,
+  getRawItem,
+  setRawItem
 } from './dbStorage';
 import {
   setupStorageEncryptionMeta,
@@ -622,6 +624,135 @@ describe('dbStorage Encryption & Rollback Tests', () => {
       // Sprzątanie: wyłączenie szyfrowania
       await disableDatabaseEncryption(newPassword);
       expect(isDatabaseEncryptionActive()).toBe(false);
+    });
+
+    it('przy aktywnym szyfrowaniu żaden klucz *_recovery_backup_* ani SCHED_DATA nie jest jawny w IDB', async () => {
+      const password = 'MasterTestPassword!2026';
+      await enableDatabaseEncryption(password);
+      expect(isDatabaseEncryptionActive()).toBe(true);
+      expect(isSessionUnlocked()).toBe(true);
+
+      const secretPayload = { secretMessage: 'ściśle_tajne_dane_szkolne_123', classId: '1a' };
+      const backupKey = await saveRecoveryBackup('test_collection', secretPayload);
+
+      const secretSchedData = {
+        '2026/2027': {
+          '1': {
+            'h_1': {
+              'col_1': { subject: 'Fizyka Jądrowa', teacher: 'Prof. Nowak', room: 'Laboratorium 99' }
+            }
+          }
+        }
+      };
+      // Zapisujemy SCHED_DATA z metadanymi, aby wywołać także ścieżkę hasSchedDataMeta w getStorageItemDetailed
+      const schedWithMeta = {
+        ...secretSchedData,
+        revision: 42,
+        tabId: 'tab_test_encryption'
+      };
+      await setStorageItem(STORAGE_KEYS.SCHED_DATA, schedWithMeta);
+      await getStorageItemDetailed(STORAGE_KEYS.SCHED_DATA);
+
+      // Pobieramy surowe wpisy bezpośrednio z IDB / localStorage przez getRawItem
+      const rawBackup = await getRawItem(backupKey);
+      const rawSched = await getRawItem(STORAGE_KEYS.SCHED_DATA);
+
+      expect(rawBackup).toBeDefined();
+      expect(rawSched).toBeDefined();
+
+      // Żaden rekord nie może być jawny:
+      // 1. Muszą mieć strukturę zaszyfrowaną encrypted-v2
+      expect((rawBackup as any)?.type).toBe('encrypted-v2');
+      expect((rawBackup as any)?.ciphertext).toBeDefined();
+      expect((rawSched as any)?.type).toBe('encrypted-v2');
+      expect((rawSched as any)?.ciphertext).toBeDefined();
+
+      // 2. Żadne wrażliwe ciągi tekstowe nie mogą być widoczne w postaci jawnej
+      const rawBackupStr = JSON.stringify(rawBackup);
+      const rawSchedStr = JSON.stringify(rawSched);
+
+      expect(rawBackupStr).not.toContain('ściśle_tajne_dane_szkolne_123');
+      expect(rawSchedStr).not.toContain('Fizyka Jądrowa');
+      expect(rawSchedStr).not.toContain('Prof. Nowak');
+      expect(rawSchedStr).not.toContain('Laboratorium 99');
+
+      // 3. Sprawdzamy wszystkie klucze w IDB: żaden recovery_backup ani SCHED_DATA nie jest jawny
+      const allKeys = await getAllStorageKeys();
+      for (const k of allKeys) {
+        if (k.includes('_recovery_backup_') || k === STORAGE_KEYS.SCHED_DATA) {
+          const raw = await getRawItem(k);
+          expect((raw as any)?.type).toBe('encrypted-v2');
+          expect((raw as any)?.ciphertext).toBeDefined();
+        }
+      }
+
+      await disableDatabaseEncryption(password);
+    });
+
+    it('trzykrotny start z uszkodzonym wpisem nie usuwa pierwszej kopii', async () => {
+      const corruptedItem = { invalidField: true, badData: 999 };
+      const baseKey = STORAGE_KEYS.SNAPSHOTS;
+
+      // 1. Pierwszy start z uszkodzonym wpisem
+      const backup1 = await saveRecoveryBackup(baseKey, corruptedItem);
+      expect(backup1).toBeDefined();
+
+      // 2. Drugi start z tym samym uszkodzonym wpisem
+      const backup2 = await saveRecoveryBackup(baseKey, corruptedItem);
+      // Nie tworzy nowej kopii, zwraca pierwszą
+      expect(backup2).toBe(backup1);
+
+      // 3. Trzeci start z tym samym uszkodzonym wpisem
+      const backup3 = await saveRecoveryBackup(baseKey, corruptedItem);
+      expect(backup3).toBe(backup1);
+
+      // Weryfikacja: w magazynie istnieje dokładnie 1 kopia, a pierwsza kopia nie została usunięta
+      const allKeys = await getAllStorageKeys();
+      const backups = allKeys.filter(k => k.startsWith(`${baseKey}_recovery_backup_`));
+      expect(backups).toHaveLength(1);
+      expect(backups).toContain(backup1);
+
+      // Sprawdzenie również w pełnym cyklu getStorageItemDetailed z tablicą z uszkodzonym wpisem
+      const validSnapshot = {
+        id: 'snap-valid-1',
+        name: 'Poprawny snapshot',
+        createdAt: '2026-09-01T08:00:00.000Z',
+        appState: { school: { name: 'Szkoła Testowa' } },
+        schedData: {}
+      };
+      const corruptedSnapshot = {
+        id: 999999,
+        badSnapshot: 'invalid_entry'
+      };
+      const mixedSnapshots = [validSnapshot, corruptedSnapshot];
+      await setRawItem(STORAGE_KEYS.SNAPSHOTS, mixedSnapshots);
+
+      // Start 1
+      const res1 = await getStorageItemDetailed(STORAGE_KEYS.SNAPSHOTS);
+      expect(res1.status).toBe('found');
+      expect((res1 as any).quarantinedCount).toBe(1);
+      const snapshotBackup1 = (res1 as any).backupKey;
+      expect(snapshotBackup1).toBeDefined();
+
+      // Po kwarantannie baza zawiera już od razu oczyszczoną tablicę (validItems)
+      const cleanedInDb = await getStorageItem<any[]>(STORAGE_KEYS.SNAPSHOTS);
+      expect(cleanedInDb).toHaveLength(1);
+      expect(cleanedInDb![0].id).toBe('snap-valid-1');
+
+      // Jeśli ponownie spreparujemy ten sam uszkodzony stan w bazie
+      await setRawItem(STORAGE_KEYS.SNAPSHOTS, mixedSnapshots);
+      const res2 = await getStorageItemDetailed(STORAGE_KEYS.SNAPSHOTS);
+      expect(res2.status).toBe('found');
+      expect((res2 as any).backupKey).toBe(snapshotBackup1);
+
+      await setRawItem(STORAGE_KEYS.SNAPSHOTS, mixedSnapshots);
+      const res3 = await getStorageItemDetailed(STORAGE_KEYS.SNAPSHOTS);
+      expect(res3.status).toBe('found');
+      expect((res3 as any).backupKey).toBe(snapshotBackup1);
+
+      // Pierwsza kopia nadal istnieje i nie została usunięta
+      const finalKeys = await getAllStorageKeys();
+      expect(finalKeys).toContain(snapshotBackup1);
     });
   });
 });

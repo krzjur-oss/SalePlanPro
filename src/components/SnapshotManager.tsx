@@ -10,8 +10,15 @@ import {
   Camera, Trash2, Download, Upload, Clock, Bookmark, X, Check, Search, FileText, AlertTriangle, Loader2, Info, BarChart2, TrendingUp, TrendingDown 
 } from 'lucide-react';
 import { downloadFile, formatBytes } from '../utils';
-import { removeStorageItem, STORAGE_KEYS } from '../services/dbStorage';
+import { removeStorageItem, getStorageItem, STORAGE_KEYS } from '../services/dbStorage';
 import { Z_INDEX_CLASSES } from '../styles/zIndex';
+import { 
+  MAX_SNAPSHOTS_LIMIT, 
+  SNAPSHOTS_SIZE_WARNING_BYTES, 
+  isSnapshotManual, 
+  pruneSnapshots, 
+  calculateSnapshotsSize 
+} from '../utils/snapshotUtils';
 
 interface SnapshotManagerProps {
   isOpen: boolean;
@@ -241,10 +248,41 @@ function SnapshotManagerInner({
   const [comparisonSearchQuery, setComparisonSearchQuery] = useState('');
   const [managerTab, setManagerTab] = useState<'manual' | 'autosave'>('manual');
 
+  // Obliczenie całkowitego rozmiaru migawek i weryfikacja ostrzeżenia o rozmiarze
+  const snapshotsTotalBytes = useMemo(() => calculateSnapshotsSize(snapshots), [snapshots]);
+  const isSizeWarning = snapshotsTotalBytes >= SNAPSHOTS_SIZE_WARNING_BYTES || snapshots.length >= MAX_SNAPSHOTS_LIMIT;
+
   // Reset stanu porównania przy zmianie wybranej migawki
   React.useEffect(() => {
     setComparisonSearchQuery('');
   }, [selectedSnapshotId]);
+
+  const [loadedAutosaveData, setLoadedAutosaveData] = useState<{ id: string; appState: AppState; schedData: SchedData } | null>(null);
+
+  // Dynamiczne doładowanie pełnych danych wybranej wersji autozapisu (w pamięci trzymane są tylko metadane)
+  React.useEffect(() => {
+    if (!selectedSnapshotId || !selectedSnapshotId.startsWith('autosave-')) {
+      setLoadedAutosaveData(null);
+      return;
+    }
+    const foundAutosave = autosaveVersions.find(v => v && v.id === selectedSnapshotId);
+    if (!foundAutosave) return;
+    if (foundAutosave.appState && foundAutosave.schedData) {
+      setLoadedAutosaveData({ id: foundAutosave.id, appState: foundAutosave.appState, schedData: foundAutosave.schedData });
+      return;
+    }
+    const rawTs = foundAutosave.timestamp ? new Date(foundAutosave.timestamp).getTime() : 0;
+    const key = foundAutosave.key || (rawTs ? `autosave_${rawTs}` : '');
+    if (key) {
+      getStorageItem<AutosaveVersion>(key).then(full => {
+        if (full && full.appState && full.schedData) {
+          setLoadedAutosaveData({ id: foundAutosave.id, appState: full.appState, schedData: full.schedData });
+        }
+      }).catch(err => {
+        console.warn('Błąd asynchronicznego pobierania pełnej wersji autozapisu', err);
+      });
+    }
+  }, [selectedSnapshotId, autosaveVersions]);
 
   // Memoized matching snapshot
   const selectedSnapshot = useMemo(() => {
@@ -252,22 +290,26 @@ function SnapshotManagerInner({
     if (selectedSnapshotId.startsWith('autosave-') && Array.isArray(autosaveVersions)) {
       const foundAutosave = autosaveVersions.find(v => v && v.id === selectedSnapshotId);
       if (foundAutosave) {
+        const fullAppState = (loadedAutosaveData?.id === foundAutosave.id ? loadedAutosaveData.appState : foundAutosave.appState) || ({} as AppState);
+        const fullSchedData = (loadedAutosaveData?.id === foundAutosave.id ? loadedAutosaveData.schedData : foundAutosave.schedData) || ({} as SchedData);
+
         return {
           id: foundAutosave.id,
           name: `Autozapis z dnia ${new Date(foundAutosave.timestamp).toLocaleDateString('pl-PL')} ${new Date(foundAutosave.timestamp).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}`,
           comment: `Stan roboczy systemu zachowany automatycznie podczas edycji siatki godzin.`,
           createdAt: foundAutosave.timestamp,
-          appState: foundAutosave.appState,
-          schedData: foundAutosave.schedData,
+          appState: fullAppState,
+          schedData: fullSchedData,
         } as SnapshotEntry;
       }
     }
     if (!Array.isArray(snapshots)) return null;
     return snapshots.find(s => s && s.id === selectedSnapshotId) || null;
-  }, [snapshots, selectedSnapshotId, autosaveVersions]);
+  }, [snapshots, selectedSnapshotId, autosaveVersions, loadedAutosaveData]);
 
   // Zliczanie zaplanowanych lekcji w schedData
-  const countLessons = (sData: SchedData): number => {
+  const countLessons = (sData?: SchedData): number => {
+    if (!sData) return 0;
     let count = 0;
     try {
       Object.values(sData || {}).forEach(yearObj => {
@@ -299,15 +341,15 @@ function SnapshotManagerInner({
     const currRooms = appState.planLekcji?.rooms?.length || 0;
 
     const snapLessons = countLessons(selectedSnapshot.schedData) || selectedSnapshot.stats?.assignedLessonsCount || 0;
-    const snapTeachers = selectedSnapshot.appState.teachers?.length || selectedSnapshot.appState.planLekcji?.teachers?.length || selectedSnapshot.stats?.teachersCount || 0;
-    const snapClasses = selectedSnapshot.appState.classes?.length || selectedSnapshot.appState.planLekcji?.classes?.length || selectedSnapshot.stats?.classesCount || 0;
-    const snapRooms = selectedSnapshot.appState.planLekcji?.rooms?.length || 0;
+    const snapTeachers = selectedSnapshot.appState?.teachers?.length || selectedSnapshot.appState?.planLekcji?.teachers?.length || selectedSnapshot.stats?.teachersCount || 0;
+    const snapClasses = selectedSnapshot.appState?.classes?.length || selectedSnapshot.appState?.planLekcji?.classes?.length || selectedSnapshot.stats?.classesCount || 0;
+    const snapRooms = selectedSnapshot.appState?.planLekcji?.rooms?.length || 0;
 
     const currSchool = appState.school?.name || appState.planLekcji?.meta?.schoolName || 'Nieznana';
-    const snapSchool = selectedSnapshot.appState.school?.name || selectedSnapshot.appState.planLekcji?.meta?.schoolName || 'Nieznana';
+    const snapSchool = selectedSnapshot.appState?.school?.name || selectedSnapshot.appState?.planLekcji?.meta?.schoolName || 'Nieznana';
 
     const currYear = appState.yearLabel || 'Nieznany';
-    const snapYear = selectedSnapshot.appState.yearLabel || 'Nieznany';
+    const snapYear = selectedSnapshot.appState?.yearLabel || 'Nieznany';
 
     return {
       curr: { lessons: currLessons, teachers: currTeachers, classes: currClasses, rooms: currRooms, school: currSchool, year: currYear },
@@ -317,7 +359,7 @@ function SnapshotManagerInner({
 
   // Detailed lessons comparison breakdown
   const lessonComparisonData = useMemo(() => {
-    if (!selectedSnapshot) return null;
+    if (!selectedSnapshot || !selectedSnapshot.schedData) return null;
 
     const currBreakdown = getLessonsBreakdown(schedData);
     const snapBreakdown = getLessonsBreakdown(selectedSnapshot.schedData);
@@ -420,6 +462,7 @@ function SnapshotManagerInner({
       id: `snap-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: finalName,
       createdAt: timestamp.toISOString(),
+      isManual: true, // Punkt ręczny – trwale chroniony przed automatycznym usuwaniem
       appState: JSON.parse(JSON.stringify(appState)),
       schedData: JSON.parse(JSON.stringify(schedData)),
       comment: newComment.trim() || undefined,
@@ -430,7 +473,8 @@ function SnapshotManagerInner({
       }
     };
 
-    onChangeSnapshots([newSnap, ...snapshots]);
+    const updatedSnaps = pruneSnapshots([newSnap, ...snapshots]);
+    onChangeSnapshots(updatedSnaps);
     setNewSnapshotName('');
     setNewComment('');
     setShowCreateForm(false);
@@ -496,29 +540,43 @@ function SnapshotManagerInner({
     setConfirmConfig({
       title: 'Przywrócenie z autozapisu',
       message: `Czy na pewno chcesz przywrócić plan do automatycznego punktu kontrolnego z dnia: ${formattedDate}? Obecny stan planu zostanie zastąpiony!`,
-      onConfirm: () => {
+      onConfirm: async () => {
         setConfirmConfig(null);
-        if (version.appState && version.schedData) {
-          setIsRestoring(true);
-          setTimeout(() => {
-            try {
-              onRestoreSnapshot(version.appState, version.schedData);
-              onClose();
-            } catch (err) {
-              console.error('Błąd podczas przywracania autozapisu', err);
-              setAlertConfig({
-                title: 'Błąd przywracania',
-                message: 'Wystąpił nieoczekiwany błąd podczas przywracania danych.'
-              });
-            } finally {
-              setIsRestoring(false);
+        setIsRestoring(true);
+        try {
+          let appStateToRestore = version.appState;
+          let schedDataToRestore = version.schedData;
+
+          // Jeśli w stanie Reacta były tylko metadane, asynchronicznie wczytaj pełną wersję
+          if (!appStateToRestore || !schedDataToRestore) {
+            const rawTs = version.timestamp ? new Date(version.timestamp).getTime() : 0;
+            const key = version.key || (rawTs ? `autosave_${rawTs}` : '');
+            if (key) {
+              const full = await getStorageItem<AutosaveVersion>(key);
+              if (full && full.appState && full.schedData) {
+                appStateToRestore = full.appState;
+                schedDataToRestore = full.schedData;
+              }
             }
-          }, 500);
-        } else {
+          }
+
+          if (appStateToRestore && schedDataToRestore) {
+            onRestoreSnapshot(appStateToRestore, schedDataToRestore);
+            onClose();
+          } else {
+            setAlertConfig({
+              title: 'Brak danych',
+              message: 'Ta automatyczna kopia nie zawiera poprawnych danych.'
+            });
+          }
+        } catch (err) {
+          console.error('Błąd podczas przywracania autozapisu', err);
           setAlertConfig({
-            title: 'Brak danych',
-            message: 'Ta automatyczna kopia nie zawiera poprawnych danych.'
+            title: 'Błąd przywracania',
+            message: 'Wystąpił nieoczekiwany błąd podczas przywracania danych.'
           });
+        } finally {
+          setIsRestoring(false);
         }
       }
     });
@@ -591,9 +649,11 @@ function SnapshotManagerInner({
         }
 
         if (targetSnap && targetSnap.appState && targetSnap.schedData) {
-          // Generowanie nowego unikalnego ID
+          // Generowanie nowego unikalnego ID oraz oznaczenie jako punkt ręczny
           targetSnap.id = `snap-imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          onChangeSnapshots([targetSnap, ...snapshots]);
+          targetSnap.isManual = true;
+          const updated = pruneSnapshots([targetSnap, ...snapshots]);
+          onChangeSnapshots(updated);
           setAlertConfig({
             title: 'Import udany',
             message: `Pomyślnie zaimportowano punkt przywracania: "${targetSnap.name}"`
@@ -711,7 +771,27 @@ function SnapshotManagerInner({
           </div>
 
           {managerTab === 'manual' && (
-            <div className="space-y-5">
+            <div className="space-y-4">
+              {/* Ostrzeżenie o rozmiarze pamięci migawek */}
+              {isSizeWarning && (
+                <div className="bg-amber-50 border border-amber-200/90 rounded-xl p-3 flex items-start gap-3 text-amber-900 text-xs shadow-3xs animate-in fade-in duration-200 select-none">
+                  <AlertTriangle size={17} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1 flex-1">
+                    <div className="font-extrabold flex items-center justify-between">
+                      <span>Ostrzeżenie o rozmiarze punktów przywracania</span>
+                      <span className="text-[10px] bg-amber-200/70 text-amber-900 font-mono font-bold px-2 py-0.5 rounded-full">
+                        {formatBytes(snapshotsTotalBytes)} • {snapshots.length}/{MAX_SNAPSHOTS_LIMIT} kopii
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-amber-800 leading-relaxed font-medium">
+                      Zapisane punkty przywracania zajmują znaczną przestrzeń w pamięci podręcznej ({formatBytes(snapshotsTotalBytes)}). 
+                      Obowiązuje limit do {MAX_SNAPSHOTS_LIMIT} migawek. Starsze migawki automatyczne są usuwane automatycznie, a punkty ręczne podlegają stałej ochronie. 
+                      Zaleca się eksport ważnych wersji do plików JSON lub usunięcie niepotrzebnych punktów.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Create Button & Search Line */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/60 shadow-xs select-none shrink-0">
             <div className="relative flex-1">
@@ -801,6 +881,9 @@ function SnapshotManagerInner({
                     onChange={(e) => setNewComment(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-violet-500 focus:border-violet-500 outline-none resize-none font-medium text-slate-650"
                   />
+                  <p className="text-[10px] text-slate-400 font-medium mt-1 select-none">
+                    Ta migawka zostanie zapisana jako <strong className="text-emerald-700">ręczna (chroniona)</strong> i nie zostanie usunięta podczas automatycznego czyszczenia limitu {MAX_SNAPSHOTS_LIMIT} kopii.
+                  </p>
                 </div>
                 <div className="flex justify-end pt-1">
                   <button
@@ -1219,9 +1302,9 @@ function SnapshotManagerInner({
                         }
                       } catch (e) {}
 
-                      const verLessons = countLessons(version.schedData);
-                      const verTeachers = version.appState.teachers?.length || version.appState.planLekcji?.teachers?.length || 0;
-                      const verClasses = version.appState.classes?.length || version.appState.planLekcji?.classes?.length || 0;
+                      const verLessons = version.schedData ? countLessons(version.schedData) : (version.stats?.lessonsCount ?? '-');
+                      const verTeachers = version.appState?.teachers?.length || version.appState?.planLekcji?.teachers?.length || (version.stats?.teachersCount ?? '-');
+                      const verClasses = version.appState?.classes?.length || version.appState?.planLekcji?.classes?.length || (version.stats?.classesCount ?? '-');
                       
                       const isSelected = selectedSnapshotId === version.id;
 
@@ -1312,9 +1395,12 @@ function SnapshotManagerInner({
           {/* List of Snapshots */}
           {managerTab === 'manual' && (
             <div className="space-y-2.5">
-              <span className="text-[10px] font-black text-slate-400 block uppercase tracking-wider select-none">
-                Zapisane punkty przywracania ({filteredSnapshots.length})
-              </span>
+              <div className="flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-wider select-none">
+                <span>Zapisane punkty przywracania ({filteredSnapshots.length})</span>
+                <span className="font-mono text-slate-500 font-bold normal-case">
+                  Pamięć: <span className="font-mono text-slate-700">{formatBytes(snapshotsTotalBytes)}</span> • Limit: <span className="font-mono text-slate-700">{snapshots.length}/{MAX_SNAPSHOTS_LIMIT}</span>
+                </span>
+              </div>
 
             {filteredSnapshots.length > 0 ? (
               <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
@@ -1334,6 +1420,7 @@ function SnapshotManagerInner({
                   }
 
                   const isSelected = selectedSnapshotId === snap.id;
+                  const isManualSnap = isSnapshotManual(snap);
                   return (
                     <div 
                       key={snap.id || Math.random().toString()} 
@@ -1361,6 +1448,17 @@ function SnapshotManagerInner({
                           }`}>
                             {snap.appState?.yearLabel || 'Plan'}
                           </span>
+                          {isManualSnap ? (
+                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider flex items-center gap-1" title="Punkt ręczny – trwale chroniony przed automatycznym usuwaniem">
+                              <Bookmark size={8} />
+                              Ręczny (chroniony)
+                            </span>
+                          ) : (
+                            <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider flex items-center gap-1" title="Punkt automatyczny – podlega rotacji przy limicie 30 kopii">
+                              <Clock size={8} />
+                              Automatyczny
+                            </span>
+                          )}
                         </div>
                         
                         <div className="flex items-center gap-3 text-[10px] text-slate-400 font-semibold select-none">

@@ -2,6 +2,12 @@
  * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
  * Moduł: Autogenerator Planu Lekcji (PlanGenerator)
  * Opis: Inteligentny silnik heurystyczny do automatycznego rozmieszczania lekcji w siatce godzinowej oddziałów.
+ * Funkcjonalności v3.13.0:
+ * - Zaawansowany model zajętości z podziałem na grupy (klasa|dzień|godzina|groupId) i partycje
+ * - Równoległe dopasowywanie jednostek tej samej klasy o różnych grupach i nauczycielach
+ * - Obsługa klas powiązanych (linkedClassIds) oraz grup międzyoddziałowych (linkedGroupIds)
+ * - Weryfikacja zajętości nauczycieli wspomagających (supportTeacherId) i sal (roomBusy z wyjątkami dla sal sportowych)
+ * - Końcowa weryfikacja poprawności wygenerowanego planu przez silnik detectConflicts
  */
 
 import React, { useState, useMemo } from 'react';
@@ -11,18 +17,867 @@ import {
 import { 
   Sparkles, X, Settings, HelpCircle, AlertCircle, Play, CheckCircle, RefreshCw, Undo2, Users, Calendar, Award, Lock 
 } from 'lucide-react';
+import { isSportsFacility } from '../utils/roomUtils';
+import { detectConflicts } from '../utils/conflictEngine';
 
-interface PlanGeneratorProps {
+export interface PlanGeneratorProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
   onClose: () => void;
 }
 
-interface TeacherRoleConfig {
+export interface TeacherRoleConfig {
   teacherId: string;
   role: 'teacher' | 'director' | 'deputy';
   maxGaps: number;
   spreadObligation: boolean;
+}
+
+export interface PlanGeneratorOptions {
+  maxGapsPerTeacher: number;
+  obeyAvailability: boolean;
+  avoidExtremes: boolean;
+  avoidExtremesSubjectIds: string[];
+  noStudentGaps: boolean;
+  allowDoubleBlocks: boolean;
+  includeSpecialNI: boolean;
+  limitComputerLabs: boolean;
+  customComputerLabsCount: number;
+  minAvailableSubstitutionTeachersPerSlot: number;
+  forceOptionalToExtremes: boolean;
+  optionalSubjectIds: string[];
+  teacherConfigs?: Record<string, TeacherRoleConfig>;
+}
+
+export interface PlanGenerationResult {
+  success: boolean;
+  placedRegular: number;
+  totalRegular: number;
+  placedSpecial: number;
+  totalSpecial: number;
+  errors: string[];
+  warnings: string[];
+  updatedLessons: Record<string, Lesson>;
+  updatedSpecialLessons: Record<string, SpecialLesson>;
+}
+
+interface WorkUnit {
+  assignmentId: string;
+  classId: string;
+  linkedClassIds: string[];
+  linkedGroupIds: string[];
+  teacherId: string | null;
+  supportTeacherId: string | null;
+  subjectId: string;
+  groupId: string | null;
+  roomId: string | null;
+  preferredBlockSize: number;
+}
+
+interface WorkBundle {
+  classId: string;
+  linkedClassIds: string[];
+  units: WorkUnit[];
+  preferredBlockSize: number;
+}
+
+/**
+ * Autonomiczny silnik układania planu lekcji z pełną obsługą grup, sal i nauczycieli wspomagających.
+ */
+export function runPlanGenerationAlgorithm(
+  appState: AppState,
+  options: PlanGeneratorOptions
+): PlanGenerationResult {
+  const pl = appState.planLekcji;
+  const daysCount = 5; // Poniedziałek - Piątek (0..4)
+  const maxHoursCount = pl.hours.length || 9;
+
+  const teachersMap = new Map(pl.teachers.map(t => [t.id, t]));
+  const subjectsMap = new Map(pl.subjects.map(s => [s.id, s]));
+  const classesMap = new Map(pl.classes.map(c => [c.id, c]));
+  const roomsMap = new Map((pl.rooms || []).map(r => [r.id, r]));
+
+  const isINFSubject = (subjectId: string) => {
+    const sub = subjectsMap.get(subjectId);
+    if (!sub) return false;
+    const name = (sub.name || '').toLowerCase();
+    const short = (sub.short || '').toLowerCase();
+    return (
+      short.includes('inf') ||
+      short.includes('e-inf') ||
+      name.includes('informatyk') ||
+      name.includes('edukacja informatyczna')
+    );
+  };
+
+  const infLessonsCount = new Map<string, number>();
+
+  const generatedLessons: Record<string, Lesson> = {};
+  const generatedSpecialLessons: Record<string, SpecialLesson> = {};
+
+  // Nauczyciele zajęci w slocie: teacherId|day|hour (prowadzący oraz wspomagający)
+  const teacherBusy = new Set<string>();
+  // Uczniowie NI zajęci w slocie: studentId|day|hour
+  const specialStudentBusy = new Set<string>();
+
+  // ── MODEL ZAJĘTOŚCI KLAS Z GRUPAMI ──
+  // 1. wholeClassBusy: zajętość "całej klasy" (bez groupId) blokuje wszystkie grupy i całą klasę
+  const wholeClassBusy = new Set<string>();
+  // 2. groupBusy: zajętość grupy blokuje tylko tę samą grupę i całą klasę
+  const groupBusy = new Set<string>();
+  // 3. classAnyBusy: czy w danym slocie klasa ma jakiekolwiek lekcje (grupa lub cała klasa)
+  const classAnyBusy = new Set<string>();
+
+  // ── MODEL ZAJĘTOŚCI SAL (roomBusy) ──
+  // roomId|day|hour -> Array<{ assignmentId: string; classId: string }>
+  const roomOccupancy = new Map<string, Array<{ assignmentId: string; classId: string }>>();
+
+  const isClassSlotBusy = (
+    classId: string,
+    day: number,
+    hour: number,
+    groupId: string | null | undefined
+  ): boolean => {
+    const slotKey = `${classId}|${day}|${hour}`;
+    if (wholeClassBusy.has(slotKey)) return true; // cała klasa zajęta -> blokuje wszystko
+    if (!groupId) {
+      // Przydział dla całej klasy: blokowany jeśli jakakolwiek grupa ma zajęcia
+      return classAnyBusy.has(slotKey);
+    }
+    // Przydział dla grupy: blokowany tylko jeśli ta sama grupa ma zajęcia
+    return groupBusy.has(`${classId}|${day}|${hour}|${groupId}`);
+  };
+
+  const markClassSlotBusy = (
+    classId: string,
+    day: number,
+    hour: number,
+    groupId: string | null | undefined
+  ) => {
+    const slotKey = `${classId}|${day}|${hour}`;
+    classAnyBusy.add(slotKey);
+    if (!groupId) {
+      wholeClassBusy.add(slotKey);
+    } else {
+      groupBusy.add(`${classId}|${day}|${hour}|${groupId}`);
+    }
+  };
+
+  const isRoomSlotBusy = (
+    roomId: string | null | undefined,
+    day: number,
+    hour: number,
+    assignmentId: string,
+    classId: string
+  ): boolean => {
+    if (!roomId) return false;
+    const slotKey = `${roomId}|${day}|${hour}`;
+    const entries = roomOccupancy.get(slotKey);
+    if (!entries || entries.length === 0) return false;
+
+    const room = roomsMap.get(roomId);
+    const isSport = isSportsFacility(room);
+    const hasSingleClassLimit = room?.singleClassLimit === true;
+
+    return entries.some(entry => {
+      if (entry.assignmentId === assignmentId) return false; // ta sama łączona lekcja
+      if (isSport) {
+        if (!hasSingleClassLimit) return false; // brak limitu pojedynczej klasy -> wiele grup i klas dozwolone
+        if (entry.classId === classId) return false; // limit jednej klasy -> dopuszcza grupy tej samej klasy
+        return true; // inna klasa w sali gimnastycznej z limitem jednej klasy
+      }
+      return true; // zwykła sala -> zajęta przez inny przydział
+    });
+  };
+
+  const markRoomSlotBusy = (
+    roomId: string | null | undefined,
+    day: number,
+    hour: number,
+    assignmentId: string,
+    classId: string
+  ) => {
+    if (!roomId) return;
+    const slotKey = `${roomId}|${day}|${hour}`;
+    const list = roomOccupancy.get(slotKey) || [];
+    list.push({ assignmentId, classId });
+    roomOccupancy.set(slotKey, list);
+  };
+
+  // Funkcja pomocnicza wyznaczająca wszystkie cele (klasa + grupa) dla przydziału z uwzględnieniem grup międzyoddziałowych
+  const getTargetsForAsgOrUnit = (
+    mainClassId: string,
+    mainGroupId: string | null,
+    linkedClassIds: string[] = [],
+    linkedGroupIds: string[] = []
+  ): { classId: string; groupId: string | null }[] => {
+    const targets: { classId: string; groupId: string | null }[] = [
+      { classId: mainClassId, groupId: mainGroupId }
+    ];
+
+    if (linkedGroupIds && linkedGroupIds.length > 0) {
+      linkedGroupIds.forEach(lgId => {
+        const grp = pl.schoolGroups?.find(g => g.id === lgId);
+        const grpClsId = grp?.classId || linkedClassIds[0] || mainClassId;
+        if (!targets.some(t => t.classId === grpClsId && t.groupId === lgId)) {
+          targets.push({ classId: grpClsId, groupId: lgId });
+        }
+      });
+    }
+
+    if (linkedClassIds && linkedClassIds.length > 0) {
+      linkedClassIds.forEach(lcId => {
+        if (!targets.some(t => t.classId === lcId)) {
+          targets.push({ classId: lcId, groupId: mainGroupId });
+        }
+      });
+    }
+
+    return targets;
+  };
+
+  // 1. Kopiowanie i rejestracja zablokowanych lekcji
+  Object.entries(pl.lessons).forEach(([key, value]) => {
+    if (value.locked) {
+      generatedLessons[key] = { ...value };
+      const parts = key.split('|');
+      const classId = parts[0];
+      const day = parseInt(parts[1], 10);
+      const hour = parseInt(parts[2], 10);
+      const keyGroupId = parts.length >= 4 ? parts[3] : null;
+
+      const asg = pl.assignments.find(a => a.id === value.assignmentId);
+      const effectiveGroupId = keyGroupId || asg?.groupId || null;
+
+      const targetList = getTargetsForAsgOrUnit(
+        classId,
+        effectiveGroupId,
+        asg?.linkedClassIds || [],
+        asg?.linkedGroupIds || []
+      );
+      targetList.forEach(tgt => {
+        markClassSlotBusy(tgt.classId, day, hour, tgt.groupId);
+        if (asg?.roomId) {
+          markRoomSlotBusy(asg.roomId, day, hour, asg.id, tgt.classId);
+        }
+      });
+
+      if (asg?.teacherId) {
+        teacherBusy.add(`${asg.teacherId}|${day}|${hour}`);
+      }
+      const supTeacherId = value.supportTeacherId || asg?.supportTeacherId;
+      if (supTeacherId) {
+        teacherBusy.add(`${supTeacherId}|${day}|${hour}`);
+      }
+      if (asg && isINFSubject(asg.subjectId)) {
+        const slotKey = `${day}|${hour}`;
+        infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
+      }
+    }
+  });
+
+  // Kopiowanie zablokowanych lekcji specjalnych (Nauczanie Indywidualne)
+  Object.entries(pl.specialLessons || {}).forEach(([key, value]) => {
+    if (value.locked) {
+      generatedSpecialLessons[key] = { ...value };
+      const parts = key.split('|');
+      if (parts.length >= 3) {
+        const studentId = parts[0];
+        const day = parseInt(parts[1], 10);
+        const hour = parseInt(parts[2], 10);
+        specialStudentBusy.add(`${studentId}|${day}|${hour}`);
+
+        const spAsg = pl.specialAssignments?.find(sa => sa.id === value.assignmentId);
+        if (spAsg?.teacherId) {
+          teacherBusy.add(`${spAsg.teacherId}|${day}|${hour}`);
+        }
+        if (spAsg?.supportTeacherId) {
+          teacherBusy.add(`${spAsg.supportTeacherId}|${day}|${hour}`);
+        }
+        if (spAsg?.roomId) {
+          markRoomSlotBusy(spAsg.roomId, day, hour, spAsg.id, `special-${studentId}`);
+        }
+      }
+    }
+  });
+
+  // 2. Przygotowanie jednostek roboczych (WorkUnit)
+  const rawUnits: WorkUnit[] = [];
+  pl.assignments.forEach(asg => {
+    const lockedCount = Object.entries(generatedLessons).filter(([k, l]) => {
+      if (!l.locked || l.assignmentId !== asg.id) return false;
+      const parts = k.split('|');
+      return parts[0] === asg.classId;
+    }).length;
+
+    const remainingHours = Math.max(0, asg.hoursPerWeek - lockedCount);
+    const blockPrefer = asg.preferredBlockSize || (options.allowDoubleBlocks ? 2 : 1);
+
+    for (let i = 0; i < remainingHours; i++) {
+      rawUnits.push({
+        assignmentId: asg.id,
+        classId: asg.classId,
+        linkedClassIds: asg.linkedClassIds || [],
+        linkedGroupIds: asg.linkedGroupIds || [],
+        teacherId: asg.teacherId,
+        supportTeacherId: asg.supportTeacherId || null,
+        subjectId: asg.subjectId,
+        groupId: asg.groupId || null,
+        roomId: asg.roomId || null,
+        preferredBlockSize: blockPrefer
+      });
+    }
+  });
+
+  // 3. Łączenie jednostek w wiązki równoległe (WorkBundle):
+  // Jednostki z tym samym classId, godzinami i różnymi nauczycielami i grupami staramy się układać równolegle.
+  const bundles: WorkBundle[] = [];
+  const unitsByClass = new Map<string, WorkUnit[]>();
+
+  rawUnits.forEach(u => {
+    const list = unitsByClass.get(u.classId) || [];
+    list.push(u);
+    unitsByClass.set(u.classId, list);
+  });
+
+  unitsByClass.forEach((classUnits, classId) => {
+    const wholeClassUnits: WorkUnit[] = [];
+    const groupUnitsByGroupId = new Map<string, WorkUnit[]>();
+
+    classUnits.forEach(u => {
+      if (!u.groupId) {
+        wholeClassUnits.push(u);
+      } else {
+        const list = groupUnitsByGroupId.get(u.groupId) || [];
+        list.push(u);
+        groupUnitsByGroupId.set(u.groupId, list);
+      }
+    });
+
+    // Lekcje całej klasy tworzą pojedyncze wiązki
+    wholeClassUnits.forEach(u => {
+      bundles.push({
+        classId: u.classId,
+        linkedClassIds: u.linkedClassIds,
+        units: [u],
+        preferredBlockSize: u.preferredBlockSize
+      });
+    });
+
+    // Lekcje grupowe: łączymy w pary/trójki równoległe dla różnych grup i różnych nauczycieli
+    const groupKeys = Array.from(groupUnitsByGroupId.keys());
+
+    while (true) {
+      // Wybierz grupy, które mają jeszcze wolne jednostki
+      const availableGroups = groupKeys.filter(gId => (groupUnitsByGroupId.get(gId)?.length || 0) > 0);
+      if (availableGroups.length < 2) {
+        // Mniej niż 2 grupy -> pozostałe jednostki idą jako pojedyncze wiązki
+        availableGroups.forEach(gId => {
+          const remaining = groupUnitsByGroupId.get(gId) || [];
+          remaining.forEach(u => {
+            bundles.push({
+              classId: u.classId,
+              linkedClassIds: u.linkedClassIds,
+              units: [u],
+              preferredBlockSize: u.preferredBlockSize
+            });
+          });
+          groupUnitsByGroupId.set(gId, []);
+        });
+        break;
+      }
+
+      // Weź po 1 jednostce z grup, upewniając się o braku kolizji wewnętrznych (różni nauczyciele, kompatybilne sale)
+      const bundledUnits: WorkUnit[] = [];
+      const usedTeachers = new Set<string>();
+      const usedSupportTeachers = new Set<string>();
+
+      for (const gId of availableGroups) {
+        const pool = groupUnitsByGroupId.get(gId) || [];
+        if (pool.length === 0) continue;
+
+        // Szukamy w pool jednostki, która nie koliduje z dotychczas dobranymi w wiązce
+        const candidateIdx = pool.findIndex(cand => {
+          if (cand.teacherId && usedTeachers.has(cand.teacherId)) return false;
+          if (cand.supportTeacherId && usedSupportTeachers.has(cand.supportTeacherId)) return false;
+          // Sprawdzenie sal w wiązce
+          for (const already of bundledUnits) {
+            if (already.roomId && cand.roomId && already.roomId === cand.roomId) {
+              const r = roomsMap.get(already.roomId);
+              if (!isSportsFacility(r)) return false; // zwykła sala nie mieści równolegle dwóch grup
+            }
+          }
+          return true;
+        });
+
+        if (candidateIdx !== -1) {
+          const [selected] = pool.splice(candidateIdx, 1);
+          bundledUnits.push(selected);
+          if (selected.teacherId) usedTeachers.add(selected.teacherId);
+          if (selected.supportTeacherId) usedSupportTeachers.add(selected.supportTeacherId);
+        }
+      }
+
+      if (bundledUnits.length > 0) {
+        bundles.push({
+          classId,
+          linkedClassIds: bundledUnits[0].linkedClassIds,
+          units: bundledUnits,
+          preferredBlockSize: Math.max(...bundledUnits.map(u => u.preferredBlockSize))
+        });
+      } else {
+        // Brak kompatybilnych par - opróżnij pierwszą grupę pojedynczo
+        const firstGroup = availableGroups[0];
+        const [singleUnit] = (groupUnitsByGroupId.get(firstGroup) || []).splice(0, 1);
+        if (singleUnit) {
+          bundles.push({
+            classId,
+            linkedClassIds: singleUnit.linkedClassIds,
+            units: [singleUnit],
+            preferredBlockSize: singleUnit.preferredBlockSize
+          });
+        }
+      }
+    }
+  });
+
+  // Sortowanie heurystyczne wiązek (trudniejsze / wielogrupowe na początku)
+  const getTeacherDifficulty = (teacherId: string | null) => {
+    if (!teacherId) return 0;
+    const t = teachersMap.get(teacherId);
+    const config = options.teacherConfigs?.[teacherId];
+    const availabilityCount = t?.availability?.length || 45;
+    const totalHours = pl.assignments
+      .filter(a => a.teacherId === teacherId)
+      .reduce((sum, a) => sum + a.hoursPerWeek, 0);
+
+    let score = totalHours * 10 - availabilityCount * 2;
+    if (config) {
+      if (config.role === 'director') score += 20;
+      if (config.role === 'deputy') score += 15;
+    }
+    return score;
+  };
+
+  bundles.sort((a, b) => {
+    // Wiązki równoległe (wiele grup) mają priorytet wcześniejszego ułożenia
+    const sizeDiff = b.units.length - a.units.length;
+    if (sizeDiff !== 0) return sizeDiff;
+
+    const diffA = a.units.reduce((acc, u) => acc + getTeacherDifficulty(u.teacherId), 0);
+    const diffB = b.units.reduce((acc, u) => acc + getTeacherDifficulty(u.teacherId), 0);
+    return diffB - diffA;
+  });
+
+  // Ocena slotu dla wiązki jednostek
+  const scoreBundleSlot = (
+    bundle: WorkBundle,
+    day: number,
+    hour: number,
+    isDouble: boolean
+  ): number => {
+    let score = 1000 * bundle.units.length;
+
+    // 1. TWARDE OGRANICZENIA: kolizje klas, nauczycieli, sal i pracowni informatycznych
+    let infNeeded = 0;
+
+    for (const unit of bundle.units) {
+      const targets = getTargetsForAsgOrUnit(
+        unit.classId,
+        unit.groupId,
+        unit.linkedClassIds,
+        unit.linkedGroupIds
+      );
+      for (const tgt of targets) {
+        if (isClassSlotBusy(tgt.classId, day, hour, tgt.groupId)) {
+          return -1;
+        }
+      }
+
+      // Nauczyciel prowadzący
+      if (unit.teacherId) {
+        if (teacherBusy.has(`${unit.teacherId}|${day}|${hour}`)) return -1;
+        if (options.obeyAvailability) {
+          const t = teachersMap.get(unit.teacherId);
+          if (t?.availability?.length && !t.availability.includes(`${day}-${hour}`)) {
+            return -1;
+          }
+        }
+      }
+
+      // Nauczyciel wspomagający (supportTeacherId w teacherBusy)
+      if (unit.supportTeacherId) {
+        if (teacherBusy.has(`${unit.supportTeacherId}|${day}|${hour}`)) return -1;
+        if (options.obeyAvailability) {
+          const st = teachersMap.get(unit.supportTeacherId);
+          if (st?.availability?.length && !st.availability.includes(`${day}-${hour}`)) {
+            return -1;
+          }
+        }
+      }
+
+      // Sala lekcyjna (roomBusy z wyjątkami dla sal sportowych)
+      if (unit.roomId) {
+        for (const tgt of targets) {
+          if (isRoomSlotBusy(unit.roomId, day, hour, unit.assignmentId, tgt.classId)) {
+            return -1;
+          }
+        }
+      }
+
+      if (isINFSubject(unit.subjectId)) {
+        infNeeded++;
+      }
+    }
+
+    if (options.limitComputerLabs && infNeeded > 0) {
+      const currentCount = infLessonsCount.get(`${day}|${hour}`) || 0;
+      if (currentCount + infNeeded > options.customComputerLabsCount) {
+        return -1;
+      }
+    }
+
+    // 2. MIĘKKIE KRYTERIA I BONUSY HEURYSTYCZNE
+    // Ogromny bonus za równoległe ułożenie grup w wiązce
+    if (bundle.units.length >= 2) {
+      score += 2500 * (bundle.units.length - 1);
+    }
+
+    // Dla pojedynczej grupy: silny bonus, jeśli inna grupa tej klasy już ma lekcję w tym slocie
+    if (bundle.units.length === 1 && bundle.units[0].groupId) {
+      const u = bundle.units[0];
+      const gId = u.groupId;
+      if (gId) {
+        const hasOtherGroupInSlot = groupKeysInSlot(u.classId, day, hour, gId);
+        if (hasOtherGroupInSlot) {
+          score += 3500; // silne przyciąganie pojedynczych grup do równoległości
+        }
+      }
+    }
+
+    // Unikanie skrajności (avoidExtremes)
+    if (options.avoidExtremes) {
+      const isAnyOptional = bundle.units.some(u =>
+        options.forceOptionalToExtremes && options.optionalSubjectIds.includes(u.subjectId)
+      );
+      if (!isAnyOptional) {
+        if (hour === 0) score -= 150;
+        if (hour >= 6) score -= (hour - 5) * 60;
+      }
+    }
+
+    // Spójność planu uczniów (noStudentGaps)
+    if (options.noStudentGaps) {
+      let dayMin = 99;
+      let dayMax = -1;
+      for (let h = 0; h < maxHoursCount; h++) {
+        if (classAnyBusy.has(`${bundle.classId}|${day}|${h}`)) {
+          dayMin = Math.min(dayMin, h);
+          dayMax = Math.max(dayMax, h);
+        }
+      }
+
+      if (dayMax !== -1) {
+        if (hour >= dayMin - 1 && hour <= dayMax + 1) {
+          score += 500;
+          if (hour >= dayMin && hour <= dayMax) score += 400; // wypełnianie okienka
+        } else {
+          score -= 300; // izolowana lekcja
+        }
+      } else {
+        if (hour === 1 || hour === 2) score += 200;
+      }
+    }
+
+    // Preferencja bloków podwójnych dla tego samego przedmiotu
+    if (isDouble) {
+      score += 200;
+    }
+
+    return score;
+  };
+
+  const groupKeysInSlot = (classId: string, day: number, hour: number, currentGroupId: string): boolean => {
+    // Sprawdza czy w danym slocie inna grupa tej klasy ma lekcję
+    for (const [key] of Object.entries(generatedLessons)) {
+      const parts = key.split('|');
+      if (parts[0] === classId && parseInt(parts[1], 10) === day && parseInt(parts[2], 10) === hour) {
+        const gId = parts.length >= 4 ? parts[3] : null;
+        if (gId && gId !== currentGroupId) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  const placeBundleAtSlot = (bundle: WorkBundle, day: number, hour: number) => {
+    bundle.units.forEach(unit => {
+      const targets = getTargetsForAsgOrUnit(
+        unit.classId,
+        unit.groupId,
+        unit.linkedClassIds,
+        unit.linkedGroupIds
+      );
+      targets.forEach(tgt => {
+        // Zapisuj klucz klasa|dzień|godzina|groupId dla przydziałów z groupId
+        const key = tgt.groupId ? `${tgt.classId}|${day}|${hour}|${tgt.groupId}` : `${tgt.classId}|${day}|${hour}`;
+        generatedLessons[key] = {
+          assignmentId: unit.assignmentId,
+          locked: false,
+          ...(unit.supportTeacherId ? { supportTeacherId: unit.supportTeacherId } : {})
+        };
+        markClassSlotBusy(tgt.classId, day, hour, tgt.groupId);
+        if (unit.roomId) {
+          markRoomSlotBusy(unit.roomId, day, hour, unit.assignmentId, tgt.classId);
+        }
+      });
+
+      if (unit.teacherId) {
+        teacherBusy.add(`${unit.teacherId}|${day}|${hour}`);
+      }
+      if (unit.supportTeacherId) {
+        teacherBusy.add(`${unit.supportTeacherId}|${day}|${hour}`);
+      }
+      if (isINFSubject(unit.subjectId)) {
+        const slotKey = `${day}|${hour}`;
+        infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
+      }
+    });
+  };
+
+  // 4. Główna pętla rozmieszczania wiązek
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  let placedRegularCount = 0;
+
+  let bIdx = 0;
+  while (bIdx < bundles.length) {
+    const bundle = bundles[bIdx];
+    let placed = false;
+    let bestScore = -99999;
+    let bestDay = -1;
+    let bestHour = -1;
+    let isBlock = false;
+
+    // Szukanie kolejnej wiązki do bloku 2-godzinnego
+    const findNextMatchingBundleIdx = () => {
+      if (!options.allowDoubleBlocks || bundle.preferredBlockSize < 2) return -1;
+      for (let k = bIdx + 1; k < bundles.length; k++) {
+        const other = bundles[k];
+        if (
+          other.classId === bundle.classId &&
+          other.units.length === bundle.units.length &&
+          other.units.every((u, i) => u.assignmentId === bundle.units[i].assignmentId)
+        ) {
+          return k;
+        }
+      }
+      return -1;
+    };
+
+    const nextBundleMatchIdx = findNextMatchingBundleIdx();
+    const shouldTryBlock = nextBundleMatchIdx !== -1;
+
+    if (shouldTryBlock) {
+      for (let d = 0; d < daysCount; d++) {
+        for (let h = 0; h < maxHoursCount - 1; h++) {
+          const s1 = scoreBundleSlot(bundle, d, h, true);
+          const s2 = scoreBundleSlot(bundle, d, h + 1, true);
+          if (s1 > 0 && s2 > 0) {
+            const combined = s1 + s2;
+            if (combined > bestScore) {
+              bestScore = combined;
+              bestDay = d;
+              bestHour = h;
+              isBlock = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (bestHour === -1) {
+      isBlock = false;
+      for (let d = 0; d < daysCount; d++) {
+        for (let h = 0; h < maxHoursCount; h++) {
+          const s = scoreBundleSlot(bundle, d, h, false);
+          if (s > bestScore && s > 0) {
+            bestScore = s;
+            bestDay = d;
+            bestHour = h;
+          }
+        }
+      }
+    }
+
+    if (bestHour !== -1) {
+      if (isBlock && nextBundleMatchIdx !== -1) {
+        const secondBundle = bundles[nextBundleMatchIdx];
+        placeBundleAtSlot(bundle, bestDay, bestHour);
+        placeBundleAtSlot(secondBundle, bestDay, bestHour + 1);
+        bundles.splice(nextBundleMatchIdx, 1);
+        placedRegularCount += bundle.units.length + secondBundle.units.length;
+      } else {
+        placeBundleAtSlot(bundle, bestDay, bestHour);
+        placedRegularCount += bundle.units.length;
+      }
+      placed = true;
+    }
+
+    if (!placed) {
+      // Fallback: szukanie dowolnego wolnego slotu bez twardych kolizji
+      let fallbackPlaced = false;
+      for (let d = 0; d < daysCount; d++) {
+        for (let h = 0; h < maxHoursCount; h++) {
+          const s = scoreBundleSlot(bundle, d, h, false);
+          if (s !== -1) {
+            placeBundleAtSlot(bundle, d, h);
+            placedRegularCount += bundle.units.length;
+            fallbackPlaced = true;
+            break;
+          }
+        }
+        if (fallbackPlaced) break;
+      }
+
+      if (!fallbackPlaced) {
+        // W ostateczności rozbijamy wiązkę na pojedyncze jednostki
+        bundle.units.forEach(unit => {
+          let singlePlaced = false;
+          const singleBundle: WorkBundle = {
+            classId: unit.classId,
+            linkedClassIds: unit.linkedClassIds,
+            units: [unit],
+            preferredBlockSize: 1
+          };
+
+          for (let d = 0; d < daysCount; d++) {
+            for (let h = 0; h < maxHoursCount; h++) {
+              if (scoreBundleSlot(singleBundle, d, h, false) !== -1) {
+                placeBundleAtSlot(singleBundle, d, h);
+                placedRegularCount += 1;
+                singlePlaced = true;
+                break;
+              }
+            }
+            if (singlePlaced) break;
+          }
+
+          if (!singlePlaced) {
+            const subj = subjectsMap.get(unit.subjectId);
+            const cls = classesMap.get(unit.classId);
+            const teacher = unit.teacherId ? teachersMap.get(unit.teacherId) : null;
+            warnings.push(
+              `Nie udało się dopasować godziny przedmiotu: "${subj?.name || 'Przedmiot'}" dla klasy ${cls?.name || 'Klasa'}${unit.groupId ? ` (gr. ${unit.groupId})` : ''} (Nauczyciel: ${teacher ? teacher.abbr : 'Brak'}).`
+            );
+          }
+        });
+      }
+    }
+
+    bIdx++;
+  }
+
+  // 5. Nauczanie Indywidualne (SpecialNI)
+  let placedSpecialCount = 0;
+  let totalSpecialCount = 0;
+
+  if (options.includeSpecialNI) {
+    interface SpecialWorkUnit {
+      specialAsg: SpecialAssignment;
+      studentId: string;
+      teacherId: string | null;
+      supportTeacherId: string | null;
+      roomId: string | null;
+      subjectId: string;
+    }
+
+    const specialUnits: SpecialWorkUnit[] = [];
+    (pl.specialAssignments || []).forEach(sa => {
+      if (!sa.withClass) {
+        totalSpecialCount += sa.hoursPerWeek;
+        for (let i = 0; i < sa.hoursPerWeek; i++) {
+          specialUnits.push({
+            specialAsg: sa,
+            studentId: sa.studentId,
+            teacherId: sa.teacherId,
+            supportTeacherId: sa.supportTeacherId || null,
+            roomId: sa.roomId || null,
+            subjectId: sa.subjectId
+          });
+        }
+      }
+    });
+
+    specialUnits.forEach(unit => {
+      let placedSp = false;
+
+      for (let d = 0; d < daysCount; d++) {
+        for (let h = 0; h < maxHoursCount; h++) {
+          if (specialStudentBusy.has(`${unit.studentId}|${d}|${h}`)) continue;
+          if (unit.teacherId && teacherBusy.has(`${unit.teacherId}|${d}|${h}`)) continue;
+          if (unit.supportTeacherId && teacherBusy.has(`${unit.supportTeacherId}|${d}|${h}`)) continue;
+
+          if (options.obeyAvailability && unit.teacherId) {
+            const t = teachersMap.get(unit.teacherId);
+            if (t?.availability?.length && !t.availability.includes(`${d}-${h}`)) continue;
+          }
+
+          if (unit.roomId && isRoomSlotBusy(unit.roomId, d, h, unit.specialAsg.id, `special-${unit.studentId}`)) {
+            continue;
+          }
+
+          const specKey = `${unit.studentId}|${d}|${h}|${unit.specialAsg.id}`;
+          generatedSpecialLessons[specKey] = { assignmentId: unit.specialAsg.id };
+          specialStudentBusy.add(`${unit.studentId}|${d}|${h}`);
+          if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${d}|${h}`);
+          if (unit.supportTeacherId) teacherBusy.add(`${unit.supportTeacherId}|${d}|${h}`);
+          if (unit.roomId) markRoomSlotBusy(unit.roomId, d, h, unit.specialAsg.id, `special-${unit.studentId}`);
+
+          placedSpecialCount++;
+          placedSp = true;
+          break;
+        }
+        if (placedSp) break;
+      }
+
+      if (!placedSp) {
+        const stud = (pl.specialStudents || []).find(s => s.id === unit.studentId);
+        const subj = subjectsMap.get(unit.subjectId);
+        warnings.push(
+          `Zajęcia indywidualne: "${subj?.name || 'Zajęcie'}" dla ucznia ${stud ? `${stud.lastName} ${stud.firstName}` : 'Uczeń'} nie zmieściły się w żadnym wolnym slocie.`
+        );
+      }
+    });
+  }
+
+  // Kontrola końcowa wygenerowanego planu za pomocą silnika conflictEngine
+  const finalPlanState: any = {
+    ...pl,
+    lessons: generatedLessons,
+    specialLessons: generatedSpecialLessons ? Object.values(generatedSpecialLessons) : pl.specialLessons
+  };
+  const detectedConflicts = detectConflicts(finalPlanState);
+  if (detectedConflicts.length > 0) {
+    detectedConflicts.forEach(c => {
+      warnings.push(`[Wykryto kolizję - ${c.type}]: ${c.message}`);
+    });
+  }
+
+  const totalRegularTarget = placedRegularCount + warnings.length;
+
+  return {
+    success: warnings.length === 0,
+    placedRegular: placedRegularCount,
+    totalRegular: totalRegularTarget,
+    placedSpecial: placedSpecialCount,
+    totalSpecial: totalSpecialCount,
+    errors,
+    warnings,
+    updatedLessons: generatedLessons,
+    updatedSpecialLessons: generatedSpecialLessons
+  };
 }
 
 export default function PlanGenerator({ appState, onChangeAppState, onClose }: PlanGeneratorProps) {
@@ -83,15 +938,7 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
 
   // Stan informacji zwrotnej o trwającym procesie generowania
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationResult, setGenerationResult] = useState<{
-    success: boolean;
-    placedRegular: number;
-    totalRegular: number;
-    placedSpecial: number;
-    totalSpecial: number;
-    errors: string[];
-    warnings: string[];
-  } | null>(null);
+  const [generationResult, setGenerationResult] = useState<PlanGenerationResult | null>(null);
 
   // Funkcja pomocnicza do aktualizacji konfiguracji
   const updateTeacherConfig = (teacherId: string, updates: Partial<TeacherRoleConfig>) => {
@@ -128,580 +975,31 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
     // Uruchomienie asynchroniczne, aby wskaźnik ładowania zdążył się wyrenderować
     setTimeout(() => {
       try {
-        const daysCount = 5; // Monday to Friday
-        const maxHoursCount = pl.hours.length || 9; // usually 0 to 8 or 9
-        
-        const isINFSubject = (subjectId: string) => {
-          const sub = subjectsMap.get(subjectId);
-          if (!sub) return false;
-          const name = (sub.name || '').toLowerCase();
-          const short = (sub.short || '').toLowerCase();
-          return (
-            short.includes('inf') ||
-            short.includes('e-inf') ||
-            name.includes('informatyk') ||
-            name.includes('edukacja informatyczna')
-          );
+        const options: PlanGeneratorOptions = {
+          maxGapsPerTeacher,
+          obeyAvailability,
+          avoidExtremes,
+          avoidExtremesSubjectIds,
+          noStudentGaps,
+          allowDoubleBlocks,
+          includeSpecialNI,
+          limitComputerLabs,
+          customComputerLabsCount,
+          minAvailableSubstitutionTeachersPerSlot,
+          forceOptionalToExtremes,
+          optionalSubjectIds,
+          teacherConfigs
         };
 
-        // Track computer science lessons scheduled at each slot: "day|hour" -> count
-        const infLessonsCount = new Map<string, number>();
-
-        // 1. Initialize result lessons state and lock state
-        // Keep all currently locked lessons intact!
-        const generatedLessons: Record<string, Lesson> = {};
-        const generatedSpecialLessons: Record<string, SpecialLesson> = {};
-
-        // Track who is busy where:
-        // teacherBusy["teacherId|dayIndex|hourIndex"] = boolean
-        const teacherBusy = new Set<string>();
-        // classBusy["classId|dayIndex|hourIndex"] = boolean
-        const classBusy = new Set<string>();
-        // specialStudentBusy["studentId|dayIndex|hourIndex"] = boolean
-        const specialStudentBusy = new Set<string>();
-
-        // Copy locked lessons first
-        Object.entries(pl.lessons).forEach(([key, value]) => {
-          if (value.locked) {
-            generatedLessons[key] = { ...value };
-            const parts = key.split('|');
-            const classId = parts[0];
-            const day = parseInt(parts[1], 10);
-            const hour = parseInt(parts[2], 10);
-            classBusy.add(`${classId}|${day}|${hour}`);
-
-            const asg = pl.assignments.find(a => a.id === value.assignmentId);
-            if (asg) {
-              if (asg.teacherId) {
-                teacherBusy.add(`${asg.teacherId}|${day}|${hour}`);
-              }
-              if (isINFSubject(asg.subjectId)) {
-                const slotKey = `${day}|${hour}`;
-                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
-              }
-            }
-          }
-        });
-
-        // Kopiowanie zablokowanych lekcji specjalnych z zachowaniem ich pozycji
-        Object.entries(pl.specialLessons).forEach(([key, value]) => {
-          generatedSpecialLessons[key] = { ...value };
-          const parts = key.split('|');
-          if (parts.length >= 3) {
-            const studentId = parts[0];
-            const day = parseInt(parts[1], 10);
-            const hour = parseInt(parts[2], 10);
-            specialStudentBusy.add(`${studentId}|${day}|${hour}`);
-
-            const spAsg = pl.specialAssignments.find(sa => sa.id === value.assignmentId);
-            if (spAsg && spAsg.teacherId) {
-              teacherBusy.add(`${spAsg.teacherId}|${day}|${hour}`);
-            }
-          }
-        });
-
-        // 2. Identify remaining items to schedule:
-        // For regular assignments, count how many hours are left to place
-        interface WorkUnit {
-          assignmentId: string;
-          classId: string;
-          teacherId: string | null;
-          subjectId: string;
-          groupId: string | null;
-          preferredBlockSize: number;
-        }
-
-        const regularUnits: WorkUnit[] = [];
-        pl.assignments.forEach(asg => {
-          // Zliczenie aktualnie zablokowanych lekcji dla tego przydziału
-          const lockedCount = Object.values(generatedLessons).filter(
-            l => l.assignmentId === asg.id && l.locked
-          ).length;
-
-          const remainingHours = Math.max(0, asg.hoursPerWeek - lockedCount);
-          const blockPrefer = asg.preferredBlockSize || (allowDoubleBlocks ? 2 : 1);
-
-          for (let i = 0; i < remainingHours; i++) {
-            regularUnits.push({
-              assignmentId: asg.id,
-              classId: asg.classId,
-              teacherId: asg.teacherId,
-              subjectId: asg.subjectId,
-              groupId: asg.groupId,
-              preferredBlockSize: blockPrefer,
-            });
-          }
-        });
-
-        // Sort work units heuristically:
-        // - Rozmieszczanie w pierwszej kolejności przydziałów nauczycieli z ograniczoną dostępnością lub dużym pensum
-        const getTeacherDifficulty = (teacherId: string | null) => {
-          if (!teacherId) return 0;
-          const t = teachersMap.get(teacherId);
-          const config = teacherConfigs[teacherId];
-          const availabilityCount = t?.availability?.length || 45; // 5 days * 9 hours = 45 possible slots
-          const totalHours = pl.assignments
-            .filter(a => a.teacherId === teacherId)
-            .reduce((sum, a) => sum + a.hoursPerWeek, 0);
-          
-          let score = totalHours * 10 - availabilityCount * 2;
-          if (config) {
-            if (config.role === 'director') score += 15;
-            if (config.role === 'deputy') score += 10;
-          }
-          return score;
-        };
-
-        regularUnits.sort((a, b) => {
-          const diffA = getTeacherDifficulty(a.teacherId);
-          const diffB = getTeacherDifficulty(b.teacherId);
-          return diffB - diffA; // High difficulty first
-        });
-
-        // 3. Place regular lessons
-        const warnings: string[] = [];
-        const errors: string[] = [];
-        let placedRegularCount = 0;
-
-        // Simple scoring heuristic for a slot (day, hour)
-        const scoreSlot = (
-          unit: WorkUnit,
-          day: number,
-          hour: number,
-          isDouble: boolean
-        ) => {
-          let score = 1000;
-
-          // Weryfikacja podstawowych kolizji godzinowych
-          if (classBusy.has(`${unit.classId}|${day}|${hour}`)) return -1;
-          if (unit.teacherId && teacherBusy.has(`${unit.teacherId}|${day}|${hour}`)) return -1;
-
-          // Sprawdzenie limitu pracowni informatycznych
-          if (limitComputerLabs && isINFSubject(unit.subjectId)) {
-            const currentCount = infLessonsCount.get(`${day}|${hour}`) || 0;
-            if (currentCount >= customComputerLabsCount) {
-              return -1; // Brak wolnych pracowni komputerowych w tym slocie
-            }
-          }
-
-          // Sprawdzenie parametrów generatora
-          // Teacher availability
-          if (obeyAvailability && unit.teacherId) {
-            const t = teachersMap.get(unit.teacherId);
-            if (t && t.availability && t.availability.length > 0) {
-              const checkCode = `${day}-${hour}`;
-              if (!t.availability.includes(checkCode)) {
-                return -1; // hard constraint
-              }
-            }
-          }
-
-          // Extremes avoidance
-          if (avoidExtremes) {
-            const isOptionalSubject = forceOptionalToExtremes && optionalSubjectIds.includes(unit.subjectId);
-            if (!isOptionalSubject) {
-              const appliesToSubject = !avoidExtremesSubjectIds || avoidExtremesSubjectIds.length === 0 || avoidExtremesSubjectIds.includes(unit.subjectId);
-              if (appliesToSubject) {
-                // Hour 0 is heavily penalized
-                if (hour === 0) {
-                  score -= 100;
-                }
-                // Hours after 6 are penalized
-                if (hour >= 6) {
-                  score -= (hour - 5) * 40;
-                }
-              }
-            }
-          }
-
-          // Force optional subjects to extremes (beginning/end of class schedule)
-          if (forceOptionalToExtremes && optionalSubjectIds.includes(unit.subjectId)) {
-            let dayMin = 99;
-            let dayMax = -1;
-
-            for (let h = 0; h < maxHoursCount; h++) {
-              if (classBusy.has(`${unit.classId}|${day}|${h}`)) {
-                dayMin = Math.min(dayMin, h);
-                dayMax = Math.max(dayMax, h);
-              }
-            }
-
-            if (dayMax !== -1) {
-              // If class already has lessons scheduled on this day, we want this to be on the outer boundary
-              if (hour === dayMin - 1 || hour === dayMax + 1) {
-                score += 800; // Duży bonus za umieszczenie na skrajnych godzinach dnia
-              } else if (hour >= dayMin && hour <= dayMax) {
-                score -= 1200; // Wysoka kara za zaplanowanie przedmiotu do wyboru w środku dnia lekcyjnego
-              } else {
-                score -= 300; // Izolacja od lekcji w bieżącym dniu
-              }
-            } else {
-              // First lesson being scheduled for this class on this day.
-              // Prefer absolute boundaries of the lesson slots (e.g. first slot 0/1 or last slot >= 5)
-              if (hour === 0 || hour === 1 || hour >= 5) {
-                score += 300;
-              }
-            }
-          }
-
-          // Teacher role specials
-          if (unit.teacherId) {
-            const config = teacherConfigs[unit.teacherId];
-            if (config) {
-              if (config.role === 'director' && (hour === 0 || hour >= 6)) {
-                score -= 150; // Directors keep a cleaner center schedule
-              }
-              if (config.role === 'deputy' && (hour === 0 || hour >= 7)) {
-                score -= 100;
-              }
-            }
-          }
-
-          // Students continuity (no gaps) - calculate distance to current scheduled classes
-          if (noStudentGaps) {
-            // Check if class has other lessons scheduled on this day
-            let hasAdjacent = false;
-            let dayMin = 99;
-            let dayMax = -1;
-
-            for (let h = 0; h < maxHoursCount; h++) {
-              if (classBusy.has(`${unit.classId}|${day}|${h}`)) {
-                dayMin = Math.min(dayMin, h);
-                dayMax = Math.max(dayMax, h);
-              }
-            }
-
-            if (dayMax !== -1) {
-              if (hour >= dayMin - 1 && hour <= dayMax + 1) {
-                // Next to a lesson - high score!
-                score += 500;
-                if (hour >= dayMin && hour <= dayMax) {
-                  // Filling a hole! Even better
-                  score += 400;
-                }
-              } else {
-                // Isolated lesson - penalized!
-                score -= 300;
-              }
-            } else {
-              // First lesson of the day for this class. Prioritize standard hours (hour 1 or 2)
-              if (hour === 1 || hour === 2) {
-                score += 200;
-              }
-            }
-          }
-
-          // Avoid placing the same subject twice on the same day unless blockSize is preferred
-          const sameDaySameSubject = Object.entries(generatedLessons).some(([key, val]) => {
-            const parts = key.split('|');
-            const cId = parts[0];
-            const d = parseInt(parts[1], 10);
-            if (cId === unit.classId && d === day) {
-              const otherAsg = pl.assignments.find(a => a.id === val.assignmentId);
-              return otherAsg && otherAsg.subjectId === unit.subjectId;
-            }
-            return false;
-          });
-
-          if (sameDaySameSubject) {
-            if (isDouble) {
-              score += 150; // Boost double block
-            } else {
-              score -= 200; // Penalize separate same-subject lessons on same day
-            }
-          }
-
-          // Teacher window avoidance: check if teacher has other classes on this day
-          if (unit.teacherId) {
-            let hasTeacherAdjacent = false;
-            for (let h = Math.max(0, hour - 1); h <= Math.min(maxHoursCount - 1, hour + 1); h++) {
-              if (h !== hour && teacherBusy.has(`${unit.teacherId}|${day}|${h}`)) {
-                hasTeacherAdjacent = true;
-                break;
-              }
-            }
-            if (hasTeacherAdjacent) {
-              score += 150; // Prefers compact schedule for teachers
-            }
-          }
-
-          // Minimalna liczba wolnych nauczycieli na zastępstwa
-          if (unit.teacherId && minAvailableSubstitutionTeachersPerSlot > 0) {
-            const tempBusy = new Set(teacherBusy);
-            tempBusy.add(`${unit.teacherId}|${day}|${hour}`);
-
-            let availableSubs = 0;
-            pl.teachers.forEach(t => {
-              if (t.inactive) return;
-              if (tempBusy.has(`${t.id}|${day}|${hour}`)) return;
-              if (obeyAvailability && t.availability && t.availability.length > 0) {
-                if (!t.availability.includes(`${day}-${hour}`)) return;
-              }
-
-              let hasOtherLessonOnDay = false;
-              for (let h = 0; h < maxHoursCount; h++) {
-                if (h !== hour && tempBusy.has(`${t.id}|${day}|${h}`)) {
-                  hasOtherLessonOnDay = true;
-                  break;
-                }
-              }
-
-              if (hasOtherLessonOnDay) {
-                availableSubs++;
-              }
-            });
-
-            if (availableSubs < minAvailableSubstitutionTeachersPerSlot) {
-              score -= 300 * (minAvailableSubstitutionTeachersPerSlot - availableSubs);
-            }
-          }
-
-          return score;
-        };
-
-        // Try to place each regular unit
-        let index = 0;
-        while (index < regularUnits.length) {
-          const unit = regularUnits[index];
-
-          // Determine if we can try to place as double block
-          let placed = false;
-          let bestScore = -99999;
-          let bestDay = -1;
-          let bestHour = -1;
-          let isBlock = false;
-
-          // Check if we can schedule a consecutive 2-hr block (if pref is >= 2 and we have another matching unscheduled unit)
-          const findNextMatchingIndex = () => {
-            for (let k = index + 1; k < regularUnits.length; k++) {
-              if (
-                regularUnits[k].classId === unit.classId &&
-                regularUnits[k].subjectId === unit.subjectId &&
-                regularUnits[k].assignmentId === unit.assignmentId
-              ) {
-                return k;
-              }
-            }
-            return -1;
-          };
-
-          const nextMatchIdx = findNextMatchingIndex();
-          const shouldTryBlock = allowDoubleBlocks && nextMatchIdx !== -1;
-
-          if (shouldTryBlock) {
-            // Wyszukanie najlepszych sąsiadujących slotów (godzina, godzina+1)
-            for (let d = 0; d < daysCount; d++) {
-              for (let h = 0; h < maxHoursCount - 1; h++) {
-                const s1 = scoreSlot(unit, d, h, true);
-                const s2 = scoreSlot(unit, d, h + 1, true);
-
-                if (s1 > 0 && s2 > 0) {
-                  const combined = s1 + s2;
-                  if (combined > bestScore) {
-                    bestScore = combined;
-                    bestDay = d;
-                    bestHour = h;
-                    isBlock = true;
-                  }
-                }
-              }
-            }
-          }
-
-          // If block not possible or not preferred, check single slot
-          if (bestHour === -1) {
-            isBlock = false;
-            for (let d = 0; d < daysCount; d++) {
-              for (let h = 0; h < maxHoursCount; h++) {
-                const s = scoreSlot(unit, d, h, false);
-                if (s > bestScore && s > 0) {
-                  bestScore = s;
-                  bestDay = d;
-                  bestHour = h;
-                }
-              }
-            }
-          }
-
-          if (bestHour !== -1) {
-            // We have a placement!
-            if (isBlock && nextMatchIdx !== -1) {
-              // Place both
-              const secondUnit = regularUnits[nextMatchIdx];
-
-              // Cell 1
-              const k1 = `${unit.classId}|${bestDay}|${bestHour}`;
-              generatedLessons[k1] = { assignmentId: unit.assignmentId, locked: false };
-              classBusy.add(`${unit.classId}|${bestDay}|${bestHour}`);
-              if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${bestDay}|${bestHour}`);
-              if (isINFSubject(unit.subjectId)) {
-                const slotKey = `${bestDay}|${bestHour}`;
-                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
-              }
-
-              // Cell 2
-              const k2 = `${secondUnit.classId}|${bestDay}|${bestHour + 1}`;
-              generatedLessons[k2] = { assignmentId: secondUnit.assignmentId, locked: false };
-              classBusy.add(`${secondUnit.classId}|${bestDay}|${bestHour + 1}`);
-              if (secondUnit.teacherId) teacherBusy.add(`${secondUnit.teacherId}|${bestDay}|${bestHour + 1}`);
-              if (isINFSubject(secondUnit.subjectId)) {
-                const slotKey = `${bestDay}|${bestHour + 1}`;
-                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
-              }
-
-              // Remove second unit from queue
-              regularUnits.splice(nextMatchIdx, 1);
-              placedRegularCount += 2;
-            } else {
-              // Place single
-              const k = `${unit.classId}|${bestDay}|${bestHour}`;
-              generatedLessons[k] = { assignmentId: unit.assignmentId, locked: false };
-              classBusy.add(`${unit.classId}|${bestDay}|${bestHour}`);
-              if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${bestDay}|${bestHour}`);
-              if (isINFSubject(unit.subjectId)) {
-                const slotKey = `${bestDay}|${bestHour}`;
-                infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
-              }
-              placedRegularCount += 1;
-            }
-            placed = true;
-          }
-
-          if (!placed) {
-            // Fallback: place in any empty slot regardless of quality score (softly ignoring hours extremes or availability if crucial)
-            let fallbackPlaced = false;
-            for (let d = 0; d < daysCount; d++) {
-              for (let h = 0; h < maxHoursCount; h++) {
-                if (!classBusy.has(`${unit.classId}|${d}|${h}`)) {
-                  if (!unit.teacherId || !teacherBusy.has(`${unit.teacherId}|${d}|${h}`)) {
-                    if (limitComputerLabs && isINFSubject(unit.subjectId)) {
-                      const currentCount = infLessonsCount.get(`${d}|${h}`) || 0;
-                      if (currentCount >= customComputerLabsCount) {
-                        continue;
-                      }
-                    }
-
-                    const k = `${unit.classId}|${d}|${h}`;
-                    generatedLessons[k] = { assignmentId: unit.assignmentId, locked: false };
-                    classBusy.add(`${unit.classId}|${d}|${h}`);
-                    if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${d}|${h}`);
-                    if (isINFSubject(unit.subjectId)) {
-                      const slotKey = `${d}|${h}`;
-                      infLessonsCount.set(slotKey, (infLessonsCount.get(slotKey) || 0) + 1);
-                    }
-                    placedRegularCount += 1;
-                    fallbackPlaced = true;
-                    break;
-                  }
-                }
-              }
-              if (fallbackPlaced) break;
-            }
-
-            if (!fallbackPlaced) {
-              const subj = subjectsMap.get(unit.subjectId);
-              const cls = classesMap.get(unit.classId);
-              const teacher = unit.teacherId ? teachersMap.get(unit.teacherId) : null;
-              
-              let reasonSuffix = '';
-              if (limitComputerLabs && isINFSubject(unit.subjectId)) {
-                reasonSuffix = ' (możliwe przekroczenie limitu wolnych pracowni komputerowych)';
-              }
-
-              warnings.push(
-                `Nie udało się dopasować godziny przedmiotu: "${subj?.name || 'Przedmiot'}" dla klasy ${cls?.name || 'Klasa'} (Nauczyciel: ${teacher ? teacher.abbr : 'Brak'})${reasonSuffix}.`
-              );
-            }
-          }
-
-          index++;
-        }
-
-        // 4. Place Special assignments (Nauczanie indywidualne) if toggled
-        let placedSpecialCount = 0;
-        let totalSpecialCount = 0;
-
-        if (includeSpecialNI) {
-          interface SpecialWorkUnit {
-            specialAsg: SpecialAssignment;
-            studentId: string;
-            teacherId: string | null;
-            subjectId: string;
-          }
-
-          const specialUnits: SpecialWorkUnit[] = [];
-          pl.specialAssignments.forEach(sa => {
-            // Filtrowanie wyłącznie zajęć indywidualnych (wymagających zaplanowania)
-            if (!sa.withClass) {
-              totalSpecialCount += sa.hoursPerWeek;
-              for (let i = 0; i < sa.hoursPerWeek; i++) {
-                specialUnits.push({
-                  specialAsg: sa,
-                  studentId: sa.studentId,
-                  teacherId: sa.teacherId,
-                  subjectId: sa.subjectId,
-                });
-              }
-            }
-          });
-
-          specialUnits.forEach(unit => {
-            let placedSp = false;
-
-            // Search for an hour where student is free and teacher is free
-            for (let d = 0; d < daysCount; d++) {
-              for (let h = 0; h < maxHoursCount; h++) {
-                // Must ensure:
-                // 1. Student has no other special lesson at this hour
-                if (specialStudentBusy.has(`${unit.studentId}|${d}|${h}`)) continue;
-
-                // 2. Teacher has no lesson/special lesson at this hour
-                if (unit.teacherId && teacherBusy.has(`${unit.teacherId}|${d}|${h}`)) continue;
-
-                // 3. Teacher is available
-                if (obeyAvailability && unit.teacherId) {
-                  const t = teachersMap.get(unit.teacherId);
-                  if (t && t.availability && t.availability.length > 0) {
-                    if (!t.availability.includes(`${d}-${h}`)) continue;
-                  }
-                }
-
-                // Place!
-                const specKey = `${unit.studentId}|${d}|${h}|${unit.specialAsg.id}`;
-                generatedSpecialLessons[specKey] = { assignmentId: unit.specialAsg.id };
-                specialStudentBusy.add(`${unit.studentId}|${d}|${h}`);
-                if (unit.teacherId) teacherBusy.add(`${unit.teacherId}|${d}|${h}`);
-
-                placedSpecialCount++;
-                placedSp = true;
-                break;
-              }
-              if (placedSp) break;
-            }
-
-            if (!placedSp) {
-              const stud = pl.specialStudents.find(s => s.id === unit.studentId);
-              const subj = subjectsMap.get(unit.subjectId);
-              warnings.push(
-                `Zajęcia indywidualne: "${subj?.name || 'Zajęcie'}" dla ucznia ${stud ? `${stud.lastName} ${stud.firstName}` : 'Uczeń'} nie zmieściły się w żadnym wolnym slocie.`
-              );
-            }
-          });
-        }
-
-        // Apply state changes!
-        const totalRegularTarget = placedRegularCount + warnings.length;
-        const totalSpecialTarget = totalSpecialCount;
-
-        const updatedPL = {
-          ...pl,
-          lessons: generatedLessons,
-          specialLessons: generatedSpecialLessons
-        };
+        const result = runPlanGenerationAlgorithm(appState, options);
 
         onChangeAppState({
           ...appState,
-          planLekcji: updatedPL,
+          planLekcji: {
+            ...pl,
+            lessons: result.updatedLessons,
+            specialLessons: result.updatedSpecialLessons
+          },
           generatorSettings: {
             genPriorityHomerooms: true,
             genPriorityTeachers: true,
@@ -709,31 +1007,11 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
             genAutoPlaceWF: true,
             genClearExisting: false,
             ...appState.generatorSettings,
-            maxGapsPerTeacher,
-            obeyAvailability,
-            avoidExtremes,
-            avoidExtremesSubjectIds,
-            noStudentGaps,
-            allowDoubleBlocks,
-            includeSpecialNI,
-            limitComputerLabs,
-            customComputerLabsCount,
-            minAvailableSubstitutionTeachersPerSlot,
-            forceOptionalToExtremes,
-            optionalSubjectIds
+            ...options
           }
         });
 
-        setGenerationResult({
-          success: warnings.length === 0,
-          placedRegular: placedRegularCount,
-          totalRegular: totalRegularTarget,
-          placedSpecial: placedSpecialCount,
-          totalSpecial: totalSpecialTarget,
-          errors,
-          warnings
-        });
-
+        setGenerationResult(result);
       } catch (err: any) {
         setGenerationResult({
           success: false,
@@ -742,7 +1020,9 @@ export default function PlanGenerator({ appState, onChangeAppState, onClose }: P
           placedSpecial: 0,
           totalSpecial: 0,
           errors: [err.message || 'Wystąpił nieznany błąd podczas generowania planu.'],
-          warnings: []
+          warnings: [],
+          updatedLessons: pl.lessons,
+          updatedSpecialLessons: pl.specialLessons || {}
         });
       } finally {
         setIsGenerating(false);

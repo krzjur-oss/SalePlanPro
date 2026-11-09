@@ -14,7 +14,9 @@
  * - Kopia zapasowa przed szyfrowaniem (pre-encryption backup) i automatyczny rollback
  * - Wyodrębniona stała ENCRYPTED_KEYS oraz funkcja listManagedKeys() obejmująca recovery backups
  * - Bezpieczna zmiana hasła bez utraty kluczy zastępstw (DAILY_SUBSTITUTIONS)
- * - Ochrona przed uszkodzeniem: kopia do *_recovery_backup_ (max 3) i selektywna blokada wadliwego klucza (blockedWrites)
+ * - Ochrona przed uszkodzeniem: kopia do *_recovery_backup_ (max 3, z deduplikacją hashy) i selektywna blokada wadliwego klucza (blockedWrites)
+ * - Szyfrowanie kopii ratunkowych przez setStorageItem przy aktywnej sesji
+ * - Zintegrowany dziennik błędów aplikacji (logAppError) z limitem 50 wpisów i obcinaniem śladu stosu do 1 kB
  * - Brak zapisywania haseł w sessionStorage
  * - Szacowanie pamięci navigator.storage.estimate() z debouncem 30s i żądanie trwałej pamięci navigator.storage.persist()
  */
@@ -48,6 +50,7 @@ import {
   PBKDF2_ITERATIONS_V2
 } from '../lib/crypto';
 import { getStorageSchemaForKey, getStorageItemSchemaForKey } from '../utils/validationSchemas';
+import { AppErrorLog } from '../types';
 
 export { 
   isDatabaseEncryptionActive,
@@ -291,7 +294,7 @@ export async function getRawItem<T = unknown>(key: string): Promise<T | null> {
 /**
  * Internal raw write without encryption (used for rollback, pre-encryption backups, and metadata)
  */
-async function setRawItem(key: string, value: unknown): Promise<void> {
+export async function setRawItem(key: string, value: unknown): Promise<void> {
   if (isIndexedDBAvailable) {
     try {
       const db = await getDB();
@@ -481,10 +484,83 @@ export async function pruneRecoveryBackups(baseKey?: string): Promise<void> {
 let lastBackupTimestamp = 0;
 
 /**
+ * Deterministically serializes unknown object with recursively sorted object keys.
+ */
+export function stableSerialize(data: unknown): string {
+  if (data === null || typeof data !== 'object') {
+    return JSON.stringify(data);
+  }
+  if (Array.isArray(data)) {
+    return '[' + data.map(stableSerialize).join(',') + ']';
+  }
+  const keys = Object.keys(data as Record<string, unknown>).sort();
+  return '{' + keys.map(k => JSON.stringify(k) + ':' + stableSerialize((data as Record<string, unknown>)[k])).join(',') + '}';
+}
+
+/**
+ * Computes deterministic SHA-256 hash (or djb2 fallback) of given data.
+ */
+export async function computeStorageHash(data: unknown): Promise<string> {
+  let serialized = '';
+  try {
+    if (typeof data === 'string') {
+      serialized = data;
+    } else {
+      serialized = stableSerialize(data);
+    }
+  } catch {
+    serialized = String(data);
+  }
+
+  if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+    try {
+      const buffer = new TextEncoder().encode(serialized);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch {}
+  }
+
+  let h = 0x811c9dc5;
+  for (let i = 0; i < serialized.length; i++) {
+    h ^= serialized.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+
+/**
  * Persists recovery backup data and enforces maximum 3 backup copies for the key.
- * Returns the generated backupKey.
+ * Before creating a new backup, computes content hash and avoids duplicating existing backups.
+ * If database encryption is active and session is unlocked, stores encrypted payload via setStorageItem.
+ * Returns the generated or existing backupKey.
  */
 export async function saveRecoveryBackup(key: string, data: unknown): Promise<string> {
+  const targetHash = await computeStorageHash(data);
+
+  // 1. Sprawdź, czy dla tego klucza istnieje już kopia ratunkowa o identycznej zawartości
+  try {
+    const allKeys = await getAllStorageKeys();
+    const existingBackupKeys = allKeys.filter(k => k.startsWith(`${key}_recovery_backup_`));
+
+    for (const existingKey of existingBackupKeys) {
+      try {
+        let existingData = await getStorageItem(existingKey);
+        if (existingData === null || existingData === undefined) {
+          existingData = await getRawItem(existingKey);
+        }
+        if (existingData !== null && existingData !== undefined) {
+          const existingHash = await computeStorageHash(existingData);
+          if (existingHash === targetHash) {
+            // Kopia o identycznym hashu już istnieje – nie twórz nowej
+            return existingKey;
+          }
+        }
+      } catch {}
+    }
+  } catch {}
+
+  // 2. Jeśli brak duplikatu, wygeneruj nowy klucz ze znacznikiem czasu
   let timestamp = Date.now();
   if (timestamp <= lastBackupTimestamp) {
     timestamp = lastBackupTimestamp + 1;
@@ -492,7 +568,18 @@ export async function saveRecoveryBackup(key: string, data: unknown): Promise<st
   lastBackupTimestamp = timestamp;
 
   const backupKey = `${key}_recovery_backup_${timestamp}`;
-  await setRawItem(backupKey, data);
+
+  // 3. Zapisz przez setStorageItem (szyfrowanie, gdy sesja odblokowana)
+  try {
+    await setStorageItem(backupKey, data, { force: true });
+  } catch (err) {
+    if (err instanceof StorageLockedError) {
+      await setRawItem(backupKey, data);
+    } else {
+      throw err;
+    }
+  }
+
   await pruneRecoveryBackups(key);
   return backupKey;
 }
@@ -632,13 +719,15 @@ export class StorageWriteBlockedError extends Error {
 export type StorageReadResult<T = unknown> =
   | { status: 'missing'; data: null }
   | { status: 'found'; data: T; quarantinedCount?: number; backupKey?: string }
-  | { status: 'corrupted'; rawContent: unknown; error: unknown; backupKey?: string };
+  | { status: 'corrupted'; rawContent: unknown; error: unknown; backupKey?: string }
+  | { status: 'error'; error: unknown; message?: string };
 
 /**
  * Detailed read from storage distinguishing between:
  * - 'missing': Key does not exist in IndexedDB or localStorage
  * - 'found': Key exists and data passed integrity/validation
  * - 'corrupted': Key exists, but data could not be decrypted, parsed, or failed Zod validation
+ * - 'error': IndexedDB read error; blocks subsequent writes to this key until resolved
  *
  * For array keys (SNAPSHOTS, ARCHIVE, AUTOSAVE_VERSIONS, PLAN_VARIANTS), validates element-by-element:
  * discards bad entries, saves them to a recovery backup, and returns valid entries.
@@ -650,30 +739,52 @@ export async function getStorageItemDetailed<T = unknown>(key: string): Promise<
   if (isIndexedDBAvailable) {
     try {
       const db = await getDB();
-      const idbResult = await new Promise<{ found: boolean; value: unknown }>((resolve) => {
+      type IdbOutcome =
+        | { outcome: 'ok'; found: boolean; value: unknown }
+        | { outcome: 'error'; error: unknown };
+
+      const idbResult = await new Promise<IdbOutcome>((resolve) => {
         try {
           const tx = db.transaction(STORE_NAME, 'readonly');
           const store = tx.objectStore(STORE_NAME);
           const req = store.get(key);
           req.onsuccess = () => {
             if (req.result !== undefined && req.result !== null) {
-              resolve({ found: true, value: req.result });
+              resolve({ outcome: 'ok', found: true, value: req.result });
             } else {
-              resolve({ found: false, value: undefined });
+              resolve({ outcome: 'ok', found: false, value: undefined });
             }
           };
-          req.onerror = () => resolve({ found: false, value: undefined });
-        } catch {
-          resolve({ found: false, value: undefined });
+          req.onerror = () => resolve({ outcome: 'error', error: req.error || new Error('Błąd odczytu rekordu z bazy IndexedDB') });
+          tx.onerror = () => resolve({ outcome: 'error', error: tx.error || new Error('Błąd transakcji odczytu IndexedDB') });
+          tx.onabort = () => resolve({ outcome: 'error', error: tx.error || new Error('Transakcja odczytu IndexedDB została przerwana') });
+        } catch (err) {
+          resolve({ outcome: 'error', error: err });
         }
       });
+
+      if (idbResult.outcome === 'error') {
+        console.warn(`[dbStorage] Błąd odczytu klucza "${key}" z IndexedDB:`, idbResult.error);
+        setWriteBlocked(key, true);
+        return {
+          status: 'error',
+          error: idbResult.error,
+          message: `Błąd odczytu bazy IndexedDB dla klucza "${key}". Zapis został zablokowany do rozstrzygnięcia.`
+        };
+      }
 
       if (idbResult.found) {
         keyFound = true;
         rawResult = idbResult.value;
       }
-    } catch {
-      // IndexedDB connection error, fall through to localStorage
+    } catch (dbErr) {
+      console.warn(`[dbStorage] Błąd połączenia z bazą IndexedDB dla klucza "${key}":`, dbErr);
+      setWriteBlocked(key, true);
+      return {
+        status: 'error',
+        error: dbErr,
+        message: `Błąd połączenia z bazą IndexedDB dla klucza "${key}". Zapis został zablokowany do rozstrzygnięcia.`
+      };
     }
   }
 
@@ -735,7 +846,7 @@ export async function getStorageItemDetailed<T = unknown>(key: string): Promise<
   if (key === STORAGE_KEYS.SCHED_DATA && hasSchedDataMeta(val)) {
     val = cleanSchedDataMeta(val, key);
     try {
-      await setRawItem(key, val);
+      await setStorageItem(key, val, { force: true });
     } catch {}
   }
 
@@ -769,6 +880,13 @@ export async function getStorageItemDetailed<T = unknown>(key: string): Promise<
     if (invalidItems.length > 0) {
       backupKey = await saveRecoveryBackup(key, invalidItems);
       console.warn(`[dbStorage] Wykryto ${invalidItems.length} uszkodzonych elementów w kluczu "${key}". Zapisano kopię ratunkową w "${backupKey}".`);
+      if (validItems.length > 0) {
+        try {
+          await setStorageItem(key, validItems, { force: true });
+        } catch (e) {
+          console.warn(`[dbStorage] Nie udało się zapisać oczyszczonej tablicy dla klucza "${key}":`, e);
+        }
+      }
     }
 
     if (val.length > 0 && validItems.length === 0) {
@@ -1390,3 +1508,110 @@ export function formatBytesFriendly(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }
+
+// ── DZIENNIK BŁĘDÓW APLIKACJI (ERROR LOGGING) ──
+export const MAX_ERROR_LOGS_LIMIT = 50;
+export const MAX_ERROR_STACK_LENGTH = 1024; // 1 kB
+
+/**
+ * Przycina ślad stosu do zadanego limitu (domyślnie 1024 znaków / 1 kB).
+ */
+export function truncateErrorStack(stack?: string, maxLen = MAX_ERROR_STACK_LENGTH): string {
+  if (!stack) return '';
+  if (stack.length <= maxLen) return stack;
+  return stack.slice(0, maxLen) + '... [skrócono do 1 kB]';
+}
+
+/**
+ * Rejestruje błąd aplikacji w dzienniku STORAGE_KEYS.ERROR_LOGS:
+ * - Ogranicza liczbę wpisów do MAX_ERROR_LOGS_LIMIT (50)
+ * - Skraca stos wywołań do MAX_ERROR_STACK_LENGTH (1 kB)
+ * - Zapewnia natychmiastową dostępność synchroniczną (localStorage) i trwały asynchroniczny zapis w IndexedDB
+ * - Emituje CustomEvent 'app-error-added'
+ */
+export function logAppError(
+  message: string,
+  stack?: string,
+  type: 'runtime' | 'promise' | 'manual' | 'sw' = 'runtime'
+): AppErrorLog | null {
+  try {
+    const truncatedStack = truncateErrorStack(stack);
+    let logs: AppErrorLog[] = [];
+
+    // 1. Odczyt z pamięci synchronicznej lub localStorage
+    const saved = getStorageItemSync<AppErrorLog[]>(STORAGE_KEYS.ERROR_LOGS);
+    if (saved && Array.isArray(saved)) {
+      logs = [...saved];
+    } else {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const raw = localStorage.getItem(STORAGE_KEYS.ERROR_LOGS);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) logs = parsed;
+          }
+        }
+      } catch {}
+    }
+
+    const newError: AppErrorLog = {
+      id: 'err-' + Math.random().toString(36).substring(2, 11) + '-' + Date.now(),
+      timestamp: new Date().toISOString(),
+      message: String(message || 'Nieznany błąd środowiskowy'),
+      stack: truncatedStack,
+      type,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Node.js',
+      url: typeof window !== 'undefined' && window.location ? window.location.href : ''
+    };
+
+    logs.unshift(newError);
+    const trimmedLogs = logs.slice(0, MAX_ERROR_LOGS_LIMIT);
+
+    // 2. Synchroniczny zapis do localStorage dla natychmiastowej spójności renderów Reacta
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.ERROR_LOGS, JSON.stringify(trimmedLogs));
+      }
+    } catch {}
+
+    // 3. Asynchroniczny zapis do trwałego magazynu IndexedDB
+    setStorageItem(STORAGE_KEYS.ERROR_LOGS, trimmedLogs, { force: true }).catch(() => {});
+
+    // 4. Emitowanie zdarzenia informującego komponenty React (np. Statystyki) o nowym błędzie
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('app-error-added', { detail: newError }));
+    }
+
+    return newError;
+  } catch (err) {
+    console.warn('[dbStorage] Nie udało się zapisać błędu do dziennika:', err);
+    return null;
+  }
+}
+
+/**
+ * Asynchroniczne pobranie pełnego dziennika błędów z bazy danych
+ */
+export async function getAppErrorLogs(): Promise<AppErrorLog[]> {
+  try {
+    const fromDb = await getStorageItem<AppErrorLog[]>(STORAGE_KEYS.ERROR_LOGS);
+    if (Array.isArray(fromDb)) return fromDb;
+  } catch {}
+  const syncLogs = getStorageItemSync<AppErrorLog[]>(STORAGE_KEYS.ERROR_LOGS);
+  return Array.isArray(syncLogs) ? syncLogs : [];
+}
+
+/**
+ * Czyszczenie dziennika błędów
+ */
+export async function clearAppErrorLogs(): Promise<void> {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEYS.ERROR_LOGS);
+    }
+  } catch {}
+  try {
+    await removeStorageItem(STORAGE_KEYS.ERROR_LOGS);
+  } catch {}
+}
+
