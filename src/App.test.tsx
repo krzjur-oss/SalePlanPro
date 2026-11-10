@@ -403,11 +403,8 @@ describe('App Smoke & Security State Tests', () => {
     const oneHour = 60 * 60 * 1000;
     const oneDay = 24 * 60 * 60 * 1000;
 
-    const currentBase = new Date(now);
-    currentBase.setMinutes(30, 0, 0);
-    const hourBase = currentBase.getTime();
-
-    // 1. Dodaj 5 wersji z tej samej godziny (minuty 30, 29, 28, 27, 26 - powinny zostać tylko 3 najnowsze)
+    // 1. Dodaj 5 wersji z tej samej godziny (rozłożone co minutę w ostatnich 10 minutach)
+    const hourBase = now - 5 * 60 * 1000;
     for (let i = 0; i < 5; i++) {
       const ts = hourBase - (i * 60 * 1000);
       await setStorageItem(`autosave_${ts}`, {

@@ -36,24 +36,25 @@ import { StateMeta, AppStateSchema, SchedDataSchema } from './utils/validationSc
 import { anonymizeBackupPayload, AnonymizationSummary } from './utils/anonymization';
 import { pruneSnapshots } from './utils/snapshotUtils';
 import { SalePlanLogoMark } from './components/SalePlanLogo';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
-const PlanKlas = lazy(() => import('./components/PlanKlas'));
-const PlanSal = lazy(() => import('./components/PlanSal'));
-const KreatorSzkoly = lazy(() => import('./components/KreatorSzkoly'));
-const Wydruki = lazy(() => import('./components/Wydruki'));
-const Statystyki = lazy(() => import('./components/Statystyki'));
-const SnapshotManager = lazy(() => import('./components/SnapshotManager'));
-const Dyzury = lazy(() => import('./components/Dyzury'));
-const ZastepstwaDziennik = lazy(() => import('./components/ZastepstwaDziennik'));
-const AudytorHigienyMEN = lazy(() => import('./components/AudytorHigienyMEN'));
-const EksportIRaporty = lazy(() => import('./components/EksportIRaporty'));
-const MobilePlanViewer = lazy(() => import('./components/MobilePlanViewer'));
-const SplitScreenDiffViewer = lazy(() => import('./components/SplitScreenDiffViewer'));
-const OProgramie = lazy(() => import('./components/OProgramie'));
-const UstawieniaGeneratorow = lazy(() => import('./components/UstawieniaGeneratorow'));
-const PlanVariantsModal = lazy(() => import('./components/PlanVariantsModal'));
-const DualScreenMasterView = lazy(() => import('./components/DualScreenMasterView'));
-const CompanionWindowView = lazy(() => import('./components/CompanionWindowView'));
+const PlanKlas = lazyWithRetry(() => import('./components/PlanKlas'));
+const PlanSal = lazyWithRetry(() => import('./components/PlanSal'));
+const KreatorSzkoly = lazyWithRetry(() => import('./components/KreatorSzkoly'));
+const Wydruki = lazyWithRetry(() => import('./components/Wydruki'));
+const Statystyki = lazyWithRetry(() => import('./components/Statystyki'));
+const SnapshotManager = lazyWithRetry(() => import('./components/SnapshotManager'));
+const Dyzury = lazyWithRetry(() => import('./components/Dyzury'));
+const ZastepstwaDziennik = lazyWithRetry(() => import('./components/ZastepstwaDziennik'));
+const AudytorHigienyMEN = lazyWithRetry(() => import('./components/AudytorHigienyMEN'));
+const EksportIRaporty = lazyWithRetry(() => import('./components/EksportIRaporty'));
+const MobilePlanViewer = lazyWithRetry(() => import('./components/MobilePlanViewer'));
+const SplitScreenDiffViewer = lazyWithRetry(() => import('./components/SplitScreenDiffViewer'));
+const OProgramie = lazyWithRetry(() => import('./components/OProgramie'));
+const UstawieniaGeneratorow = lazyWithRetry(() => import('./components/UstawieniaGeneratorow'));
+const PlanVariantsModal = lazyWithRetry(() => import('./components/PlanVariantsModal'));
+const DualScreenMasterView = lazyWithRetry(() => import('./components/DualScreenMasterView'));
+const CompanionWindowView = lazyWithRetry(() => import('./components/CompanionWindowView'));
 import { SWUpdateBanner } from './components/SWUpdateBanner';
 import { multiTabStateService } from './services/multiTabStateService';
 import MultiTabConflictModal from './components/MultiTabConflictModal';
@@ -219,7 +220,7 @@ export const pruneAutosaveVersions = async (): Promise<AutosaveVersion[]> => {
         continue;
       }
 
-      const ageMs = now - item.ts;
+      const ageMs = Math.max(0, now - item.ts);
       if (ageMs < oneDay) {
         // Ostatnie 24h (24 okna 1-godzinne): do 3 wersji na godzinę (maks. 72)
         const hourBucket = Math.floor(ageMs / oneHour);

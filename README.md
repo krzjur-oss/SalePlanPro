@@ -2,461 +2,136 @@
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
-Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **PWA (Progressive Web App)**, co oznacza, że po pierwszej instalacji nie wymaga stałego dostępu do Internetu i uruchamia się błyskawicznie bezpośrednio z pulpitu komputera lub telefonu.
+Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **PWA (Progressive Web App)**, co oznacza, że po pierwszej instalacji nie wymaga stałego dostępu do Internetu i uruchamia się błyskawicznie bezpośrednio z pulpitu komputera lub telefonu. Wszystkie dane pozostają wyłącznie w lokalnej pamięci Twojego urządzenia.
 
 ---
 
 ## 🚀 Główne Funkcje Systemu i Moduły
 
-### 1. 🛠️ Kreator Szkół i Konfiguracji (KreatorSzkoly)
-*   **Dynamiczny Wybór Roku Szkolnego**: System automatycznie oblicza bieżący rok szkolny na podstawie daty systemowej użytkownika przy pierwszym uruchomieniu programu (zapobiega to "zamrożeniu" roku szkolnego w kodzie źródłowym). Użytkownik ma do wyboru automatyczną listę lat (od 3 lat wstecz do 6 lat w przód) oraz opcję ręcznego zdefiniowania niestandardowego roku szkolnego.
-*   **Słownik Przedmiotów (Kanon Przedmiotowy według Rodzaju Szkoły)**: Wbudowany asystent pozwala jednym kliknięciem zaimportować gotowy, predefiniowany zestaw przedmiotów dla wybranego rodzaju szkoły:
+### 1. 🛠️ Kreator Szkół i Konfiguracji (`KreatorSzkoly`)
+*   **Dynamiczny Wybór Roku Szkolnego**: System automatycznie oblicza bieżący rok szkolny na podstawie daty systemowej użytkownika przy pierwszym uruchomieniu programu. Użytkownik ma do wyboru automatyczną listę lat oraz opcję ręcznego zdefiniowania niestandardowego roku szkolnego.
+*   **Słownik Przedmiotów (Kanon Przedmiotowy według Rodzaju Szkoły)**: Wbudowany asystent pozwala jednym kliknięciem zaimportować gotowy zestaw przedmiotów dla wybranego typu placówki:
     *   **Szkoła Podstawowa (SP)**: Język polski, Matematyka, Przyroda, Technika, Muzyka, Religia/Etyka itp.
     *   **Liceum Ogólnokształcące (LO)**: Rozszerzenia przedmiotowe, Biznes i zarządzanie, Historia i teraźniejszość, Filozofia itp.
     *   **Technikum**: Podział na przedmioty ogólnokształcące, zawodowe, BHP oraz Język Obcy Zawodowy (JOZ).
     *   **Szkoła Branżowa**: Praktyczna nauka zawodu, BHP, przedmioty zawodowe i podstawowe.
-*   **Wizualny Kreator Budynku**: Możliwość szczegółowego odwzorowania pięter oraz sal lekcyjnych z przypisaniem ich typu (np. sala ogólna, pracownia informatyczna, sala gimnastyczna).
-*   **Wsparcie Kształcenia Specjalnego i Uczniów ze SPE (Kroki 8 i 9 • v3.9.9)**:
-    *   **Krok 8 (Ewidencja i Pule Orzeczeniowe)**: Rejestracja uczniów ze SPE, przypisanie do oddziału lub toku indywidualnego oraz określenie puli godzin w ramach form wsparcia (Nauczanie Indywidualne – NI, Nauczyciel Wspomagający w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
-    *   **Lokalizacja Nauczania Indywidualnego (w szkole vs w domu)**: Dedykowany przełącznik miejsca realizacji zajęć NI – w budynku szkoły (sala/gabinet) lub w domu ucznia (poza szkołą), z pełną wizualizacją w profilach, arkuszu wsparcia i wydrukach.
-    *   **Krok 9 (Dedykowany Tryb USPE i Rozdysponowanie Pul)**:
-        *   Wybór ucznia SPE oraz interaktywny panel pul orzeczeniowych z dynamicznym licznikiem godzin zadeklarowanych, przydzielonych i pozostałych.
-        *   Szczegółowy przydział godzin z puli: wskazanie nauczyciela, konkretnego przedmiotu szkolnego (np. Język angielski, Edukacja wczesnoszkolna, Informatyka, WF) lub formy terapeutycznej.
-        *   Tryb realizacji: **Wspomaganie na lekcjach w oddziale** (🤝 z nauczycielem prowadzącym) vs **Zajęcia indywidualne / 1 na 1** (👤 gabinet).
-        *   Wizualizacja siatki przydziałów w widoku **👤 Uczniami SPE** z podziałem na pule i przyciskami szybkiego przydziału `+ Przypisz z tej puli`.
-*   **Zintegrowany Formularz Przydziałów Lekcyjnych (Krok 9)**:
-    *   **3 Ergonomiczne Tryby Pracy**:
-        *   `Klasami`: `Oddział -> Grupa -> Przedmiot -> Nauczyciel -> Sala -> Wymiar / Bloki`.
-        *   `Nauczycielami`: `Nauczyciel -> Oddział / Grupa -> Przedmiot -> Sala -> Wymiar / Bloki`.
-        *   `👤 USPE (Uczniowie SPE)`: `Uczeń SPE -> Pula orzeczeniowa -> Przedmiot/zajęcia -> Nauczyciel -> Tryb (W oddziale / Indywidualnie) -> Sala -> Wymiar / Bloki`.
-    *   **Inteligentne Podpowiedzi i Pilnowanie Limitów**: Automatyczne sugerowanie zadeklarowanych dla danego ucznia form wsparcia, przedmiotów oraz pozostałego wymiaru godzin z puli.
-    *   **Niezależność Kroków**: Wybór kolejnych pól formularza nie resetuje ani nie nadpisuje wcześniej ustalonych danych.
-*   **Szablony Struktury Szkoły**: Zapisywanie i wczytywanie konfiguracji nowego roku szkolnego z automatyczną promocją klas o jeden poziom wyżej.
+*   **Wizualny Kreator Budynku**: Szczegółowe odwzorowanie pięter oraz sal lekcyjnych z przypisaniem ich typu (np. sala ogólna, pracownia informatyczna, sala gimnastyczna/sportowa).
+*   **Wsparcie Kształcenia Specjalnego i Uczniów ze SPE (Kroki 8 i 9)**:
+    *   **Ewidencja i Pule Orzeczeniowe**: Rejestracja uczniów ze SPE, przypisanie do oddziału lub toku indywidualnego oraz określenie puli godzin (Nauczanie Indywidualne – NI, Nauczyciel Wspomagający w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
+    *   **Lokalizacja Nauczania Indywidualnego**: Wybór miejsca realizacji zajęć NI – w budynku szkoły (sala/gabinet) lub w domu ucznia (poza szkołą).
+    *   **Dedykowany Tryb USPE i Rozdysponowanie Pul**: Przydział godzin z puli, wskazanie nauczyciela wspomagającego, przedmiotu szkolnego lub formy terapeutycznej oraz trybu realizacji (w oddziale vs gabinet 1 na 1).
+*   **Szablony Struktury Szkoły**: Zapisywanie i wczytywanie konfiguracji z automatyczną promocją klas o jeden poziom wyżej.
 
-### 2. 👨‍🏫 Zaawansowane Zarządzanie Dyżurami Nauczycielskimi (Dyzury)
-*   **Zarządzanie Obszarami Dyżurów (Miejsca)**: Definiowanie punktów kluczowych w szkole (np. korytarz parter, boisko, stołówka) wraz z przypisaniem ich do pięter.
+### 2. 👨‍🏫 Zaawansowane Zarządzanie Dyżurami Nauczycielskimi (`Dyzury`)
+*   **Zarządzanie Obszarami Dyżurów (Miejsca)**: Definiowanie punktów kluczowych w szkole wraz z przypisaniem do pięter i kondygnacji.
 *   **Konfiguracja Przerw**: Elastyczny kreator godzin trwania przerw obiadowych i krótkich.
 *   **Matryca Harmonogramu**: Interaktywny panel przydzielania nauczycieli do określonych miejsc i przerw w poszczególne dni tygodnia.
 *   **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni i Sal Sportowych)**:
-    *   **Inteligentne rozróżnianie zajęć**: system weryfikuje charakter lekcji prowadzonej przez danego nauczyciela. Podczas zajęć wychowania fizycznego i sportowych nauczyciel ma obowiązek sprawować bezpośrednią opiekę nad klasą w szatniach sportowych/na sali gimnastycznej i jest automatycznie zwalniany z dyżurów korytarzowych na przyległych przerwach.
-    *   **Pełna elastyczność dla nauczycieli dwuprzedmiotowych**: jeśli ten sam pedagog uczy innych przedmiotów (np. biologii, edukacji dla bezpieczeństwa, edukacji zdrowotnej), w trakcie tych lekcji system traktuje go jako w pełni dyspozycyjnego i normalnie planuje mu dyżury na korytarzach szkolnych.
-    *   **Konfiguracja trybu opieki**: wybór przerw podlegających nadzorowi (przed i po lekcji WF, tylko po lekcji – opuszczenie szatni, tylko przed lekcją).
-    *   **Wliczanie do pensum dyżurów**: opcjonalne zaliczanie minut spędzonych na nadzorze szatni do tygodniowego limitu dyżurów nauczyciela (FTE).
-    *   **Wykaz i edycja przedmiotów sportowych**: interaktywny selektor przedmiotów umożliwiający dodanie lub wykluczenie dowolnych nietypowych nazw przedmiotów sportowych w szkole.
-    *   **Dedykowany podgląd i bilans**: harmonogram dzienny z tabelą nadzoru szatni sportowych oraz wyszczególnieniem czasu WF w podsumowaniu obciążeń kadry.
-*   **Dyżury Adaptacyjne i Odprowadzające w Klasach 1**:
-    *   **Dyżur w sali lekcyjnej**: opieka wychowawców i nauczycieli edukacji wczesnoszkolnej w salach lekcyjnych klas pierwszych podczas przerw, chroniąca przed równoczesnym wyznaczeniem dyżuru na korytarzu.
-    *   **Dyżur odprowadzający**: dedykowany czas (np. 15 minut) na bezpieczne odprowadzenie uczniów do szatni lub świetlicy po zakończeniu zajęć.
-*   **Zadania Poza Tablicą i Personel Niepedagogiczny w Puli Dyżurów (v3.9.11)**:
-    *   **Nauczyciele z zadaniami poza tablicą (moduł Nauczyciele)**: ewidencja czynności świetlicowych, bibliotecznych, wsparcia pedagogicznego, psychologicznego, logopedycznego i współorganizującego (wspomagającego) bezpośrednio w profilu nauczyciela w Kreatorze Szkoły, z określeniem tygodniowej liczby godzin oraz przełącznikiem udziału w dyżurach korytarzowych.
-    *   **Dedykowany moduł pracowników niepedagogicznych**: autonomiczny rejestr pracowników obsługi, asystentów ucznia, woźnych i szatniarzy, zawierający stanowisko, tygodniowy wymiar godzin (Kodeks Pracy) oraz indywidualną siatkę dyspozycyjności.
-    *   **Sprawiedliwe bilansowanie limitów dyżurów**: algorytm przelicza obciążenie według ekwiwalentu pełnego etatu (FTE) – 18h pensum dla nauczycieli (Karta Nauczyciela) oraz 40h dla personelu obsługi (Kodeks Pracy), gwarantując proporcjonalne przydziały minutowe.
-    *   **Inteligentne dopasowanie obecności i rekomendacje**: pracownicy bez lekcji tablicowych są kwalifikowani do dyżurów na podstawie zdefiniowanej dostępności w szkole, a okno ręcznego przydziału oraz generator automatyczny wyróżniają ich role czytelnymi odznakami i podpowiedziami ergonomii.
-    *   **Wielokanałowe filtry w panelu bilansu**: boczny panel umożliwia szybkie filtrowanie kadry: *Wszyscy*, *Tablicowi*, *Poza tablicą / specjaliści* oraz *Obsługa*.
-*   **Ergonomia i Przewijanie Tabeli Dyżurów (v3.9.8)**:
-    *   Niezależne przewijanie horyzontalne (`overflow-x-auto`) i wertykalne (`overflow-y-auto`) z zamrożoną, przyklejoną kolumną przerw (`sticky left-0`).
-    *   Przełącznik zwijania bocznego panelu bilansu pozwalający rozszerzyć siatkę dyżurów na pełną szerokość ekranu.
+    *   Nauczyciel prowadzący zajęcia WF ma obowiązek opieki nad uczniami w szatniach i salach sportowych — system automatycznie zwalnia go z dyżuru na przyległych przerwach.
+    *   Dla nauczycieli dwuprzedmiotowych system inteligentnie rozróżnia charakter prowadzonych lekcji (przy przedmiotach ogólnych nauczyciel jest w pełni dyspozycyjny).
+*   **Dyżury Adaptacyjne i Odprowadzające w Klasach 1**: Opieka wychowawców w salach lekcyjnych klas pierwszych oraz dedykowany czas odprowadzania do szatni/świetlicy.
+*   **Zadania Poza Tablicą i Personel Niepedagogiczny**: Ewidencja czynności świetlicowych, bibliotecznych, psychologów i pedagogów oraz pracowników obsługi w siatce dyżurów.
+*   **Sprawiedliwe Bilansowanie Limitów (FTE)**: Przeliczanie obciążenia wg ekwiwalentu pełnego etatu (18h pensum vs 40h Kodeks Pracy).
+*   **Ręczne Oznaczanie Zbędnych Dyżurów**: Możliwość wyłączenia pojedynczego dyżuru (np. zamknięte piętro) jednym kliknięciem z automatyczną korektą zapotrzebowania minutowego.
 
-### 3. 👥 Równoległe Grupy, Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) oraz Szybka Edycja Komórek w Planie Klas
-*   **Interaktywny Modal Szybkiej Edycji Komórki (v3.8.5)**:
-    *   Kliknięcie na dowolną komórkę planu lekcji (zarówno pustą, jak i zawierającą już zaplanowane zajęcia) otwiera dedykowany modal szybkiej edycji slotu.
-    *   Użytkownik może w oknie modalu natychmiast wybrać przydział z puli klasy, zastąpić istniejącą lekcję, usunąć ją lub przypisać/zmienić nauczyciela wspomagającego bez konieczności wcześniejszego wybierania pędzla z dolnego paska.
-    *   System zachowuje 100% ergonomii: zaawansowani planiści mogą nadal korzystać z szybkiego trybu "pędzla" i przeciągania (Drag-and-Drop), a kliknięcie bez pędzla natychmiast prowadzi do intuicyjnego okna edycji.
-*   **Zajęcia Specjalne w Grupach Łączonych dla Uczniów ze SPE (v3.8.5)**:
-    *   Pełna obsługa form wsparcia, które mogą odbywać się w grupach łączonych międzyoddziałowych: **Zajęcia logopedyczne (Logopedia)**, **Zajęcia z psychologiem**, **Zajęcia z pedagogiem** oraz **Terapia pedagogiczna (Korekta)**.
-    *   Możliwość łączenia uczniów ze SPE w jedną grupę zajęciową (`group_special`, `isGroup`, `groupName`, lista powiązanych uczniów `linkedStudentIds`).
-    *   Zapisanie slotu grupowej terapii automatycznie replikuje i synchronizuje zajęcia w planie wszystkich powiązanych uczniów ze SPE, zapewniając spójność organizacyjną i eliminując konieczność wielokrotnego wprowadzania tych samych danych.
-*   **Obsługa Wielu Grup na Jednej Godzinie**: Możliwość prowadzenia lekcji w grupach (np. Informatyka gr1 i gr2, WF chłopcy i dziewczęta) w tym samym slocie godzinowym przez różnych nauczycieli w osobnych salach z oznaczeniami graficznymi grup i brakiem fałszywych kolizji.
-*   **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Lewym Pasku Bocznym (Sidebar)**:
-    *   **Jednolita Nawigacja Boczna**: Bezpośrednie przełączanie w lewym panelu między widokiem oddziałów (`🏫 Oddziały klasowe`) a listą uczniów specjalnych (`👤 Uczniowie SPE i NI`), z wbudowaną wyszukiwarką uczniów i szybkim dodawaniem nowego orzeczenia.
-    *   **Ergonomiczne Zwijanie Paska (100% Szerokości Ekranu)**: Panel boczny zwija się do smukłego paska z plakietką wybranego ucznia (`PanelLeftClose` / `PanelLeftOpen`), eliminując podwójne paski i uwalniając pełną szerokość ekranu dla głównej siatki zajęć.
-    *   **Kompleksowy Plan Tygodniowy Ucznia SPE**:
-        *   Wizualne rozróżnienie zajęć w oddziale (**🤝 Wspomaganie** z nauczycielem prowadzącym), zajęć gabinetowych (**👤 1 na 1 / Indywidualne** – Nauczanie Indywidualne, Rewalidacja) oraz zajęć w grupach łączonych (**👥 Grupy łączone** – Logopedia, Psycholog, Pedagog).
-        *   Dynamiczne podsumowanie wymiaru godzin (godziny z klasą vs godziny gabinetowe vs grupy łączone) aktualizowane na żywo.
-    *   **Karty Wsparcia Psychologiczno-Pedagogicznego**: Wbudowane edytory zintegrowane bezpośrednio z profilem ucznia:
-        *   **Orzeczenie i Profil**: Podstawa orzeczenia, zalecenia poradni PPP, termin ważności.
-        *   **WOPFU**: Wielospecjalistyczna Ocena Poziomu Funkcjonowania Ucznia (mocne strony, trudności, bariery środowiskowe).
-        *   **IPET**: Indywidualny Program Edukacyjno-Terapeutyczny (cele rozwojowe, zintegrowane działania nauczycieli i specjalistów, formy dostosowania wymagań).
-        *   **Rewalidacja / Pomoc PP**: Zakres zajęć rewalidacyjnych, logopedycznych, psychologicznych, pedagogicznych, korekcyjno-kompensacyjnych i socjoterapeutycznych.
+### 3. 👥 Plan Klas, Równoległe Grupy i Uczniowie ze SPE (`PlanKlas`)
+*   **Interaktywny Modal Szybkiej Edycji Komórki**: Błyskawiczny przydział z puli klasy, zastępowanie istniejącej lekcji, przypisanie nauczyciela wspomagającego i wybór sali.
+*   **Zaawansowany Model Grup i Partycji**: Obsługa wielu grup w tym samym slocie (np. język angielski gr1 i gr2, WF dziewczęta i chłopcy) bez fałszywych kolizji.
+*   **Zajęcia Specjalne w Grupach Łączonych**: Łączenie uczniów ze SPE z różnych oddziałów na zajęcia logopedyczne, psychologiczne i rewalidacyjne ze zsynchronizowanym zapisem.
+*   **Karty Wsparcia Psychologiczno-Pedagogicznego**: Wbudowane edytory orzeczeń, WOPFU, IPET oraz planów rewalidacji bezpośrednio w profilu ucznia w panelu bocznym.
 
-### 4. 📊 Moduł Wydruków, Płachta Dyrektorska i Tablica TV (Wydruki v3.8.8)
-System oferuje zaawansowany generator czystych szablonów PDF/A4, wydruków wielkoformatowych A3/A2 oraz interaktywnych widoków multimedialnych:
-*   **📜 Płachta Dyrektorska (Wielkoformatowy Arkusz Szkoły A3 / A2 / A4 – v3.8.8)**:
-    *   Całościowy, panoramiczny podgląd pracy całej szkoły w jednym arkuszu – możliwość zestawienia **Wszystkich oddziałów klasowych** (np. 25–50 klas), **Wszystkich nauczycieli** (np. 40–50 pedagogów) lub **Wszystkich sal i gabinetów** (np. 35–45 gabinetów).
-    *   **Wielostronicowy Podział na Dni (Dedykowany dla dużych szkół • 5 stron A3)**: Wyeliminowano problem ucinania treści i ograniczania do 1 strony. W układzie *Każdy dzień na nowej karcie* każdy dzień tygodnia (Pn–Pt) drukowany jest na pełnej karcie A3 Poziomo z kompletem godzin 1–8/10 i wszystkimi kolumnami, bez ucinania wierszy.
-    *   **Auto-Dopasowanie Kolumn**: Dynamiczne przeliczanie rozmiaru czcionek (w tym tryb *Super-gęsty* `text-[7px]` dla 35–50 kolumn) gwarantujące pełne zmieszczenie wszystkich kolumn na szerokość arkusza A3 landscape bez ucinania prawej krawędzi.
-    *   **Podział Kolumn na Części (Część 1 / Część 2)**: Opcjonalny podział kolumn (np. klasy 1–13 i 14–25 lub nauczyciele 1–21 i 22–42) umożliwiający wydruk w większej czcionce do powieszenia obok siebie w pokoju nauczycielskim.
-    *   Wybór planu źródłowego: Etap 1 (Plan Klas), Etap 2 (Plan Sal) lub dynamiczne warianty semestralne (np. Semestr II).
-    *   Wydruki wielkoformatowe: Precyzyjnie skonfigurowane reguły CSS `@page` dla formatów **A3 landscape** (420×297 mm), **A2 landscape** (594×420 mm) oraz **A4 landscape** ze skalowaniem czcionek i tabeli.
-    *   Czysty i bezpośredni wydruk: Arkusz płachty jest w pełni odizolowany od tła aplikacji na wydruku (`@media print` ukrywa zbędne zakładki robocze, wysyłając do drukarki od razu czysty arkusz A3/A2 bez pierwszej strony kreatora w tle).
-    *   Elastyczna konfiguracja: Regulacja gęstości komórek (*Super-gęsta*, *Kompaktowa*, *Standardowa*, *Rozszerzona*), kodowanie kolorami według dziedzin przedmiotowych lub wysoki kontrast czarno-biały, selektywne włączanie skrótów nauczycieli, numerów sal, grup, legendy przedmiotowej oraz metryki podpisu Dyrektora Szkoły.
-    *   Skalowanie ekranowe (Zoom 40%–150%) z podglądem na żywo przed wydrukiem lub zapisem do PDF oraz szybkimi zakładkami dni.
+### 4. 🏢 Plan Sal i Obłożenie Gabinetów (`PlanSal`)
+*   **Wizualna Matryca Obłożenia Sal**: Wgląd w stan każdego gabinetu w szkole, piętro po piętrze i godzina po godzinie.
+*   **Bezpośrednie Mapowanie Strukturalne**: Pełne wsparcie grup oddziałowych i międzyoddziałowych oparte na bezpiecznych metadanych strukturalnych (`_bridgeMeta.classId`, `_bridgeMeta.groupId`), bez podatnego na błędy parsowania ciągów tekstowych.
+*   **Wykrywanie Kolizji Sal**: Automatyczne ostrzeżenia o podwójnym zajęciu gabinetu z inteligentnym uwzględnieniem sal gimnastycznych i boisk.
+*   **Automatyczny Optymalizator Przydziału Sal**: Algorytm dopasowujący gabinety lekcyjne do preferencji klasowych (pracownie stałe oddziałów) i przedmiotowych (np. laboratoria, pracownie komputerowe).
+
+### 5. 🔍 Tryb Porównywania Wariantów Split-Screen Diff (`SplitScreenDiffViewer`)
+*   **Równoległe Zestawienie Wariantów Planu**: Widok side-by-side dla dowolnych dwóch wersji lub semestrów planu zajęć.
+*   **Wizualny Silnik Różnicowy**: Dynamiczne podświetlanie dodanych (+), usuniętych (-), zmienionych (~) i identycznych komórek lekcji.
+*   **Cherry-picking Lekcji**: Selektywne przenoszenie pojedynczych zajęć z wariantu alternatywnego do głównego za pomocą jednego kliknięcia z bieżącą kontrolą kolizji.
+
+### 6. 📊 Moduł Wydruków, Płachta Dyrektorska i Tablica TV (`Wydruki`)
+*   **📜 Płachta Dyrektorska (Wielkoformatowy Arkusz Szkoły A3 / A2 / A4)**:
+    *   Panoramiczne zestawienie pracy całej szkoły w jednym arkuszu (dla 25–50 klas lub 40–60 pedagogów).
+    *   Wielostronicowy podział na dni (Pn–Pt, każdy dzień na osobnej karcie A3 Poziomo z kompletem godzin).
+    *   Auto-dopasowanie rozmiaru czcionek, podział kolumn na części (Część 1 / Część 2), oficjalne skróty z Kreatora oraz metryka podpisu Dyrektora Szkoły.
 *   **📺 Tablica Informacyjna TV / Tryb Rzutnika (Kiosk Mode)**:
-    *   Pełnoekranowy, nowoczesny interfejs zaprojektowany dla telewizorów i monitorów w holu szkoły, pokoju nauczycielskim lub rzutników w salach.
-    *   Zegar czasu rzeczywistego oraz inteligentne odliczanie do najbliższego dzwonka (początku lub zakończenia lekcji / przerwy).
-    *   **3 tryby prezentacji**:
-        *   *Tablica dynamiczna na żywo*: Bieżące zajęcia dla wszystkich klas i sal w trwającej godzinie lekcyjnej z inteligentnym filtrowaniem okienek i godzin bez zajęć (ukrywanie klas nieobecnych w szkole z opcją przełączania widoku).
-        *   *Automatyczna karuzela planów klas*: Płynne przewijanie planów kolejnych oddziałów z konfigurowalnym interwałem (10–60 sekund).
-        *   *Grafik obłożenia gabinetów*: Błyskawiczny wgląd w stan każdej sali w szkole.
-    *   **Dwa zoptymalizowane motywy graficzne**:
-        *   *Ciemny (OLED)*: Wysoki kontrast, energooszczędny, idealny na nowoczesne ekrany telewizyjne w korytarzach.
-        *   *Jasny (Rzutnik)*: Przystosowany do projektorów i jasnych pomieszczeń z pełnym kontrastem czerni, granatów i barw semantycznych (wyeliminowany problem znikającego tekstu).
-    *   Filtr klas bez zajęć: Tablica w trybie na żywo automatycznie ukrywa klasy mające okienko lub niemające lekcji w danej godzinie, powiększając przestrzeń dla trwających zajęć. Dostępny jest szybki przełącznik „Tylko z lekcjami” / „Pokaż wszystkie”.
-    *   Pasek komunikatów i ogłoszeń (Ticker) przesyłający najważniejsze komunikaty dyrekcji na dole ekranu z wygodną edycją dotykową dla tabletów.
-    *   Symulator czasu lekcyjnego umożliwiający podgląd działania tablicy o dowolnej porze i dniu.
-*   **Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami**:
-    *   W każdej komórce lekcji prezentowane są precyzyjne dane w czytelnym układzie pionowym: **Przedmiot** (wyraźny nagłówek), **Klasa / Grupa** (np. `3a (gr1)`) oraz **Rzeczywista Sala Lekcyjna** (np. `s. 104`).
-    *   **Pobieranie Właściwych Sal z Planu Sal**: System weryfikuje faktyczne obłożenie w matrycy sal (`schedData` / Etap 2) i wyświetla salę, w której lekcja realnie się odbywa, a nie salę jedynie sugerowaną przez nauczyciela w notatce.
-    *   **Dyżury Międzylekcyjne**: Pomiędzy godzinami lekcyjnymi automatycznie wstawiane są wiersze przerw z informacją o wyznaczonym dyżurze dla danego nauczyciela (dokładne miejsce dyżuru oraz piętro, np. `Parter - Korytarz główny`).
-    *   Opcjonalny przełącznik włączania/wyłączania widoczności dyżurów w widoku pojedynczym i zbiorczym.
-*   **Płachta Gabinetów i Sal (Matryca Sal na A4 Landscape)**:
-    *   Czysty, minimalistyczny układ danych w komórkach (**Klasa**, **Grupa**, **Przedmiot**, **Nauczyciel**) ułożonych jedno pod drugim bez rozpraszających ramek i kolorowych obwódek – idealna czytelność dla uczniów i nauczycieli po wydrukowaniu na papierze.
-    *   Wbudowany algorytm deduplikacji wpisów eliminujący powtarzanie się tych samych lekcji w jednym oknie godzinowym.
-    *   Precyzyjne reguły podziału stron `@media print` (`break-inside: avoid`) zapobiegające rozcinaniu wierszy i generowaniu pustych arkuszy.
-*   **Dynamiczny Podgląd Dyżurów (Duties Print Preview & Verification Modal)**:
-    *   Osobny, interaktywny modal umożliwiający podgląd całego harmonogramu dyżurów ze skalowaniem w locie (Zoom 70-110%) oraz filtrowaniem dni.
+    *   Pełnoekranowy interfejs na telewizory i monitory w holu szkoły lub pokoju nauczycielskim.
+    *   Zegar czasu rzeczywistego, odliczanie do najbliższego dzwonka oraz dynamiczne ukrywanie okienek.
 
-### 5. 🖥️🖥️ Inteligentny Tryb Dwóch Ekranów (Dual-Screen Workspace • v3.9.5)
-Przełomowe rozszerzenie ergonomii pracy planisty przy podpiętych dwóch monitorach:
-*   **Sprzętowe i Heurystyczne Wykrywanie Dwóch Ekranów**:
-    *   System automatycznie sprawdza dostępność zewnętrznych wyświetlaczy (Screen Details API: `screen.isExtended`, geometria wirtualnego pulpitu `screen.availLeft`/`availTop`, zdarzenia `change`).
-    *   Przycisk `Tryb pracy: 1 Ekran / 2 Ekrany` pojawia się w głównym nagłówku programu **wyłącznie wtedy, gdy podpięty jest co najmniej drugi ekran**.
-    *   Dla celów testowych na jednym monitorze w rozwijanym menu głównym dostępny jest przełącznik symulacji `Dwa ekrany (Wymuszenie/test)`.
-*   **Automatyczny Podział na Dwa Okna (Ekran 1 + Ekran 2)**:
-    *   **Ekran 1 (Okno Główne)**: Skupione w 100% na bieżącej edycji — np. w Planie Klas planista ma do dyspozycji pełną przestrzeń na siatkę godzin oddziału oraz wszystkie kafelki przedmiotów/przydziałów z dolnego zasobnika.
-    *   **Ekran 2 (Okno Towarzyszące • Companion Window)**: Dedykowane, niezależne okno otwierane automatycznie na drugim monitorze (`?mode=companion`), zawierające równoległe widoki zarządcze:
-        *   **Matryca Sal na żywo**: Tabela wszystkich godzin lekcyjnych i dni tygodnia z podziałem na sale, filtrami typów sal (ogólne, sportowe, nauczania indywidualnego/SPE, pracownie) oraz statystyką obłożenia.
-        *   **Płachta Dyrektorska**: Zbiorczy podgląd całej szkoły ze słownikiem skrótów.
-        *   **Rzut Kondygnacji**: Przestrzenne rozmieszczenie gabinetów na piętrach.
-        *   **Bilans Szkoły**: Tygodniowe pensum i limity kadry.
-*   **Interaktywna Dwukierunkowa Komunikacja (BroadcastChannel)**:
-    *   Podczas najechania kursorem na lekcję w oknie Planu Klas, Okno Towarzyszące natychmiast rozświetla dany dzień i godzinę w Matrycy Sal.
-    *   Jedno kliknięcie na wolną salę w Oknie Towarzyszącym natychmiast przypisuje tę salę do podświetlonej lekcji w Oknie Głównym i zapisuje stan w bazie danych.
-*   **Spójność z Pozostałymi Etapami**:
-    *   Okno Towarzyszące dynamicznie dostosowuje swój widok pomocniczy w zależności od aktywnego etapu (Kreator -> Nowy wariant i rzut budynku, Plan Klas -> Matryca sal, Plan Sal -> Płachta i konflikty, Wydruki -> Arkusze publikacji, Statystyki -> Diagnoza w trybie do odczytu, Ustawienia -> Parametry generatorów).
-    *   **Etap 3 (Dyżury nauczycielskie)**: w przygotowaniu – moduł zintegrowany z dwukierunkową synchronizacją w czasie rzeczywistym (< 1 s) oraz mechanizmem rozwiązywania konfliktów wersji, z dedykowaną rozszerzoną matrycą stref w trakcie finalizacji.
+### 7. 🤖 Inteligentny Generator Planu Lekcji (`PlanGenerator`)
+*   **Zaawansowany Model Zajętości Grup**: Układanie zajęć z uwzględnieniem podziałów na grupy (`klasa|dzień|godzina|groupId`), partycji grup i preferencji równoległego układania.
+*   **Wsparcie Klas Powiązanych i Nauczycieli Wspomagających**: Weryfikacja jednoczesnej dostępności nauczycieli prowadzących i wspomagających oraz sal lekcyjnych.
+*   **Zintegrowana Kontrola Końcowa**: Sprawdzenie ułożonego planu przez dedykowany silnik detekcji konfliktów `detectConflicts`.
 
-### 6. 🛡️ Tarcza Bezpieczeństwa RODO v2, Wielokartowa Synchronizacja i Wykrywanie Konfliktów Kart (v3.9.10)
-*   **Format Szyfrowania „encrypted-v2” i Standardy NIST/OWASP**:
-    *   Podwyższona derywacja klucza głównego do **600 000 iteracji PBKDF2** z użyciem funkcji skrótu SHA-256 oraz unikalnej soli kryptograficznej dla każdego wpisu w IndexedDB.
-    *   Szyfrowanie symetryczne **AES-256-GCM** z autentykacją integralności danych.
-*   **Single-Session CryptoKey (Wydajność w Pamięci RAM)**:
-    *   Klucz kryptograficzny wyliczany jest jednokrotnie przy wpisaniu hasła i cache’owany w bezpiecznej pamięci operacyjnej sesji (RAM).
-    *   Całkowicie wyeliminowano przechowywanie hasła w postaci otwartej w `sessionStorage`, co radykalnie podnosi odporność na ataki typu XSS.
-    *   Błyskawiczne operacje kryptograficzne (< 1 s dla baz > 5 MB) bez zamrażania interfejsu.
-*   **Pre-Encryption Backup i Bezpieczny Rollback**:
-    *   Przed aktywacją szyfrowania baza tworzy kopię awaryjną i weryfikuje integralność każdego klucza. W razie błędu następuje natychmiastowe przywrócenie danych.
-*   **Wielokartowa Magistrala „saleplan-state” (BroadcastChannel)**:
-    *   Osobna od trybu dwuekranowego magistrala synchronizacji stanu programu pomiędzy wieloma otwartymi kartami.
-    *   Każdy zapis `APP_STATE` i `SCHED_DATA` oznacza rekord rosnącym licznikiem `revision`, unikalnym identyfikatorem karty `tabId`, etykietą modułu oraz znacznikiem czasu.
-*   **Identyfikacja Karty i Silnik Różnicowy Zmian (Conflict Diff Engine • v3.9.10)**:
-    *   **Precyzyjne wskazanie źródła zapisu**: Gdy inna karta zapisze nowszą wersję, okno konfliktu informuje, w której dokładnie karcie dokonano zapisu (np. *Karta: Dyżury Nauczycielskie*, *Karta: Plan Klas*, *Karta: Kreator Szkoły*), jaki moduł był edytowany, ile czasu temu nastąpił zapis oraz porównuje numery rewizji bazy.
-    *   **Bilans i Podgląd Różnic (Diff)**: Dynamiczne wyliczanie dokładnych zmian w strukturze planu (liczba dodanych, zmienionych i usuniętych lekcji, dyżurów, obsady kadrowej, sal, oddziałów i przypisań w Planie Sal).
-    *   **Kategoryzowana lista wprowadzonych zmian**: Interaktywne filtry kategorii (*Wszystkie*, *Lekcje*, *Dyżury*, *Struktura*, *Plan Sal*) z czytelnymi etykietami zmian i możliwością dokładnego audytu przed decyzją o wczytaniu lub nadpisaniu.
-    *   **Ochrona przed cichym nadpisaniem**: Opcje *Wczytaj zmiany* lub *Zachowaj moją wersję* (z automatycznym zabezpieczeniem kopii z drugiej karty w Punktach Przywracania / Snapshotach).
-    *   Górny baner powiadomień `MultiTabRefreshBanner` wyświetla nazwę karty źródłowej z przyciskiem szybkiego odświeżenia.
-*   **Pakiet 76 Testów Automatycznych i GitHub Actions CI**:
-    *   Zestaw testów jednostkowych i integracyjnych w Vitest + @testing-library/react + fake-indexeddb.
-    *   Pokrycie kryptografii v1/v2, blokad sesji i bazy danych, sanityzacji HTML pod kątem XSS, czystości wydruków, silnika różnicowego `conflictDiff`, walidacji schematów Zod oraz manualnego oznaczania zbędnych dyżurów w Etapie 3.
-    *   Automatyczne uruchamianie `npm test` w procesie ciągłej integracji (`.github/workflows/deploy.yml`).
-
-### 7. 🤝 Centrum Wieloosobowego Scalania i Baza IndexedDB
-*   **Scalanie Wieloplikowe**: Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku bez nadpisywania danych.
-*   **Baza IndexedDB**: Bezpieczne, nielimitowane przechowywanie danych szkolnych z automatycznym autozapisem i punktami przywracania stanu.
-
-### 8. 📈 Moduł Statystyk, Diagnostyki i Higieny Pracy Kadry (Statystyki v3.8.3)
-*   **Wizualne Wyróżnienie Nauczycieli z Ponad 2h Okienek**:
-    *   W widoku *Praca & Dyżury Kadry* wiersze nauczycieli z ponad 2 godzinami przestojów w planie zajęć są dynamicznie podświetlane na kolor bursztynowo-pomarańczowy wraz z plakietką ostrzegawczą `⚠️ Xh okienek w planie`.
-    *   Prezentacja szczegółowego rozkładu okienek: wyszczególnienie dni tygodnia oraz numerów lekcji, w których pedagog ma przerwę w zajęciach.
-    *   Szybkie odnośniki diagnostyczne `Analizuj w okienkach →` przenoszące bezpośrednio do szczegółowego audytu.
-*   **Filtry Szybkiego Dostępu**:
-    *   Dedykowane przyciski filtrowania `Wszyscy` vs `⚠️ >2h okienek` w zestawieniu wymiaru godzin kadry oraz w zakładce analizy okienek.
-*   **Panel Wykonawczy Okienek Kadry**:
-    *   Baner podsumowujący wykryte przestoje powyżej dopuszczalnej normy wraz z kafelkami pedagogów wymagających optymalizacji planu.
-*   **Rozszerzenie Automatycznego Audytu Planu i Statusu Dyrektorskiego**:
-    *   Do siatki kontroli dodano sekcję *Optymalizacja higieny pracy: Nauczyciele z ponad 2h okienek w planie* oraz wskaźniki w statusie walidacji.
-
-### 9. 🧮 System Pensum, Obliczania Nadgodzin i Dyżurów w Szkole Podstawowej (Karta Nauczyciela art. 42 + Kodeks Pracy 40h • v3.10.0)
-Kompleksowa implementacja polskich przepisów oświatowych regulujących czas pracy kadry pedagogicznej i personelu w szkole podstawowej:
-*   **Zróżnicowany Tygodniowy Wymiar Pensum według Stanowisk i Funkcji**:
-    *   *Nauczyciel przedmiotowy* (np. matematyki, informatyki, języka polskiego, języków obcych, historii, biologii): **18 godz.** (Karta Nauczyciela art. 42 ust. 3).
-    *   *Nauczyciel współorganizujący kształcenie* (pedagog specjalny / nauczyciel wspomagający w oddziale integracyjnym): **20 godz.** (Karta Nauczyciela art. 42 ust. 3).
-    *   *Wychowawca świetlicy szkolnej*: **26 godz.** (Karta Nauczyciela art. 42 ust. 3).
-    *   *Nauczyciel bibliotekarz*: **30 godz.** (Karta Nauczyciela art. 42 ust. 3).
-    *   *Specjaliści* (pedagog, psycholog, logopeda, terapeuta pedagogiczny): **maks. 22 godz.** (uchwała organu prowadzącego; domyślnie 22h z opcją regulacji).
-    *   *Doradca zawodowy*: **maks. 22 godz.** (uchwała organu prowadzącego; domyślnie 22h).
-    *   *Pracownicy niepedagogiczni* (administracja i obsługa – np. woźny, konserwator, sekretarz, asystent): **40 godz. zegarowych** tygodniowo (Ustawa o pracownikach samorządowych oraz Kodeks Pracy – 8 godz. dziennie Pn–Pt).
-*   **Proporcjonalny Wzór Pensum Łączonego (Uśredniony Wymiar Etatu)**:
-    *   Gdy nauczyciel łączy stanowiska o różnym pensum (np. część godzin jako nauczyciel przedmiotowy – 18h, a część w świetlicy – 26h), pensum ustala się wg uśrednionego wzoru organu prowadzącego:
-        $$P = \frac{\sum h_i}{\sum \frac{h_i}{P_i}}$$
-    *   Ułamek etatu: $\text{FTE} = \sum \frac{h_i}{P_i}$. Jeśli $\text{FTE} > 1.0$, system wylicza godziny ponadwymiarowe (nadgodziny) z uwzględnieniem pensum łączonego: $\text{Nadgodziny} = \sum h_i - P$.
-*   **Zróżnicowanie Czasu Trwania Zajęć (45 min vs 60 min)**:
-    *   Godzina lekcyjna zajęć dydaktycznych trwa **45 minut**.
-    *   Godzina zajęć świetlicowych oraz opiekuńczo-wychowawczych trwa **60 minut**.
-    *   System prezentuje czas pracy w **osobnych kolumnach** dla godzin 45 min oraz godzin 60 min w tabelach obciążeń, statystykach i arkuszach Excel z jednoznacznym przeliczeniem na ułamek etatu.
-*   **Proporcjonalny Przydział i Limity Dyżurów na Przerwach**:
-    *   Sugerowany limit dyżurów korytarzowych wyliczany jest **proporcjonalnie do godzin bezpośrednio prowadzonych przy tablicy**:
-        $$\text{Sugerowane minuty dyżurów} = \text{Baza dyżurów} \times \frac{h_{\text{tablica}}}{18} \times \text{FTE}$$
-    *   Nauczyciele realizujący wyłącznie czynności opiekuńcze lub specjalistyczne mogą zostać zwolnieni z dyżurów korytarzowych, chroniąc czas ich pracy statutowej.
-*   **Nadzór nad Pełnym 40-Godzinnym Czasem Pracy Nauczyciela**:
-    *   Zgodnie z art. 42 Karty Nauczyciela pełny etat to maksymalnie 40 godzin tygodniowo, w skład którego wchodzą:
-        1. *Realizacja pensum* (zajęcia bezpośrednio z uczniami).
-        2. *Czynności statutowe szkoły* (dyżury na przerwach, wywiadówki, rady pedagogiczne, egzaminy).
-        3. *Przygotowywanie się do zajęć, sprawdzanie prac i samokształcenie*.
-    *   Wskaźnik obciążenia w Statystykach monitoruje całą kopertę 40h i sygnalizuje ewentualne przeciążenie personelu.
-*   **Nowy Komponent `TeacherWorkloadEditor` w Kreatorze Szkoły**:
-    *   Interaktywny panel w profilu każdego nauczyciela umożliwia wybór gotowego szablonu stanowiska jednym kliknięciem, dodawanie wielu równoległych funkcji i pensum łączonego oraz podgląd na żywo wyliczonego etatu, pensum i limitu dyżurów.
-*   **Nowa Tabela Statystyk i Raporty Excel**:
-    *   Moduł Statystyk zyskał nowy nagłówek KPI, przełączanie widoków (Tabela, Kafelki, Wykresy), precyzyjną tabelę z kolumnami 45 min, 60 min, pensum łączonego, nadgodzin i dyżurów oraz eksport do arkusza `.xlsx` z dedykowaną zakładką *Czas Pracy i Pensum*.
-
-### 10. 🔀 Tryb Porównywania Wariantów Planu Split-Screen Diff (Dual-View • Moduł 4 • v3.10.0)
-Zaawansowane narzędzie do wizualnego porównywania i bezpiecznego scalania wariantów planu lekcji:
-*   **Równoległy Podgląd Dwóch Wariantów (Side-by-Side Dual-View)**:
-    *   Możliwość otwarcia dwóch dowolnych wariantów (np. Wariant Główny vs Wariant Alternatywny, Semestr I vs Semestr II) w jednym oknie obok siebie.
-*   **Wizualny Silnik Różnicowy (Visual Diff Highlighter)**:
-    *   Dynamiczne oznaczanie komórek kolorami: zielony (+ nowa lekcja), czerwony (- brak lekcji), bursztynowy (~ zmiana nauczyciela/sali) oraz szary (identyczne zajęcia).
-*   **Selektywne Przenoszenie Lekcji (Cherry-Picking)**:
-    *   Możliwość przeniesienia pojedynczej lekcji lub całego bloku z Wariantu B do Wariantu A za pomocą jednego kliknięcia strzałki `→`.
-*   **Detekcja Kolizji i Ochrona Spójności w Czasie Rzeczywistym**:
-    *   Silnik natychmiast ostrzega przed kolizjami sal, nauczycieli i oddziałów klasowych przed zatwierdzeniem przeniesienia lekcji.
+### 8. 🛡️ Niezawodna Architektura Trwałości i Bezpieczeństwo RODO
+*   **Kryptografia AES-256-GCM (Format encrypted-v2)**: 600 000 iteracji PBKDF2 (SHA-256), jednorazowy klucz sesyjny w pamięci RAM, brak haseł w `sessionStorage`.
+*   **Atomowa Transakcja Zapisu (`commitState`) i Web Locks**: Bezpieczny zapis stanu z weryfikacją numeru rewizji, kolejkowaniem promisów i wykluczeniem wzajemnym między kartami przez `navigator.locks`.
+*   **Niezawodny Autozapis z Przerzedzaniem**: Zapis w dyskretnych kluczach `autosave_<ts>` z redukcją do 3 wersji na godzinę przez 24 h i 1 na dobę przez 14 dni.
+*   **Menedżer Punktów Przywracania (Limit 30 Migawek)**: Bezwzględna ochrona kopii ręcznych (`isManual: true`), automatyczna rotacja najstarszych kopii technicznych oraz ostrzeżenia o rozmiarze pamięci (> 10 MB).
+*   **Scentralizowany Dziennik Błędów (`logAppError`)**: Bezpieczne rejestrowanie błędów w `dbStorage` z limitem 50 wpisów i obcinaniem śladu stosu do 1 kB.
 
 ---
 
-## 🧠 Zasady Działania Algorytmów i Generatorów
+## 🛠️ Stack Technologiczny
 
-### 1. Integracja Planu Lekcji z Harmonogramem Dyżurów (Silnik SchedData)
-Główną innowacją systemu jest **dynamiczna weryfikacja kontekstowa zajęć lekcyjnych** podczas planowania dyżurów nauczycieli na danej przerwie.
-Dla każdego przypisanego dyżuru system przeszukuje bazę danych ułożonego planu lekcji (`etap2Schedule`):
-*   **Lekcja Przed Przerwą**: Wyszukuje, jakie zajęcia nauczyciel prowadził bezpośrednio przed przerwą (pobiera klasę, przedmiot oraz numer sali lekcyjnej).
-*   **Lekcja Po Przerwie**: Analizuje zajęcia nauczyciela zaraz po przerwie.
-*   *Cel*: Pozwala to osobie układającej dyżury na natychmiastową ocenę logistyczną – czy nauczyciel zdąży przemieścić się ze swojej klasy na miejsce dyżuru (np. z 2. piętra na boisko szkolne).
-
-### 2. Automatyczny Walidator Kolizji i Ostrzeżeń (Real-Time Safety Checks)
-Podczas renderowania planu dyżurów, silnik walidacyjny w czasie rzeczywistym analizuje harmonogram i zgłasza dwa kluczowe typy alertów:
-1.  **🚨 Kolizja: Jednoczesny dyżur w innych rejonach**: Wykrywa błędy polegające na przypisaniu tego samego nauczyciela na tej samej przerwie w tym samym dniu do dwóch lub więcej różnych fizycznie miejsc.
-2.  **⚠️ Brak innych lekcji w tym dniu**: Ostrzega planistę, jeśli nauczyciel został wyznaczony do dyżuru w dniu, w którym według ułożonego planu lekcji nie ma żadnych zajęć.
-
-### 3. Inteligentny Silnik Optymalizacji Dyżurów z Ochroną Szatni WF i Klas 1 (v3.8.2)
-*   **Wielozadaniowość i kontekst przedmiotowy**: System weryfikuje charakter prowadzonych lekcji przez każdego nauczyciela. W czasie przerw przyległych do lekcji WF nauczyciel sprawuje opiekę nad klasą w szatniach i salach sportowych – algorytm automatycznie chroni go przed wyznaczeniem dyżuru na korytarzach szkolnych. W czasie lekcji z przedmiotów ogólnych ten sam pedagog jest traktowany jako w pełni dyspozycyjny.
-*   **Ochrona edukacji wczesnoszkolnej**: Automatyczne uwzględnianie dyżurów adaptacyjnych w salach klas pierwszych oraz dyżurów odprowadzających do szatni/świetlicy.
+| Warstwa | Technologia | Zastosowanie |
+| :--- | :--- | :--- |
+| **Frontend Framework** | **React 19** + **TypeScript** | Deklaratywny interfejs, ścisłe typowanie modeli szkolnych |
+| **Narzędzie budowania** | **Vite 6** | Błyskawiczny bundler i serwer deweloperski |
+| **Stylowanie** | **Tailwind CSS v4** | Nowoczesny, responsywny interfejs |
+| **Trwałość danych** | **IndexedDB** (Promise-based) + **Web Locks API** | Lokalna baza danych bez limitu 5 MB, atomowe transakcje |
+| **Kryptografia** | **Web Crypto API** (AES-256-GCM, PBKDF2) | Pełne szyfrowanie danych placówki i ochrony RODO w RAM |
+| **Walidacja** | **Zod** | Walidacja integralności struktur danych i odporność na uszkodzenia |
+| **Drag & Drop** | **@dnd-kit/core** | Ergonomiczne przeciąganie lekcji i sal |
+| **PWA** | **Service Worker** (Cache-First + Navigation Race) | Praca w trybie offline, instalacja jako aplikacja pulpitu |
+| **Testy** | **Vitest** + **@testing-library/react** + **fake-indexeddb** | Ponad 200 zautomatyzowanych testów jednostkowych i integracyjnych |
 
 ---
 
-## 📈 Podsumowanie Statusu Prac
+## 💻 Uruchomienie Lokalne i Budowanie
 
-### ✅ Co zostało zrobione (Zrealizowane)
-1.  **Niezależny Silnik Detekcji Konfliktów, Partycje Grup i Międzyoddziały, Inteligentny Generator z Dostępnością Sal, Rotacja 30 Migawek i Bezpieczny Dziennik Błędów (v3.13.0)**:
-    *   **Niezależny silnik detekcji konfliktów (`src/utils/conflictEngine.ts`)**: Czysta, w 100% testowalna funkcja `detectConflicts(planLekcji)` zwracająca listę konfliktów (`teacher`, `room`, `class`, `availability`). Zasady: ten sam `assignmentId` stanowi legalną lekcję łączoną (brak konfliktu); lekcja całej klasy koliduje z lekcją dowolnej grupy tej samej klasy; dwie różne grupy tej samej klasy nie kolidują pod warunkiem różnych nauczycieli i sal; uwzględnienie nauczycieli wspomagających (`supportTeacherId`), dostępności kadry oraz limitów sal sportowych. Zintegrowana z `PlanKlas`, `swapAdvisorService`, `PlanGenerator` i procedurą scalania.
-    *   **Model partycji grup (`partitionId`) oraz uczniów (`studentIds`)**: Grupy o tym samym `partitionId` wzajemnie się wykluczają i mogą odbywać się równolegle (np. gr1 i gr2 w ramach oddziału); grupy o różnych identyfikatorach partycji kolidują w przypadku posiadania wspólnych uczniów (`studentIds` lub domyślny podział klasy).
-    *   **Grupy międzyoddziałowe (`linkedGroupIds`)**: Pełna obsługa blokowania i synchronizacji zajęć łączonych między oddziałami w `placeAssignmentOnCell`, `PlanSal` i `PlanGenerator`.
-    *   **Plan Sal bez parsowania tekstu**: Zastąpienie zawodnego parsowania napisów typu `5A (gr1)` bezpośrednimi metadanymi strukturalnymi `_bridgeMeta.classId` oraz `_bridgeMeta.groupId`.
-    *   **Bezpieczne wstawianie lekcji z potwierdzeniem**: Funkcja `placeAssignmentOnCell` wyświetla interaktywne potwierdzenie z listą usuwanych lekcji zamiast cichego kasowania istniejących przydziałów.
-    *   **Zaawansowany generator planu (`PlanGenerator.tsx`)**: Zastąpienie uproszczonego `classBusy` modelem zajętości z grupami (`klasa|dzień|godzina|groupId`). Preferowane równoległe układanie jednostek tego samego oddziału o różnych nauczycielach i grupach, obsługa `linkedClassIds`, nauczycieli wspomagających oraz modelu `roomBusy` z wyjątkami dla sal gimnastycznych.
-    *   **Rotacja 30 punktów przywracania i ostrzeżenie o rozmiarze (`SnapshotManager` / `snapshotUtils.ts`)**: Wprowadzenie limitu `MAX_SNAPSHOTS_LIMIT = 30`. W pierwszej kolejności usuwane są najstarsze migawki automatyczne, natomiast migawki ręczne (`isManual: true`) podlegają **bezwzględnej ochronie**. Dynamiczne szacowanie rozmiaru pamięci (`calculateSnapshotsSize`) oraz ostrzeżenie bursztynowe przy zajętości > 10 MB lub zbliżaniu się do limitu 30 kopii.
-    *   **Dziennik błędów w `dbStorage` ze skracaniem stosu do 1 kB**: Funkcja `logAppError` rejestrująca błędy w IndexedDB i localStorage z limitem 50 wpisów (`MAX_ERROR_LOGS_LIMIT = 50`) oraz automatycznym skracaniem śladu stosu do 1024 znaków (`MAX_ERROR_STACK_LENGTH = 1024`) z dopiskiem `... [skrócono do 1 kB]`.
-    *   **Szyfrowanie i deduplikacja kopii ratunkowych**: `saveRecoveryBackup` zapisuje dane z wykorzystaniem szyfrowania AES-256-GCM przy odblokowanej sesji, a przed utworzeniem nowej kopii ratunkowej weryfikuje hash zawartości, eliminując powielanie identycznych kopii.
-    *   **Trwałość transakcji w `persistence.ts`**: `executeCommit` zwraca obiekt `{ status: 'ok' | 'conflict' | 'error', error? }`, błędy braku miejsca (`QuotaExceededError`) są precyzyjnie raportowane, a awaria połączenia z bazą nie kończy się fałszywym statusem sukcesu.
-2.  **Atomowa Architektura Trwałości Danych, Niezawodny Autozapis z Przerzedzaniem (3/h, 1/doba), Wzmocnione PWA i Oficjalny Pipeline GitHub Pages (v3.12.0)**:
-    *   **Atomowa transakcja zapisu stanu (`commitState`)**: Zapis `APP_STATE`, `SCHED_DATA` i `STATE_META` w pojedynczej transakcji IndexedDB z atomowym porównaniem rewizji. Kosztowne szyfrowanie kryptograficzne AES-256-GCM / PBKDF2 odbywa się przed otwarciem transakcji, co zapobiega timeoutom transakcji IndexedDB (`TransactionInactiveError`).
-    *   **Kolejka promisów i koordynacja Web Locks (`saleplan-write`)**: Wszystkie wywołania zapisu zbiegają się w pojedynczej kolejce promisów – ostatni zgłoszony stan wygrywa, a oczekujące promisy są łączone i rozstrzygane wspólnie. Między równoległymi kartami przeglądarki wykluczenie wzajemne realizowane jest przez natywne `navigator.locks.request('saleplan-write', ...)`.
-    *   **Lekka detekcja konfliktów kart (`checkSaveConflict`)**: Weryfikacja konfliktu odczytuje wyłącznie kompaktowy rekord metadanych `STATE_META`, bez konieczności pobierania i deszyfrowania setek kilobajtów całego planu.
-    *   **Dyskretna architektura autozapisu (`pushAutosaveVersion`)**: Każda wersja autozapisu zapisywana jest pod osobnym kluczem `autosave_<ts>`. Wersja generowana jest nie częściej niż co 5 minut lub po 50 zmianach (porównanie po numerze rewizji, bez ciężkiego `JSON.stringify`).
-    *   **Wbudowany algorytm redukcji/przerzedzania autozapisu**: Przechowywanie do 3 wersji z bieżącej godziny oraz po 1 wersji z każdej wcześniejszej doby (do 14 dni wstecz), gwarantując pełną ochronę historii bez zapychania IndexedDB.
-    *   **Wymuszone opróżnianie bufora (`flushNow`) i ochrona przed utratą danych**: Zrzut bufora zapisu w tle na zdarzeniach `visibilitychange` (stan `hidden`) oraz `pagehide`. Blokada przypadkowego zamknięcia lub odświeżenia karty (`beforeunload` z `event.returnValue`), gdy stan nie został jeszcze utrwalony (`saveStatus !== 'saved'`).
-    *   **Odporność na uszkodzenia bazy i selektywne blokady**: Wyraźne rozróżnienie braku rekordu od błędu walidacji Zod. W przypadku uszkodzenia rekordu tworzona jest kopia `*_recovery_backup_` (ograniczona do 3 najświeższych kopii), a blokada zapisu dotyczy wyłącznie uszkodzonego klucza (`blockedWrites`), nie paraliżując pozostałych modułów.
-    *   **Zarządzanie kluczami i bezpieczna zmiana hasła**: Wyodrębnienie stałej `ENCRYPTED_KEYS` oraz funkcji `listManagedKeys()`, obejmującej dynamiczne klucze awaryjne i autozapisu. Zmiana hasła głównego deszyfruje i ponownie szyfruje wszystkie zarządzane rekordy, w tym moduł zastępstw `DAILY_SUBSTITUTIONS`.
-    *   **Optymalizacja statystyk pamięci (`refreshStorageStats`)**: Pomiary pamięci z 30-sekundowym debouncem oparte na `navigator.storage.estimate()` oraz żądanie trwałego magazynu `navigator.storage.persist()` po pierwszym zapisie.
-    *   **Wzmocniony Service Worker PWA (`public/sw.js`)**: Dynamiczny pre-cache z `CURRENT_ASSETS` (błąd pre-cache przerywa instalację), czysta strategia Cache-First dla `/assets/*` z `cache.put` opakowanym w `event.waitUntil`, wyścig z 3-sekundowym timeoutem dla nawigacji oraz przeładowanie strony po aktualizacji wyłącznie na żądanie użytkownika.
-    *   **Deterministyczny `buildId` w `vite.config.ts`**: Identyfikator kompilacji oparty na skrócie SHA-256 z nazw wygenerowanych plików pakietu, eliminujący niestabilny `Date.now()`.
-    *   **Oficjalny dwuetapowy workflow wdrażania GitHub Actions (`.github/workflows/deploy.yml`)**: Podział na niezależne joby `build` i `deploy`, eliminacja równoczesnych wdrożeń i błędu `Deployment cancelled`, automatyczne generowanie `.nojekyll` oraz oficjalna akcja `actions/deploy-pages@v4`.
-2.  **Modularyzacja Architektury, Optymalizacja Wariantów Diff oraz Integracja Pensum w Dyżurach (v3.11.0)**:
-    *   **Modularyzacja komponentów monolitycznych**: Dekompozycja `KreatorSzkoly.tsx` na niezależne podkomponenty (`KreatorStepBuildings`, `KreatorStepSubjects`, `KreatorStepCorridors`, `KreatorStepSummary`, `constants.ts`) oraz `PlanKlas.tsx` na dedykowane moduły (`PlanKlasAssignTab`, `PlanKlasTeachersTab`, `PlanKlasSpeSlotModal`, `PlanKlasEditCellModal`) – zmniejszenie złożoności o ponad 2400 linii i znaczące przyspieszenie renderowania.
-    *   **Optymalizacja silnika Split-Screen Diff**: Budowanie zbiorów zmienionych nauczycieli i sal bezpośrednio ze zmian oddziałów w `computeAllDiffs` bez nadmiarowych podwójnych wywołań.
-    *   **Indeksowanie slotów wg sal i nauczycieli (`lessonsBySlot`)**: Wprowadzenie jednolinijkowego indeksu `dzień|godzina -> lista lekcji` zamiast powtarzanych przeszukiwań `Object.entries`, z pełną obsługą podziału na grupy.
-    *   **Ścisła ekwiwalencja komórek planu**: Rozszerzenie reguł `areSlotsEquivalent` o identyfikator oddziału (`classId`) oraz przynależność do grup.
-    *   **Sanityzacja eksportu diff do Excela**: Bezpieczne oczyszczanie nazw plików ze znaków specjalnych `/[\\/:*?"<>|]/g` oraz ochrona przed przekroczeniem limitu długości ścieżki.
-    *   **Integracja pensum w kalkulatorze limitów dyżurów**: Przekazywanie szkolnego pensum bazowego (`appState.school.basePensumConfig`) oraz reguł nadgodzin (`appState.school.overtimeDefaultHandling`) w funkcji `getPersonFteProportion` w module `Dyzury.tsx`.
-    *   **Audyt i higiena kodu**: Usunięcie zbędnych zmiennych w `calculateTeacherWorkload`, zabezpieczenie plików tymczasowych w `.gitignore`, pełna zgodność ESLint/TypeScript oraz 100% zdanych testów w 20 pakietach Vitest.
-3.  **Kompleksowa Reforma Pensum i Obliczania Nadgodzin w Szkole Podstawowej (Karta Nauczyciela art. 42 • v3.10.0)**:
-    *   **Zróżnicowane pensum wg stanowisk w SP**: Przedmiotowy 18h, wspomagający 20h, świetlica 26h, biblioteka 30h, specjaliści (pedagog, psycholog, logopeda, terapeuta) 22h, doradca 22h oraz obsługa niepedagogiczna 40h (Kodeks Pracy).
-    *   **Wzór pensum łączonego**: Proporcjonalna formuła organu prowadzącego $P = \sum h_i / \sum (h_i / P_i)$ z dynamicznym wyliczaniem ułamka etatu (FTE) i godzin ponadwymiarowych (nadgodzin).
-    *   **Zróżnicowanie jednostek czasu (45 min lekcyjne vs 60 min świetlica/opieka)**: Prezentacja w odrębnych kolumnach w tabelach obciążeń, statystykach i arkuszach Excel `.xlsx`.
-    *   **Proporcjonalne limity dyżurów na przerwach**: Przydział minutowy dyżurów skalowany ściśle wg godzin bezpośrednio prowadzonych przy tablicy ($h_{\text{tablica}} / 18$) oraz etatu, z opcją zwolnienia personelu opiekuńczo-specjalistycznego.
-    *   **Kontrola 40-godzinnego tygodniowego budżetu czasu pracy**: Weryfikacja łącznego czasu (pensum + dyżury + przygotowanie do zajęć i czynności statutowe) z ostrzeżeniami o przeciążeniu.
-    *   **Nowy edytor TeacherWorkloadEditor w Kreatorze Szkoły**: Błyskawiczny dobór szablonu stanowiska, konfiguracja wielu ról i pensum łączonego z podglądem KPI na żywo.
-    *   **Zaktualizowany moduł Statystyk i raporty Excel**: Nowa tabela obciążeń, kafelki KPI, wykresy oraz arkusz „Czas Pracy i Pensum” w eksporcie `.xlsx`.
-4.  **Tryb Porównywania Wariantów Planu Lekcji Split-Screen Diff (Dual-View • Moduł 4 • v3.10.0)**:
-    *   **Równoległe zestawienie wariantów planu**: Widok side-by-side dla dowolnych dwóch wersji lub semestrów planu zajęć.
-    *   **Wizualny silnik różnicowy**: Dynamiczne podświetlanie dodanych (+), usuniętych (-), zmienionych (~) i identycznych komórek lekcji.
-    *   **Cherry-picking lekcji**: Selektywne przenoszenie pojedynczych zajęć z wariantu alternatywnego do głównego za pomocą jednego kliknięcia.
-    *   **Bieżąca detekcja kolizji**: Sprawdzanie dostępności sal, nauczycieli i oddziałów w czasie rzeczywistym przed zatwierdzeniem zmian.
-5.  **Nowa Stała Ikona i Logo Programu oraz Ręczne Układanie Miejsc Dyżurów (v3.9.13)**:
-    *   **Identyfikacja wizualna**: Nowa stała ikona oraz logotyp zawierające duże, drukowane białe litery „SP” oraz dynamiczny, żółty odręczny dopisek „pro” pismem pisanym na głębokim kobaltowym tle.
-    *   **Integracja w systemie**: Favikona, ikony PWA (192, 512, maskable), nagłówki ekranu głównego, okna towarzyszącego oraz modułu O programie.
-    *   **Ręczne układanie kolejności miejsc dyżurów**: Przeciąganie Drag & Drop, precyzyjne przyciski strzałek, szybkie sortowanie po piętrach (piwnica → parter → piętra) i nazwach (A-Z) z natychmiastowym odzwierciedleniem w harmonogramie i wydrukach.
-6.  **Ręczne Oznaczanie Zbędnych Dyżurów w Etapie 3 (Dyżury Niepotrzebne / Zwolnione • v3.9.12)**:
-    *   **Ręczne oznaczanie w komórkach harmonogramu (1-kliknięcie)**: Każda pusta komórka w tabeli dziennej Etapu 3 posiada szybki przycisk 🚫 do natychmiastowego oznaczenia dyżuru jako zbędny (niepotrzebny).
-    *   **Dedykowana prezentacja wizualna**: Zwolnione stanowiska wyróżnione są elegancką kartą z odznaką 🚫 ZBĘDNY, etykietą uzasadnienia oraz przyciskiem szybkiego przywrócenia ✕.
-    *   **Zaawansowany modal konfiguracji slotu**: W oknie edycji dyżuru dodano przełącznik trybu (*Dyżur wymagany* vs *Dyżur zbędny*), pole notatki/uzasadnienia (np. brak lekcji na skrzydle, zamknięte piętro) oraz przełącznik *Zastosuj we wszystkie dni robocze (Poniedziałek – Piątek) o tej godzinie*.
-    *   **Inteligentna ochrona przed generatorem**: Silnik auto-sugestii dyżurów (`handleAutoSuggest`) w pełni chroni zbędne sloty przed nadpisaniem i nie przydziela na nie personelu.
-    *   **Automatyczna korekta zapotrzebowania i statystyk**: Czas zbędnych przerw jest automatycznie odejmowany z sumarycznego zapotrzebowania tygodniowego, a wskaźnik pokrycia precyzyjnie odzwierciedla realny bilans.
-    *   **Zbiorczy panel „Zbędne dyżury” i wydruki**: Nowy przycisk na pasku narzędzi otwiera listę wszystkich wyłączonych dyżurów z opcją zbiorczego lub selektywnego przywrócenia, a wydruki i podgląd HTML czytelnie informują o statusie zwolnienia z dyżuru.
-7.  **Ewidencja Zadań Poza Tablicą w Module Nauczyciele, Moduł Personelu Niepedagogicznego i Integracja z Pulą Dyżurów (v3.9.11)**:
-    *   **Zadania poza tablicą w profilu nauczyciela (Kreator Szkoły • Krok 6)**: Ewidencja czynności świetlicowych, bibliotecznych, wsparcia pedagogicznego, psychologicznego, logopedycznego i współorganizującego (wspomagającego) bezpośrednio w profilu nauczyciela, z określeniem tygodniowej liczby godzin oraz przełącznikiem udziału w dyżurach korytarzowych.
-    *   **Dedykowany moduł pracowników niepedagogicznych**: Autonomiczny rejestr pracowników obsługi, asystentów ucznia, woźnych i szatniarzy, zawierający stanowisko, tygodniowy wymiar godzin (Kodeks Pracy) oraz indywidualną siatkę dyspozycyjności.
-    *   **Sprawiedliwe bilansowanie limitów dyżurów (FTE)**: Algorytm przelicza obciążenie według ekwiwalentu pełnego etatu (FTE) – 18h pensum dla nauczycieli (Karta Nauczyciela) oraz 40h dla personelu obsługi (Kodeks Pracy), gwarantując proporcjonalne przydziały minutowe.
-    *   **Inteligentne dopasowanie obecności i rekomendacje**: Pracownicy bez lekcji tablicowych kwalifikowani są do dyżurów na podstawie zdefiniowanej dostępności w szkole, a okno ręcznego przydziału oraz generator automatyczny wyróżniają ich role czytelnymi odznakami i podpowiedziami ergonomii.
-    *   **Wielokanałowe filtry w panelu bilansu**: Boczny panel umożliwia szybkie filtrowanie kadry: *Wszyscy*, *Tablicowi*, *Poza tablicą / specjaliści* oraz *Obsługa*, z pełnym odzwierciedleniem w wydrukach, statystykach i arkuszach wsparcia.
-    *   **Pełna polonizacja komentarzy kodu źródłowego**: Ujednolicenie i uzupełnienie komentarzy technicznych i dokumentacyjnych w języku polskim we wszystkich modułach aplikacji.
-8.  **Szczegółowa Identyfikacja Karty i Podgląd Zmian w Oknie Równoległej Edycji (Konflikt Kart • v3.9.10)**:
-    *   **Wskazanie karty dokonującej zmian**: Okno dialogowe wykrywania równoległej edycji precyzyjnie informuje, w której karcie przeglądarki zapisano nowszą wersję (np. *Karta: Dyżury Nauczycielskie*, *Karta: Plan Klas*, *Karta: Kreator Szkoły*), z jakim modułem, czasem zapisu (np. „15 s temu”) oraz porównaniem rewizji lokalnej i w bazie danych.
-    *   **Zaawansowany silnik różnicowy (Conflict Diff Engine)**: Błyskawiczne obliczanie i prezentacja dokładnych różnic pomiędzy bieżącą kartą a wersją zapisaną w bazie (z podziałem na pigułki bilansu: lekcje, dyżury, nauczyciele, oddziały, sale, uczniowie SPE oraz przydziały w planie sal).
-    *   **Kategoryzowana lista wprowadzonych zmian**: Interaktywne filtry kategorii (*Wszystkie*, *Lekcje*, *Dyżury*, *Struktura*, *Plan Sal*) oraz szczegółowe wpisy z plakietkami (+ Dodano w innej karcie, ~ Zmiana przydziału, - Usunięto) z czytelnym podaniem klasy, terminu, sali i nauczyciela.
-    *   **Informacyjny baner aktualizacji**: Pasek powiadomień w górnej części ekranu (`MultiTabRefreshBanner`) wyświetla nazwę karty źródłowej dokonującej zapisu z przyciskiem natychmiastowego odświeżenia.
-    *   **Zapis metadanych karty w STATE_META**: Usługa `multiTabStateService` i warstwa `persistence` rejestrują etykietę karty oraz aktywny moduł podczas każdego zapisu z pełnym pokryciem testami jednostkowymi.
-9.  **Miejsce Realizacji Nauczania Indywidualnego: Oznaczenie Zajęć w Szkole oraz w Domu Ucznia (v3.9.9)**:
-    *   **Przełącznik „Zajęcia realizowane w szkole / w domu” w Kreatorze Szkoły (Krok 8)**: Podczas dodawania lub edycji ucznia z pulą nauczania indywidualnego (NI) użytkownik wybiera, czy zajęcia odbywają się w budynku szkoły (gabinet) czy w domu ucznia (poza szkołą).
-    *   **Konfiguracja miejsca zajęć w Planie Klas**: Zarówno w formularzu szybkiego dodawania ucznia SPE, jak i w profilu ucznia dodano dedykowaną kontrolkę wyboru lokalizacji NI (🏫 W szkole / 🏠 W domu).
-    *   **Widoczne oznaczenia na kartach i listach uczniów**: Etykiety lokalizacji NI na liście uczniów w Kreatorze Szkoły, nagłówku ucznia oraz na bocznej liście uczniów w Planie Klas.
-    *   **Wizualizacja w Arkuszu Wsparcia Ucznia i Wydrukach**: Arkusz wsparcia prezentuje oznaczenie lokalizacji w nagłówku orzeczenia oraz w komórkach lekcji (wskazanie gabinetu dla zajęć w szkole lub oznaczenie „poza szkołą” dla zajęć domowych), a lista wyboru uczniów w Wydrukach informuje o trybie NI.
-    *   **Rozszerzenie modelu danych i walidacji Zod**: Pole `homeTeachingInSchool` włączone do typu `SpecialStudent` w `types.ts` i schematu `SpecialStudentSchema` w `validationSchemas.ts` z testami jednostkowymi.
-10.  **Naprawa Przewijania Tabeli Dyżurów w Poziomie i Pionie oraz Responsywności Etapu 3 (v3.9.8)**:
-    *   **Dedykowany kontener przewijania poziomego (`overflow-x-auto`)**: Tabela harmonogramu dyżurów umieszczona w niezależnym obszarze przewijania z minimalną szerokością kolumn (`min-w-[150px]`), eliminując wychodzenie elementów poza ekran.
-    *   **Odblokowanie przewijania pionowego (`min-h-0` / flex overflow)**: Dodano właściwości `min-h-0` i `min-w-0` do nadrzędnych kontenerów flexbox i grid w Etapie 3, eliminując blokadę suwaka przy długich listach przerw.
-    *   **Przypięta kolumna „Godzina / Przerwa” (`sticky left-0`)**: Podczas przewijania poziomego pierwsza kolumna z numerem i godzinami przerwy pozostaje zawsze widoczna i czytelna na ekranie.
-    *   **Przełącznik widoku bocznego panelu bilansu**: Dodano przycisk „Zwiń bilans / Pokaż bilans”, umożliwiający rozciągnięcie siatki dyżurów na pełną szerokość ekranu.
-11.  **Naprawa Walidacji Schematów Pokoje/Segmenty i Bezpieczna Normalizacja Danych (v3.9.7)**:
-    *   **Dedykowany schemat `SegmentRoomSchema`**: Pokoje w kondygnacjach i segmentach (`floors[].segments[].rooms[]`) walidowane są schematem `SegmentRoomSchema` z polem `num` zamiast `RoomSchema` wymagającego `name`.
-    *   **Tolerancyjne rzutowanie numeru pokoju**: Obsługa `num` jako string i number z automatyczną transformacją oraz mapowaniem starszych wpisów z polem `name`.
-    *   **Pełna zgodność `FloorSchema` i `BuildingSchema`**: Dodano obsługę kolorów pięter (`color`) oraz dodatkowych atrybutów budynków.
-    *   **Bezpieczna auto-normalizacja w `initStorage`**: Automatyczna sanityzacja struktury danych (`sanitizeAppState`) i bezpieczny backup w razie niekrytycznych niezgodności formatu.
-12.  **Tarcza Bezpieczeństwa RODO v2, Wielokartowa Synchronizacja i Pełny Pakiet Testów CI (v3.9.6)**:
-    *   **Format Szyfrowania „encrypted-v2”**: Derywacja klucza głównego podniesiona do **600 000 iteracji PBKDF2** (SHA-256) z unikalną solą kryptograficzną na każdy rekord w bazie IndexedDB zgodnie z aktualnymi zaleceniami NIST i OWASP.
-    *   **Single-Session CryptoKey w RAM**: Klucz szyfrowania wyliczany jest jednorazowo przy odblokowaniu i cache’owany w pamięci operacyjnej sesji (RAM), co całkowicie eliminuje jawne hasło z `sessionStorage` i gwarantuje operacje szyfrowania poniżej 1 sekundy nawet dla baz o rozmiarze powyżej 5 MB.
-    *   **Pre-Encryption Backup i Bezpieczny Rollback**: Automatyczne tworzenie kopii zapasowej przed zaszyfrowaniem bazy i test weryfikacyjny każdego klucza z natychmiastowym rollbackiem w razie błędu.
-    *   **Magistrala Wielokartowa „saleplan-state”**: Dedykowany kanał `BroadcastChannel` (niezależny od trybu 2 ekranów), numeracja rewizji (`revision`) oraz identyfikatory kart (`tabId`).
-    *   **Ochrona przed Utratą Zmian i Modal Konfliktów**: Wykrywanie zapisów z innych kart i zapobieganie cichemu nadpisywaniu zmian z opcją wczytania nowej wersji lub zachowania lokalnej (z automatycznym zabezpieczeniem kopii z drugiej karty w snapshotach).
-    *   **Zestaw 41 Testów Automatycznych i GitHub Actions CI**: Zintegrowany pakiet testów jednostkowych i integracyjnych w Vitest + @testing-library/react + fake-indexeddb weryfikujący kryptografię, magazyn danych, ochronę przed XSS, czystość wydruków i renderowanie aplikacji, uruchamiany w CI przed wdrożeniem na GitHub Pages.
-13.  **Inteligentny Tryb Dwóch Ekranów (Dual-Screen Workspace • v3.9.5)**:
-    *   **Automatyczne Wykrywanie Wielu Monitorów**: Analiza parametrów Screen Details API (`screen.isExtended`) i geometrii pulpitu. Przycisk pracy na 2 ekranach pojawia się w nagłówku wyłącznie przy podpiętym drugim monitorze.
-    *   **Niezależne Okno Towarzyszące (Companion Window)**: Otwieranie drugiego okna na sąsiednim monitorze (`?mode=companion`) z podglądem Matrycy Sal na żywo, Płachty Dyrektorskiej, rzutów kondygnacji i bilansu pensum.
-    *   **Interaktywne Podświetlanie i Przydział Sal**: Najechanie na lekcję w Planie Klas na Ekranie 1 rozświetla dostępność sal na Ekranie 2; kliknięcie wolnej sali natychmiast przypisuje gabinet do lekcji.
-    *   **Szybka Magistrala Komunikacji**: Błyskawiczna synchronizacja zmian pomiędzy oknami w pamięci przeglądarki bez opóźnień.
-14.  **Skróty Przedmiotów z Kreatora na Płachcie Dyrektorskiej, Słownik Skrótów, Rekonstrukcja Planu Klas i Czyste Menu (v3.9.0)**:
-    *   **Oficjalne Skróty Przedmiotów z Kreatora Szkoły na Płachcie Dyrektorskiej**: Zamiast obcinanych pełnych nazw w wąskich komórkach tabeli zastosowano jednoznaczne skróty zdefiniowane w Kreatorze Szkoły (np. `[JP]`, `[MAT]`, `[ANG]`, `[INF]`, `[WF]`). W pasku narzędzi dodano selektor trybu: *„Skróty oficjalne (Kreator)”* oraz *„Pełne nazwy”*, dzięki czemu komórki nie są przepełnione i mieszczą komplet danych bez ucinania.
-    *   **Kompletny Słownik Skrótów Przedmiotów, Kadry i Sal (Dedykowana Karta Końcowa)**: Na osobnej karcie wydruku (Karta 2 z 2 lub Karta końcowa) dołączono urzędowy *Słownik Skrótów Przedmiotów z Kreatora Szkoły* z kolorami kategorii i liczbą godzin tygodniowo, słownik inicjałów kadry pedagogicznej, wykaz sal lekcyjnych oraz oficjalną metrykę zatwierdzenia planu z pieczęcią i podpisem Dyrektora Szkoły.
-    *   **Podręczny Pasek Skrótów pod Tabelą Płachty**: Pod każdą tabelą rozkładu (w arkuszu tygodniowym A3/A2 oraz w arkuszach dziennych) umieszczono kompaktowy pasek szybkiego odczytu najczęstszych skrótów przedmiotów.
-    *   **Elastyczny, Dwupoziomowy Nagłówek w Planie Klas**: Wyeliminowano pionowe ściskanie tytułu oddziału i opisu do wąskiej kolumny słów na tabletach i laptopach przy otwartych obu bocznych panelach (*Lista klas* + *Skrytka lekcji*). Tytuł klasy ze znacznikiem oddziału oraz opisem ma pełną szerokość roboczą (`flex-1 min-w-0`), co eliminuje nienaturalne zawijanie wyrazów w pionie.
-    *   **Wydzielony Pasek Narzędziowy i Ochrona Przycisków**: Przyciski operacyjne przeniesiono do niezależnego dolnego wiersza z logicznym podziałem na grupę pomocniczą (*Wariant*, *Kłódki*, *Szybka zamiana / Swap*) oraz grupę głównych akcji (*Autogenerator planu lekcji*, *Przenieś do planu sal / Etap 2*). Wdrożono `whitespace-nowrap` i elastyczny `flex-wrap` zapobiegający ucinanie przycisków na krawędzi karty.
-    *   **Uporządkowanie Paska Nawigacji i Paska Operacyjnego**: Usunięto zduplikowane przyciski *Płachta Dyrektorska*, *Tablica TV / Kiosk* oraz *Warianty i Semestry Planu* z głównego paska nawigacji i paska narzędziowego, zachowując je w ich naturalnych modułach (*Wydruki i Publikacje* oraz obok punktów przywracania).
-    *   **Prawidłowa Hierarchia Warstw i Z-Index**: Rozwiązano problem przesłaniania rozwijanego menu nawigacji przez pasek narzędziowy Płachty Dyrektorskiej (nagłówek `z-50`, obszar roboczy `z-0`, pasek narzędziowy `z-10`).
-15.  **Pełna Izolacja Wydruku i Stabilizacja Matrycy Płachty Dyrektorskiej (v3.8.9)**:
-    *   **Całkowite Odcięcie Tła Aplikacji**: Rygorystyczne ukrywanie głównego kontenera `#app-main-workspace` podczas drukowania z otwartego modalu Płachty Dyrektorskiej, uniemożliwiające przenikanie kreatora czy nawigacji do wydruku.
-    *   **Stabilizacja Geometrii Tabeli i Kolumn**: Natywne reguły `table`/`table-cell` z matematycznym wyliczaniem szerokości kolumn dla wszystkich 25–45 obiektów szkoły bez rozbijania i przesuwania komórek lekcji.
-    *   **Paginacja 5+1 bez Pustych Stron**: Precyzyjny podział 5 dni na 5 czystych kart A3/A2 plus dedykowana karta legendy i pieczęci szkoły.
-16.  **Wielostronicowy Wydruk Płachty Dyrektorskiej (5 stron A3) oraz Pełny Kontrast Tablicy TV (v3.8.8)**:
-    *   **Wielostronicowy Podział na Dni (Dedykowany dla dużych szkół • 5 stron A3)**: Wyeliminowano problem ucinania treści do jednej strony dla dużych szkół (np. 25 oddziałów, 35 sal, 42 nauczycieli). W układzie *Każdy dzień na nowej karcie* każdy dzień tygodnia (Pn–Pt) drukowany jest na pełnej karcie A3 Poziomo z kompletem godzin 1–8/10 i wszystkimi kolumnami, bez ucinania wierszy ani czwartku i piątku.
-    *   **Inteligentne Auto-Dopasowanie Kolumn**: Dynamiczne skalowanie czcionek (w tym tryb *Super-gęsty* `text-[7px]` dla 35–50 kolumn) gwarantujące pełne zmieszczenie wszystkich kolumn na szerokość arkusza A3 landscape bez ucinania prawej krawędzi.
-    *   **Podział Kolumn na Części (Część 1 / Część 2)**: Opcjonalny podział kolumn (np. klasy 1–13 i 14–25 lub nauczyciele 1–21 i 22–42) umożliwiający wydruk w większej, doskonale czytelnej czcionce do powieszenia obok siebie w pokoju nauczycielskim.
-    *   **Dedykowana Karta Słowniczka i Pieczęci (Strona 6)**: Słownik skrótów nauczycieli, spis gabinetów i sal oraz legenda przedmiotowa z miejscem na pieczęć szkoły i podpis dyrektora generowane są na osobnej, estetycznej stronie arkusza A3/A4.
-    *   **Szybkie Zakładki Podglądu Dni**: Możliwość natychmiastowego przełączania podglądu ekranowego między wszystkimi dniami a pojedynczymi dniami (Pn, Wt, Śr, Czw, Pt) wraz ze skalowaniem Zoom (40%–150%).
-    *   **Pełny Kontrast Motywu Jasnego (Rzutnik) w Tablicy TV / Kiosku**: Kompleksowo zoptymalizowano czytelność w trybie rzutnika – usunięto znikające/zlewające się teksty, zastosowano głęboką czerń (`text-slate-950`), nasycone granaty i wyraziste obramowania kart lekcji, dyżurów, wolnych sal oraz paska ogłoszeń.
-17.  **Płachta Dyrektorska (Wielkoformatowy arkusz szkoły A3/A2) oraz Tablica TV / Kiosk Mode (v3.8.7)**:
-    *   **Płachta Dyrektorska (Wielkoformatowa A3 / A2 / A4)**: Całościowy arkusz organizacyjny szkoły – możliwość jednoczesnego zestawienia wszystkich oddziałów klasowych, wszystkich nauczycieli lub gabinetów w podziale na dni tygodnia i godziny lekcyjne, zoptymalizowany pod wydruki na ploterach i kserokopiarkach wielkoformatowych (`@page` landscape) z czystą separacją druku (brak tła aplikacji na pierwszej stronie wydruku).
-    *   **Personalizacja widoku arkusza**: Wybór gęstości komórek (*Kompaktowa*, *Standardowa*, *Rozszerzona*), kodowanie kolorystyczne przedmiotów lub tryb czarno-biały wysokiego kontrastu, widoczność sal, skrótów nauczycieli, grup międzyoddziałowych, legendy przedmiotowej oraz metryki zatwierdzenia przez Dyrekcję.
-    *   **Tablica Informacyjna TV / Kiosk Mode (Rzutnik & Hol Szkoły)**: Dynamiczny, pełnoekranowy tryb do wyświetlania na telewizorach i rzutnikach z zegarem systemowym na żywo, odliczaniem do dzwonka (początku lub końca lekcji/przerwy), paskiem ogłoszeń (Ticker) oraz trzema trybami: *Na żywo*, *Karuzela klas* (co 10–60s) i *Obłożenie sal*.
-    *   **Filtr okienek i godzin bez zajęć w Tablicy TV**: Automatyczne ukrywanie oddziałów, które w danej chwili nie mają zajęć w szkole (koniec lekcji, późniejszy start, okienko) z szybkim przełącznikiem widoku („Tylko z lekcjami” / „Pokaż wszystkie”) i zapamiętywaniem preferencji.
-    *   **Zintegrowana nawigacja**: Przyciski szybkiego dostępu w zakładce *Wydruki* (Płachta A3, Tablica TV), bezpośrednie skróty na górnym pasku narzędzi oraz w rozwijanym menu głównym.
-18.  **Interaktywny Podręcznik Wszystkich Modułów i Akceptacja Licencji WLDE (v3.8.6)**:
-    *   **Kompleksowy Podręcznik w sekcji „O programie”**: Interaktywny przewodnik krok po kroku po wszystkich modułach systemu (Kreator Szkoły 1–10, Plan Klas, Plan Sal, Dyżury Nauczycielskie, Uczniowie SPE, Statystyki, Wydruki oraz Bezpieczeństwo i Kopia Zapasowa) z wyszukiwarką haseł i poradami planistycznymi.
-    *   **Procedura pierwszego uruchomienia i akceptacja licencji**: Pełnoekranowy modal akceptacji Regulaminu, Polityki Prywatności (100% lokalne przetwarzanie RODO w przeglądarce) oraz Wolnej Licencji Domowo-Edukacyjnej (WLDE) mgr Krzysztofa Jureczka.
-19.  **Zajęcia Grup Łączonych SPE oraz Interaktywna Edycja Komórek w Planie Klas (v3.8.5)**:
-    *   **Okno szybkiej edycji komórki w Planie Klas**: Kliknięcie w dowolną pustą lub zajętą komórkę siatki lekcji otwiera bezpośrednio modal zarządzania slotem (wybór i wstawienie przydziału, wymiana lekcji, usunięcie lekcji oraz przydział nauczyciela wspomagającego bez konieczności uprzedniego wybierania pędzla).
-    *   **Zajęcia dla uczniów SPE w grupach łączonych**: Wprowadzono pełną obsługę zajęć specjalistycznych prowadzonych w grupach łączonych międzyoddziałowych:
-        *   **Zajęcia logopedyczne (Logopedia)**
-        *   **Zajęcia z psychologiem**
-        *   **Zajęcia z pedagogiem**
-        *   **Terapia pedagogiczna (Korekta)**
-    *   **Synchronizacja grup SPE**: Narzędzie tworzenia grup łączonych (`group_special`, `isGroup`, `groupName`, `linkedStudentIds`) z automatyczną propagacją zmian do planów wszystkich powiązanych uczniów ze SPE.
-    *   **Obsługa przydziałów kadry wspomagającej**: Precyzyjne rozróżnienie pomiędzy operacyjnym obsadzeniem nauczyciela wspomagającego w siatce godzinowej (widoczność w planie nauczyciela i kontrola kolizji sal/lekcji) a formalnym wymiarem pensum/etatu w orzeczeniu ucznia w Kreatorze Szkoły (Kroki 8 i 9).
-20.  **Płynne Przewijanie i Responsywność Siatki Planu Lekcji (v3.8.4)**:
-    *   **Odblokowanie pełnego przewijania pionowego**: Usunięto sztywne ograniczenia wysokości (`h-full` zastąpione elastycznym `min-h-full` z marginesem `pb-12 sm:pb-8`) oraz dodano właściwości `min-h-0` w strukturze kontenerów flexbox, co przywróciło pełne, płynne przewijanie do wszystkich godzin lekcyjnych (5, 6, 7, 8+).
-    *   **Przyklejony nagłówek dni tygodnia (`sticky thead`)**: Wprowadzono zamrożony nagłówek tabeli z dniami tygodnia (`Poniedziałek` – `Piątek`), który pozostaje czytelny na samej górze siatki podczas przewijania planu w dół do późniejszych godzin.
-    *   **Inteligentna obsługa gestów dotykowych (Touch DND & Scroll)**: Zaktualizowano zachowanie kart zajęć na urządzeniach dotykowych (`touch-pan-y` zamiast `touch-none`) wraz z automatyczną detekcją ruchu w pionie, co pozwala na naturalne, płynne scrollowanie ekranu bez przypadkowego blokowania dotyku przez karty.
-    *   **Responsywność horyzontalna**: Wprowadzono bezpieczną minimalną szerokość siatki (`min-w-[550px]`) z horyzontalnym przewijaniem na mniejszych ekranach laptopów i tabletów.
-21.  **Wizualne Wyróżnienie i Analiza Nauczycieli z Ponad 2h Okienek w Statystykach (v3.8.3)**:
-    *   Wdrożono automatyczne wykrywanie nauczycieli mających ponad 2 godziny okienek przestojowych w tygodniowym rozkładzie lekcji.
-    *   Wprowadzono wyraziste wyróżnienie kolorystyczne wierszy kadry (bursztynowe tło, obramowanie, plakietka `⚠️ Xh okienek w planie`) w zakładce "Praca & Dyżury Kadry".
-    *   Dodano filtry szybkiego przełączania widoku ("Wszyscy" vs "⚠️ >2h okienek") w zestawieniu pensum oraz w module analizy okienek.
-    *   Utworzono panel wykonawczy z kafelkami szybkiego wglądu w brakujące lekcje oraz bezpośrednie przekierowania diagnostyczne.
-    *   Zintegrowano diagnostykę z kartami Automatycznego Audytu i walidacji higieny planu lekcji.
-    *   Uproszczono menu główne programu – usunięto zbędny, zduplikowany przycisk "Plan SPE & NI" z głównego paska nawigacji (obsługa uczniów SPE oraz nauczania indywidualnego odbywa się bezpośrednio i intuicyjnie w Etapie 1: Plan Klas za pomocą przełącznika "Klasy / Uczniowie SPE").
-22.  **Lekcje WF a Dyżury Korytarzowe (Nadzór Szatni) oraz Dyżury Adaptacyjne Klas 1 (v3.8.2)**:
-    *   Wdrożono inteligentne rozróżnianie charakteru prowadzonych zajęć – zwolnienie z dyżurów korytarzowych przy lekcjach WF i nakierowanie uwagi na nadzór szatni sportowych.
-    *   Obsługa nauczycieli łączących WF z innymi przedmiotami (np. biologia, edukacja zdrowotna) – pełna dyspozycyjność do dyżurów korytarzowych w blokach przedmiotów ogólnych.
-    *   Konfiguracja przerw z nadzorem szatni (przed i po, tylko po, tylko przed) oraz opcja wliczania minut opieki do pensum dyżurów (FTE).
-    *   Interaktywny selektor przedmiotów sportowych z dynamicznym wykrywaniem i możliwością ręcznego wykluczania/dodawania.
-    *   Dedykowany podgląd harmonogramu dziennego nadzoru szatni i sal sportowych oraz integracja z bilansem tygodniowym.
-    *   Wsparcie dla dyżurów adaptacyjnych i odprowadzających w klasach 1.
-23.  **Zintegrowany Moduł Nauczania Specjalnego (SPE i NI) w Planie Klas (v3.8.1)**:
-    *   Wdrożono jednolitą nawigację w lewym panelu bocznym z przełącznikiem między oddziałami klasowymi a uczniami SPE i NI.
-    *   Zaimplementowano ergonomiczne zwijanie/rozwijanie paska bocznego do wąskiej kolumny (`PanelLeftClose` / `PanelLeftOpen`), uwalniając 100% szerokości ekranu na właściwą siatkę zajęć.
-    *   Wyeliminowano zduplikowany lewy panel boczny wewnątrz modułu SPE, tworząc przejrzysty, harmonijny i spójny interfejs.
-    *   Siatka tygodniowa ucznia ze SPE z podziałem na wspomaganie w oddziale (🤝) oraz zajęcia gabinetowe (👤) wraz z edytorami kart wsparcia: Profil, WOPFU, IPET oraz Rewalidacja.
-24.  **Ewidencja Uczniów SPE i Pule Orzeczeniowe w Kreatorze Szkoły (Kroki 8 i 9)**:
-    *   Dedykowany krok ewidencji uczniów SPE w Kreatorze Szkoły z obsługą wielu form wsparcia jednocześnie (NI, Wspomaganie w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
-    *   Zintegrowany formularz przydziałów w trybie nauczycielskim oraz dedykowany tryb `👤 USPE` z pulami orzeczeniowymi i dynamicznym licznikiem godzin zadeklarowanych, przydzielonych i pozostałych.
-    *   Wdrożono niezależność kroków w formularzu (brak resetowania wartości przy wyborze kolejnych pól).
-    *   Uwzględniono godziny zajęć specjalnych i indywidualnych w kalkulacji pensum, obciążenia i nadgodzin kadry pedagogicznej.
-    *   Rozszerzono zestawienie przydziałów o czytelny widok zajęć SPE dla klas, nauczycieli oraz toku indywidualnego.
-25.  **Szczegółowy Plan Tygodniowy Nauczycieli z Rzeczywistymi Salami i Dyżurami (v3.7.2)**:
-    *   Wdrożono pionowy układ danych w komórkach (Przedmiot -> Klasa/Grupa -> Rzeczywista sala z Planu Sal).
-    *   Poprawiono resolver sal z faktycznego przydziału w Planie Sal (`schedData` / Etap 2).
-    *   Zintegrowano wstrzykiwanie wierszy przerw z informacją o dyżurach nauczycielskich.
-    *   Dodano opcję włączania/wyłączania dyżurów w widoku pojedynczym oraz zbiorczym.
-26.  **Dedykowany Wydruk Płachty Sal (Optymalizacja A4 Landscape - v3.7.1)**:
-    *   Wdrożono czytelny, pionowy układ informacji wewnątrz komórek bez zbędnych obramowań (Klasa -> Grupa -> Przedmiot -> Nauczyciel).
-    *   Wprowadzono algorytm deduplikacji wpisów oraz reguły ochrony przed dzieleniem stron (`break-inside: avoid`).
-27.  **Obsługa Równoległych Grup na Jednej Godzinie Lekcyjnej (v3.7.0)**:
-    *   Możliwość planowania zajęć w grupach (np. Informatyka gr1 i gr2, WF) w tym samym slocie godzinowym bez fałszywych kolizji.
-28.  **Szablony Struktury Szkoły (SchoolStructureTemplate - v3.6.0)**:
-    *   Zapisywanie struktury szkoły jako wielorazowy szablon z automatyczną promocją roczników.
-29.  **Centrum Scalania i Wieloosobowej Pracy (v3.5.0)**:
-    *   Moduł łączenia planów klas 1-3, 4-8 oraz dyżurów od różnych autorów do jednego pliku.
-30.  **Baza Danych IndexedDB i Autonaprawa Pamięci Podręcznej (v3.4.0)**:
-    *   Zniesienie limitu 5 MB pamięci, moduł awaryjnego resetu pamięci podręcznej i automatyczna autokorekta danych.
-31.  **Automatyzacja Wyboru Roku Szkolnego i Profile Przedmiotowe**:
-    *   Dynamiczny dobór roku szkolnego oraz profile przedmiotów dla SP, LO, Technikum i Szkoły Branżowej.
+### Wymagania wstępne:
+*   Node.js w wersji **18.0** lub nowszej
+*   Menedżer pakietów **npm**
 
----
-
-## 📦 Środowisko i instalacja (Narzędzia deweloperskie)
-
-Projekt jako oficjalnego menedżera pakietów używa **npm** (ze spójnym plikiem blokady `package-lock.json`).
-
+### Instalacja zależności:
 ```bash
-# Instalacja zależności
-npm ci
-
-# Uruchomienie serwera deweloperskiego
-npm run dev
-
-# Uruchomienie testów jednostkowych i integracyjnych
-npm test
-
-# Uruchomienie dedykowanego testu integracji trwałości bazy danych (E2E)
-npm run test:e2e
-
-# Kompilacja produkcyjna
-npm run build
+npm install
 ```
 
-## 🛡️ Bezpieczeństwo i Prywatność (Zgodność z RODO)
+### Uruchomienie serwera deweloperskiego:
+```bash
+npm run dev
+```
+Aplikacja będzie dostępna pod adresem: `http://localhost:3000`.
 
-Program został zaprojektowany z zachowaniem najwyższych standardów ochrony danych osobowych (Privacy by Design):
-*   Wszystkie wprowadzane dane (nazwiska nauczycieli, plany zajęć, oddziały klasowe) są zapisywane wyłącznie w pamięci lokalnej Twojego urządzenia (IndexedDB / LocalStorage).
-*   Narzędzie diagnostyczne i dziennik błędów zapisuje jedynie parametry techniczne w celu rozwiązywania problemów ze zgodnością. Dane wprowadzane przez użytkownika są podczas diagnostyki w 100% pomijane.
+### Uruchomienie testów jednostkowych:
+```bash
+npm test
+```
+
+### Budowanie wersji produkcyjnej:
+```bash
+npm run build
+```
+Zoptymalizowane pliki wynikowe zostaną wygenerowane w katalogu `dist/`.
+
+---
+
+## 📜 Historia Wydań i Wprowadzane Zmiany
+
+Szczegółowy wykaz wszystkich zmian, nowości, poprawek oraz historii kolejnych wersji programu znajduje się w dedykowanym pliku:
+
+👉 **[Zobacz pełną historię wydań w pliku CHANGELOG.md](./CHANGELOG.md)**
+
+---
 
 ## 📄 Licencja
 
-Projekt dystrybuowany jest na warunkach **Darmowej Licencji Edukacyjnej (Zastrzeżonej)**. Zezwala ona na bezpłatne użytkowanie oprogramowania w placówkach oświatowych, lecz zabrania kopiowania, dystrybuowania, modyfikowania oraz komercjalizacji kodu bez zgody autora. Szczegóły znajdują się w pliku `LICENSE`.
+Projekt objęty jest **Wolną Licencją Domowo-Edukacyjną (Zastrzeżoną) — WLDE**.  
+Bezpłatny do użytku prywatnego oraz w placówkach oświatowych. Kopiowanie, odsprzedaż i komercjalizacja bez pisemnej zgody Autora są zabronione.
+
+**Autor**: mgr Krzysztof Jureczek  
+Copyright © 2026 Krzysztof Jureczek. Wszelkie prawa zastrzeżone.
