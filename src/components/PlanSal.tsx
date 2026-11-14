@@ -2,9 +2,9 @@
  * SalePlan Pro – System Planowania Lekcji, Sal i Dyżurów Nauczycielskich
  * Moduł: Plan Sal – Przypisanie Gabinetów Lekcyjnych (PlanSal)
  * Opis: Weryfikacja obłożenia pracowni przedmiotowych, wykrywanie kolizji sal oraz automatyczny optymalizator gabinetów.
- * Funkcjonalności v3.13.0:
- * - Bezpośrednie mapowanie grup i oddziałów oparte na _bridgeMeta.classId i _bridgeMeta.groupId (bez parsowania ciągów tekstowych)
- * - Pełna obsługa grup międzyoddziałowych (linkedGroupIds)
+ * Funkcjonalności v3.14.0:
+ * - Bezpośrednie mapowanie grup i oddziałów oparte na _bridgeMeta.classId i _bridgeMeta.groupId
+ * - Pełna obsługa grup międzyoddziałowych (linkedGroupIds), precyzyjnej detekcji klas 1–3 (isGrade1to3) i twardych wymogów pracowni
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
@@ -15,6 +15,10 @@ import {
 } from 'lucide-react';
 import { DndContext, DragEndEvent, useSensor, useSensors, PointerSensor, TouchSensor, MouseSensor } from '@dnd-kit/core';
 import { DraggableItem, DroppableCell } from './DndWrapper';
+import { isTeacherAvailableAt } from '../utils/availability';
+import { autoGenerateRooms } from '../utils/roomGenerator';
+import { buildAssignmentCombinedClasses } from '../utils/roomUtils';
+import { computePlanLessonsHash } from '../utils/planSyncHash';
 
 // Parsowanie wpisu klasy z ewentualnym oznaczeniem grupy (np. "5A (gr1)")
 function parseClassWithGroup(raw: string): { baseClass: string; groupName: string | null; display: string }[] {
@@ -175,26 +179,11 @@ export default function PlanSal({
   };
 
   const handleAutoGenerateRooms = () => {
-    // Save current to undo in parent
-    const yearKey = appState.yearKey;
     const pl = appState.planLekcji;
-
     if (!pl || !pl.assignments) {
       notify('Brak przydziałów lekcyjnych w Etapie 1!', 'err');
       return;
     }
-
-    const assignmentsMap = new Map<string, Assignment>((pl.assignments || []).map(a => [a.id, a]));
-    const teachersMap = new Map<string, Teacher>((pl.teachers || []).map(t => [t.id, t]));
-    const subjectsMap = new Map<string, Subject>((pl.subjects || []).map(s => [s.id, s]));
-    const groupsMap = new Map<string, SchoolGroup>((pl.schoolGroups || []).map(g => [g.id, g]));
-    
-    // Support lookups by ID and by clean room name
-    const roomsMap = new Map<string, ClassRoom>();
-    (pl.rooms || []).forEach(r => {
-      roomsMap.set(r.id, r);
-      roomsMap.set(r.name.toLowerCase().trim(), r);
-    });
 
     const allRoomCols = flattenColumns(appState.floors);
     if (allRoomCols.length === 0) {
@@ -202,386 +191,25 @@ export default function PlanSal({
       return;
     }
 
-    const nextSchedData = { ...schedData };
-    if (!nextSchedData[yearKey]) {
-      nextSchedData[yearKey] = {};
-    }
-
-    let totalPlaced = 0;
-    let totalSkippedPE = 0;
-    let totalUnassigned = 0;
-
-    const isPESubject = (subjectId: string, teacherId: string | null) => {
-      const sub = subjectsMap.get(subjectId);
-      if (!sub) return false;
-      const name = (sub.name || '').toLowerCase();
-      const s = (sub.short || '').toLowerCase();
-
-      const teacher = teacherId ? teachersMap.get(teacherId) : null;
-      const tAbbr = teacher ? (teacher.abbr || '').toLowerCase() : '';
-
-      return (
-        s.includes('wf') ||
-        s.includes('w-f') ||
-        name.includes('wychowanie fizyczne') ||
-        name.includes('w-f') ||
-        name.includes('wf') ||
-        tAbbr === 'wf'
-      );
-    };
-
-    // Main 5-day solver loop
-    for (let day = 0; day < 5; day++) {
-      if (!nextSchedData[yearKey][day]) {
-        nextSchedData[yearKey][day] = {};
-      }
-
-      appState.hours.forEach(hourKey => {
-        const hourIdx = pl.hours.findIndex(h => String(h.num) === hourKey);
-        if (hourIdx === -1) return;
-
-        if (genClearExisting) {
-          nextSchedData[yearKey][day][hourKey] = {};
-        }
-
-        const colKeyCells = nextSchedData[yearKey][day][hourKey] || {};
-        nextSchedData[yearKey][day][hourKey] = colKeyCells;
-
-        const lessonsToAssign: any[] = [];
-
-        pl.classes.forEach(cls => {
-          const matchingLessons = Object.entries(pl.lessons).filter(([k]) => {
-            const p = k.split('|');
-            return p[0] === cls.id && parseInt(p[1], 10) === day && parseInt(p[2], 10) === hourIdx;
-          });
-
-          matchingLessons.forEach(([lessonKey, lesson]) => {
-            if (!lesson) return;
-
-            const asg = assignmentsMap.get(lesson.assignmentId);
-            if (!asg) return;
-
-            // Deduplicate multi-class assignments
-            if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
-              return;
-            }
-
-            const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-            const subject = subjectsMap.get(asg.subjectId);
-            const roomEtap1 = asg.roomId ? roomsMap.get(asg.roomId) : null;
-
-            const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
-            const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
-              ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
-              : [];
-            const combinedClasses = [cls.name, ...extraClasses];
-
-            const isPE = isPESubject(asg.subjectId, asg.teacherId);
-
-            lessonsToAssign.push({
-              id: lessonKey,
-              assignmentId: asg.id,
-              classId: cls.id,
-              className: cls.name,
-              classYear: cls.year,
-              groupId: asg.groupId,
-              combinedClasses,
-              teacherId: asg.teacherId,
-              teacherAbbr: teacher?.abbr || '?',
-              suppTeacherAbbr: suppTeacher?.abbr,
-              subjectId: asg.subjectId,
-              subjectShort: subject?.short || 'Zajęcia',
-              subjectName: subject?.name || 'Zajęcia',
-              suggestedRoomId: asg.roomId,
-              suggestedRoomName: roomEtap1 ? roomEtap1.name : null,
-              isPE
-            });
-          });
-        });
-
-        const availableMainCols = allRoomCols.filter(col => {
-          const roomNameClean = (col.room.num || '').toLowerCase().trim();
-          const meta = roomsMap.get(roomNameClean);
-          const bld = appState.buildings[col.floor.buildingIdx];
-          const isIndividual = meta?.type === 'indywidualne';
-          const isSport = meta?.type === 'sport' || bld?.multi === true;
-          return !isIndividual && !isSport;
-        });
-
-        const availableSportCols = allRoomCols.filter(col => {
-          const roomNameClean = (col.room.num || '').toLowerCase().trim();
-          const meta = roomsMap.get(roomNameClean);
-          const bld = appState.buildings[col.floor.buildingIdx];
-          return meta?.type === 'sport' || bld?.multi === true;
-        });
-
-        const occupiedKeys = new Set<string>();
-        Object.keys(colKeyCells).forEach(ck => {
-          const cell = colKeyCells[ck];
-          if (cell) {
-            occupiedKeys.add(ck);
-          }
-        });
-
-        const standardLessons = lessonsToAssign.filter(l => !l.isPE);
-        const peLessons = lessonsToAssign.filter(l => l.isPE);
-
-        // A. Place PE Lessons
-        if (genExcludeWF) {
-          if (genAutoPlaceWF) {
-            peLessons.forEach(lesson => {
-              let assignedKey = '';
-              for (const col of availableSportCols) {
-                const key = colKey(col);
-                if (!occupiedKeys.has(key)) {
-                  assignedKey = key;
-                  break;
-                }
-              }
-
-              if (!assignedKey) {
-                totalUnassigned++;
-              } else {
-                occupiedKeys.add(assignedKey);
-                const groupObj = lesson.groupId ? groupsMap.get(lesson.groupId) : null;
-                const groupName = groupObj ? groupObj.name : (lesson.groupId || undefined);
-                const displayClassName = groupName 
-                  ? `${mergeClassNames(lesson.combinedClasses).join('+')} (${groupName})`
-                  : mergeClassNames(lesson.combinedClasses).join('+');
-
-                colKeyCells[assignedKey] = {
-                  teacherAbbr: lesson.teacherAbbr,
-                  supportTeacherAbbr: lesson.suppTeacherAbbr,
-                  classes: lesson.combinedClasses,
-                  className: displayClassName,
-                  subject: lesson.subjectName,
-                  note: 'Zajęcia sportowe (W-F)',
-                  _bridgeMeta: {
-                    classId: lesson.classId,
-                    teacherId: lesson.teacherId,
-                    subjectId: lesson.subjectId,
-                    roomId: lesson.suggestedRoomId,
-                    groupId: lesson.groupId || null,
-                    suggestedRoom: lesson.suggestedRoomName
-                  }
-                };
-                totalPlaced++;
-              }
-            });
-          } else {
-            totalSkippedPE += peLessons.length;
-          }
-        } else {
-          standardLessons.push(...peLessons);
-        }
-
-        // B. Place Standard Lessons (Greedy heuristic matching with custom priorities)
-        let unassignedStandard = [...standardLessons];
-
-        while (unassignedStandard.length > 0) {
-          const candidates: { lessonIdx: number; colKey: string; score: number }[] = [];
-
-          unassignedStandard.forEach((lesson, lIdx) => {
-            allRoomCols.forEach(col => {
-              const key = colKey(col);
-              if (occupiedKeys.has(key)) return;
-
-              const roomNameClean = (col.room.num || '').toLowerCase().trim();
-              const meta = roomsMap.get(roomNameClean);
-              const bld = appState.buildings[col.floor.buildingIdx];
-              const isSport = meta?.type === 'sport' || bld?.multi === true;
-              const isIndividual = meta?.type === 'indywidualne';
-
-              let score = 0;
-
-              // Rule 1: Homerooms (Sala wychowawcza klasy lub gospodarz sali)
-              const hr = appState.homerooms?.[key];
-              if (genPriorityHomerooms && hr) {
-                if (hr.className && lesson.combinedClasses.some((cName: string) => cName.toUpperCase().trim() === hr.className.toUpperCase().trim())) {
-                  score += 2000;
-                }
-                if (hr.teacherAbbr && lesson.teacherAbbr && hr.teacherAbbr.toUpperCase().trim() === lesson.teacherAbbr.toUpperCase().trim()) {
-                  score += 1200;
-                }
-                if (hr.className2 && lesson.combinedClasses.some((cName: string) => hr.className2 && cName.toUpperCase().trim() === hr.className2.toUpperCase().trim())) {
-                  score += 800;
-                }
-                if (hr.teacherAbbr2 && lesson.teacherAbbr && hr.teacherAbbr2.toUpperCase().trim() === lesson.teacherAbbr.toUpperCase().trim()) {
-                  score += 500;
-                }
-              }
-
-              // Rule 2: Teacher's Preferred Classroom
-              if (genPriorityTeachers && lesson.teacherId) {
-                const tObj = appState.teachers.find(t => t.id === lesson.teacherId);
-                if (tObj?.preferredRooms && tObj.preferredRooms.includes(key)) {
-                  score += 1500;
-                }
-              }
-
-              // Rule 3: Suggested Room from Etap 1
-              if (lesson.suggestedRoomName && roomNameClean === lesson.suggestedRoomName.toLowerCase().trim()) {
-                score += 300;
-              }
-
-              // Ciągłość lekcji nauczyciela: zachowanie tej samej sali na kolejnej lekcji
-              if (hourIdx > 0 && lesson.teacherId) {
-                const prevHourKey = appState.hours[hourIdx - 1];
-                const prevColKeyCells = nextSchedData[yearKey][day][prevHourKey] || {};
-                const prevCell = prevColKeyCells[key]; // klucz colKey kandydującej sali
-                if (prevCell) {
-                  const cellsList = Array.isArray(prevCell) ? prevCell : [prevCell];
-                  const hasSameTeacher = cellsList.some(cell => {
-                    const cellMeta = cell?._bridgeMeta;
-                    return cellMeta && cellMeta.teacherId === lesson.teacherId;
-                  });
-                  if (hasSameTeacher) {
-                    score += 5000; // Large bonus to stay in same room!
-                  }
-                }
-              }
-
-              // Special younger classes (1-3) rule: standard lessons (except PE/Informatics) must reside in homerooms
-              const isGrade1_3 = (lesson.classYear && lesson.classYear >= 1 && lesson.classYear <= 3) || 
-                                 ['1', '2', '3'].includes((lesson.className || '').trim().charAt(0));
-                                 
-              const isINFSubject = (subjectId: string) => {
-                const sub = subjectsMap.get(subjectId);
-                if (!sub) return false;
-                const name = (sub.name || '').toLowerCase();
-                const short = (sub.short || '').toLowerCase();
-                return (
-                  short.includes('inf') ||
-                  short.includes('e-inf') ||
-                  name.includes('informatyk') ||
-                  name.includes('edukacja informatyczna') ||
-                  name.includes('zajęcia komputerowe')
-                );
-              };
-              
-              const isPEOrInf = lesson.isPE || isINFSubject(lesson.subjectId);
-              
-              // Sprawdzenie, czy sala jest zarejestrowana jako sala lekcyjna tej klasy
-              const isClassHomeroom = hr && hr.className && (
-                hr.className.toUpperCase().trim() === lesson.className.toUpperCase().trim() ||
-                (hr.className2 && hr.className2.toUpperCase().trim() === lesson.className.toUpperCase().trim())
-              );
-              
-              if (isGrade1_3 && !isPEOrInf) {
-                const classHasHomeroomDefined = Object.values(appState.homerooms || {}).some(hObj => 
-                  hObj.className?.toUpperCase().trim() === lesson.className.toUpperCase().trim() ||
-                  hObj.className2?.toUpperCase().trim() === lesson.className.toUpperCase().trim()
-                );
-                
-                if (classHasHomeroomDefined) {
-                  if (isClassHomeroom) {
-                    score += 50000; // Enormous bonus to enforce placement in own homeroom
-                  } else {
-                    score -= 50000; // Enormous penalty to prevent placement in other classrooms
-                  }
-                }
-
-                // Dedicated 1-3 room allocation rule
-                if (meta?.isGrade1_3) {
-                  score += 15000; // Prefer designated 1-3 classrooms
-                } else {
-                  score -= 5000;  // Discourage placement of 1-3 classes in generic classrooms
-                }
-              } else if (!isGrade1_3) {
-                // Prevent older classes from stealing rooms marked explicitly for 1-3
-                if (meta?.isGrade1_3) {
-                  score -= 20000; // Strong penalty to leave 1-3 classrooms empty for juniors
-                }
-              }
-
-              // Whole-class lessons versus group-divided lessons prioritization in large/small rooms
-              const isWholeClass = !lesson.groupId;
-              const capacity = meta?.capacity || 30; // standard room defaults to 30
-              
-              if (isWholeClass) {
-                // Dla całego oddziału preferuj większe sale lekcyjne
-                if (capacity >= 25) {
-                  score += capacity * 30; // e.g. up to +1500 score bonus for large capacity
-                } else {
-                  score -= (30 - capacity) * 30; // kara za przydział całej klasy do małego gabinetu
-                }
-              } else {
-                // For group split classes, prefer smaller rooms so we leave large ones to whole classes
-                if (capacity >= 25) {
-                  score -= capacity * 40; // penalize group-split lesson taking large room (e.g. up to -1200)
-                } else {
-                  score += (30 - capacity) * 40; // bonus za optymalny dobór mniejszej sali
-                }
-              }
-
-              // Korygowanie kar dla sal sportowych i gabinetów indywidualnych przy standardowych lekcjach
-              if (isSport) {
-                score -= 800;
-              }
-              if (isIndividual) {
-                score -= 400;
-              }
-
-              candidates.push({
-                lessonIdx: lIdx,
-                colKey: key,
-                score
-              });
-            });
-          });
-
-          if (candidates.length === 0) {
-            unassignedStandard.forEach(() => {
-              totalUnassigned++;
-            });
-            break;
-          }
-
-          candidates.sort((a, b) => b.score - a.score);
-          const best = candidates[0];
-
-          if (best.score < -4000) {
-            unassignedStandard.forEach(() => {
-              totalUnassigned++;
-            });
-            break;
-          }
-
-          const chosenLesson = unassignedStandard[best.lessonIdx];
-          const chosenRoomKey = best.colKey;
-
-          const chosenGroupObj = chosenLesson.groupId ? groupsMap.get(chosenLesson.groupId) : null;
-          const chosenGroupName = chosenGroupObj ? chosenGroupObj.name : (chosenLesson.groupId || undefined);
-          const displayChosenClassName = chosenGroupName 
-            ? `${mergeClassNames(chosenLesson.combinedClasses).join('+')} (${chosenGroupName})`
-            : mergeClassNames(chosenLesson.combinedClasses).join('+');
-
-          colKeyCells[chosenRoomKey] = {
-            teacherAbbr: chosenLesson.teacherAbbr,
-            supportTeacherAbbr: chosenLesson.suppTeacherAbbr,
-            classes: chosenLesson.combinedClasses,
-            className: displayChosenClassName,
-            subject: chosenLesson.subjectName,
-            note: chosenLesson.suggestedRoomName ? `(sugestia: ${chosenLesson.suggestedRoomName})` : undefined,
-            _bridgeMeta: {
-              classId: chosenLesson.classId,
-              teacherId: chosenLesson.teacherId,
-              subjectId: chosenLesson.subjectId,
-              roomId: chosenLesson.suggestedRoomId,
-              groupId: chosenLesson.groupId || null,
-              suggestedRoom: chosenLesson.suggestedRoomName
-            }
-          };
-
-          occupiedKeys.add(chosenRoomKey);
-          totalPlaced++;
-
-          unassignedStandard.splice(best.lessonIdx, 1);
-        }
-      });
-    }
+    const {
+      nextSchedData,
+      totalPlaced,
+      totalSkippedPE,
+      totalUnassigned,
+      warnings
+    } = autoGenerateRooms(appState, schedData, {
+      genPriorityHomerooms,
+      genPriorityTeachers,
+      genExcludeWF,
+      genAutoPlaceWF,
+      genClearExisting
+    });
 
     onChangeSchedData(nextSchedData);
+    onChangeAppState({
+      ...appState,
+      planSyncHash: computePlanLessonsHash(appState.planLekcji)
+    });
 
     let summary = `Wygenerowano plan dla sal lekcyjnych!\n`;
     summary += `🔹 Przydzielono pomyślnie: ${totalPlaced} godzin\n`;
@@ -589,10 +217,15 @@ export default function PlanSal({
       summary += `🔹 Pominięte lekcje W-F: ${totalSkippedPE} godzin\n`;
     }
     if (totalUnassigned > 0) {
-      summary += `⚠️ Brak wolnych sal dla: ${totalUnassigned} lekcji (wypchnięte do puli bocznej)`;
+      summary += `⚠️ Brak dostępnych sal dla: ${totalUnassigned} lekcji (wypchnięte do puli bocznej)\n`;
+    }
+    if (warnings.length > 0) {
+      const preview = warnings.slice(0, 3).join('\n');
+      const more = warnings.length > 3 ? `\n… oraz ${warnings.length - 3} więcej ostrzeżeń.` : '';
+      summary += `⚠️ Ostrzeżenia dot. pracowni:\n${preview}${more}`;
     }
 
-    notify(summary, 'ok');
+    notify(summary, warnings.length > 0 ? 'err' : 'ok');
     setShowGenerator(false);
   };
 
@@ -809,7 +442,7 @@ export default function PlanSal({
     return options;
   }, [sortedClasses, appState.planLekcji?.schoolGroups]);
 
-  // Set of classes assigned at any given hour on current active day in plan sal
+  // Set of classes / assignment IDs assigned at any given hour on current active day in plan sal
   const isAssigned = useMemo(() => {
     const map = new Set<string>();
     appState.hours.forEach(h => {
@@ -820,6 +453,9 @@ export default function PlanSal({
         const slots = Array.isArray(cell) ? cell : [cell];
         slots.forEach(slot => {
           if (!slot) return;
+          if (slot._bridgeMeta?.assignmentId) {
+            map.add(`${h}|asg:${slot._bridgeMeta.assignmentId}`);
+          }
           const classes = slot.classes || (slot.className ? [slot.className] : []);
           classes.forEach(c => {
             if (c) {
@@ -840,10 +476,13 @@ export default function PlanSal({
     const pl = appState.planLekcji;
     if (!pl || !pl.classes) return [];
 
+    const classesMap = new Map<string, Class>((pl.classes || []).map(c => [c.id, c]));
+
     const list: {
       id: string;
       className: string;
       rawClassName: string;
+      combinedClasses: string[];
       classId: string;
       teacherId?: string | null;
       subjectId?: string;
@@ -860,11 +499,13 @@ export default function PlanSal({
       assignmentId?: string;
     }[] = [];
 
-    pl.classes.forEach(cls => {
-      appState.hours.forEach((hKey) => {
-        const hIdx = pl.hours.findIndex(h => String(h.num) === hKey);
-        if (hIdx === -1) return;
+    appState.hours.forEach((hKey) => {
+      const hIdx = pl.hours.findIndex(h => String(h.num) === hKey);
+      if (hIdx === -1) return;
 
+      const seenAsgInHour = new Set<string>();
+
+      pl.classes.forEach(cls => {
         const matchingLessons = Object.entries(pl.lessons || {}).filter(([k]) => {
           const p = k.split('|');
           return p[0] === cls.id && parseInt(p[1], 10) === activeDay && parseInt(p[2], 10) === hIdx;
@@ -876,35 +517,40 @@ export default function PlanSal({
           const asg = assignmentsMap.get(lesson.assignmentId);
           if (!asg) return;
 
-          // Deduplicate multi-class assignments
-          if (asg.linkedClassIds && asg.linkedClassIds.length > 0 && cls.id !== asg.classId) {
+          // Deduplicate multi-class & linkedGroupIds assignments
+          const hasLinkedClasses = Boolean(asg.linkedClassIds && asg.linkedClassIds.length > 0);
+          const hasLinkedGroups = Boolean(asg.linkedGroupIds && asg.linkedGroupIds.length > 0);
+          if ((hasLinkedClasses || hasLinkedGroups) && cls.id !== asg.classId) {
             return;
           }
+          if (seenAsgInHour.has(asg.id)) {
+            return;
+          }
+          seenAsgInHour.add(asg.id);
 
+          const baseClass = classesMap.get(asg.classId) || cls;
           const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
           const suppTeacher = lesson.supportTeacherId ? teachersMap.get(lesson.supportTeacherId) : null;
           const subject = subjectsMap.get(asg.subjectId)?.name || 'Przedmiot';
           const suggestedRoom = asg.roomId ? rMap.get(asg.roomId)?.name || '' : '';
 
-          const groupObj = asg.groupId ? groupsMap.get(asg.groupId) : null;
-          const groupName = groupObj ? groupObj.name : undefined;
+          const { combinedClasses, displayClassName, groupName } = buildAssignmentCombinedClasses(
+            asg,
+            baseClass,
+            classesMap,
+            groupsMap
+          );
 
-          const extraClasses = asg.linkedClassIds && asg.linkedClassIds.length > 0
-            ? (asg.linkedClassIds.map(id => pl.classes.find(c => c.id === id)?.name).filter(Boolean) as string[])
-            : [];
-          const combinedClasses = [cls.name, ...extraClasses];
-          const displayClassName = groupName 
-            ? `${mergeClassNames(combinedClasses).join('+')} (${groupName})`
-            : mergeClassNames(combinedClasses).join('+');
-
-          const assigned = isAssigned.has(`${hKey}|${displayClassName.toUpperCase()}`) ||
-                           isAssigned.has(`${hKey}|${cls.name.toUpperCase()}`);
+          const assigned = isAssigned.has(`${hKey}|asg:${asg.id}`) ||
+                           isAssigned.has(`${hKey}|${displayClassName.toUpperCase()}`) ||
+                           isAssigned.has(`${hKey}|${baseClass.name.toUpperCase()}`);
 
           list.push({
             id: `${lessonKey}-${asg.id}`,
             className: displayClassName,
-            rawClassName: cls.name,
-            classId: cls.id,
+            rawClassName: baseClass.name,
+            combinedClasses,
+            classId: baseClass.id,
             teacherId: asg.teacherId,
             subjectId: asg.subjectId,
             groupId: asg.groupId || null,
@@ -1104,25 +750,22 @@ export default function PlanSal({
 
             // Check availability of teacher
             const teacher = teachersByAbbr.get(tAbbrUpper);
-            if (teacher && teacher.availability) {
+            if (teacher) {
               const hIdx = appState.planLekcji.hours.findIndex(hourObj => String(hourObj.num) === h);
-              if (hIdx !== -1) {
-                const checkCode = `${activeDay}-${hIdx}`;
-                if (!teacher.availability.includes(checkCode)) {
-                  const desc = `⚠️ Niedostępność: Nauczyciel: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
-                  const keyInCol = `${h}|${cKey}`;
-                  const existing = detected.get(keyInCol) || [];
-                  if (!existing.includes(desc)) {
-                    existing.push(desc);
-                    detected.set(keyInCol, existing);
-                  }
-                  
-                  const sKey = `${h}|${cKey}|${slIdx}`;
-                  const sExisting = slotConflicts.get(sKey) || [];
-                  if (!sExisting.includes(desc)) {
-                    sExisting.push(desc);
-                    slotConflicts.set(sKey, sExisting);
-                  }
+              if (hIdx !== -1 && !isTeacherAvailableAt(teacher, activeDay, hIdx, appState.planLekcji.hours)) {
+                const desc = `⚠️ Niedostępność: Nauczyciel: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
+                const keyInCol = `${h}|${cKey}`;
+                const existing = detected.get(keyInCol) || [];
+                if (!existing.includes(desc)) {
+                  existing.push(desc);
+                  detected.set(keyInCol, existing);
+                }
+
+                const sKey = `${h}|${cKey}|${slIdx}`;
+                const sExisting = slotConflicts.get(sKey) || [];
+                if (!sExisting.includes(desc)) {
+                  sExisting.push(desc);
+                  slotConflicts.set(sKey, sExisting);
                 }
               }
             }
@@ -1138,25 +781,22 @@ export default function PlanSal({
 
             // Check availability of support teacher
             const teacher = teachersByAbbr.get(tAbbrUpper);
-            if (teacher && teacher.availability) {
+            if (teacher) {
               const hIdx = appState.planLekcji.hours.findIndex(hourObj => String(hourObj.num) === h);
-              if (hIdx !== -1) {
-                const checkCode = `${activeDay}-${hIdx}`;
-                if (!teacher.availability.includes(checkCode)) {
-                  const desc = `⚠️ Niedostępność nauczyciela wsp.: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
-                  const keyInCol = `${h}|${cKey}`;
-                  const existing = detected.get(keyInCol) || [];
-                  if (!existing.includes(desc)) {
-                    existing.push(desc);
-                    detected.set(keyInCol, existing);
-                  }
-                  
-                  const sKey = `${h}|${cKey}|${slIdx}`;
-                  const sExisting = slotConflicts.get(sKey) || [];
-                  if (!sExisting.includes(desc)) {
-                    sExisting.push(desc);
-                    slotConflicts.set(sKey, sExisting);
-                  }
+              if (hIdx !== -1 && !isTeacherAvailableAt(teacher, activeDay, hIdx, appState.planLekcji.hours)) {
+                const desc = `⚠️ Niedostępność nauczyciela wsp.: ${teacher.first} ${teacher.last} (${teacher.abbr}) nie ma wyznaczonej dostępności w tym terminie!`;
+                const keyInCol = `${h}|${cKey}`;
+                const existing = detected.get(keyInCol) || [];
+                if (!existing.includes(desc)) {
+                  existing.push(desc);
+                  detected.set(keyInCol, existing);
+                }
+
+                const sKey = `${h}|${cKey}|${slIdx}`;
+                const sExisting = slotConflicts.get(sKey) || [];
+                if (!sExisting.includes(desc)) {
+                  sExisting.push(desc);
+                  slotConflicts.set(sKey, sExisting);
                 }
               }
             }
@@ -2084,11 +1724,12 @@ export default function PlanSal({
                     type: 'pool-lesson',
                     cellData: {
                       className: lesson.className,
-                      classes: [lesson.className],
+                      classes: lesson.combinedClasses,
                       teacherAbbr: lesson.teacherAbbr,
                       supportTeacherAbbr: lesson.suppTeacherAbbr,
                       subject: lesson.subject,
                       _bridgeMeta: {
+                        assignmentId: lesson.assignmentId,
                         classId: lesson.classId,
                         groupId: lesson.groupId || null,
                         teacherId: lesson.teacherId,

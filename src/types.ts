@@ -259,6 +259,7 @@ export interface SchedCell {
   note?: string;
   locked?: boolean;
   _bridgeMeta?: {
+    assignmentId?: string;
     classId?: string;
     teacherId?: string | null;
     subjectId?: string | null;
@@ -443,6 +444,7 @@ export interface GeneratorSettings {
 
   forceOptionalToExtremes?: boolean;
   optionalSubjectIds?: string[];
+  preserveUnlockedManualLessons?: boolean;
 }
 
 export interface AppState {
@@ -461,6 +463,7 @@ export interface AppState {
   planLekcji: PlanLekcjiState;
   dyzury: PlanDyzuryState;
   generatorSettings?: GeneratorSettings;
+  planSyncHash?: string;
   revision?: number;
   tabId?: string;
   _revision?: number;

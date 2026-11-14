@@ -5,6 +5,7 @@
  */
 import { AppState, SchedData } from '../types';
 import { calculateAdaptationDuties } from './adaptationDuty';
+import { getDutySlotKey } from './dutyLimits';
 import { escapeHtml } from './sanitizer';
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
@@ -24,30 +25,47 @@ export function generateDutiesHtml(appState: AppState, schedData: SchedData = {}
     breaks.forEach(p => {
       let colsHtml = '';
       places.forEach(place => {
-        const dutyKey = `${place.id}|${dayIdx}|${p.num}`;
-        const entry = appState.dyzury?.harmonogram?.[dutyKey];
-        const t = entry?.teacherAbbr 
-          ? (appState.teachers?.find(tch => tch.abbr === entry.teacherAbbr) || (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr)) 
-          : null;
-        
-        let cellContent = '-';
-        if (entry?.isUnneeded) {
-          cellContent = `
-            <div style="font-weight: 800; background-color: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; padding: 3px 6px; border-radius: 6px; font-size: 10px; display: inline-block;">
-              🚫 Zbędny
-            </div>
-            ${entry.note ? `<div style="font-size: 8px; color: #64748b; font-weight: 600; margin-top: 2px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${escapeHtml(entry.note)}">${escapeHtml(entry.note)}</div>` : ''}
-          `;
-        } else if (entry?.teacherAbbr) {
-          cellContent = `
-            <div style="font-weight: 900; background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 4px 8px; border-radius: 6px; font-size: 11px; display: inline-block; min-width: 45px; text-align: center;">
-              ${escapeHtml(entry.teacherAbbr)}
-            </div>
-            <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 3px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${t ? escapeHtml(`${t.first} ${t.last}`) : ''}">
-              ${t ? `${escapeHtml(t.first.slice(0, 1))}. ${escapeHtml(t.last)}` : 'Dyżur'}
-            </div>
-          `;
+        const needed = Math.max(1, place.teachersNeeded || 1);
+        const slotHtmlParts: string[] = [];
+
+        for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+          const dutyKey = getDutySlotKey(place.id, dayIdx, p.num, slotIdx);
+          const entry = appState.dyzury?.harmonogram?.[dutyKey];
+          const t = entry?.teacherAbbr 
+            ? (appState.teachers?.find(tch => tch.abbr === entry.teacherAbbr) || (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr)) 
+            : null;
+          const slotBadge = needed > 1 ? `<span style="font-size: 8px; color: #64748b; font-weight: 700; margin-right: 3px;">#${slotIdx}</span>` : '';
+
+          if (entry?.isUnneeded) {
+            slotHtmlParts.push(`
+              <div style="margin-bottom: ${slotIdx < needed ? '6px' : '0'};">
+                <div style="font-weight: 800; background-color: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; padding: 3px 6px; border-radius: 6px; font-size: 10px; display: inline-block;">
+                  ${slotBadge}🚫 Zbędny
+                </div>
+                ${entry.note ? `<div style="font-size: 8px; color: #64748b; font-weight: 600; margin-top: 2px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${escapeHtml(entry.note)}">${escapeHtml(entry.note)}</div>` : ''}
+              </div>
+            `);
+          } else if (entry?.teacherAbbr) {
+            slotHtmlParts.push(`
+              <div style="margin-bottom: ${slotIdx < needed ? '6px' : '0'};">
+                <div style="font-weight: 900; background-color: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 4px 8px; border-radius: 6px; font-size: 11px; display: inline-block; min-width: 45px; text-align: center;">
+                  ${slotBadge}${escapeHtml(entry.teacherAbbr)}
+                </div>
+                <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 3px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${t ? escapeHtml(`${t.first} ${t.last}`) : ''}">
+                  ${t ? `${escapeHtml(t.first.slice(0, 1))}. ${escapeHtml(t.last)}` : 'Dyżur'}
+                </div>
+              </div>
+            `);
+          } else {
+            slotHtmlParts.push(`
+              <div style="margin-bottom: ${slotIdx < needed ? '4px' : '0'}; color: #94a3b8; font-size: 10px;">
+                ${needed > 1 ? `<span style="font-size: 8px; font-weight: 700;">#${slotIdx}</span> —` : '-'}
+              </div>
+            `);
+          }
         }
+
+        const cellContent = slotHtmlParts.join('');
 
         colsHtml += `
           <td style="border: 1px solid #cbd5e1; padding: 10px 6px; text-align: center; vertical-align: middle; background: #fff;">
@@ -85,7 +103,7 @@ export function generateDutiesHtml(appState: AppState, schedData: SchedData = {}
                 <th style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 11px; font-weight: 900; color: #334155; width: 140px;">PRZERWA / GODZINA</th>
                 ${places.map(place => `
                   <th style="border: 1px solid #cbd5e1; padding: 8px 6px; text-align: center; font-size: 10.5px; font-weight: 900; color: #1e293b; background-color: #f8fafc;">
-                    <div style="font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 10.5px;">📍 ${escapeHtml(place.name)}</div>
+                    <div style="font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 10.5px;">📍 ${escapeHtml(place.name)}${(place.teachersNeeded || 1) > 1 ? ` <span style="font-size:8.5px;color:#475569;">(${place.teachersNeeded} os.)</span>` : ''}</div>
                     ${place.floor ? `<div style="font-size: 8px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">${escapeHtml(place.floor)}</div>` : ''}
                   </th>
                 `).join('')}

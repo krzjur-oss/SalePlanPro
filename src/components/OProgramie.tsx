@@ -52,7 +52,7 @@ export default function OProgramie({ initialTab = 'info' }: OProgramieProps) {
           <div className="flex flex-col items-center justify-center shrink-0 select-none z-10 gap-2">
             <SalePlanLogoMark size={84} className="shadow-2xl rounded-2xl" />
             <span className="text-[10px] uppercase font-black tracking-widest text-blue-300 font-mono bg-blue-950/80 px-2.5 py-0.5 rounded-full border border-blue-500/35">
-              v3.13.0
+              v3.14.0
             </span>
           </div>
         </div>

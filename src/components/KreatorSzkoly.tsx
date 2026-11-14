@@ -5308,6 +5308,15 @@ export default function KreatorSzkoly({
                           </button>
                         </div>
 
+                        {newSAvailability.length === 0 && (
+                          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] font-semibold flex items-start gap-2">
+                            <span className="shrink-0">⚠️</span>
+                            <span>
+                              <strong>Brak zaznaczeń = dostępny zawsze (bez ograniczeń).</strong> Pusta siatka oznacza pełną dostępność pracownika we wszystkich godzinach.
+                            </span>
+                          </div>
+                        )}
+
                         <table className="w-full text-center border-collapse text-xs">
                           <thead>
                             <tr className="bg-slate-100 border-b border-slate-200">
@@ -5738,6 +5747,15 @@ export default function KreatorSzkoly({
                           <p className="text-[10px] text-slate-400 leading-normal">
                             Kliknij na poszczególne godziny na planie, aby przełączać status dostępności nauczyciela we wskazanych porach. Zielone komórki oznaczają gotowość do prowadzenia zajęć.
                           </p>
+
+                          {newTAvailability.length === 0 && (
+                            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[10.5px] font-semibold flex items-start gap-2">
+                              <span className="shrink-0">⚠️</span>
+                              <span>
+                                <strong>Brak zaznaczeń = dostępny zawsze (bez ograniczeń).</strong> Odznaczenie wszystkich godzin nie blokuje żadnych slotów w planie — aby ograniczyć dostępność, zaznacz wyłącznie dozwolone godziny.
+                              </span>
+                            </div>
+                          )}
 
                           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white flex-1 min-h-[250px] overflow-y-auto max-h-[300px]">
                             <table className="w-full border-collapse text-left text-xs">

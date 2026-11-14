@@ -10,6 +10,7 @@ import { AppState, SchedData, Class, Teacher, Subject, ClassRoom } from '../type
 import { ExcelExportOptions, WorkloadTeacherSummary } from '../types/reports';
 import { flattenColumns, colKey } from '../utils';
 import { calculateTeacherWorkload } from '../utils/workloadUtils';
+import { getDutySlotKey } from '../utils/dutyLimits';
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
@@ -250,13 +251,17 @@ export function createTeachersSheet(appState: AppState, schedData: SchedData): X
         let dutyText = '';
 
         for (const place of places) {
-          const dutyKey = `${place.id}|${dayIdx}|${breakNum}`;
-          const dutyEntry = harmonogram[dutyKey];
-          if (dutyEntry && dutyEntry.teacherAbbr === teacher.abbr) {
-            isTeacherOnDuty = true;
-            dutyText = `Dyżur: ${place.name}${place.floor ? ` (${place.floor})` : ''}`;
-            break;
+          const needed = Math.max(1, place.teachersNeeded || 1);
+          for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+            const dutyKey = getDutySlotKey(place.id, dayIdx, breakNum, slotIdx);
+            const dutyEntry = harmonogram[dutyKey];
+            if (dutyEntry && dutyEntry.teacherAbbr === teacher.abbr) {
+              isTeacherOnDuty = true;
+              dutyText = `Dyżur: ${place.name}${place.floor ? ` (${place.floor})` : ''}${needed > 1 ? ` (#${slotIdx})` : ''}`;
+              break;
+            }
           }
+          if (isTeacherOnDuty) break;
         }
 
         if (lessonFound || isTeacherOnDuty) {
@@ -419,13 +424,16 @@ export function createDutiesSheet(appState: AppState): XLSX.WorkSheet {
       // Szukanie dyżurów w harmonogramie dla danej przerwy
       const foundDuties: { placeName: string; entry: any }[] = [];
       places.forEach(place => {
-        const dutyKey = `${place.id}|${dayIdx}|${breakNum}`;
-        const entry = harmonogram[dutyKey];
-        if (entry) {
-          foundDuties.push({
-            placeName: place.name + (place.floor ? ` (${place.floor})` : ''),
-            entry
-          });
+        const needed = Math.max(1, place.teachersNeeded || 1);
+        for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+          const dutyKey = getDutySlotKey(place.id, dayIdx, breakNum, slotIdx);
+          const entry = harmonogram[dutyKey];
+          if (entry) {
+            foundDuties.push({
+              placeName: place.name + (place.floor ? ` (${place.floor})` : '') + (needed > 1 ? ` (#${slotIdx})` : ''),
+              entry
+            });
+          }
         }
       });
 
@@ -716,13 +724,19 @@ export function createSingleTeacherSheet(appState: AppState, schedData: SchedDat
       const places = appState.dyzury?.miejsca || [];
       const harmonogram = appState.dyzury?.harmonogram || {};
       for (const place of places) {
-        const dutyKey = `${place.id}|${dayIdx}|${breakNum}`;
-        const duty = harmonogram[dutyKey];
-        if (duty && duty.teacherAbbr === teacher.abbr) {
-          const dText = `[Dyżur: ${place.name}${place.floor ? ` (${place.floor})` : ''}]`;
-          cellText = cellText ? `${cellText} | ${dText}` : dText;
-          break;
+        const needed = Math.max(1, place.teachersNeeded || 1);
+        let matched = false;
+        for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+          const dutyKey = getDutySlotKey(place.id, dayIdx, breakNum, slotIdx);
+          const duty = harmonogram[dutyKey];
+          if (duty && duty.teacherAbbr === teacher.abbr) {
+            const dText = `[Dyżur: ${place.name}${place.floor ? ` (${place.floor})` : ''}${needed > 1 ? ` (#${slotIdx})` : ''}]`;
+            cellText = cellText ? `${cellText} | ${dText}` : dText;
+            matched = true;
+            break;
+          }
         }
+        if (matched) break;
       }
 
       row.push(cellText);

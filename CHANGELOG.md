@@ -5,6 +5,55 @@ Projekt stosuje konwencję wersjonowania semantycznego (SemVer) oraz standardy d
 
 ---
 
+## [3.14.0] — 2026-11-14
+### 🚀 Aktywne Reguły Generatora, Spójne Limity i Multi-Stanowiska w Dyżurach, Precyzyjne Sale Klas 1–3 i Kontrola Synchronizacji Planów
+
+#### Nowości i Usprawnienia:
+*   **Aktywna realizacja wszystkich opcji Generatora Planu (`PlanGenerator.tsx`, `UstawieniaGeneratorow.tsx`)**:
+    *   **Limity okienek (`maxGapsPerTeacher` i `teacherConfigs[*].maxGaps`)**: Suwak globalny oraz indywidualne limity na nauczyciela (z domyślną opcją dziedziczenia „Wg suwaka”) są aktywnie egzekwowane podczas układania planu.
+    *   **Rozkład etatu i ochrona skrajnych godzin**: Opcja `spreadObligation` pilnuje rozłożenia zajęć na minimalną liczbę dni, `avoidExtremesSubjectIds` penalizuje skrajne godziny dla wskazanych przedmiotów, a `forceOptionalToExtremes` przesuwa zajęcia dodatkowe na początek lub koniec dnia.
+    *   **Rezerwa kadrowa na zastępstwa (`minAvailableSubstitutionTeachersPerSlot`)**: Generator chroni zadaną minimalną liczbę wolnych nauczycieli w każdym slocie lekcyjnym.
+    *   **Reguła dziennego rozkładu przedmiotu w klasie**: Preferencja maksymalnie 2 lekcji tego samego przedmiotu dziennie (z twardym limitem 3) oraz premiowanie rozkładu na różne dni tygodnia.
+    *   **Zachowanie ręcznych lekcji niezablokowanych (`preserveUnlockedManualLessons`)**: Nowa opcja w ustawieniach generatora chroniąca ręcznie ułożone lekcje bez konieczności przypinania kłódki.
+*   **Spójny model kolizji i metryki w Generatorze (`conflictEngine.ts`, `PlanGenerator.tsx`)**:
+    *   Zastąpienie prostego `groupBusy` funkcją `groupsOverlap(a, b, schoolGroups)` opartą na `partitionId` i `studentIds`.
+    *   Poprawne wyliczanie `totalRegular` (suma `hoursPerWeek` po odjęciu lekcji zablokowanych), osobne raportowanie kolizji `conflicts` oraz automatyczne usuwanie (przed i po generowaniu) osieroconych lekcji z nieistniejącym `assignmentId` z czytelnym ostrzeżeniem.
+*   **Kanoniczne limity dyżurów i wiele stanowisk (`src/utils/dutyLimits.ts`, `Dyzury.tsx`, `dutiesPrintHtml.ts`)**:
+    *   Wydzielenie wspólnej funkcji `computeTeacherMaxMinutes` / `computeTeacherDutyLimits` używanej zarówno przez generator dyżurów, jak i panel statystyk.
+    *   Twarde wykluczenie osób zwolnionych (`dutyExempt`, `isAdministrative`) oraz o zerowym udziale etatu (`FTE <= 0`).
+    *   Twarda egzekucja indywidualnego `teacher.maxDutyCount`, limitu `dyz.settings.maxPerTeacher` oraz `dyz.settings.maxMinutesPerTeacher` (pętla buforów rozluźnia wyłącznie limity `autoBalance`).
+    *   **Obsługa wielu dyżurnych w jednym miejscu (`teachersNeeded > 1`)**: Klucze slotów z sufiksem stanowiska (`miejsce|dzień|przerwa|slotIdx`) w generatorze, siatce harmonogramu, statystykach zapotrzebowania i na wydrukach, a także lista nieobsadzonych slotów po generowaniu.
+*   **Wykrywanie desynchronizacji Planu Sal (`src/utils/planSyncHash.ts`, `Dyzury.tsx`, `PlanSal.tsx`, `App.tsx`)**:
+    *   Wyznaczanie deterministycznego skrótu lekcji (`computePlanLessonsHash`) i zapis `planSyncHash` przy imporcie lub automatycznym generowaniu sal.
+    *   Baner ostrzegawczy **„Plan sal nie jest zsynchronizowany z planem lekcji”** w module Dyżurów z przyciskiem szybkiego przejścia do Planu Sal.
+*   **Ostrzeżenie przy pustej dostępności w Kreatorze Szkoły (`KreatorSzkoly.tsx`)**:
+    *   Po odznaczeniu wszystkich godzin dostępności nauczyciela lub pracownika wyświetlane jest wyraźne ostrzeżenie: *„Brak zaznaczeń = dostępny zawsze (bez ograniczeń)”*.
+
+#### Poprawki:
+*   **Precyzyjny przydział sal dla klas 1–3 i pracowni (`src/utils/roomUtils.ts`, `PlanSal.tsx`)**:
+    *   Wydzielenie funkcji `isGrade1to3(cls)` opartej na `cls.year` z bezpiecznym fallbackiem `/^[1-3](?!\d)/` (klasy `"10A"`, `"11B"` nie są już mylone z klasami 1–3).
+    *   Klasy 1–3 bez przypisanej sali wychowawczej ani sal `isGrade1_3` otrzymują dowolną wolną salę (usunięcie sztucznego progu `-4000` na rzecz jawnego warunku braku wolnej sali).
+    *   Brak dublowania lekcji przy ponownym generowaniu z wyłączonym czyszczeniem (`genClearExisting = false`) dzięki porównaniu po `_bridgeMeta`.
+    *   Deduplikacja lekcji grup międzyoddziałowych (`linkedGroupIds`) oraz traktowanie przypisanej pracowni z Etapu 1 (`asg.roomId` dla sal specjalistycznych) jako twardego wymogu.
+*   **Dostępność nauczyciela w `isTeacherAvailableForBreak` (`dutyLimits.ts`, `Dyzury.tsx`)**:
+    *   Uwzględnienie siatki dyspozycyjności `Teacher.availability` na danej przerwie również w dniach, w których nauczyciel prowadzi zajęcia lekcyjne.
+
+---
+
+## [3.13.1] — 2026-11-13
+### 🛠️ Poprawka mapowania dostępności nauczycieli (indeks godziny vs numer lekcji)
+
+#### Poprawiono:
+*   **Kanoniczne mapowanie dostępności nauczycieli (`src/utils/availability.ts`)**: Wyodrębniono wspólną funkcję `isTeacherAvailableAt(teacher, day, hourIndex, hours)` (oraz `isTeacherAvailableAtNum` / `formatAvailabilityKey`), która mapuje 0-based indeks godziny w siatce na numer lekcji (`hours[hourIndex].num`) i porównuje go z wpisami `"dzień-numerLekcji"` (np. `"0-1"`). Pusta lista lub brak pola `availability` nadal oznacza brak ograniczeń.
+*   **Ujednolicenie sprawdzania dostępności we wszystkich modułach**:
+    *   `PlanGenerator`: naprawiono przesunięcie o 1 lekcję w `scoreBundleSlot` oraz sekcji Nauczania Indywidualnego (NI), a także zachowano strukturę mapy `specialLessons` przy końcowym sprawdzeniu przez `detectConflicts`.
+    *   `conflictEngine`: `detectConflicts` mapuje teraz indeks godziny na numer lekcji z `planLekcji.hours` zarówno dla lekcji klasowych, jak i specjalnych (w tym nauczycieli wspomagających).
+    *   `PlanSal`: naprawiono kontrolę dostępności nauczyciela prowadzącego i wspomagającego (~l. 1105 i ~l. 1139) z uwzględnieniem `planLekcji.hours` oraz pustej dostępności jako braku ograniczeń.
+    *   `substitutionService` i `Dyzury`: ujednolicono sprawdzanie dostępności po numerze lekcji / numerze przerwy przez wspólną funkcję i format klucza.
+*   **Uwaga migracyjna**: **Dane użytkowników nie wymagają żadnej migracji** — formularze w `KreatorSzkoly` i `PlanKlas` od początku poprawnie zapisywały dyspozycyjność w formacie `"dzień-numerLekcji"` (`${day}-${h.num}`, np. `"0-1"`). Poprawka usuwa błąd interpretacji o 1 lekcję wyłącznie po stronie silników planowania i walidacji.
+
+---
+
 ## [3.13.0] — 2026-11-09
 ### 🚀 Niezależny Silnik Detekcji Konfliktów, Partycje Grup i Międzyoddziały, Inteligentny Generator z Dostępnością Sal, Rotacja 30 Migawek i Bezpieczny Dziennik Błędów
 

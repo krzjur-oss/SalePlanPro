@@ -13,6 +13,7 @@ import {
   DiffSlotItem, 
   VariantComparisonState 
 } from '../types/variantDiff';
+import { getDutySlotKey } from '../utils/dutyLimits';
 
 const DAYS_NAMES = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
@@ -765,54 +766,57 @@ export function computeDutyDiffs(
   const results: DetailedDiffItem[] = [];
 
   places.forEach(place => {
+    const needed = Math.max(1, place.teachersNeeded || 1);
     DAYS_NAMES.forEach((dayName, dayIdx) => {
       breaks.forEach((p, pIdx) => {
-        const dutyKey = `${place.id}|${dayIdx}|${p.num}`;
-        const entryA = harmonogramA[dutyKey];
-        const entryB = harmonogramB[dutyKey];
+        for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+          const dutyKey = getDutySlotKey(place.id, dayIdx, p.num, slotIdx);
+          const entryA = harmonogramA[dutyKey];
+          const entryB = harmonogramB[dutyKey];
 
-        const isSame = (
-          (!entryA && !entryB) ||
-          (entryA && entryB && entryA.teacherAbbr === entryB.teacherAbbr && entryA.isUnneeded === entryB.isUnneeded)
-        );
+          const isSame = (
+            (!entryA && !entryB) ||
+            (entryA && entryB && entryA.teacherAbbr === entryB.teacherAbbr && entryA.isUnneeded === entryB.isUnneeded)
+          );
 
-        if (isSame) return;
+          if (isSame) continue;
 
-        const teacherA = entryA?.teacherAbbr 
-          ? (lookups.teachersMap.get(entryA.teacherAbbr) || Array.from(lookups.teachersMap.values()).find((t: any) => t.abbr === entryA.teacherAbbr))
-          : null;
-        const teacherB = entryB?.teacherAbbr 
-          ? (lookups.teachersMap.get(entryB.teacherAbbr) || Array.from(lookups.teachersMap.values()).find((t: any) => t.abbr === entryB.teacherAbbr))
-          : null;
+          const teacherA = entryA?.teacherAbbr 
+            ? (lookups.teachersMap.get(entryA.teacherAbbr) || Array.from(lookups.teachersMap.values()).find((t: any) => t.abbr === entryA.teacherAbbr))
+            : null;
+          const teacherB = entryB?.teacherAbbr 
+            ? (lookups.teachersMap.get(entryB.teacherAbbr) || Array.from(lookups.teachersMap.values()).find((t: any) => t.abbr === entryB.teacherAbbr))
+            : null;
 
-        const itemA: DiffSlotItem | null = entryA ? {
-          teacher: teacherA ? `${teacherA.last} ${teacherA.first}` : undefined,
-          teacherAbbr: entryA.teacherAbbr,
-          note: entryA.note,
-          isUnneeded: entryA.isUnneeded
-        } : null;
+          const itemA: DiffSlotItem | null = entryA ? {
+            teacher: teacherA ? `${teacherA.last} ${teacherA.first}` : undefined,
+            teacherAbbr: entryA.teacherAbbr,
+            note: entryA.note,
+            isUnneeded: entryA.isUnneeded
+          } : null;
 
-        const itemB: DiffSlotItem | null = entryB ? {
-          teacher: teacherB ? `${teacherB.last} ${teacherB.first}` : undefined,
-          teacherAbbr: entryB.teacherAbbr,
-          note: entryB.note,
-          isUnneeded: entryB.isUnneeded
-        } : null;
+          const itemB: DiffSlotItem | null = entryB ? {
+            teacher: teacherB ? `${teacherB.last} ${teacherB.first}` : undefined,
+            teacherAbbr: entryB.teacherAbbr,
+            note: entryB.note,
+            isUnneeded: entryB.isUnneeded
+          } : null;
 
-        results.push({
-          id: `duty_${place.id}_${dayIdx}_${p.num}`,
-          scope: 'duty',
-          entityId: place.id,
-          entityName: `${place.name}${place.floor ? ` (${place.floor})` : ''}`,
-          dayIdx,
-          dayName,
-          hourIdx: pIdx,
-          hourNum: p.num,
-          timeRange: `${p.start} - ${p.end}`,
-          status: 'duty_changed',
-          itemA,
-          itemB
-        });
+          results.push({
+            id: needed > 1 ? `duty_${place.id}_${dayIdx}_${p.num}_${slotIdx}` : `duty_${place.id}_${dayIdx}_${p.num}`,
+            scope: 'duty',
+            entityId: place.id,
+            entityName: `${place.name}${place.floor ? ` (${place.floor})` : ''}${needed > 1 ? ` (#${slotIdx})` : ''}`,
+            dayIdx,
+            dayName,
+            hourIdx: pIdx,
+            hourNum: p.num,
+            timeRange: `${p.start} - ${p.end}`,
+            status: 'duty_changed',
+            itemA,
+            itemB
+          });
+        }
       });
     });
   });

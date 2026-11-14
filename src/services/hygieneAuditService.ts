@@ -19,6 +19,7 @@ import {
   ClassHygieneReport,
   SchoolHygieneAuditSummary
 } from '../types';
+import { isGrade1to3 } from '../utils/roomUtils';
 
 export const DAYS_POLISH = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 
@@ -86,19 +87,23 @@ export function determineGradeLevel(className: string, classYear?: number | null
     return 'ponadpodstawowa';
   }
 
-  // Odczyt pierwszej cyfry z nazwy klasy (np. "1A" -> 1, "4B" -> 4, "7C" -> 7)
-  const match = clean.match(/^([1-8])/);
-  if (match) {
-    const gradeNum = parseInt(match[1], 10);
-    if (gradeNum >= 1 && gradeNum <= 3) return '1-3';
-    if (gradeNum >= 4 && gradeNum <= 6) return '4-6';
-    if (gradeNum >= 7 && gradeNum <= 8) return '7-8';
+  if (isGrade1to3({ name: className, year: classYear })) {
+    return '1-3';
   }
 
-  if (classYear) {
-    if (classYear >= 1 && classYear <= 3) return '1-3';
+  if (classYear !== null && classYear !== undefined) {
     if (classYear >= 4 && classYear <= 6) return '4-6';
     if (classYear >= 7 && classYear <= 8) return '7-8';
+    if (classYear >= 9) return 'ponadpodstawowa';
+  }
+
+  // Odczyt liczby klasy z początku nazwy (np. "4B" -> 4, "7C" -> 7, ale nie "10A" -> 1)
+  const match = clean.match(/^(\d+)/);
+  if (match) {
+    const gradeNum = parseInt(match[1], 10);
+    if (gradeNum >= 4 && gradeNum <= 6) return '4-6';
+    if (gradeNum >= 7 && gradeNum <= 8) return '7-8';
+    if (gradeNum >= 9) return 'ponadpodstawowa';
   }
 
   return '4-6'; // Domyślnie

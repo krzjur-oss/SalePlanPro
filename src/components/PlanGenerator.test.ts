@@ -378,4 +378,389 @@ describe('PlanGenerator - Model zajętości z grupami, parami równoległymi i s
     const c2Slots = c2GroupKeys.map(k => `${k.split('|')[1]}|${k.split('|')[2]}`).sort();
     expect(c1Slots).toEqual(c2Slots);
   });
+
+  it('mapuje dostępność "dzień-numerLekcji": nauczyciel dostępny tylko "0-1","0-2","0-3" dostaje lekcje na indeksach 0,1,2', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+
+    pl.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+    pl.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-2', '0-3'] }
+    ];
+    pl.subjects = [{ id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }];
+    pl.rooms = [{ id: 'r101', name: '101' }];
+    pl.assignments = [
+      {
+        id: 'asg_1',
+        classId: 'c1',
+        groupId: null,
+        teacherId: 't1',
+        subjectId: 's1',
+        roomId: 'r101',
+        hoursPerWeek: 3
+      }
+    ];
+
+    const result = runPlanGenerationAlgorithm(appState, {
+      ...defaultOptions,
+      obeyAvailability: true
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.placedRegular).toBe(3);
+
+    const keys = Object.keys(result.updatedLessons).sort();
+    expect(keys).toEqual(['c1|0|0', 'c1|0|1', 'c1|0|2']);
+  });
+
+  it('mapuje dostępność "dzień-numerLekcji": nauczyciel dostępny tylko "0-8" dostaje lekcję na indeksie 7 (zwykła oraz NI)', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+
+    pl.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+    pl.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-8'] },
+      { id: 't2', first: 'Anna', last: 'Nowak', abbr: 'AN', availability: ['0-8'] }
+    ];
+    pl.subjects = [{ id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }];
+    pl.rooms = [{ id: 'r101', name: '101' }, { id: 'r102', name: '102' }];
+    pl.assignments = [
+      {
+        id: 'asg_1',
+        classId: 'c1',
+        groupId: null,
+        teacherId: 't1',
+        subjectId: 's1',
+        roomId: 'r101',
+        hoursPerWeek: 1
+      }
+    ];
+    pl.specialStudents = [
+      { id: 'st1', firstName: 'Kacper', lastName: 'Lis', classId: null, type: 'ni' }
+    ];
+    pl.specialAssignments = [
+      {
+        id: 'sp_1',
+        studentId: 'st1',
+        teacherId: 't2',
+        subjectId: 's1',
+        roomId: 'r102',
+        hoursPerWeek: 1,
+        withClass: false
+      }
+    ];
+
+    const result = runPlanGenerationAlgorithm(appState, {
+      ...defaultOptions,
+      obeyAvailability: true,
+      includeSpecialNI: true
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.placedRegular).toBe(1);
+    expect(result.placedSpecial).toBe(1);
+
+    expect(Object.keys(result.updatedLessons)).toEqual(['c1|0|7']);
+    expect(Object.keys(result.updatedSpecialLessons)).toEqual(['st1|0|7|sp_1']);
+  });
+
+  it('maxGapsPerTeacher=0 i 5 daje różne wyniki, a liczba okienek nauczyciela przy 0 jest <= niż przy 5', () => {
+    const countTeacherGaps = (lessons: Record<string, { assignmentId: string }>, assignments: any[], teacherId: string) => {
+      let gaps = 0;
+      for (let d = 0; d < 5; d++) {
+        const hoursOnDay: number[] = [];
+        Object.entries(lessons).forEach(([key, lesson]) => {
+          const [, dayStr, hourStr] = key.split('|');
+          if (Number(dayStr) !== d) return;
+          const asg = assignments.find(a => a.id === lesson.assignmentId);
+          if (asg?.teacherId === teacherId || asg?.supportTeacherId === teacherId) {
+            hoursOnDay.push(Number(hourStr));
+          }
+        });
+        if (hoursOnDay.length > 1) {
+          const minH = Math.min(...hoursOnDay);
+          const maxH = Math.max(...hoursOnDay);
+          gaps += (maxH - minH + 1) - hoursOnDay.length;
+        }
+      }
+      return gaps;
+    };
+
+    const buildGapScenario = () => {
+      const appState = createBaseAppState();
+      const pl = appState.planLekcji;
+      pl.classes = [
+        { id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] },
+        { id: 'c2', name: '1B', color: '#10b981', groupIds: [] }
+      ];
+      // t1 ma zajęcia tylko w pn (godz. 1, 2, 3 -> indeksy 0,1,2) oraz wt (godz. 2 -> indeks 1)
+      pl.teachers = [
+        { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-2', '0-3', '1-2'] },
+        { id: 't2', first: 'Anna', last: 'Nowak', abbr: 'AN' }
+      ];
+      pl.subjects = [
+        { id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' },
+        { id: 's2', name: 'Polski', short: 'POL', color: '#ef4444' }
+      ];
+      pl.assignments = [
+        { id: 'asg_t1_c1', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 1 },
+        { id: 'asg_t2_c2', classId: 'c2', groupId: null, teacherId: 't2', subjectId: 's2', roomId: null, hoursPerWeek: 1 },
+        { id: 'asg_t1_c2', classId: 'c2', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 1 }
+      ];
+      // Blokujemy lekcję t1 w c1 na pn indeks 0 oraz lekcję t2 w c2 na pn indeks 1 (t1 na pn nie może na indeks 1 w c2,
+      // więc umieszczenie asg_t1_c2 na pn indeks 2 przyciąga noStudentGaps +500 kosztem 1 okienka dla t1,
+      // natomiast wtorek indeks 1 daje t1 0 okienek!).
+      pl.lessons = {
+        'c1|0|0': { assignmentId: 'asg_t1_c1', locked: true },
+        'c2|0|1': { assignmentId: 'asg_t2_c2', locked: true }
+      };
+      return appState;
+    };
+
+    const res0 = runPlanGenerationAlgorithm(buildGapScenario(), {
+      ...defaultOptions,
+      maxGapsPerTeacher: 0,
+      noStudentGaps: true
+    });
+    const res5 = runPlanGenerationAlgorithm(buildGapScenario(), {
+      ...defaultOptions,
+      maxGapsPerTeacher: 5,
+      noStudentGaps: true
+    });
+
+    expect(res0.success).toBe(true);
+    expect(res5.success).toBe(true);
+    expect(res0.updatedLessons).not.toEqual(res5.updatedLessons);
+
+    const gaps0 = countTeacherGaps(res0.updatedLessons, buildGapScenario().planLekcji.assignments, 't1');
+    const gaps5 = countTeacherGaps(res5.updatedLessons, buildGapScenario().planLekcji.assignments, 't1');
+    expect(gaps0).toBe(0);
+    expect(gaps0).toBeLessThanOrEqual(gaps5);
+
+    // Indywidualny override teacherConfigs[*].maxGaps = 0 przy globalnym maxGapsPerTeacher = 5 też daje 0 okienek
+    const resOverride = runPlanGenerationAlgorithm(buildGapScenario(), {
+      ...defaultOptions,
+      maxGapsPerTeacher: 5,
+      noStudentGaps: true,
+      teacherConfigs: {
+        t1: { teacherId: 't1', role: 'director', maxGaps: 0, spreadObligation: false }
+      }
+    });
+    expect(resOverride.success).toBe(true);
+    expect(countTeacherGaps(resOverride.updatedLessons, buildGapScenario().planLekcji.assignments, 't1')).toBe(0);
+  });
+
+  it('reguła rozkładu przedmiotu: maks. liczba lekcji przedmiotu dziennie w klasie <= 2 dla 4 godz./tydz. oraz twardy limit >3', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+
+    pl.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+    // Nauczyciel dostępny tylko w 2 dni (pn i wt po 4h), przedmiot ma 4h/tydz.
+    pl.teachers = [
+      {
+        id: 't1',
+        first: 'Jan',
+        last: 'Kowalski',
+        abbr: 'JK',
+        availability: ['0-1', '0-2', '0-3', '0-4', '1-1', '1-2', '1-3', '1-4']
+      }
+    ];
+    pl.subjects = [{ id: 's_mat', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }];
+    pl.assignments = [
+      { id: 'asg_mat', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's_mat', roomId: null, hoursPerWeek: 4 }
+    ];
+
+    const result = runPlanGenerationAlgorithm(appState, {
+      ...defaultOptions,
+      allowDoubleBlocks: true
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.placedRegular).toBe(4);
+
+    const perDay = [0, 0, 0, 0, 0];
+    Object.keys(result.updatedLessons).forEach(k => {
+      const d = Number(k.split('|')[1]);
+      perDay[d]++;
+    });
+    expect(Math.max(...perDay)).toBeLessThanOrEqual(2);
+
+    // Gdy nauczyciel ma tylko 1 dzień (pn) i 4h jednego przedmiotu, twardy limit >3 blokuje 4. lekcję tego samego dnia
+    const singleDayState = createBaseAppState();
+    singleDayState.planLekcji.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+    singleDayState.planLekcji.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-2', '0-3', '0-4'] }
+    ];
+    singleDayState.planLekcji.subjects = [{ id: 's_mat', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }];
+    singleDayState.planLekcji.assignments = [
+      { id: 'asg_mat', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's_mat', roomId: null, hoursPerWeek: 4 }
+    ];
+    const singleDayResult = runPlanGenerationAlgorithm(singleDayState, defaultOptions);
+    expect(singleDayResult.placedRegular).toBe(3);
+    expect(singleDayResult.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('avoidExtremesSubjectIds stosuje karę za skrajne godziny tylko dla wskazanych przedmiotów', () => {
+    const makeState = () => {
+      const appState = createBaseAppState();
+      const pl = appState.planLekcji;
+      pl.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+      // Dostępność tylko poniedziałek godz. 1 (indeks 0 - skrajna) i godz. 3 (indeks 2), z zablokowaną lekcją na indeksie 1
+      pl.teachers = [
+        { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-3'] },
+        { id: 't2', first: 'Anna', last: 'Nowak', abbr: 'AN' }
+      ];
+      pl.subjects = [
+        { id: 's_mat', name: 'Matematyka', short: 'MAT', color: '#3b82f6' },
+        { id: 's_other', name: 'Koło', short: 'KOL', color: '#10b981' }
+      ];
+      pl.assignments = [
+        { id: 'asg_lock', classId: 'c1', groupId: null, teacherId: 't2', subjectId: 's_other', roomId: null, hoursPerWeek: 1 },
+        { id: 'asg_mat', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's_mat', roomId: null, hoursPerWeek: 1 }
+      ];
+      pl.lessons = {
+        'c1|0|1': { assignmentId: 'asg_lock', locked: true }
+      };
+      return appState;
+    };
+
+    const resAvoided = runPlanGenerationAlgorithm(makeState(), {
+      ...defaultOptions,
+      avoidExtremes: true,
+      avoidExtremesSubjectIds: ['s_mat']
+    });
+    expect(resAvoided.updatedLessons['c1|0|2']?.assignmentId).toBe('asg_mat'); // unika indeksu 0
+
+    // Bez s_mat na liście avoidExtremesSubjectIds przedmiot nie dostaje kary na godzinie 0
+    const resNotListed = runPlanGenerationAlgorithm(makeState(), {
+      ...defaultOptions,
+      avoidExtremes: true,
+      avoidExtremesSubjectIds: ['s_other']
+    });
+    expect(resNotListed.updatedLessons['c1|0|0']?.assignmentId).toBe('asg_mat');
+  });
+
+  it('spreadObligation rozkłada godziny nauczyciela na wiele dni', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+    pl.classes = [
+      { id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] },
+      { id: 'c2', name: '1B', color: '#10b981', groupIds: [] },
+      { id: 'c3', name: '1C', color: '#f59e0b', groupIds: [] }
+    ];
+    pl.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK' }
+    ];
+    pl.subjects = [
+      { id: 's1', name: 'Informatyka', short: 'INF', color: '#3b82f6' },
+      { id: 's2', name: 'Fizyka', short: 'FIZ', color: '#10b981' },
+      { id: 's3', name: 'Chemia', short: 'CHE', color: '#f59e0b' }
+    ];
+    pl.assignments = [
+      { id: 'a1', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 1 },
+      { id: 'a2', classId: 'c2', groupId: null, teacherId: 't1', subjectId: 's2', roomId: null, hoursPerWeek: 1 },
+      { id: 'a3', classId: 'c3', groupId: null, teacherId: 't1', subjectId: 's3', roomId: null, hoursPerWeek: 1 }
+    ];
+
+    const result = runPlanGenerationAlgorithm(appState, {
+      ...defaultOptions,
+      teacherConfigs: {
+        t1: { teacherId: 't1', role: 'teacher', maxGaps: 2, spreadObligation: true }
+      }
+    });
+
+    expect(result.success).toBe(true);
+    const days = new Set(Object.keys(result.updatedLessons).map(k => k.split('|')[1]));
+    expect(days.size).toBe(3);
+  });
+
+  it('minAvailableSubstitutionTeachersPerSlot pozostawia wymaganą rezerwę wolnych nauczycieli w każdym slocie', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+    pl.classes = [
+      { id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] },
+      { id: 'c2', name: '1B', color: '#10b981', groupIds: [] }
+    ];
+    pl.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-2'] },
+      { id: 't2', first: 'Anna', last: 'Nowak', abbr: 'AN', availability: ['0-1', '0-2'] }
+    ];
+    pl.subjects = [
+      { id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }
+    ];
+    pl.assignments = [
+      { id: 'a1', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 1 },
+      { id: 'a2', classId: 'c2', groupId: null, teacherId: 't2', subjectId: 's1', roomId: null, hoursPerWeek: 1 }
+    ];
+
+    const result = runPlanGenerationAlgorithm(appState, {
+      ...defaultOptions,
+      minAvailableSubstitutionTeachersPerSlot: 1
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.placedRegular).toBe(2);
+    // t1 i t2 nie mogą być w tym samym slocie, bo wtedy zostaje 0 wolnych nauczycieli na zastępstwa
+    const slotA = Object.keys(result.updatedLessons).find(k => result.updatedLessons[k].assignmentId === 'a1')!.split('|').slice(1, 3).join('|');
+    const slotB = Object.keys(result.updatedLessons).find(k => result.updatedLessons[k].assignmentId === 'a2')!.split('|').slice(1, 3).join('|');
+    expect(slotA).not.toBe(slotB);
+  });
+
+  it('preserveUnlockedManualLessons zachowuje ręczne lekcje niezablokowane i dokłada tylko brakujące godziny', () => {
+    const makeManualState = () => {
+      const appState = createBaseAppState();
+      const pl = appState.planLekcji;
+      pl.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+      pl.teachers = [{ id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK' }];
+      pl.subjects = [{ id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }];
+      pl.assignments = [
+        { id: 'a1', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 3 }
+      ];
+      // Ręcznie ułożona niezablokowana lekcja w piątek na ostatniej lekcji (4|7)
+      pl.lessons = {
+        'c1|4|7': { assignmentId: 'a1', locked: false }
+      };
+      return appState;
+    };
+
+    const preserved = runPlanGenerationAlgorithm(makeManualState(), {
+      ...defaultOptions,
+      preserveUnlockedManualLessons: true
+    });
+    expect(preserved.success).toBe(true);
+    expect(preserved.updatedLessons['c1|4|7']?.assignmentId).toBe('a1');
+    expect(preserved.totalRegular).toBe(2);
+    expect(preserved.placedRegular).toBe(2);
+    expect(Object.keys(preserved.updatedLessons)).toHaveLength(3);
+
+    const replaced = runPlanGenerationAlgorithm(makeManualState(), {
+      ...defaultOptions,
+      preserveUnlockedManualLessons: false
+    });
+    expect(replaced.success).toBe(true);
+    expect(replaced.totalRegular).toBe(3);
+    expect(replaced.placedRegular).toBe(3);
+    expect(replaced.updatedLessons['c1|4|7']).toBeUndefined();
+  });
+
+  it('po generowaniu usuwa zablokowane lekcje z nieistniejącym assignmentId i zgłasza ostrzeżenie', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+    pl.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+    pl.teachers = [{ id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK' }];
+    pl.subjects = [{ id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }];
+    pl.assignments = [
+      { id: 'a_ok', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 1 }
+    ];
+    pl.lessons = {
+      'c1|2|3': { assignmentId: 'missing_asg_id', locked: true }
+    };
+
+    const result = runPlanGenerationAlgorithm(appState, defaultOptions);
+    expect(result.updatedLessons['c1|2|3']).toBeUndefined();
+    expect(result.warnings.some(w => w.includes('missing_asg_id'))).toBe(true);
+    expect(result.placedRegular).toBe(1);
+    expect(result.success).toBe(true);
+  });
 });
+

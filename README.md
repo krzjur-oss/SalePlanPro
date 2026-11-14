@@ -1,4 +1,4 @@
-# SalePlan Pro v3.13.0 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.14.0 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -20,7 +20,7 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   **Ewidencja i Pule Orzeczeniowe**: Rejestracja uczniów ze SPE, przypisanie do oddziału lub toku indywidualnego oraz określenie puli godzin (Nauczanie Indywidualne – NI, Nauczyciel Wspomagający w klasie, Rewalidacja, Terapia Korekcyjno-Kompensacyjna).
     *   **Lokalizacja Nauczania Indywidualnego**: Wybór miejsca realizacji zajęć NI – w budynku szkoły (sala/gabinet) lub w domu ucznia (poza szkołą).
     *   **Dedykowany Tryb USPE i Rozdysponowanie Pul**: Przydział godzin z puli, wskazanie nauczyciela wspomagającego, przedmiotu szkolnego lub formy terapeutycznej oraz trybu realizacji (w oddziale vs gabinet 1 na 1).
-*   **Szablony Struktury Szkoły**: Zapisywanie i wczytywanie konfiguracji z automatyczną promocją klas o jeden poziom wyżej.
+*   **Szablony Struktury Szkoły i Jawna Dyspozycyjność**: Zapisywanie i wczytywanie konfiguracji z automatyczną promocją klas o jeden poziom wyżej oraz ostrzeżeniem przy pustej siatce dostępności kadry (*„Brak zaznaczeń = dostępny zawsze”*).
 
 ### 2. 👨‍🏫 Zaawansowane Zarządzanie Dyżurami Nauczycielskimi (`Dyzury`)
 *   **Zarządzanie Obszarami Dyżurów (Miejsca)**: Definiowanie punktów kluczowych w szkole wraz z przypisaniem do pięter i kondygnacji.
@@ -31,7 +31,7 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   Dla nauczycieli dwuprzedmiotowych system inteligentnie rozróżnia charakter prowadzonych lekcji (przy przedmiotach ogólnych nauczyciel jest w pełni dyspozycyjny).
 *   **Dyżury Adaptacyjne i Odprowadzające w Klasach 1**: Opieka wychowawców w salach lekcyjnych klas pierwszych oraz dedykowany czas odprowadzania do szatni/świetlicy.
 *   **Zadania Poza Tablicą i Personel Niepedagogiczny**: Ewidencja czynności świetlicowych, bibliotecznych, psychologów i pedagogów oraz pracowników obsługi w siatce dyżurów.
-*   **Sprawiedliwe Bilansowanie Limitów (FTE)**: Przeliczanie obciążenia wg ekwiwalentu pełnego etatu (18h pensum vs 40h Kodeks Pracy).
+*   **Sprawiedliwe Bilansowanie Limitów (FTE) i Multi-Stanowiska**: Jeden kanoniczny kalkulator limitów minutowych (`computeTeacherMaxMinutes`), twarde egzekwowanie zwolnień oraz limitów ręcznych, obsługa wielu dyżurnych w jednym punkcie (`teachersNeeded > 1`), respektowanie dyspozycyjności kadry również w dniach lekcyjnych oraz alert o braku synchronizacji Planu Sal z Planem Lekcji.
 *   **Ręczne Oznaczanie Zbędnych Dyżurów**: Możliwość wyłączenia pojedynczego dyżuru (np. zamknięte piętro) jednym kliknięciem z automatyczną korektą zapotrzebowania minutowego.
 
 ### 3. 👥 Plan Klas, Równoległe Grupy i Uczniowie ze SPE (`PlanKlas`)
@@ -44,7 +44,7 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 *   **Wizualna Matryca Obłożenia Sal**: Wgląd w stan każdego gabinetu w szkole, piętro po piętrze i godzina po godzinie.
 *   **Bezpośrednie Mapowanie Strukturalne**: Pełne wsparcie grup oddziałowych i międzyoddziałowych oparte na bezpiecznych metadanych strukturalnych (`_bridgeMeta.classId`, `_bridgeMeta.groupId`), bez podatnego na błędy parsowania ciągów tekstowych.
 *   **Wykrywanie Kolizji Sal**: Automatyczne ostrzeżenia o podwójnym zajęciu gabinetu z inteligentnym uwzględnieniem sal gimnastycznych i boisk.
-*   **Automatyczny Optymalizator Przydziału Sal**: Algorytm dopasowujący gabinety lekcyjne do preferencji klasowych (pracownie stałe oddziałów) i przedmiotowych (np. laboratoria, pracownie komputerowe).
+*   **Automatyczny Optymalizator Przydziału Sal**: Algorytm dopasowujący gabinety do preferencji klas 1–3 (`isGrade1to3`), twardych wymagań pracowni przedmiotowych z Etapu 1, grup międzyoddziałowych (`linkedGroupIds`) oraz bezduplikacyjnego uzupełniania brakujących wpisów.
 
 ### 5. 🔍 Tryb Porównywania Wariantów Split-Screen Diff (`SplitScreenDiffViewer`)
 *   **Równoległe Zestawienie Wariantów Planu**: Widok side-by-side dla dowolnych dwóch wersji lub semestrów planu zajęć.
@@ -61,9 +61,9 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   Zegar czasu rzeczywistego, odliczanie do najbliższego dzwonka oraz dynamiczne ukrywanie okienek.
 
 ### 7. 🤖 Inteligentny Generator Planu Lekcji (`PlanGenerator`)
-*   **Zaawansowany Model Zajętości Grup**: Układanie zajęć z uwzględnieniem podziałów na grupy (`klasa|dzień|godzina|groupId`), partycji grup i preferencji równoległego układania.
-*   **Wsparcie Klas Powiązanych i Nauczycieli Wspomagających**: Weryfikacja jednoczesnej dostępności nauczycieli prowadzących i wspomagających oraz sal lekcyjnych.
-*   **Zintegrowana Kontrola Końcowa**: Sprawdzenie ułożonego planu przez dedykowany silnik detekcji konfliktów `detectConflicts`.
+*   **Zaawansowany Model Zajętości Grup i Partycji**: Układanie zajęć z pełną zgodnością z `groupsOverlap(a, b, schoolGroups)` dla grup równoległych i międzyoddziałowych.
+*   **Aktywna Optymalizacja Reguł**: Egzekwowanie globalnych i indywidualnych limitów okienek nauczycieli, dziennego limitu przedmiotu w klasie (max 2 lekcje dziennie), ochrony skrajnych godzin, rezerwy wolnych nauczycieli na zastępstwa oraz opcji zachowania ręcznych lekcji niezablokowanych.
+*   **Zintegrowana Kontrola Końcowa**: Czyszczenie osieroconych lekcji z brakującym przydziałem i weryfikacja ułożonego planu przez silnik detekcji konfliktów `detectConflicts`.
 
 ### 8. 🛡️ Niezawodna Architektura Trwałości i Bezpieczeństwo RODO
 *   **Kryptografia AES-256-GCM (Format encrypted-v2)**: 600 000 iteracji PBKDF2 (SHA-256), jednorazowy klucz sesyjny w pamięci RAM, brak haseł w `sessionStorage`.
@@ -86,7 +86,7 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 | **Walidacja** | **Zod** | Walidacja integralności struktur danych i odporność na uszkodzenia |
 | **Drag & Drop** | **@dnd-kit/core** | Ergonomiczne przeciąganie lekcji i sal |
 | **PWA** | **Service Worker** (Cache-First + Navigation Race) | Praca w trybie offline, instalacja jako aplikacja pulpitu |
-| **Testy** | **Vitest** + **@testing-library/react** + **fake-indexeddb** | Ponad 200 zautomatyzowanych testów jednostkowych i integracyjnych |
+| **Testy** | **Vitest** + **@testing-library/react** + **fake-indexeddb** | Ponad 240 zautomatyzowanych testów jednostkowych i integracyjnych |
 
 ---
 

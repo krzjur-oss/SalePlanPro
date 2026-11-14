@@ -24,50 +24,40 @@ import {
   PESupervisionResult 
 } from '../utils/peDuty';
 import { calculateTeacherWorkload } from '../utils/workloadUtils';
+import { isTeacherAvailableAtNum, hasExplicitAvailabilityAtNum } from '../utils/availability';
+import {
+  autoAssignDuties,
+  buildAllDutyPersonnel,
+  computePersonFteProportion,
+  computePersonWeeklyHoursMap,
+  computeTeacherMaxMinutes,
+  computeTotalRequiredDutyMinutes,
+  DutyPerson,
+  DUTY_NON_TEACHING_ROLE_NAMES,
+  getBreakDuration,
+  getDutySlotKey,
+  getStandardBreakDuration,
+  isPlaceActiveForBreakInPlan,
+  isTeacherAssignedOnBreak,
+  parseDutySlotKey,
+  UnfilledDutySlot,
+} from '../utils/dutyLimits';
+import { isPlanRoomsOutOfSync } from '../utils/planSyncHash';
 
-const getBreakDuration = (p: Przerwa): number => {
-  const [sh, sm] = p.start.split(':').map(Number);
-  const [eh, em] = p.end.split(':').map(Number);
-  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0;
-  const diff = (eh * 60 + em) - (sh * 60 + sm);
-  return diff < 0 ? diff + 24 * 60 : diff;
-};
-
-export interface DutyPerson {
-  id: string;
-  first: string;
-  last: string;
-  abbr: string;
-  color?: string;
-  isStaff: boolean;
-  role: string;
-  nonTeachingRoles?: string[];
-  nonTeachingHours?: number;
-  weeklyHours?: number;
-  availability?: string[];
-  inactive?: boolean;
-  dutyEligible: boolean;
-}
-
-export const NON_TEACHING_ROLE_NAMES: Record<string, string> = {
-  swietlica: 'Wychowawca świetlicy',
-  biblioteka: 'Bibliotekarz',
-  pedagog: 'Pedagog szkolny / specjalny',
-  psycholog: 'Psycholog',
-  logopeda: 'Logopeda',
-  wspomagajacy: 'Nauczyciel współorganizujący',
-  terapeuta: 'Terapeuta pedagogiczny',
-};
+export type { DutyPerson };
+export const NON_TEACHING_ROLE_NAMES = DUTY_NON_TEACHING_ROLE_NAMES;
 
 interface DyzuryProps {
   appState: AppState;
   onChangeAppState: (newState: AppState) => void;
   schedData: SchedData;
+  onNavigateToTab?: (tab: string) => void;
   presentationMode?: boolean;
 }
 
-export default function Dyzury({ appState, onChangeAppState, schedData, presentationMode = false }: DyzuryProps) {
+export default function Dyzury({ appState, onChangeAppState, schedData, onNavigateToTab, presentationMode = false }: DyzuryProps) {
   const dyz = appState.dyzury;
+  const isRoomsOutOfSync = useMemo(() => isPlanRoomsOutOfSync(appState), [appState]);
 
   const [activeTab, setActiveTab] = useState<'roster' | 'places' | 'breaks'>('roster');
 
@@ -79,7 +69,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const [activeDay, setActiveDay] = useState<number>(0);
   const [showStatsSidebar, setShowStatsSidebar] = useState<boolean>(true);
   const [statsRoleFilter, setStatsRoleFilter] = useState<'all' | 'teaching' | 'non_teaching' | 'support_staff'>('all');
-  const [draggedTeacher, setDraggedTeacher] = useState<{ miejsceId: string; przerwa: number } | null>(null);
+  const [draggedTeacher, setDraggedTeacher] = useState<{ miejsceId: string; przerwa: number; slotIdx: number } | null>(null);
+  const [unfilledWarning, setUnfilledWarning] = useState<UnfilledDutySlot[] | null>(null);
 
   // Edit / Add forms
   const [newPlaceName, setNewPlaceName] = useState('');
@@ -130,7 +121,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     setCountPeSupervisionInFTE(!!dyz.settings.countPeSupervisionInFTE);
   }, [dyz.settings]);
 
-  const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number } | null>(null);
+  const [editingSlot, setEditingSlot] = useState<{ miejsceId: string; przerwa: number; slotIdx: number } | null>(null);
   const [selectedTeacher, setSelectedTeacher] = useState<string>('');
   const [dutyNote, setDutyNote] = useState('');
   const [dutyLocked, setDutyLocked] = useState(true);
@@ -150,52 +141,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
   // Pełna zunifikowana lista personelu szkoły biorącego udział w życiu placówki
   const allPersonnel = useMemo<DutyPerson[]>(() => {
-    const list: DutyPerson[] = [];
-
-    // 1. Nauczyciele (zarówno tablicowi, jak i realizujący zadania poza tablicą)
-    appState.teachers.forEach(t => {
-      const hasNonTeaching = Boolean((t.nonTeachingHours && t.nonTeachingHours > 0) || (t.nonTeachingRoles && t.nonTeachingRoles.length > 0));
-      const roleStr = hasNonTeaching 
-        ? (t.nonTeachingRoles && t.nonTeachingRoles.length > 0
-            ? t.nonTeachingRoles.map(r => NON_TEACHING_ROLE_NAMES[r] || r).join(', ')
-            : 'Zadania poza tablicą')
-        : 'Nauczyciel';
-      
-      list.push({
-        id: t.id,
-        first: t.first,
-        last: t.last,
-        abbr: t.abbr,
-        color: t.color || '#3b82f6',
-        isStaff: false,
-        role: roleStr,
-        nonTeachingRoles: t.nonTeachingRoles || [],
-        nonTeachingHours: t.nonTeachingHours || 0,
-        availability: t.availability || [],
-        inactive: Boolean(t.inactive),
-        dutyEligible: t.nonTeachingDutyEligible !== false,
-      });
-    });
-
-    // 2. Pracownicy niepedagogiczni (wsparcie i obsługa: woźni, asystenci, szatniarze)
-    (appState.supportStaff || []).forEach(s => {
-      list.push({
-        id: s.id,
-        first: s.first,
-        last: s.last,
-        abbr: s.abbr,
-        color: s.color || '#475569',
-        isStaff: true,
-        role: s.role || 'Pracownik obsługi',
-        weeklyHours: s.weeklyHours || 40,
-        availability: s.availability || [],
-        inactive: Boolean(s.inactive),
-        dutyEligible: s.dutyEligible !== false,
-      });
-    });
-
-    return list;
-  }, [appState.teachers, appState.supportStaff]);
+    return buildAllDutyPersonnel(appState);
+  }, [appState]);
 
   // Mapa szybkiego wyszukiwania osoby po unikalnym skrócie (abbr)
   const personByAbbr = useMemo(() => {
@@ -207,7 +154,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   // Zbiór wyłączonych z dyżurów (nauczyciele i pracownicy)
   const excludedSet = useMemo(() => new Set(excludeTeachers), [excludeTeachers]);
 
-  // Aktywny personel uprawniony do dyżurów (nauczyciele tablicowi, specjaliści poza tablicą oraz pracownicy niepedagogiczni)
+  // Aktywny personel uprawniony do dyżurów (z wyłączeniem dutyExempt, isAdministrative, inactive i excludedSet)
   const eligiblePersonnel = useMemo(() => {
     return allPersonnel.filter(p => !p.inactive && p.dutyEligible && !excludedSet.has(p.abbr));
   }, [allPersonnel, excludedSet]);
@@ -217,40 +164,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
   // Tygodniowy wymiar godzin personelu (lekcje z planu sal + godziny poza tablicą + etat personelu wsparcia)
   const teacherHours = useMemo(() => {
-    const hours: { [abbr: string]: number } = {};
-    const yk = appState.yearKey;
-    const yearData = schedData[yk] || {};
-
-    // 1. Zlicz godziny lekcyjne przy tablicy
-    Object.values(yearData).forEach((dayData) => {
-      if (!dayData || typeof dayData !== 'object') return;
-      Object.values(dayData).forEach((hourData) => {
-        if (!hourData || typeof hourData !== 'object') return;
-        Object.values(hourData).forEach((cell) => {
-          const cells: SchedCell[] = Array.isArray(cell) ? (cell as SchedCell[]) : (cell ? [cell as SchedCell] : []);
-          cells.forEach((c) => {
-            if (c?.teacherAbbr) {
-              hours[c.teacherAbbr] = (hours[c.teacherAbbr] || 0) + 1;
-            }
-          });
-        });
-      });
-    });
-
-    // 2. Dodaj godziny czynności poza tablicą nauczycieli (świetlica, biblioteka, pedagog, psycholog, logopeda)
-    appState.teachers.forEach(t => {
-      if (t.nonTeachingHours && t.nonTeachingHours > 0) {
-        hours[t.abbr] = (hours[t.abbr] || 0) + t.nonTeachingHours;
-      }
-    });
-
-    // 3. Dodaj tygodniowy wymiar godzin pracowników niepedagogicznych
-    (appState.supportStaff || []).forEach(s => {
-      hours[s.abbr] = s.weeklyHours || 40;
-    });
-
-    return hours;
-  }, [schedData, appState.yearKey, appState.teachers, appState.supportStaff]);
+    return computePersonWeeklyHoursMap(appState, schedData);
+  }, [appState, schedData]);
 
   // Mapa nauczycieli do szybkiego wyszukiwania
   const teacherMap = useMemo(() => {
@@ -259,53 +174,22 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return map;
   }, [appState.teachers]);
 
-  // Pomocnicza kalkulacja proporcji dyżurów:
-  // Zgodnie z audytem: boardHours bezpośrednio odzwierciedla wymiar etatu przy tablicy (18h = 1.0)
-  // Nie mnożymy podwójnie przez min(1, FTE)
+  const staffMap = useMemo(() => {
+    const map = new Map<string, SupportStaff>();
+    (appState.supportStaff || []).forEach(s => map.set(s.abbr, s));
+    return map;
+  }, [appState.supportStaff]);
+
+  // Pomocnicza kalkulacja proporcji dyżurów
   const getPersonFteProportion = useCallback((p: DutyPerson, hours: number): number => {
-    if (p.isStaff) {
-      // Pracownicy niepedagogiczni (Kodeks Pracy): pełny etat = 40h
-      return hours >= 40 ? 1.0 : hours / 40;
-    }
-
-    const teacher = teacherMap.get(p.abbr);
-    if (!teacher) return hours >= 18 ? 1.0 : hours / 18;
-    if (teacher.dutyExempt || teacher.isAdministrative) return 0;
-
-    const analysis = calculateTeacherWorkload(
-      teacher,
-      appState.planLekcji.assignments,
-      appState.planLekcji.specialAssignments,
-      0,
-      3,
-      appState.school.basePensumConfig,
-      appState.school.overtimeDefaultHandling
-    );
-
-    if (analysis.dutyExempt || analysis.effectiveDutyLimit === 0) {
-      return 0;
-    }
-
-    // boardHours już odzwierciedla wymiar etatu przy tablicy (18h dydaktycznych = 1.0)
-    // Nie mnożymy podwójnie przez min(1, FTE)
-    if (analysis.boardHours > 0) {
-      return Math.max(0, analysis.boardHours / 18);
-    }
-    // W przypadku nauczycieli bez godzin tablicowych, ale z etatem (np. świetlica z dyżurami)
-    return Math.min(1.0, Math.max(0, analysis.totalFte));
-  }, [
-    teacherMap,
-    appState.planLekcji.assignments,
-    appState.planLekcji.specialAssignments,
-    appState.school.basePensumConfig,
-    appState.school.overtimeDefaultHandling
-  ]);
+    return computePersonFteProportion(p, hours, teacherMap, appState);
+  }, [teacherMap, appState]);
 
   // Current duty allocation counts per teacher/staff
   const teacherDutyCounts = useMemo(() => {
     const counts: { [abbr: string]: number } = {};
     Object.values(dyz.harmonogram).forEach((entry) => {
-      if (entry.teacherAbbr) {
+      if (entry.teacherAbbr && !entry.isUnneeded) {
         counts[entry.teacherAbbr] = (counts[entry.teacherAbbr] || 0) + 1;
       }
     });
@@ -326,13 +210,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   const teacherCorridorMinutes = useMemo(() => {
     const mins: { [abbr: string]: number } = {};
     Object.entries(dyz.harmonogram).forEach(([key, entry]) => {
-      if (entry.teacherAbbr) {
-        const parts = key.split('|'); // [miejsceId, day, przerwaNum]
-        const przerwaNum = parseInt(parts[2]);
-        const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
-        if (przerwa) {
-          const d = getBreakDuration(przerwa);
-          mins[entry.teacherAbbr] = (mins[entry.teacherAbbr] || 0) + d;
+      if (entry.teacherAbbr && !entry.isUnneeded) {
+        const parsed = parseDutySlotKey(key);
+        if (parsed) {
+          const przerwa = dyz.przerwy.find(p => p.num === parsed.breakNum);
+          if (przerwa) {
+            const d = getBreakDuration(przerwa);
+            mins[entry.teacherAbbr] = (mins[entry.teacherAbbr] || 0) + d;
+          }
         }
       }
     });
@@ -355,7 +240,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     return mins;
   }, [teacherCorridorMinutes, dyz.settings.firstGradeAdaptationDuty, dyz.settings.countAdaptationInFTE, adaptationDuties, dyz.settings.peSupervisionDuty, dyz.settings.countPeSupervisionInFTE, peDuties]);
 
-  // Target max minutes for each person based on FTE proportion and board hours
+  // Target max minutes for each person — obliczane wspólną funkcją computeTeacherMaxMinutes (identycznie jak w handleAutoSuggest)
   const teacherMaxMinutes = useMemo(() => {
     const maxMins: { [abbr: string]: number } = {};
     let sumProportions = 0;
@@ -368,47 +253,40 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     if (sumProportions === 0) sumProportions = 1;
 
-    // Obliczenie wymaganej sumy minut dyżurów
-    let totalRequiredDutyMinutes = 0;
-    for (let day = 0; day < 5; day++) {
-      for (const przerwa of dyz.przerwy) {
-        const d = getBreakDuration(przerwa);
-        for (const miejsce of dyz.miejsca) {
-          totalRequiredDutyMinutes += d * (miejsce.teachersNeeded || 1);
-        }
-      }
-    }
-
+    const totalRequiredDutyMinutes = computeTotalRequiredDutyMinutes(dyz);
     const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
-    const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
-    eligiblePersonnel.forEach(p => {
-      const teacher = !p.isStaff ? teacherMap.get(p.abbr) : null;
-      if (teacher?.dutyExempt) {
-        maxMins[p.abbr] = 0;
-        return;
-      }
-      if (teacher && teacher.maxDutyCount !== undefined) {
-        maxMins[p.abbr] = Math.max(0, teacher.maxDutyCount * 15);
-        return;
-      }
+    const standardBreakDuration = getStandardBreakDuration(dyz.przerwy);
 
+    allPersonnel.forEach(p => {
+      const teacher = !p.isStaff ? teacherMap.get(p.abbr) : null;
+      const staff = p.isStaff ? staffMap.get(p.abbr) : null;
       const hours = teacherHours[p.abbr] || 0;
-      const prop = getPersonFteProportion(p, hours);
-      if (prop <= 0) {
-        maxMins[p.abbr] = 0;
-      } else if (dyz.settings.autoBalance !== false) {
-        maxMins[p.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * prop)));
-      } else {
-        maxMins[p.abbr] = maxMinsLimit;
-      }
+      const prop = (!p.inactive && p.dutyEligible && !excludedSet.has(p.abbr))
+        ? getPersonFteProportion(p, hours)
+        : 0;
+
+      maxMins[p.abbr] = computeTeacherMaxMinutes({
+        teacher,
+        isStaff: p.isStaff,
+        staffDutyEligible: staff ? staff.dutyEligible !== false : undefined,
+        staffInactive: staff ? Boolean(staff.inactive) : undefined,
+        isExcluded: excludedSet.has(p.abbr),
+        fteProportion: prop,
+        avgMinutesForFullTime,
+        settings: dyz.settings,
+        breakDuration: standardBreakDuration,
+      });
     });
 
     return maxMins;
-  }, [eligiblePersonnel, teacherHours, dyz.przerwy, dyz.miejsca, dyz.settings.maxMinutesPerTeacher, dyz.settings.autoBalance, teacherMap, getPersonFteProportion]);
+  }, [allPersonnel, eligiblePersonnel, teacherHours, dyz, teacherMap, staffMap, excludedSet, getPersonFteProportion]);
 
   // Memoized duty demand statistics
   const demandStats = useMemo(() => {
     let totalMinutesNeeded = 0;
+    let totalSlotsNeeded = 0;
+    let totalAssignedMinutes = 0;
+    let assignedSlotsCount = 0;
     let unneededMinutes = 0;
     let unneededSlotsCount = 0;
     let unneededTodayCount = 0;
@@ -417,33 +295,37 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       dyz.przerwy.forEach(przerwa => {
         const duration = getBreakDuration(przerwa);
         dyz.miejsca.forEach(miejsce => {
-          const key = `${miejsce.id}|${day}|${przerwa.num}`;
-          const isSlotUnneeded = Boolean(dyz.harmonogram[key]?.isUnneeded);
-          if (isSlotUnneeded) {
-            unneededSlotsCount += 1;
-            unneededMinutes += duration;
-            if (day === activeDay) {
-              unneededTodayCount += 1;
+          const needed = Math.max(1, miejsce.teachersNeeded || 1);
+          for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+            const key = getDutySlotKey(miejsce.id, day, przerwa.num, slotIdx);
+            const entry = dyz.harmonogram[key];
+            if (entry?.isUnneeded) {
+              unneededSlotsCount += 1;
+              unneededMinutes += duration;
+              if (day === activeDay) {
+                unneededTodayCount += 1;
+              }
+            } else {
+              totalMinutesNeeded += duration;
+              totalSlotsNeeded += 1;
+              if (entry?.teacherAbbr) {
+                totalAssignedMinutes += duration;
+                assignedSlotsCount += 1;
+              }
             }
-          } else {
-            totalMinutesNeeded += duration * (miejsce.teachersNeeded || 1);
           }
         });
       });
     }
-    // weekly demand (sum over active needed slots across all 5 days)
-    const weeklyMinutesNeeded = totalMinutesNeeded;
 
-    // Total active/eligible personnel count
+    const weeklyMinutesNeeded = totalMinutesNeeded;
     const teachersCount = eligiblePersonnel.length;
 
-    // Total weekly hours of eligible personnel
     let totalTeachingHours = 0;
     eligiblePersonnel.forEach(p => {
       totalTeachingHours += teacherHours[p.abbr] || 0;
     });
 
-    // Sum of proportions (FTE equivalent sum)
     let sumProportions = 0;
     eligiblePersonnel.forEach(p => {
       const hours = teacherHours[p.abbr] || 0;
@@ -452,24 +334,12 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     });
     if (sumProportions === 0) sumProportions = 1;
 
-    // Average minutes of duty for a full-time person to cover everything
     const avgMinutesForFullTime = weeklyMinutesNeeded / sumProportions;
-
-    // Total currently assigned duty minutes
-    let totalAssignedMinutes = 0;
-    Object.entries(dyz.harmonogram).forEach(([key, entry]) => {
-      if (entry.teacherAbbr && !entry.isUnneeded) {
-        const parts = key.split('|');
-        const przerwaNum = parseInt(parts[2]);
-        const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
-        if (przerwa) {
-          totalAssignedMinutes += getBreakDuration(przerwa);
-        }
-      }
-    });
 
     return {
       weeklyMinutesNeeded,
+      totalSlotsNeeded,
+      assignedSlotsCount,
       unneededMinutes,
       unneededSlotsCount,
       unneededTodayCount,
@@ -815,7 +685,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
     const nextHarm = { ...dyz.harmonogram };
     Object.keys(nextHarm).forEach((key) => {
-      if (key.endsWith(`|${num}`)) {
+      const parsed = parseDutySlotKey(key);
+      if (parsed && parsed.breakNum === num) {
         delete nextHarm[key];
       }
     });
@@ -881,202 +752,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     });
   };
 
-  const wouldViolateConsecutiveDutiesRule = (
-    teacherAbbr: string,
-    day: number,
-    candidateBreakNum: number,
-    currentHarm: Record<string, DyzurEntry>,
-    miejsca: MiejsceDyzuru[],
-    przerwy: Przerwa[]
-  ): boolean => {
-    const maxConsecutive = dyz.settings.maxConsecutiveDuties !== undefined ? dyz.settings.maxConsecutiveDuties : 2;
-
-    const sortedBreaks = [...przerwy].sort((a, b) => {
-      const [ah, am] = a.start.split(':').map(Number);
-      const [bh, bm] = b.start.split(':').map(Number);
-      return (ah * 60 + am) - (bh * 60 + bm);
-    });
-
-    const dutyInSortedIndices = sortedBreaks.map((p) => {
-      if (p.num === candidateBreakNum) return true;
-      const hasDuty = miejsca.some(m => 
-        currentHarm[`${m.id}|${day}|${p.num}`]?.teacherAbbr === teacherAbbr
-      );
-      return hasDuty;
-    });
-
-    let consecutiveCount = 0;
-    for (let i = 0; i < dutyInSortedIndices.length; i++) {
-      if (dutyInSortedIndices[i]) {
-        consecutiveCount++;
-        if (consecutiveCount > maxConsecutive) {
-          return true; // Violation
-        }
-      } else {
-        consecutiveCount = 0;
-      }
-    }
-    return false;
-  };
-
-  const isTeacherAvailableForBreak = (abbr: string, dayIdx: number, przerwa: Przerwa): boolean => {
-    const person = personByAbbr.get(abbr);
-
-    // 1. Sprawdzenie dla pracowników niepedagogicznych (obsługa / asystenci / woźni)
-    if (person?.isStaff) {
-      if (person.availability && person.availability.length > 0) {
-        return person.availability.includes(`${dayIdx}-${przerwa.num}`);
-      }
-      // Domyślnie obecny w godzinach standardowych przerw (1..8)
-      return przerwa.num <= 8;
-    }
-
-    // 2. Sprawdzenie godzin tablicowych z planu sal
-    const yk = appState.yearKey;
-    const dayData = schedData[yk]?.[dayIdx] || {};
-    const activeHours: number[] = [];
-
-    Object.keys(dayData).forEach(hourKey => {
-      const hNum = parseInt(hourKey);
-      if (!isNaN(hNum)) {
-        const hourData = dayData[hourKey] || {};
-        const hasClass = Object.values(hourData).some((cell) => {
-          const cells = Array.isArray(cell) ? cell : [cell];
-          return cells.some((c: SchedCell) => c?.teacherAbbr === abbr);
-        });
-        if (hasClass) {
-          activeHours.push(hNum);
-        }
-      }
-    });
-
-    const hasNonTeaching = person && Boolean((person.nonTeachingHours && person.nonTeachingHours > 0) || (person.nonTeachingRoles && person.nonTeachingRoles.length > 0));
-
-    // Jeśli nauczyciel nie ma lekcji przy tablicy w tym dniu:
-    if (activeHours.length === 0) {
-      if (hasNonTeaching) {
-        if (person.availability && person.availability.length > 0) {
-          return person.availability.includes(`${dayIdx}-${przerwa.num}`);
-        }
-        // Domyślna dostępność w szkole dla specjalisty poza tablicą (np. świetlica, pedagog)
-        return przerwa.num <= 6;
-      }
-      return false;
-    }
-
-    const minHour = Math.min(...activeHours);
-    const maxHour = Math.max(...activeHours);
-
-    const firstTimeslot = appState.timeslots?.find(t => t.num === minHour);
-    const lastTimeslot = appState.timeslots?.find(t => t.num === maxHour);
-
-    if (!firstTimeslot || !lastTimeslot) {
-      if (dyz.settings.excludeAfterLastLesson) {
-        return przerwa.num >= minHour - 1 && przerwa.num < maxHour;
-      }
-      return przerwa.num >= minHour - 1 && przerwa.num <= maxHour;
-    }
-
-    const toMins = (tStr: string) => {
-      const [h, m] = tStr.split(':').map(Number);
-      return (isNaN(h) || isNaN(m)) ? 0 : h * 60 + m;
-    };
-
-    const dayStartMins = toMins(firstTimeslot.start);
-    const dayEndMins = toMins(lastTimeslot.end);
-
-    const breakStartMins = toMins(przerwa.start);
-    const breakEndMins = toMins(przerwa.end);
-
-    if (dyz.settings.excludeAfterLastLesson) {
-      // Wykluczenie przerwy, jeśli rozpoczyna się po zakończeniu ostatniej lekcji
-      if (breakStartMins >= dayEndMins) {
-        // Jeśli jednak nauczyciel ma dodatkowe zadania poza tablicą i jest dyspozycyjny w tym slocie
-        if (hasNonTeaching && person.availability?.includes(`${dayIdx}-${przerwa.num}`)) {
-          return true;
-        }
-        return false;
-      }
-    }
-
-    const isBetween = breakStartMins >= dayStartMins && breakEndMins <= dayEndMins;
-    const isDirectlyBefore = breakEndMins === dayStartMins || (breakEndMins > dayStartMins - 30 && breakEndMins <= dayStartMins);
-    const isDirectlyAfter = breakStartMins === dayEndMins || (breakStartMins >= dayEndMins && breakStartMins < dayEndMins + 30);
-
-    if (isBetween || isDirectlyBefore || isDirectlyAfter || (przerwa.num >= minHour - 1 && przerwa.num <= maxHour)) {
-      return true;
-    }
-
-    // Jawna dyspozycyjność poza tablicą (np. dyżur świetlicy popołudniu)
-    if (hasNonTeaching && person.availability?.includes(`${dayIdx}-${przerwa.num}`)) {
-      return true;
-    }
-
-    return false;
-  };
-
   const isPlaceActiveForBreak = (miejsce: MiejsceDyzuru, dayIdx: number, przerwa: Przerwa): boolean => {
-    if (!dyz.settings.skipDutyIfNoClassesOnCorridor) return true;
-
-    const yk = appState.yearKey;
-    const hourBeforeKey = String(przerwa.num);
-    const hourAfterKey = String(przerwa.num + 1);
-
-    const dayData = schedData[yk]?.[dayIdx] || {};
-    const hourBeforeData = dayData[hourBeforeKey] || {};
-    const hourAfterData = dayData[hourAfterKey] || {};
-
-    let roomsToCheck: string[] = miejsce.connectedRooms || [];
-
-    // Dla stref przejściowych lub bez przypisanych sal, użyj sal z danego piętra
-    if (miejsce.isTransitional || roomsToCheck.length === 0) {
-      if (miejsce.floor) {
-        const cols = flattenColumns(appState.floors);
-        roomsToCheck = cols
-          .filter(col => col.floor?.name === miejsce.floor)
-          .map(col => col.room.num);
-      }
-      
-      // Jeśli brak przypisanych sal, sprawdź czy trwa JAKAKOLWIEK lekcja w szkole
-      if (roomsToCheck.length === 0) {
-        const hasAnyLessonInSchool = 
-          Object.values(hourBeforeData).some(cell => {
-            const cells = Array.isArray(cell) ? cell : [cell];
-            return cells.some((c: any) => c?.teacherAbbr);
-          }) ||
-          Object.values(hourAfterData).some(cell => {
-            const cells = Array.isArray(cell) ? cell : [cell];
-            return cells.some((c: any) => c?.teacherAbbr);
-          });
-        return hasAnyLessonInSchool;
-      }
-    }
-
-    const cols = flattenColumns(appState.floors);
-    const targetColKeys = cols
-      .filter(col => roomsToCheck.includes(col.room.num))
-      .map(col => colKey(col));
-
-    if (targetColKeys.length === 0) return false;
-
-    const hasClassBefore = targetColKeys.some(cKey => {
-      const cell = hourBeforeData[cKey];
-      if (!cell) return false;
-      const cells = Array.isArray(cell) ? cell : [cell];
-      return cells.some((c: any) => c?.teacherAbbr);
-    });
-
-    const hasClassAfter = targetColKeys.some(cKey => {
-      const cell = hourAfterData[cKey];
-      if (!cell) return false;
-      const cells = Array.isArray(cell) ? cell : [cell];
-      return cells.some((c: any) => c?.teacherAbbr);
-    });
-
-    return hasClassBefore || hasClassAfter;
+    return isPlaceActiveForBreakInPlan(miejsce, dayIdx, przerwa, appState, schedData);
   };
 
-  // ── AUTO-SUGESTIA DYŻURÓW (Smart duty optimizer with connected rooms preference) ──
+  // ── AUTO-SUGESTIA DYŻURÓW (Smart duty optimizer with hard limits & multi-slot support) ──
   const handleAutoSuggest = () => {
     if (dyz.miejsca.length === 0) {
       notify('Dodaj przynajmniej jedno miejsce dyżuru!', 'err');
@@ -1087,245 +767,46 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       return;
     }
 
-    const nextHarm = { ...dyz.harmonogram };
-    const yk = appState.yearKey || 'default';
-
-    const teacherProportions: { [abbr: string]: number } = {};
-    let sumProportions = 0;
-
-    eligiblePersonnel.forEach(t => {
-      const hours = teacherHours[t.abbr] || 0;
-      const prop = getPersonFteProportion(t, hours);
-      teacherProportions[t.abbr] = prop;
-      sumProportions += prop;
-    });
-
-    if (sumProportions === 0) sumProportions = 1;
-
-    // Obliczenie łącznej liczby slotów dyżurów w tygodniu oraz ich czasu trwania (z pominięciem zbędnych)
-    let totalRequiredDutyMinutes = 0;
-    for (let day = 0; day < 5; day++) {
-      for (const przerwa of dyz.przerwy) {
-        const breakDur = getBreakDuration(przerwa);
-        for (const miejsce of dyz.miejsca) {
-          const key = `${miejsce.id}|${day}|${przerwa.num}`;
-          if (nextHarm[key]?.isUnneeded) continue;
-          totalRequiredDutyMinutes += breakDur * (miejsce.teachersNeeded || 1);
-        }
-      }
-    }
-
-    // Target/Max minutes for each person in duty pool
-    const avgMinutesForFullTime = totalRequiredDutyMinutes / sumProportions;
-    const teacherMaxMinutes: { [abbr: string]: number } = {};
-    const maxMinsLimit = dyz.settings.maxMinutesPerTeacher || 60;
-    eligiblePersonnel.forEach(t => {
-      // Ustawienie minimalnego progu 15 minut, aby umożliwić przydział co najmniej jednego dyżuru
-      if (dyz.settings.autoBalance !== false) {
-        teacherMaxMinutes[t.abbr] = Math.min(maxMinsLimit, Math.max(15, Math.ceil(avgMinutesForFullTime * teacherProportions[t.abbr])));
-      } else {
-        teacherMaxMinutes[t.abbr] = maxMinsLimit;
-      }
-    });
-
-    // Track assigned minutes for each person
-    const assignedMinutes: { [abbr: string]: number } = {};
-    eligiblePersonnel.forEach(t => {
-      // If counting adaptation duties in FTE, pre-populate with their adaptation minutes
-      const adaptMins = (dyz.settings.firstGradeAdaptationDuty !== false && dyz.settings.countAdaptationInFTE !== false)
-        ? (adaptationDuties.totalTeacherMinutes[t.abbr] || 0)
-        : 0;
-      // If counting PE locker room supervision in FTE, pre-populate with PE supervision minutes
-      const peMins = (dyz.settings.peSupervisionDuty !== false && dyz.settings.countPeSupervisionInFTE)
-        ? (peDuties.totalTeacherMinutes[t.abbr] || 0)
-        : 0;
-      assignedMinutes[t.abbr] = adaptMins + peMins;
-    });
-
-    // Uzupełnienie liczby przydzielonych minut zablokowanymi dyżurami
-    Object.entries(nextHarm).forEach(([key, entry]) => {
-      if (entry.locked && entry.teacherAbbr && !entry.isUnneeded && assignedMinutes[entry.teacherAbbr] !== undefined) {
-        const parts = key.split('|'); // [miejsceId, day, przerwaNum]
-        const przerwaNum = parseInt(parts[2]);
-        const przerwa = dyz.przerwy.find(p => p.num === przerwaNum);
-        if (przerwa) {
-          assignedMinutes[entry.teacherAbbr] += getBreakDuration(przerwa);
-        }
-      }
-    });
-
-    // Clear unlocked duties first so we can regenerate them (zachowaj sloty zbędne)
-    Object.keys(nextHarm).forEach(key => {
-      if (!nextHarm[key]?.locked && !nextHarm[key]?.isUnneeded) {
-        delete nextHarm[key];
-      }
-    });
-
-    // Sprawdzenie, czy nauczyciel może objąć dyżur na danej przerwie
-    const canAssignTeacher = (
-      t: any,
-      day: number,
-      przerwa: Przerwa,
-      allowedMinutesBuffer: number
-    ): boolean => {
-      // Sprawdzenie obecności w szkole w danym dniu i na przerwie
-      if (!isTeacherAvailableForBreak(t.abbr, day, przerwa)) return false;
-
-      // Sprawdzenie, czy nauczyciel pełni dyżur adaptacyjny w klasie pierwszej
-      if (dyz.settings.firstGradeAdaptationDuty !== false) {
-        const busyWithAdaptation = getTeacherAdaptationDuty(adaptationDuties.byDay, t.abbr, day, przerwa.num);
-        if (busyWithAdaptation) {
-          return false;
-        }
-      }
-
-      // Sprawdzenie, czy nauczyciel pełni nadzór nad szatnią WF
-      if (dyz.settings.peSupervisionDuty !== false) {
-        const busyWithPE = getTeacherPESupervision(
-          schedData,
-          yk,
-          day,
-          przerwa.num,
-          t.abbr,
-          appState.subjects,
-          dyz.settings
-        );
-        if (busyWithPE) {
-          return false;
-        }
-      }
-
-      // Sprawdzenie limitu minut dyżurów nauczyciela
-      const dur = getBreakDuration(przerwa);
-      if (assignedMinutes[t.abbr] + dur > teacherMaxMinutes[t.abbr] + allowedMinutesBuffer) return false;
-
-      // Sprawdzenie, czy nauczyciel nie ma już dyżuru w innym miejscu na tej przerwie
-      const alreadyAssignedInBreak = dyz.miejsca.some(m => 
-        nextHarm[`${m.id}|${day}|${przerwa.num}`]?.teacherAbbr === t.abbr
-      );
-      if (alreadyAssignedInBreak) return false;
-
-      // Kontrola zasady unikania dyżurów na bezpośrednio sąsiadujących przerwach
-      if (wouldViolateConsecutiveDutiesRule(t.abbr, day, przerwa.num, nextHarm, dyz.miejsca, dyz.przerwy)) {
-        return false;
-      }
-
-      return true;
-    };
-
-    let assignedCount = 0;
-
-    // We do multi-pass scheduling to ensure perfect balance:
-    // We try to fill slots with 0 buffer first. If some slots remain, we try with +15 min buffer, then +30 min, up to +60 min.
-    const buffers = [0, 15, 30, 45, 60, 120];
-
-    for (const buffer of buffers) {
-      // Loop through days, breaks, places
-      for (let day = 0; day < 5; day++) {
-        for (const przerwa of dyz.przerwy) {
-          const breakDur = getBreakDuration(przerwa);
-
-          for (const miejsce of dyz.miejsca) {
-            const key = `${miejsce.id}|${day}|${przerwa.num}`;
-
-            // Pomiń sloty oznaczone jako zbędne
-            if (nextHarm[key]?.isUnneeded) continue;
-
-            if (!isPlaceActiveForBreak(miejsce, day, przerwa)) continue;
-
-            // Skip if already filled
-            if (nextHarm[key]) continue;
-
-            let selected: string | null = null;
-            const connected = miejsce.connectedRooms || [];
-
-            // Sort teachers who can be assigned, preferring the ones who are furthest from their maximum limit
-            const getDeficit = (abbr: string) => {
-              return teacherMaxMinutes[abbr] - assignedMinutes[abbr];
-            };
-
-            const candidates = [...eligibleTeachers]
-              .filter(t => canAssignTeacher(t, day, przerwa, buffer))
-              .sort((a, b) => getDeficit(b.abbr) - getDeficit(a.abbr)); // larger deficit first
-
-            if (candidates.length === 0) continue;
-
-            // TIER 1: Connected rooms preference
-            if (connected.length > 0) {
-              const connectedCandidate = candidates.find(t => {
-                const hourBefore = String(przerwa.num);
-                const hourAfter = String(przerwa.num + 1);
-                return _teacherHasClassInConnectedRooms(t.abbr, day, hourBefore, connected) ||
-                       _teacherHasClassInConnectedRooms(t.abbr, day, hourAfter, connected);
-              });
-              if (connectedCandidate) {
-                selected = connectedCandidate.abbr;
-              }
-            }
-
-            // TIER 2: Nearby classrooms preference (directly before or after the break)
-            if (!selected) {
-              const nearbyCandidate = candidates.find(t => {
-                const hourBefore = String(przerwa.num);
-                const hourAfter = String(przerwa.num + 1);
-                return _teacherHasClass(t.abbr, day, hourBefore) || _teacherHasClass(t.abbr, day, hourAfter);
-              });
-              if (nearbyCandidate) {
-                selected = nearbyCandidate.abbr;
-              }
-            }
-
-            // TIER 3: Fallback - most free candidate in pool
-            if (!selected && candidates.length > 0) {
-              selected = candidates[0].abbr;
-            }
-
-            if (selected) {
-              nextHarm[key] = {
-                teacherAbbr: selected,
-                locked: false
-              };
-              assignedMinutes[selected] += breakDur;
-              assignedCount++;
-            }
-          }
-        }
-      }
-    }
+    const result = autoAssignDuties(appState, schedData);
 
     onChangeAppState({
       ...appState,
       dyzury: {
         ...dyz,
-        harmonogram: nextHarm
+        harmonogram: result.harmonogram
       }
     });
 
-    notify(`✓ Automatycznie zaplanowano ${assignedCount} dyżurów!`);
-  };
-
-  const _teacherHasClass = (abbr: string, dayIdx: number, hourKey: string): boolean => {
-    const yk = appState.yearKey;
-    const hourData = schedData[yk]?.[dayIdx]?.[hourKey] || {};
-    return Object.values(hourData).some((cell: any) => {
-      const cells = Array.isArray(cell) ? cell : [cell];
-      return cells.some((c: any) => c?.teacherAbbr === abbr);
-    });
+    if (result.unfilledSlots.length > 0) {
+      setUnfilledWarning(result.unfilledSlots);
+      notify(
+        `Zaplanowano ${result.assignedCount} dyżurów. Nie udało się obsadzić ${result.unfilledSlots.length} slotów bez złamania limitów.`,
+        'err'
+      );
+    } else {
+      setUnfilledWarning(null);
+      notify(`✓ Automatycznie zaplanowano ${result.assignedCount} dyżurów!`);
+    }
   };
 
   // Drag & drop swapping
-  const handleDragStart = (mId: string, prw: number) => {
+  const handleDragStart = (mId: string, prw: number, slotIdx: number = 1) => {
     if (presentationMode) return;
-    setDraggedTeacher({ miejsceId: mId, przerwa: prw });
+    setDraggedTeacher({ miejsceId: mId, przerwa: prw, slotIdx });
   };
 
-  const handleDropOnSlot = (dstMId: string, dstPrw: number) => {
+  const handleDropOnSlot = (dstMId: string, dstPrw: number, dstSlotIdx: number = 1) => {
     if (presentationMode) return;
     if (!draggedTeacher) return;
-    const { miejsceId: srcMId, przerwa: srcPrw } = draggedTeacher;
+    const { miejsceId: srcMId, przerwa: srcPrw, slotIdx: srcSlotIdx } = draggedTeacher;
 
-    const srcKey = `${srcMId}|${activeDay}|${srcPrw}`;
-    const dstKey = `${dstMId}|${activeDay}|${dstPrw}`;
+    const srcKey = getDutySlotKey(srcMId, activeDay, srcPrw, srcSlotIdx);
+    const dstKey = getDutySlotKey(dstMId, activeDay, dstPrw, dstSlotIdx);
+
+    if (srcKey === dstKey) {
+      setDraggedTeacher(null);
+      return;
+    }
 
     const nextHarm = { ...dyz.harmonogram };
     const tempSrc = nextHarm[srcKey];
@@ -1350,10 +831,10 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   };
 
   // Direct Assign Modal
-  const openDirectAssign = (miejsceId: string, przerwa: number) => {
+  const openDirectAssign = (miejsceId: string, przerwa: number, slotIdx: number = 1) => {
     if (presentationMode) return;
-    setEditingSlot({ miejsceId, przerwa });
-    const key = `${miejsceId}|${activeDay}|${przerwa}`;
+    setEditingSlot({ miejsceId, przerwa, slotIdx });
+    const key = getDutySlotKey(miejsceId, activeDay, przerwa, slotIdx);
     const entry = dyz.harmonogram[key];
     setSelectedTeacher(entry?.teacherAbbr || '');
     setDutyNote(entry?.note || '');
@@ -1366,13 +847,13 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
     if (e) e.preventDefault();
     if (!editingSlot) return;
 
-    const { miejsceId, przerwa } = editingSlot;
+    const { miejsceId, przerwa, slotIdx } = editingSlot;
     const nextHarm = { ...dyz.harmonogram };
     const daysToUpdate = applyAllDays ? [0, 1, 2, 3, 4] : [activeDay];
 
     if (slotIsUnneeded) {
       daysToUpdate.forEach(d => {
-        const k = `${miejsceId}|${d}|${przerwa}`;
+        const k = getDutySlotKey(miejsceId, d, przerwa, slotIdx);
         nextHarm[k] = {
           teacherAbbr: '',
           locked: true,
@@ -1383,7 +864,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       notify(applyAllDays ? 'Oznaczono dyżur jako zbędny (cały tydzień Pn–Pt)' : 'Oznaczono dyżur jako zbędny');
     } else if (selectedTeacher) {
       daysToUpdate.forEach(d => {
-        const k = `${miejsceId}|${d}|${przerwa}`;
+        const k = getDutySlotKey(miejsceId, d, przerwa, slotIdx);
         nextHarm[k] = {
           teacherAbbr: selectedTeacher,
           locked: dutyLocked,
@@ -1394,7 +875,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       notify(applyAllDays ? 'Przypisano dyżur na cały tydzień' : 'Zapisano dyżur');
     } else {
       daysToUpdate.forEach(d => {
-        const k = `${miejsceId}|${d}|${przerwa}`;
+        const k = getDutySlotKey(miejsceId, d, przerwa, slotIdx);
         delete nextHarm[k];
       });
       notify(applyAllDays ? 'Wyczyszczono dyżur z całego tygodnia' : 'Wyczyszczono dyżur');
@@ -1412,9 +893,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
   };
 
   // Szybkie przełączenie statusu zbędnego dyżuru (1-kliknięcie w komórce)
-  const handleQuickToggleUnneeded = (miejsceId: string, przerwa: number) => {
+  const handleQuickToggleUnneeded = (miejsceId: string, przerwa: number, slotIdx: number = 1) => {
     if (presentationMode) return;
-    const key = `${miejsceId}|${activeDay}|${przerwa}`;
+    const key = getDutySlotKey(miejsceId, activeDay, przerwa, slotIdx);
     const entry = dyz.harmonogram[key];
     const nextHarm = { ...dyz.harmonogram };
     const place = dyz.miejsca.find(m => m.id === miejsceId);
@@ -1636,8 +1117,80 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
       </div>
 
       <div className="flex-1 overflow-auto bg-slate-50 p-4 md:p-5 min-h-0 min-w-0 custom-scrollbar">
+        {isRoomsOutOfSync && (
+          <div
+            role="alert"
+            className="mb-4 bg-amber-50 border border-amber-300 rounded-xl p-3.5 shadow-xs text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          >
+            <div className="flex items-start gap-2.5">
+              <span className="text-base leading-none mt-0.5">⚠️</span>
+              <div>
+                <div className="font-extrabold text-amber-950">
+                  Plan sal nie jest zsynchronizowany z planem lekcji
+                </div>
+                <p className="text-[11px] text-amber-800 mt-0.5">
+                  W Etapie 1 (Plan lekcji) wprowadzono zmiany od ostatniej synchronizacji z Planem Sal. Przelicz przydział sal w Planie Sal przed układaniem dyżurów, aby obecność nauczycieli i aktywność korytarzy były aktualne.
+                </p>
+              </div>
+            </div>
+            {onNavigateToTab && !presentationMode && (
+              <button
+                type="button"
+                onClick={() => onNavigateToTab('plan_sal')}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] shadow-xs transition shrink-0 cursor-pointer"
+              >
+                Przejdź do Planu Sal
+              </button>
+            )}
+          </div>
+        )}
+
         {/* ── INTERAKTYWNY HARMONOGRAM ── */}
         {activeTab === 'roster' && (
+          <div className="space-y-4">
+            {unfilledWarning && unfilledWarning.length > 0 && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 shadow-xs text-xs text-amber-950">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-extrabold flex items-center gap-1.5 text-amber-900">
+                      <span>⚠️</span>
+                      <span>
+                        Nie udało się obsadzić {unfilledWarning.length}{' '}
+                        {unfilledWarning.length === 1 ? 'stanowiska' : 'stanowisk'} bez złamania limitów dyżurów:
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/90 mt-0.5">
+                      Pozostały puste ze względu na twarde limity (zwolnienia, maks. liczba/minuty dyżurów, dyżury sąsiadujące lub dostępność).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUnfilledWarning(null)}
+                    className="text-amber-700 hover:text-amber-950 font-bold px-2 py-0.5 rounded hover:bg-amber-100 cursor-pointer"
+                    title="Zamknij ostrzeżenie"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <ul className="mt-2.5 max-h-36 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 pr-1">
+                  {unfilledWarning.map((slot) => (
+                    <li
+                      key={slot.key}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/80 border border-amber-200 text-[11px] flex items-center justify-between gap-2"
+                    >
+                      <span className="font-bold truncate">
+                        {slot.dayName} • {slot.placeName}
+                        {slot.totalSlotsForPlace > 1 ? ` (#${slot.slotIdx})` : ''}
+                      </span>
+                      <span className="font-mono text-[10px] text-amber-800 shrink-0">
+                        {slot.breakName} ({slot.timeRange})
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-start min-w-0 w-full">
             <div className={`bg-white border border-slate-200 rounded-xl shadow-sm p-4 min-w-0 w-full ${
               presentationMode || !showStatsSidebar ? 'lg:col-span-4' : 'lg:col-span-3'
@@ -1675,6 +1228,11 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                                 #{pIdx + 1}
                               </span>
                               <span className="block text-slate-800 font-bold truncate max-w-[150px]" title={place.name}>{place.name}</span>
+                              {(place.teachersNeeded || 1) > 1 && (
+                                <span className="px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 text-[9px] font-mono font-bold shrink-0" title={`Wymagana obsada: ${place.teachersNeeded} osoby`}>
+                                  {place.teachersNeeded} os.
+                                </span>
+                              )}
                             </div>
                             {place.floor && <span className="block text-[9px] text-slate-400 font-medium mt-0.5 truncate">{place.floor}</span>}
                           </th>
@@ -1689,122 +1247,147 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                             <div className="text-[10px] text-slate-500 font-mono mt-0.5 font-semibold">{p.start}–{p.end}</div>
                           </td>
                           {dyz.miejsca.map(place => {
-                            const key = `${place.id}|${activeDay}|${p.num}`;
-                            const duty = dyz.harmonogram[key];
-                            const t = duty?.teacherAbbr ? personByAbbr.get(duty.teacherAbbr) : null;
                             const isActive = isPlaceActiveForBreak(place, activeDay, p);
+                            const needed = Math.max(1, place.teachersNeeded || 1);
+                            const slotIndices = Array.from({ length: needed }, (_, idx) => idx + 1);
 
                             return (
                               <td 
                                 key={place.id} 
                                 className={`p-1.5 text-center align-middle transition-colors duration-150 min-w-[150px] border-l border-slate-100 ${!isActive ? 'bg-slate-50/40' : ''}`}
                                 onDragOver={(e) => e.preventDefault()}
-                                onDrop={() => handleDropOnSlot(place.id, p.num)}
+                                onDrop={() => handleDropOnSlot(place.id, p.num, 1)}
                               >
-                                {duty?.isUnneeded ? (
-                                  <div 
-                                    onClick={() => openDirectAssign(place.id, p.num)}
-                                    className="group/unneeded relative p-1.5 rounded-lg border-2 border-dashed border-amber-300/80 bg-amber-50/70 hover:bg-amber-100/80 hover:border-amber-400 transition cursor-pointer flex flex-col justify-center items-center min-h-[50px] shadow-xs select-none"
-                                    title={duty.note ? `Dyżur oznaczony jako zbędny: ${duty.note}. Kliknij, aby edytować.` : 'Dyżur oznaczony ręcznie jako niepotrzebny (zbędny). Kliknij, aby edytować.'}
-                                  >
-                                    <div className="flex items-center gap-1 text-amber-950 font-bold">
-                                      <span className="text-xs leading-none">🚫</span>
-                                      <span className="text-[10px] font-black uppercase tracking-wider font-mono">Zbędny</span>
-                                    </div>
-                                    <span className="text-[9px] text-amber-800/90 font-semibold truncate max-w-[125px] mt-0.5" title={duty.note || 'Zwolniony z obsady'}>
-                                      {duty.note || 'Dyżur niepotrzebny'}
-                                    </span>
-                                    {!presentationMode && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
+                                <div className="flex flex-col gap-1.5">
+                                  {slotIndices.map((slotIdx) => {
+                                    const key = getDutySlotKey(place.id, activeDay, p.num, slotIdx);
+                                    const duty = dyz.harmonogram[key];
+                                    const t = duty?.teacherAbbr ? personByAbbr.get(duty.teacherAbbr) : null;
+
+                                    return (
+                                      <div
+                                        key={key}
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={(e) => {
                                           e.stopPropagation();
-                                          handleQuickToggleUnneeded(place.id, p.num);
+                                          handleDropOnSlot(place.id, p.num, slotIdx);
                                         }}
-                                        className="opacity-0 group-hover/unneeded:opacity-100 focus:opacity-100 absolute top-1 right-1 text-[8.5px] bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-700 border border-slate-200 rounded px-1.5 py-0.5 shadow-xs transition font-bold"
-                                        title="Przywróć dyżur jako wymagany"
                                       >
-                                        ✕
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : duty?.teacherAbbr ? (
-                                  <div 
-                                    draggable={!presentationMode}
-                                    onDragStart={() => handleDragStart(place.id, p.num)}
-                                    onClick={() => openDirectAssign(place.id, p.num)}
-                                    className={`p-2 rounded-lg border-l-4 shadow-xs transition relative flex flex-col justify-center items-center min-h-[50px] ${
-                                      presentationMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:shadow-md hover:scale-[1.02]'
-                                    } ${
-                                      duty.locked 
-                                        ? 'bg-slate-50 border-slate-600 text-slate-900 font-bold'
-                                        : 'bg-emerald-50/60 border-emerald-500 text-emerald-950 font-semibold'
-                                    } ${!isActive ? 'opacity-75 border-slate-300' : ''}`}
-                                  >
-                                    <div className="flex items-center gap-1">
-                                      {t?.isStaff && <span className="text-[10px]" title={`Pracownik niepedagogiczny: ${t.role}`}>🏫</span>}
-                                      {Boolean(!t?.isStaff && t?.nonTeachingHours && t.nonTeachingHours > 0) && (
-                                        <span className="text-[10px]" title={`Zadania poza tablicą: ${t?.role}`}>📚</span>
-                                      )}
-                                      <span className="text-xs tracking-wider font-mono font-bold">{duty.teacherAbbr}</span>
-                                    </div>
-                                    <span className="text-[10px] text-slate-500 truncate max-w-[125px] font-medium mt-0.5" title={t ? `${t.first} ${t.last} (${t.role})` : undefined}>
-                                      {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
-                                    </span>
-                                    {!isActive && <span className="absolute bottom-1 right-1 text-[8px] opacity-75" title="Brak lekcji na tym korytarzu">💤</span>}
-                                    {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
-                                    {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
-                                  </div>
-                                ) : presentationMode ? (
-                                  <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>
-                                ) : !isActive ? (
-                                  <div className="relative group/slot flex items-center justify-center w-full min-h-[46px]">
-                                    <button 
-                                      onClick={() => openDirectAssign(place.id, p.num)}
-                                      className="w-full h-full py-1 border border-dashed border-slate-200 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/30 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer text-[9px] flex flex-col items-center justify-center min-h-[46px]"
-                                      title="Na tym korytarzu nie odbywają się teraz lekcje (dyżur niewymagany automatycznie)"
-                                    >
-                                      <span className="font-bold text-slate-400 leading-none">+</span>
-                                      <span className="text-[7.5px] text-slate-400 font-semibold leading-none mt-0.5">wolne</span>
-                                    </button>
-                                    {!presentationMode && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleQuickToggleUnneeded(place.id, p.num);
-                                        }}
-                                        className="opacity-0 group-hover/slot:opacity-100 focus:opacity-100 absolute top-1 right-1 p-1 rounded bg-white hover:bg-amber-100 text-slate-400 hover:text-amber-800 border border-slate-200 hover:border-amber-300 shadow-xs transition text-[9px] font-bold"
-                                        title="Oznacz ręcznie: dyżur zbędny / niepotrzebny"
-                                      >
-                                        🚫
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="relative group/slot flex items-center justify-center w-full min-h-[46px]">
-                                    <button 
-                                      onClick={() => openDirectAssign(place.id, p.num)}
-                                      className="w-full h-full py-2.5 border border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/20 hover:text-blue-600 rounded-lg text-slate-400 text-sm font-light transition cursor-pointer min-h-[46px] flex items-center justify-center"
-                                      title="Kliknij, aby przypisać osobę na dyżur"
-                                    >
-                                      +
-                                    </button>
-                                    {!presentationMode && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleQuickToggleUnneeded(place.id, p.num);
-                                        }}
-                                        className="opacity-0 group-hover/slot:opacity-100 focus:opacity-100 absolute top-1 right-1 p-1 rounded bg-white hover:bg-amber-100 text-slate-400 hover:text-amber-800 border border-slate-200 hover:border-amber-300 shadow-xs transition text-[9px] font-bold"
-                                        title="Oznacz ręcznie: dyżur zbędny / niepotrzebny"
-                                      >
-                                        🚫
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
+                                        {duty?.isUnneeded ? (
+                                          <div 
+                                            onClick={() => openDirectAssign(place.id, p.num, slotIdx)}
+                                            className="group/unneeded relative p-1.5 rounded-lg border-2 border-dashed border-amber-300/80 bg-amber-50/70 hover:bg-amber-100/80 hover:border-amber-400 transition cursor-pointer flex flex-col justify-center items-center min-h-[50px] shadow-xs select-none"
+                                            title={duty.note ? `Dyżur oznaczony jako zbędny: ${duty.note}. Kliknij, aby edytować.` : 'Dyżur oznaczony ręcznie jako niepotrzebny (zbędny). Kliknij, aby edytować.'}
+                                          >
+                                            <div className="flex items-center gap-1 text-amber-950 font-bold">
+                                              {needed > 1 && <span className="text-[8.5px] font-mono text-amber-700">#{slotIdx}</span>}
+                                              <span className="text-xs leading-none">🚫</span>
+                                              <span className="text-[10px] font-black uppercase tracking-wider font-mono">Zbędny</span>
+                                            </div>
+                                            <span className="text-[9px] text-amber-800/90 font-semibold truncate max-w-[125px] mt-0.5" title={duty.note || 'Zwolniony z obsady'}>
+                                              {duty.note || 'Dyżur niepotrzebny'}
+                                            </span>
+                                            {!presentationMode && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleQuickToggleUnneeded(place.id, p.num, slotIdx);
+                                                }}
+                                                className="opacity-0 group-hover/unneeded:opacity-100 focus:opacity-100 absolute top-1 right-1 text-[8.5px] bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-700 border border-slate-200 rounded px-1.5 py-0.5 shadow-xs transition font-bold"
+                                                title="Przywróć dyżur jako wymagany"
+                                              >
+                                                ✕
+                                              </button>
+                                            )}
+                                          </div>
+                                        ) : duty?.teacherAbbr ? (
+                                          <div 
+                                            draggable={!presentationMode}
+                                            onDragStart={() => handleDragStart(place.id, p.num, slotIdx)}
+                                            onClick={() => openDirectAssign(place.id, p.num, slotIdx)}
+                                            className={`p-2 rounded-lg border-l-4 shadow-xs transition relative flex flex-col justify-center items-center min-h-[50px] ${
+                                              presentationMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:shadow-md hover:scale-[1.02]'
+                                            } ${
+                                              duty.locked 
+                                                ? 'bg-slate-50 border-slate-600 text-slate-900 font-bold'
+                                                : 'bg-emerald-50/60 border-emerald-500 text-emerald-950 font-semibold'
+                                            } ${!isActive ? 'opacity-75 border-slate-300' : ''}`}
+                                          >
+                                            <div className="flex items-center gap-1">
+                                              {needed > 1 && (
+                                                <span className="text-[8.5px] font-mono text-slate-400">#{slotIdx}</span>
+                                              )}
+                                              {t?.isStaff && <span className="text-[10px]" title={`Pracownik niepedagogiczny: ${t.role}`}>🏫</span>}
+                                              {Boolean(!t?.isStaff && t?.nonTeachingHours && t.nonTeachingHours > 0) && (
+                                                <span className="text-[10px]" title={`Zadania poza tablicą: ${t?.role}`}>📚</span>
+                                              )}
+                                              <span className="text-xs tracking-wider font-mono font-bold">{duty.teacherAbbr}</span>
+                                            </div>
+                                            <span className="text-[10px] text-slate-500 truncate max-w-[125px] font-medium mt-0.5" title={t ? `${t.first} ${t.last} (${t.role})` : undefined}>
+                                              {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
+                                            </span>
+                                            {!isActive && <span className="absolute bottom-1 right-1 text-[8px] opacity-75" title="Brak lekcji na tym korytarzu">💤</span>}
+                                            {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
+                                            {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
+                                          </div>
+                                        ) : presentationMode ? (
+                                          <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>
+                                        ) : !isActive ? (
+                                          <div className="relative group/slot flex items-center justify-center w-full min-h-[46px]">
+                                            <button 
+                                              onClick={() => openDirectAssign(place.id, p.num, slotIdx)}
+                                              className="w-full h-full py-1 border border-dashed border-slate-200 bg-slate-50/40 hover:border-blue-300 hover:bg-blue-50/30 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer text-[9px] flex flex-col items-center justify-center min-h-[46px]"
+                                              title="Na tym korytarzu nie odbywają się teraz lekcje (dyżur niewymagany automatycznie)"
+                                            >
+                                              <span className="font-bold text-slate-400 leading-none">
+                                                {needed > 1 ? `#${slotIdx} +` : '+'}
+                                              </span>
+                                              <span className="text-[7.5px] text-slate-400 font-semibold leading-none mt-0.5">wolne</span>
+                                            </button>
+                                            {!presentationMode && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleQuickToggleUnneeded(place.id, p.num, slotIdx);
+                                                }}
+                                                className="opacity-0 group-hover/slot:opacity-100 focus:opacity-100 absolute top-1 right-1 p-1 rounded bg-white hover:bg-amber-100 text-slate-400 hover:text-amber-800 border border-slate-200 hover:border-amber-300 shadow-xs transition text-[9px] font-bold"
+                                                title="Oznacz ręcznie: dyżur zbędny / niepotrzebny"
+                                              >
+                                                🚫
+                                              </button>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <div className="relative group/slot flex items-center justify-center w-full min-h-[46px]">
+                                            <button 
+                                              onClick={() => openDirectAssign(place.id, p.num, slotIdx)}
+                                              className="w-full h-full py-2.5 border border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50/20 hover:text-blue-600 rounded-lg text-slate-400 text-sm font-light transition cursor-pointer min-h-[46px] flex items-center justify-center gap-1"
+                                              title="Kliknij, aby przypisać osobę na dyżur"
+                                            >
+                                              {needed > 1 && <span className="text-[9px] font-mono text-slate-400">#{slotIdx}</span>}
+                                              <span>+</span>
+                                            </button>
+                                            {!presentationMode && (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleQuickToggleUnneeded(place.id, p.num, slotIdx);
+                                                }}
+                                                className="opacity-0 group-hover/slot:opacity-100 focus:opacity-100 absolute top-1 right-1 p-1 rounded bg-white hover:bg-amber-100 text-slate-400 hover:text-amber-800 border border-slate-200 hover:border-amber-300 shadow-xs transition text-[9px] font-bold"
+                                                title="Oznacz ręcznie: dyżur zbędny / niepotrzebny"
+                                              >
+                                                🚫
+                                              </button>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </td>
                             );
                           })}
@@ -2084,7 +1667,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                       const maxMins = teacherMaxMinutes[t.abbr] || 0;
                       const hours = teacherHours[t.abbr] || 0;
                       const isOver = dm > maxMins;
-                      const isExcluded = excludedSet.has(t.abbr);
+                      const isExcluded = excludedSet.has(t.abbr) || Boolean(t.dutyExempt) || Boolean(t.isAdministrative) || !t.dutyEligible;
                       const fte = getPersonFteProportion(t, hours);
 
                       return (
@@ -2154,6 +1737,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                 </div>
               </div>
             )}
+          </div>
           </div>
         )}
 
@@ -2654,16 +2238,32 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     <div className="flex gap-2 items-center">
                       <input 
                         type="number"
-                        min="10"
+                        min="5"
                         max="300"
                         step="5"
                         value={maxMinutesPerTeacher}
                         onChange={(e) => setMaxMinutesPerTeacher(Number(e.target.value))}
                         className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none w-24 font-bold text-slate-800 font-mono"
                       />
-                      <span className="text-xs text-slate-500 font-semibold">minut</span>
+                      <span className="text-xs text-slate-500 font-semibold">minut (twardy limit)</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 mt-1 block">Łączny limit czasu dyżurów przydzielany nauczycielowi w skali tygodnia.</span>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Łączny twardy limit czasu dyżurów przydzielany nauczycielowi w skali tygodnia.</span>
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-3">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">🔢 Maksymalna liczba dyżurów w tygodniu (na osobę)</label>
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="number"
+                        min="1"
+                        max="25"
+                        value={maxDuties}
+                        onChange={(e) => setMaxDuties(Math.max(1, Number(e.target.value) || 1))}
+                        className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white outline-none w-24 font-bold text-slate-800 font-mono"
+                      />
+                      <span className="text-xs text-slate-500 font-semibold">dyżurów (twardy limit)</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">Twardy limit liczby dyżurów w tygodniu na jednego nauczyciela.</span>
                   </div>
 
                   <div className="border-t border-slate-100 pt-3">
@@ -2878,14 +2478,14 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                       <div className="p-2 bg-white rounded-lg border border-slate-100">
                         <span className="block text-[9px] font-bold text-slate-400 uppercase leading-none">Potrzebne dyżury</span>
                         <span className="block text-sm font-extrabold text-slate-800 font-mono mt-1">{demandStats.weeklyMinutesNeeded} min</span>
-                        <span className="text-[9px] text-slate-400 font-medium block mt-0.5 leading-none">w skali tygodnia</span>
+                        <span className="text-[9px] text-slate-400 font-medium block mt-0.5 leading-none">{demandStats.totalSlotsNeeded} obsad w tyg.</span>
                       </div>
                       <div className="p-2 bg-white rounded-lg border border-slate-100">
                         <span className="block text-[9px] font-bold text-slate-400 uppercase leading-none">Przydzielone dyżury</span>
                         <span className={`block text-sm font-extrabold font-mono mt-1 ${demandStats.coveragePercent >= 100 ? 'text-emerald-600' : 'text-amber-600'}`}>
                           {demandStats.totalAssignedMinutes} min ({demandStats.coveragePercent}%)
                         </span>
-                        <span className="text-[9px] text-slate-400 font-medium block mt-0.5 leading-none font-sans">obsadzone przerw</span>
+                        <span className="text-[9px] text-slate-400 font-medium block mt-0.5 leading-none font-sans">{demandStats.assignedSlotsCount} obsadzonych</span>
                       </div>
                     </div>
 
@@ -2987,19 +2587,24 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
 
       {/* ── MODAL RĘCZNEGO PRZYDZIELANIA DYŻURU ── */}
       {editingSlot && (() => {
-        const { miejsceId, przerwa } = editingSlot;
+        const { miejsceId, przerwa, slotIdx } = editingSlot;
         const miejsce = dyz.miejsca.find(m => m.id === miejsceId);
         if (!miejsce) return null;
 
-        const getCandidateList = (pl: MiejsceDyzuru, prw: number) => {
+        const getCandidateList = (pl: MiejsceDyzuru, prw: number, targetSlotIdx: number) => {
           const connected = pl.connectedRooms || [];
           const candidates = eligibleTeachers.map(t => {
             const lessonBefore = _getTeacherLesson(t.abbr, activeDay, String(prw));
             const lessonAfter = _getTeacherLesson(t.abbr, activeDay, String(prw + 1));
             
-            const isAlreadyOnBreak = dyz.miejsca.some(m => 
-              m.id !== pl.id && 
-              dyz.harmonogram[`${m.id}|${activeDay}|${prw}`]?.teacherAbbr === t.abbr
+            const isAlreadyOnBreak = isTeacherAssignedOnBreak(
+              dyz.harmonogram,
+              dyz.miejsca,
+              activeDay,
+              prw,
+              t.abbr,
+              pl.id,
+              targetSlotIdx
             );
 
             const busyAdaptation = dyz.settings.firstGradeAdaptationDuty !== false
@@ -3012,8 +2617,18 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
             
             const currentMins = teacherDutyMinutes[t.abbr] || 0;
             const maxMins = teacherMaxMinutes[t.abbr] || 0;
-            const isCurrentlyAssignedHere = dyz.harmonogram[`${pl.id}|${activeDay}|${prw}`]?.teacherAbbr === t.abbr;
-            const isOverLimit = currentMins >= maxMins && !isCurrentlyAssignedHere;
+            const currentCount = teacherDutyCounts[t.abbr] || 0;
+            const teacherObj = !t.isStaff ? teacherMap.get(t.abbr) : null;
+            const hardCountLimit = teacherObj?.maxDutyCount !== undefined && dyz.settings.maxPerTeacher !== undefined
+              ? Math.min(teacherObj.maxDutyCount, dyz.settings.maxPerTeacher)
+              : teacherObj?.maxDutyCount !== undefined
+                ? teacherObj.maxDutyCount
+                : dyz.settings.maxPerTeacher;
+            const isCurrentlyAssignedHere = dyz.harmonogram[getDutySlotKey(pl.id, activeDay, prw, targetSlotIdx)]?.teacherAbbr === t.abbr;
+            const isOverLimit = !isCurrentlyAssignedHere && (
+              currentMins >= maxMins ||
+              (hardCountLimit !== undefined && currentCount >= hardCountLimit)
+            );
 
             let score = 1; // standard neutral
             let reason = 'Wolny (brak przyległych lekcji)';
@@ -3031,7 +2646,9 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
               reason = 'Zajęty - pełni inny dyżur na tej przerwie';
             } else if (isOverLimit) {
               score = 0;
-              reason = `Przekroczony limit minutowy (${currentMins}/${maxMins} min)`;
+              reason = hardCountLimit !== undefined && currentCount >= hardCountLimit
+                ? `Osiągnięty limit liczby dyżurów (${currentCount}/${hardCountLimit})`
+                : `Przekroczony limit minutowy (${currentMins}/${maxMins} min)`;
             } else {
               const roomBeforeConnected = lessonBefore?.roomName && connected.includes(lessonBefore.roomName);
               const roomAfterConnected = lessonAfter?.roomName && connected.includes(lessonAfter.roomName);
@@ -3077,7 +2694,8 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
           });
         };
 
-        const candidates = getCandidateList(miejsce, przerwa);
+        const candidates = getCandidateList(miejsce, przerwa, slotIdx);
+        const neededForPlace = Math.max(1, miejsce.teachersNeeded || 1);
 
         return (
           <div className="fixed inset-0 z-[2000] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
@@ -3086,7 +2704,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">🚪 Przypisz nauczyciela na dyżur</h3>
                   <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">
-                    Stanowisko: <span className="text-slate-700">{miejsce.name}</span> | Przerwa nr {przerwa} ({DAYS[activeDay]})
+                    Stanowisko: <span className="text-slate-700">{miejsce.name}{neededForPlace > 1 ? ` (#${slotIdx})` : ''}</span> | Przerwa nr {przerwa} ({DAYS[activeDay]})
                   </p>
                 </div>
                 <button 
@@ -3395,18 +3013,19 @@ export default function Dyzury({ appState, onChangeAppState, schedData, presenta
                     {Object.entries(dyz.harmonogram)
                       .filter(([, entry]) => entry.isUnneeded)
                       .map(([key, entry]) => {
-                        const [mId, dStr, pNumStr] = key.split('|');
-                        const dayNum = parseInt(dStr, 10);
-                        const pNum = parseInt(pNumStr, 10);
+                        const parsed = parseDutySlotKey(key);
+                        if (!parsed) return null;
+                        const { placeId: mId, day: dayNum, breakNum: pNum, slotIdx } = parsed;
                         const place = dyz.miejsca.find(m => m.id === mId);
                         const przerwa = dyz.przerwy.find(p => p.num === pNum);
+                        const needed = Math.max(1, place?.teachersNeeded || 1);
 
                         return (
                           <div key={key} className="p-3 bg-white hover:bg-slate-50 flex items-center justify-between gap-3 text-xs">
                             <div className="space-y-0.5 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-slate-800 truncate">
-                                  {place?.name || 'Stanowisko'}
+                                  {place?.name || 'Stanowisko'}{needed > 1 ? ` (#${slotIdx})` : ''}
                                 </span>
                                 <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.2 rounded-full">
                                   {DAYS[dayNum]}

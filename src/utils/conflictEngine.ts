@@ -4,8 +4,83 @@
  * Opis: Czysta funkcja analityczna sprawdzająca kolizje nauczycieli, sal, klas, grup i dostępności.
  */
 
-import { PlanLekcjiState, Assignment, SpecialAssignment } from '../types';
+import { PlanLekcjiState, Assignment, SpecialAssignment, SchoolGroup } from '../types';
 import { isSportsFacility } from './roomUtils';
+import { isTeacherAvailableAt } from './availability';
+
+export interface GroupOverlapReason {
+  reason: 'whole_class' | 'same_group' | 'common_students' | 'different_partition';
+  commonCount?: number;
+  partitionA?: string;
+  partitionB?: string;
+}
+
+/**
+ * Sprawdza szczegółowo, czy dwie jednostki tej samej klasy (cała klasa lub grupy)
+ * kolidują ze sobą w tym samym slocie czasowym na podstawie partitionId oraz studentIds.
+ */
+export function analyzeGroupOverlap(
+  groupAId: string | null | undefined,
+  groupBId: string | null | undefined,
+  schoolGroups?: SchoolGroup[] | Map<string, SchoolGroup>
+): GroupOverlapReason | null {
+  if (!groupAId || !groupBId) {
+    return { reason: 'whole_class' };
+  }
+  if (groupAId === groupBId) {
+    return { reason: 'same_group' };
+  }
+
+  const getGroup = (id: string): SchoolGroup | undefined => {
+    if (!schoolGroups) return undefined;
+    if (schoolGroups instanceof Map) return schoolGroups.get(id);
+    return schoolGroups.find(g => g.id === id);
+  };
+
+  const groupA = getGroup(groupAId);
+  const groupB = getGroup(groupBId);
+
+  const studentsA = groupA?.studentIds;
+  const studentsB = groupB?.studentIds;
+  const hasExplicitStudentsA = Array.isArray(studentsA) && studentsA.length > 0;
+  const hasExplicitStudentsB = Array.isArray(studentsB) && studentsB.length > 0;
+
+  if (hasExplicitStudentsA && hasExplicitStudentsB) {
+    const commonStudents = studentsA.filter(sId => studentsB.includes(sId));
+    if (commonStudents.length > 0) {
+      return {
+        reason: 'common_students',
+        commonCount: commonStudents.length,
+        partitionA: groupA?.partitionId,
+        partitionB: groupB?.partitionId
+      };
+    }
+    return null;
+  }
+
+  const partA = groupA?.partitionId || '';
+  const partB = groupB?.partitionId || '';
+  if (partA !== partB) {
+    return {
+      reason: 'different_partition',
+      partitionA: groupA?.partitionId || 'domyślny',
+      partitionB: groupB?.partitionId || 'domyślny'
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Zwraca true, jeśli dwie grupy (lub lekcje całej klasy przy null) nie mogą odbywać się równolegle w tym samym slocie.
+ */
+export function groupsOverlap(
+  groupAId: string | null | undefined,
+  groupBId: string | null | undefined,
+  schoolGroups?: SchoolGroup[] | Map<string, SchoolGroup>
+): boolean {
+  return analyzeGroupOverlap(groupAId, groupBId, schoolGroups) !== null;
+}
 
 export interface PlanConflict {
   type: 'teacher' | 'room' | 'class' | 'availability';
@@ -161,16 +236,14 @@ export function analyzeConflicts(planLekcji: PlanLekcjiState): ConflictEngineRes
 
       // Sprawdzenie dostępności nauczyciela prowadzącego
       const teacher = teachersMap.get(asg.teacherId);
-      if (teacher && teacher.availability && teacher.availability.length > 0) {
-        const checkCode = `${day}-${hour}`;
-        if (!teacher.availability.includes(checkCode)) {
-          const tName = `${teacher.first} ${teacher.last} (${teacher.abbr})`;
-          addConflict(
-            'availability',
-            [key],
-            `Niedostępność nauczyciela: ${tName} nie ma wyznaczonej dostępności w tym terminie (dzień ${day}, lekcja ${hour + 1}).`
-          );
-        }
+      if (teacher && !isTeacherAvailableAt(teacher, day, hour, planLekcji.hours)) {
+        const tName = `${teacher.first} ${teacher.last} (${teacher.abbr})`;
+        const hourLabel = planLekcji.hours?.[hour]?.num ?? (hour + 1);
+        addConflict(
+          'availability',
+          [key],
+          `Niedostępność nauczyciela: ${tName} nie ma wyznaczonej dostępności w tym terminie (dzień ${day}, lekcja ${hourLabel}).`
+        );
       }
     }
 
@@ -187,16 +260,14 @@ export function analyzeConflicts(planLekcji: PlanLekcjiState): ConflictEngineRes
 
       // Sprawdzenie dostępności nauczyciela wspomagającego
       const supTeacher = teachersMap.get(effectiveSupportId);
-      if (supTeacher && supTeacher.availability && supTeacher.availability.length > 0) {
-        const checkCode = `${day}-${hour}`;
-        if (!supTeacher.availability.includes(checkCode)) {
-          const supName = `${supTeacher.first} ${supTeacher.last} (${supTeacher.abbr})`;
-          addConflict(
-            'availability',
-            [key],
-            `Niedostępność nauczyciela wsp.: ${supName} nie ma wyznaczonej dostępności w tym terminie (dzień ${day}, lekcja ${hour + 1}).`
-          );
-        }
+      if (supTeacher && !isTeacherAvailableAt(supTeacher, day, hour, planLekcji.hours)) {
+        const supName = `${supTeacher.first} ${supTeacher.last} (${supTeacher.abbr})`;
+        const hourLabel = planLekcji.hours?.[hour]?.num ?? (hour + 1);
+        addConflict(
+          'availability',
+          [key],
+          `Niedostępność nauczyciela wsp.: ${supName} nie ma wyznaczonej dostępności w tym terminie (dzień ${day}, lekcja ${hourLabel}).`
+        );
       }
     }
 
@@ -241,16 +312,14 @@ export function analyzeConflicts(planLekcji: PlanLekcjiState): ConflictEngineRes
       teacherSlots.set(tKey, tList);
 
       const teacher = teachersMap.get(spAsg.teacherId);
-      if (teacher && teacher.availability && teacher.availability.length > 0) {
-        const checkCode = `${day}-${hour}`;
-        if (!teacher.availability.includes(checkCode)) {
-          const tName = `${teacher.first} ${teacher.last} (${teacher.abbr})`;
-          addConflict(
-            'availability',
-            [key],
-            `Niedostępność nauczyciela (NI): ${tName} nie ma wyznaczonej dostępności w tym terminie (dzień ${day}, lekcja ${hour + 1}).`
-          );
-        }
+      if (teacher && !isTeacherAvailableAt(teacher, day, hour, planLekcji.hours)) {
+        const tName = `${teacher.first} ${teacher.last} (${teacher.abbr})`;
+        const hourLabel = planLekcji.hours?.[hour]?.num ?? (hour + 1);
+        addConflict(
+          'availability',
+          [key],
+          `Niedostępność nauczyciela (NI): ${tName} nie ma wyznaczonej dostępności w tym terminie (dzień ${day}, lekcja ${hourLabel}).`
+        );
       }
     }
 
@@ -267,6 +336,17 @@ export function analyzeConflicts(planLekcji: PlanLekcjiState): ConflictEngineRes
         studentId
       });
       teacherSlots.set(supKey, supList);
+
+      const supTeacher = teachersMap.get(spAsg.supportTeacherId);
+      if (supTeacher && !isTeacherAvailableAt(supTeacher, day, hour, planLekcji.hours)) {
+        const supName = `${supTeacher.first} ${supTeacher.last} (${supTeacher.abbr})`;
+        const hourLabel = planLekcji.hours?.[hour]?.num ?? (hour + 1);
+        addConflict(
+          'availability',
+          [key],
+          `Niedostępność nauczyciela wsp. (NI): ${supName} nie ma wyznaczonej dostępności w tym terminie (dzień ${day}, lekcja ${hourLabel}).`
+        );
+      }
     }
 
     // Sala w zajęciach specjalnych
@@ -301,15 +381,13 @@ export function analyzeConflicts(planLekcji: PlanLekcjiState): ConflictEngineRes
         // Ta sama łączona lekcja (np. powiązane klasy) nie koliduje
         if (itemA.assignmentId === itemB.assignmentId) continue;
 
-        const isWholeA = !itemA.groupId;
-        const isWholeB = !itemB.groupId;
+        const overlap = analyzeGroupOverlap(itemA.groupId, itemB.groupId, groupsMap);
+        if (!overlap) continue;
 
-        let isConflict = false;
         let conflictMsg = '';
-
-        if (isWholeA || isWholeB) {
-          // Zasada: lekcja całej klasy koliduje z każdą lekcją (całej klasy lub dowolnej grupy)
-          isConflict = true;
+        if (overlap.reason === 'whole_class') {
+          const isWholeA = !itemA.groupId;
+          const isWholeB = !itemB.groupId;
           if (isWholeA && isWholeB) {
             conflictMsg = `Konflikt klasy: Klasa ${className} ma zaplanowane dwie różne lekcje dla całej klasy w tym samym czasie.`;
           } else {
@@ -317,44 +395,23 @@ export function analyzeConflicts(planLekcji: PlanLekcjiState): ConflictEngineRes
             const gName = groupItem.groupId ? groupsMap.get(groupItem.groupId)?.name || groupItem.groupId : 'grupa';
             conflictMsg = `Konflikt klasy: Klasa ${className} ma zaplanowaną lekcję dla całej klasy jednocześnie z lekcją grupy (${gName}).`;
           }
-        } else if (itemA.groupId && itemA.groupId === itemB.groupId) {
-          // Ta sama grupa ma dwie różne lekcje
-          isConflict = true;
-          const gName = groupsMap.get(itemA.groupId)?.name || itemA.groupId;
+        } else if (overlap.reason === 'same_group') {
+          const gName = itemA.groupId ? groupsMap.get(itemA.groupId)?.name || itemA.groupId : 'grupa';
           conflictMsg = `Konflikt grupy: Grupa ${gName} w klasie ${className} ma zaplanowane dwie różne lekcje w tym samym czasie.`;
-        } else if (itemA.groupId && itemB.groupId && itemA.groupId !== itemB.groupId) {
-          // Sprawdzenie kolizji uczniów między różnymi grupami tej samej klasy
-          const groupA = groupsMap.get(itemA.groupId);
-          const groupB = groupsMap.get(itemB.groupId);
-          const gNameA = groupA?.name || itemA.groupId;
-          const gNameB = groupB?.name || itemB.groupId;
-
-          const studentsA = groupA?.studentIds;
-          const studentsB = groupB?.studentIds;
-          const hasExplicitStudentsA = Array.isArray(studentsA) && studentsA.length > 0;
-          const hasExplicitStudentsB = Array.isArray(studentsB) && studentsB.length > 0;
-
-          if (hasExplicitStudentsA && hasExplicitStudentsB) {
-            // Dokładne sprawdzenie przecięcia uczniów
-            const commonStudents = studentsA.filter(sId => studentsB.includes(sId));
-            if (commonStudents.length > 0) {
-              isConflict = true;
-              const partInfo = (groupA?.partitionId && groupB?.partitionId && groupA.partitionId !== groupB.partitionId)
-                ? ` (podziały: ${groupA.partitionId} vs ${groupB.partitionId})`
-                : '';
-              conflictMsg = `Konflikt uczniów w grupach: Grupa ${gNameA} i Grupa ${gNameB} w klasie ${className}${partInfo} mają wspólnych uczniów (${commonStudents.length}) i nie mogą odbywać się jednocześnie.`;
-            }
-          } else if (groupA?.partitionId && groupB?.partitionId && groupA.partitionId !== groupB.partitionId) {
-            // Grupy o tym samym partitionId wykluczają się wzajemnie i razem tworzą całą klasę.
-            // Grupy z różnych partitionId kolidują, gdy nie podano rozłącznych list studentów (z definicji dzielą uczniów klasy).
-            isConflict = true;
-            conflictMsg = `Konflikt podziału: Grupa ${gNameA} (podział: ${groupA.partitionId}) i Grupa ${gNameB} (podział: ${groupB.partitionId}) w klasie ${className} pochodzą z różnych podziałów i mają wspólnych uczniów.`;
-          }
+        } else if (overlap.reason === 'common_students') {
+          const gNameA = itemA.groupId ? groupsMap.get(itemA.groupId)?.name || itemA.groupId : '';
+          const gNameB = itemB.groupId ? groupsMap.get(itemB.groupId)?.name || itemB.groupId : '';
+          const partInfo = (overlap.partitionA && overlap.partitionB && overlap.partitionA !== overlap.partitionB)
+            ? ` (podziały: ${overlap.partitionA} vs ${overlap.partitionB})`
+            : '';
+          conflictMsg = `Konflikt uczniów w grupach: Grupa ${gNameA} i Grupa ${gNameB} w klasie ${className}${partInfo} mają wspólnych uczniów (${overlap.commonCount}) i nie mogą odbywać się jednocześnie.`;
+        } else {
+          const gNameA = itemA.groupId ? groupsMap.get(itemA.groupId)?.name || itemA.groupId : '';
+          const gNameB = itemB.groupId ? groupsMap.get(itemB.groupId)?.name || itemB.groupId : '';
+          conflictMsg = `Konflikt podziału: Grupa ${gNameA} (podział: ${overlap.partitionA}) i Grupa ${gNameB} (podział: ${overlap.partitionB}) w klasie ${className} pochodzą z różnych podziałów i mają wspólnych uczniów.`;
         }
 
-        if (isConflict) {
-          addConflict('class', [itemA.key, itemB.key], conflictMsg);
-        }
+        addConflict('class', [itemA.key, itemB.key], conflictMsg);
       }
     }
   });

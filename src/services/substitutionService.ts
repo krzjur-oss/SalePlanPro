@@ -20,6 +20,7 @@ import {
   DailySubstitutionsState,
   SubstitutionActionType
 } from '../types';
+import { isTeacherAvailableAtNum } from '../utils/availability';
 
 export const POLISH_DAYS = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek'];
 export const POLISH_MONTHS = [
@@ -410,8 +411,7 @@ export function getSmartSubstitutionCandidates(
       }
 
       // 5. Preferencje dyspozycyjności z Kreatora Szkoły
-      const availKey = `${sub.dayOfWeek}-${sub.hourNum}`;
-      if (teacher.availability && teacher.availability.length > 0 && !teacher.availability.includes(availKey)) {
+      if (!isTeacherAvailableAtNum(teacher, sub.dayOfWeek, sub.hourNum)) {
         score -= 25;
         warnings.push('Godzina oznaczona jako niedyspozycyjna w profilu');
       }

@@ -12,6 +12,7 @@ import {
   Split, LayoutGrid, ChevronRight, BookOpen
 } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
+import { isGrade1to3 } from '../utils/roomUtils';
 
 export interface PlachtaDyrektorskaProps {
   appState: AppState;
@@ -261,11 +262,18 @@ export default function PlachtaDyrektorska({
   const filteredClasses = useMemo(() => {
     let list = [...pl.classes];
     if (selectedClassStage === '1-3') {
-      list = list.filter(c => /^[1-3]/i.test(c.name.trim()));
+      list = list.filter(c => isGrade1to3(c));
     } else if (selectedClassStage === '4-8') {
-      list = list.filter(c => /^[4-8]/i.test(c.name.trim()));
+      list = list.filter(c => {
+        if (c.year !== null && c.year !== undefined) return c.year >= 4 && c.year <= 8;
+        return /^[4-8](?!\d)/i.test(c.name.trim());
+      });
     } else if (selectedClassStage === 'lo_tech') {
-      list = list.filter(c => !/^[1-8]/i.test(c.name.trim()) || c.name.toLowerCase().includes('lo') || c.name.toLowerCase().includes('t'));
+      list = list.filter(c => !isGrade1to3(c) && (
+        (c.year !== null && c.year !== undefined ? c.year > 8 : !/^[4-8](?!\d)/i.test(c.name.trim())) ||
+        c.name.toLowerCase().includes('lo') ||
+        c.name.toLowerCase().includes('t')
+      ));
     }
     return list;
   }, [pl.classes, selectedClassStage]);

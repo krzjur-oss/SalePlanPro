@@ -413,4 +413,36 @@ describe('ConflictEngine - detectConflicts', () => {
     const conflictsDisjoint = detectConflicts(pl);
     expect(conflictsDisjoint.filter(c => c.type === 'class').length).toBe(0);
   });
+
+  it('detectConflicts nie zgłasza konfliktu dla indeksu 0 przy dostępności "0-1" i zgłasza dla indeksu 1', () => {
+    const pl = createBasePlan();
+    pl.teachers[0].availability = ['0-1']; // pn, lekcja nr 1 (pl.hours[0].num === 1)
+
+    pl.assignments = [
+      {
+        id: 'asg_1',
+        classId: 'c1',
+        teacherId: 't1',
+        subjectId: 's1',
+        roomId: 'r1',
+        hoursPerWeek: 1,
+        groupId: null
+      }
+    ];
+
+    // Indeks 0 (lekcja nr 1) -> zgodnie z "0-1" brak konfliktu
+    pl.lessons = {
+      'c1|0|0': { assignmentId: 'asg_1', locked: false }
+    };
+    expect(detectConflicts(pl).filter(c => c.type === 'availability')).toHaveLength(0);
+
+    // Indeks 1 (lekcja nr 2) -> niezgodne z "0-1" -> konflikt dostępności
+    pl.lessons = {
+      'c1|0|1': { assignmentId: 'asg_1', locked: false }
+    };
+    const conflictsAtIdx1 = detectConflicts(pl).filter(c => c.type === 'availability');
+    expect(conflictsAtIdx1).toHaveLength(1);
+    expect(conflictsAtIdx1[0].lessonKeys).toEqual(['c1|0|1']);
+  });
 });
+

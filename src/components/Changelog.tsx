@@ -30,11 +30,37 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.14.0',
+      date: '14 listopada 2026',
+      title: 'Aktywne Reguły Generatora (Okienka, Rozkład Przedmiotów, Rezerwa Zastępstw), Spójne Limity i Multi-Stanowiska w Dyżurach, Precyzyjne Sale Klas 1–3 i Detekcja Desynchronizacji Planu',
+      description: 'Wydanie v3.14.0 domyka pełną spójność algorytmów układania planów, sal i dyżurów. Generator planu realizuje teraz wszystkie suwaki i opcje (limity okienek globalne i indywidualne, rozkład dniowy oraz blokadę >2 lekcji dziennie z jednego przedmiotu, ochronę rezerwy nauczycieli na zastępstwa, zachowanie ręcznych lekcji niezablokowanych i czyszczenie osieroconych blokad). Moduł Dyżurów zyskał jeden kanoniczny kalkulator limitów minutowych (computeTeacherMaxMinutes), obsługę wielu dyżurnych na jednym miejscu (teachersNeeded > 1), weryfikację dyspozycyjności nauczyciela także w dniach prowadzenia lekcji oraz baner wykrywający brak synchronizacji planu sal z planem lekcji. Plan Sal precyzyjnie rozpoznaje klasy 1–3 (isGrade1to3), bezbłędnie przydziela sale bez dedykowanej wychowawczej, deduplikuje grupy międzyoddziałowe i respektuje przypisane pracownie z Etapu 1.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Generator planu – egzekucja limitu okienek i rozkładu zajęć: Implementacja globalnego limitu okienek (maxGapsPerTeacher) i limitów indywidualnych nauczycieli (teacherConfigs[*].maxGaps z opcją „Wg suwaka”), rozkładu etatu (spreadObligation), ochrony wskazanych przedmiotów przed skrajnymi godzinami (avoidExtremesSubjectIds), progu wolnych nauczycieli na zastępstwa (minAvailableSubstitutionTeachersPerSlot) oraz dziennego limitu jednego przedmiotu w klasie (preferowane max 2 lekcje dziennie, twardy limit 3).', badgeText: 'Optymalizator Planu' },
+        { type: 'feature', text: 'Opcja „Zachowaj ręczne lekcje niezablokowane”: Nowy przełącznik w Ustawieniach Generatora (preserveUnlockedManualLessons) pozwalający chronić lekcje ułożone ręcznie bez konieczności ich ręcznego kłódkowania; spójne wykrywanie kolizji grup przez groupsOverlap(a, b, schoolGroups) oraz automatyczne usuwanie osieroconych lekcji z nieistniejącym assignmentId.', badgeText: 'Generator & Scalanie' },
+        { type: 'feature', text: 'Spójny kalkulator limitów dyżurów i multi-stanowiska (dutyLimits.ts): Wspólna funkcja computeTeacherMaxMinutes dla generatora i panelu statystyk; twarde respektowanie zwolnień (dutyExempt, isAdministrative, zerowy etat FTE <= 0), indywidualnego maxDutyCount, maxPerTeacher oraz maxMinutesPerTeacher. Obsługa wielu stanowisk (teachersNeeded > 1) w harmonogramie, bilansie i na wydrukach oraz raport nieobsadzonych slotów po generowaniu.', badgeText: 'Dyżury & Limity' },
+        { type: 'feature', text: 'Kontrola synchronizacji Planu Sal z Planem Lekcji (planSyncHash.ts): Obliczanie deterministycznego skrótu planu lekcji; w module Dyżurów pojawia się baner ostrzegawczy „Plan sal nie jest zsynchronizowany z planem lekcji” z przyciskiem szybkiego przejścia do Planu Sal po zmianie lekcji bez odświeżenia sal.', badgeText: 'Synchronizacja Planów' },
+        { type: 'fix', text: 'Dostępność nauczyciela na dyżurach: Funkcja isTeacherAvailableForBreak uwzględnia teraz dyspozycyjność (Teacher.availability) również w dniach, w których nauczyciel ma zaplanowane lekcje.', badgeText: 'Dostępność Dyżurów' },
+        { type: 'fix', text: 'Precyzyjny przydział sal dla klas 1–3 i pracowni (roomUtils.ts, PlanSal.tsx): Wydzielenie isGrade1to3(cls) opartego na cls.year (wykluczenie klas typu „10A”, „11B”), przydział sal klasom 1–3 nawet bez sali wychowawczej/dedykowanej, brak duplikowania wpisów przy genClearExisting=false, deduplikacja grup międzyoddziałowych (linkedGroupIds) i twarde respektowanie pracowni z Etapu 1 (asg.roomId).', badgeText: 'Plan Sal' },
+        { type: 'improvement', text: 'Ostrzeżenie przy pustej dostępności w Kreatorze Szkoły: Odznaczenie wszystkich godzin dostępności nauczyciela lub pracownika wyświetla wyraźną informację „Brak zaznaczeń = dostępny zawsze (bez ograniczeń)”.', badgeText: 'Kreator Szkoły' }
+      ]
+    },
+    {
+      version: 'v3.13.1',
+      date: '13 listopada 2026',
+      title: 'Kanoniczne Mapowanie Dostępności Nauczycieli (Indeks Godziny vs Numer Lekcji)',
+      description: 'Naprawiono błąd przesunięcia o 1 lekcję podczas weryfikacji dyspozycyjności nauczycieli (Teacher.availability). Wydzielono wspólny moduł src/utils/availability.ts z funkcją isTeacherAvailableAt mapującą 0-based indeks siatki na numer lekcji (hours[hourIndex].num) we wszystkich silnikach: PlanGenerator, conflictEngine, PlanSal, substitutionService oraz Dyzury. Dane użytkowników nie wymagają migracji.',
+      badge: 'Stabilna',
+      changes: [
+        { type: 'fix', text: 'Wspólna funkcja isTeacherAvailableAt (src/utils/availability.ts): Jednolite mapowanie indeksu godziny na numer lekcji z planLekcji.hours w PlanGenerator (w tym lekcje NI), conflictEngine, PlanSal, substitutionService i Dyzury.', badgeText: 'Dostępność Kadry' }
+      ]
+    },
+    {
       version: 'v3.13.0',
       date: '9 listopada 2026',
       title: 'Niezależny Silnik Detekcji Konfliktów, Partycje Grup i Międzyoddziały, Inteligentny Generator z Dostępnością Sal, Rotacja 30 Migawek i Bezpieczny Dziennik Błędów',
       description: 'Wydanie v3.13.0 wprowadza zaawansowany silnik detekcji konfliktów (detectConflicts) z pełną obsługą partycji grup (partitionId/studentIds), grup międzyoddziałowych (linkedGroupIds) oraz nauczycieli wspomagających i sal sportowych. Rozbudowano generator planu o wielowymiarowy model zajętości grup, oddziałów powiązanych i sal lekcyjnych. Wprowadzono limit 30 punktów przywracania z bezwzględną ochroną kopii ręcznych i dynamicznym ostrzeżeniem o rozmiarze, bezpieczny dziennik błędów w dbStorage z limitem 50 wpisów i obcinaniem stosu do 1 kB, a także szyfrowanie i deduplikację kopii ratunkowych w IndexedDB.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Niezależny silnik detekcji konfliktów (conflictEngine): Czysta, modułowa funkcja detectConflicts(planLekcji) precyzyjnie weryfikująca kolizje nauczycieli, sal, oddziałów i dostępności; ten sam assignmentId traktowany jest jako legalna lekcja łączona, a lekcje całej klasy kolidują z grupami.', badgeText: 'Conflict Engine' },
         { type: 'feature', text: 'Partycje grup (partitionId) i grupy międzyoddziałowe (linkedGroupIds): Grupy o tym samym partitionId wykluczają się i mogą odbywać się równolegle; grupy o różnych partycjach kolidują przy wspólnych uczniach (studentIds). Pełna obsługa grup międzyoddziałowych w generatorze, Planie Sal i Planie Klas.', badgeText: 'Partycje & Grupy' },

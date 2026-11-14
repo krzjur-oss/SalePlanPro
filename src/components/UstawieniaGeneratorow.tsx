@@ -46,6 +46,7 @@ export const DEFAULT_GENERATOR_SETTINGS: GeneratorSettings = {
   genClearExisting: true,
   forceOptionalToExtremes: true,
   optionalSubjectIds: [],
+  preserveUnlockedManualLessons: false,
 };
 
 export default function UstawieniaGeneratorow({ appState, onChangeAppState }: UstawieniaGeneratorowProps) {
@@ -382,6 +383,23 @@ export default function UstawieniaGeneratorow({ appState, onChangeAppState }: Us
                 />
               </div>
             )}
+
+            {/* preserveUnlockedManualLessons */}
+            <div className="flex items-start gap-3 p-3 bg-slate-50/50 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
+              <input 
+                type="checkbox" 
+                id="set_preserveUnlockedManualLessons"
+                className="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                checked={!!settings.preserveUnlockedManualLessons}
+                onChange={(e) => updateSettings({ preserveUnlockedManualLessons: e.target.checked })}
+              />
+              <label htmlFor="set_preserveUnlockedManualLessons" className="cursor-pointer select-none space-y-0.5 flex-1">
+                <span className="text-xs font-bold text-slate-800 block">Zachowaj ręczne lekcje niezablokowane</span>
+                <span className="text-[10px] text-slate-500 block leading-tight">
+                  Podczas automatycznego układania nie usuwa lekcji dodanych ręcznie bez kłódki i dobiera tylko brakujące godziny przydziałów.
+                </span>
+              </label>
+            </div>
 
             {/* forceOptionalToExtremes - Priorytet dla religii i przedmiotów opcjonalnych */}
             <div className="space-y-2 border-t border-slate-100 pt-4">

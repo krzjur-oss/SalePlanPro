@@ -32,6 +32,7 @@ import {
 } from '../types';
 import { sanitizeProtoPollution } from './validationSchemas';
 import { detectConflicts } from './conflictEngine';
+import { isGrade1to3 } from './roomUtils';
 
 export interface ImportPayload {
   version?: string;
@@ -235,6 +236,10 @@ export function sanitizeAppState(rawInput: unknown): AppState {
     includeSpecialNI: rawGen.includeSpecialNI !== false,
     limitComputerLabs: rawGen.limitComputerLabs !== false,
     customComputerLabsCount: typeof rawGen.customComputerLabsCount === 'number' ? rawGen.customComputerLabsCount : 1,
+    minAvailableSubstitutionTeachersPerSlot: typeof rawGen.minAvailableSubstitutionTeachersPerSlot === 'number' ? rawGen.minAvailableSubstitutionTeachersPerSlot : 1,
+    forceOptionalToExtremes: rawGen.forceOptionalToExtremes !== false,
+    optionalSubjectIds: Array.isArray(rawGen.optionalSubjectIds) ? rawGen.optionalSubjectIds : [],
+    preserveUnlockedManualLessons: !!rawGen.preserveUnlockedManualLessons,
     genPriorityHomerooms: rawGen.genPriorityHomerooms !== false,
     genPriorityTeachers: rawGen.genPriorityTeachers !== false,
     genExcludeWF: rawGen.genExcludeWF !== false,
@@ -258,6 +263,7 @@ export function sanitizeAppState(rawInput: unknown): AppState {
     planLekcji,
     dyzury,
     generatorSettings,
+    planSyncHash: typeof raw.planSyncHash === 'string' ? raw.planSyncHash : undefined,
     revision: typeof raw.revision === 'number' ? raw.revision : undefined,
     tabId: typeof raw.tabId === 'string' ? raw.tabId : undefined,
     _revision: typeof raw._revision === 'number' ? raw._revision : undefined,
@@ -328,9 +334,11 @@ export function normalizeImportPayload(rawInput: unknown): ImportPayload {
 }
 
 export function isClassGrade1_3(className: string, year?: number | null): boolean {
-  if (year !== null && year !== undefined && year >= 1 && year <= 3) return true;
+  if (year !== null && year !== undefined) {
+    return isGrade1to3({ name: className, year });
+  }
+  if (isGrade1to3({ name: className, year })) return true;
   const clean = String(className || '').trim().toUpperCase();
-  if (/^[1-3][A-Z0-9]?\b/.test(clean)) return true;
   if (/^(I|II|III)[A-Z0-9]?\b/.test(clean)) return true;
   if (/^0[A-Z0-9]?\b/.test(clean)) return true; // Zerówka / oddział przedszkolny
   return false;

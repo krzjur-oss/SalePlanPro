@@ -37,6 +37,7 @@ import { anonymizeBackupPayload, AnonymizationSummary } from './utils/anonymizat
 import { pruneSnapshots } from './utils/snapshotUtils';
 import { SalePlanLogoMark } from './components/SalePlanLogo';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import { computePlanLessonsHash } from './utils/planSyncHash';
 
 const PlanKlas = lazyWithRetry(() => import('./components/PlanKlas'));
 const PlanSal = lazyWithRetry(() => import('./components/PlanSal'));
@@ -1473,7 +1474,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.13.0';
+  const CURRENT_VERSION = '3.14.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -2297,6 +2298,10 @@ export default function App() {
     }
 
     setSchedData(nextSchedData);
+    handleUpdateAppState(prev => ({
+      ...prev,
+      planSyncHash: computePlanLessonsHash(prev.planLekcji)
+    }));
     notify(`Zsynchronizowano lekcje! Przeniesiono pomyślnie ${countTransfer} jednostek lekcyjnych.`, 'ok');
     addEventLog(
       'import',
@@ -3331,6 +3336,7 @@ export default function App() {
                         appState={appState} 
                         onChangeAppState={handleUpdateAppState} 
                         schedData={schedData}
+                        onNavigateToTab={(tab) => setCurrentTab(tab as any)}
                         presentationMode={isPresentationMode}
                       />
                     )}
@@ -3730,9 +3736,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.13.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.14.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Czysty silnik detekcji konfliktów i partycje grup, inteligentny generator planu z salami, rotacja 30 migawek i bezpieczny dziennik błędów.
+                  Pełna egzekucja limitów okienek i rozkładu w generatorze, spójne limity i multi-stanowiska w dyżurach, wykrywanie desynchronizacji planu sal oraz reguły klas 1–3.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button
