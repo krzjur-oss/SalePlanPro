@@ -432,11 +432,16 @@ export function getDemoAppState(): AppState {
       includeSpecialNI: true,
       limitComputerLabs: true,
       customComputerLabsCount: 1,
+      minAvailableSubstitutionTeachersPerSlot: 1,
       genPriorityHomerooms: true,
       genPriorityTeachers: true,
       genExcludeWF: true,
       genAutoPlaceWF: true,
       genClearExisting: true,
+      forceOptionalToExtremes: true,
+      optionalSubjectIds: [],
+      preserveUnlockedManualLessons: false,
+      teacherConfigs: {},
     },
   };
 }

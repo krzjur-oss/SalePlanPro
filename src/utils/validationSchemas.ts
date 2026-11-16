@@ -273,6 +273,35 @@ export const PlanLekcjiStateSchema = z.object({
   specialAbsences: z.record(z.string(), z.unknown()).optional().default({}),
 }).passthrough();
 
+export const TeacherGeneratorConfigSchema = z.object({
+  teacherId: z.string().optional().default(''),
+  role: z.enum(['teacher', 'deputy', 'director']).optional().default('teacher'),
+  maxGaps: z.number().nullable().optional().default(null),
+  spreadObligation: z.boolean().optional().default(false),
+}).passthrough();
+
+export const GeneratorSettingsSchema = z.object({
+  maxGapsPerTeacher: z.number().optional(),
+  obeyAvailability: z.boolean().optional(),
+  avoidExtremes: z.boolean().optional(),
+  avoidExtremesSubjectIds: z.array(z.string()).optional(),
+  noStudentGaps: z.boolean().optional(),
+  allowDoubleBlocks: z.boolean().optional(),
+  includeSpecialNI: z.boolean().optional(),
+  limitComputerLabs: z.boolean().optional(),
+  customComputerLabsCount: z.number().optional(),
+  minAvailableSubstitutionTeachersPerSlot: z.number().optional(),
+  genPriorityHomerooms: z.boolean().optional(),
+  genPriorityTeachers: z.boolean().optional(),
+  genExcludeWF: z.boolean().optional(),
+  genAutoPlaceWF: z.boolean().optional(),
+  genClearExisting: z.boolean().optional(),
+  forceOptionalToExtremes: z.boolean().optional(),
+  optionalSubjectIds: z.array(z.string()).optional(),
+  preserveUnlockedManualLessons: z.boolean().optional(),
+  teacherConfigs: z.record(z.string(), TeacherGeneratorConfigSchema).optional(),
+}).passthrough();
+
 export const AppStateSchema = z.object({
   yearKey: z.string().optional().default('y_2025_2026'),
   yearLabel: z.string().optional().default('2025/2026'),
@@ -288,7 +317,7 @@ export const AppStateSchema = z.object({
   homerooms: z.record(z.string(), z.unknown()).optional().default({}),
   planLekcji: PlanLekcjiStateSchema.optional(),
   dyzury: PlanDyzuryStateSchema.optional(),
-  generatorSettings: z.record(z.string(), z.unknown()).optional(),
+  generatorSettings: GeneratorSettingsSchema.optional(),
   revision: z.number().optional(),
   tabId: z.string().optional(),
   _revision: z.number().optional(),

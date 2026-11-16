@@ -1,7 +1,7 @@
 {
   "name": "saleplan-pro",
   "private": true,
-  "version": "3.14.0",
+  "version": "3.15.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit && eslint src",
+    "check:any": "node scripts/check-any-budget.mjs",
     "test": "vitest run",
     "test:e2e": "vitest run src/services/persistence.e2e.test.ts",
     "prebuild": "npm run test:e2e"
@@ -21,7 +22,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.9.2",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -74,4 +74,45 @@ describe('qrPlanService', () => {
     const htmlDoor = generateQrPrintHtml(classConfigs, 'stickers_door', mockAppState);
     expect(htmlDoor).toContain('door-sticker');
   });
+
+  it('escapuje znaczniki HTML w polach tekstowych i odrzuca niebezpieczne qrDataUrl', () => {
+    const xssTitle = '<img src=x onerror=alert(1)>';
+    const xssSchool = '<script>alert("xss")</script>';
+    const xssAppState = {
+      ...mockAppState,
+      school: { name: xssSchool },
+      yearLabel: '2026/<svg onload=alert(2)>'
+    } as unknown as AppState;
+
+    const items = [
+      {
+        id: 'x1',
+        type: 'class' as const,
+        title: xssTitle,
+        subtitle: '<b>Opis</b>',
+        tag: '" onclick="alert(3)',
+        targetUrl: 'https://saleplan.pro/?q=<script>',
+        qrDataUrl: 'javascript:alert(1)'
+      }
+    ];
+
+    for (const tpl of ['cards_6', 'cards_12', 'stickers_door'] as const) {
+      const html = generateQrPrintHtml(items, tpl, xssAppState);
+      expect(html).not.toContain(xssTitle);
+      expect(html).not.toContain('<script>alert("xss")</script>');
+      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+      expect(html).not.toContain('javascript:alert(1)');
+      expect(html).not.toContain('<img ');
+    }
+
+    const validItems = [
+      {
+        ...items[0],
+        qrDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+      }
+    ];
+    const htmlWithValidQr = generateQrPrintHtml(validItems, 'cards_6', xssAppState);
+    expect(htmlWithValidQr).toContain('<img src="data:image/png;base64,');
+    expect(htmlWithValidQr).toContain('alt="&lt;img src=x onerror=alert(1)&gt;"');
+  });
 });

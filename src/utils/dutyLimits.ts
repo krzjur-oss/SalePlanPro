@@ -557,6 +557,10 @@ export function isTeacherAvailableForBreak(
   appState: AppState,
   schedData: SchedData
 ): boolean {
+  // Konwencja potwierdzona w KreatorSzkoly.tsx (handleSaveStep1 / calculatedBreaks) oraz utils.ts:
+  // przerwa o numerze N (`przerwa.num === N`) następuje bezpośrednio po lekcji N
+  // (`name: "Przerwa po N. lekcji"`, `start: lesson[N].end`, `end: lesson[N+1].start`).
+  // Dlatego `przerwa.num` odpowiada wprost numerowi lekcji N w siatce `Teacher.availability` (`day-N`).
   if (person.isStaff) {
     if (person.availability && person.availability.length > 0) {
       return isTeacherAvailableAtNum(person, dayIdx, przerwa.num);

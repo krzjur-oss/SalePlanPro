@@ -33,6 +33,7 @@ import {
 import { sanitizeProtoPollution } from './validationSchemas';
 import { detectConflicts } from './conflictEngine';
 import { isGrade1to3 } from './roomUtils';
+import { computePlanLessonsHash, hasSchedDataEntries, PLAN_SYNC_HASH_PREFIX } from './planSyncHash';
 
 export interface ImportPayload {
   version?: string;
@@ -226,6 +227,26 @@ export function sanitizeAppState(rawInput: unknown): AppState {
   };
 
   const rawGen = (raw.generatorSettings && typeof raw.generatorSettings === 'object' ? raw.generatorSettings : {}) as Record<string, any>;
+  const rawTeacherConfigs =
+    rawGen.teacherConfigs && typeof rawGen.teacherConfigs === 'object' && !Array.isArray(rawGen.teacherConfigs)
+      ? (rawGen.teacherConfigs as Record<string, any>)
+      : {};
+  const teacherConfigs: Record<string, { teacherId: string; role: 'teacher' | 'deputy' | 'director'; maxGaps: number | null; spreadObligation: boolean }> = {};
+  for (const [key, entry] of Object.entries(rawTeacherConfigs)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (!entry || typeof entry !== 'object') continue;
+    const role = entry.role === 'director' || entry.role === 'deputy' || entry.role === 'teacher' ? entry.role : 'teacher';
+    const maxGaps = typeof entry.maxGaps === 'number' && Number.isFinite(entry.maxGaps) ? entry.maxGaps : null;
+    const spreadObligation = Boolean(entry.spreadObligation);
+    const teacherId = typeof entry.teacherId === 'string' && entry.teacherId.trim() ? entry.teacherId : key;
+    teacherConfigs[key] = {
+      teacherId,
+      role,
+      maxGaps,
+      spreadObligation,
+    };
+  }
+
   const generatorSettings = {
     maxGapsPerTeacher: typeof rawGen.maxGapsPerTeacher === 'number' ? rawGen.maxGapsPerTeacher : 2,
     obeyAvailability: rawGen.obeyAvailability !== false,
@@ -245,6 +266,7 @@ export function sanitizeAppState(rawInput: unknown): AppState {
     genExcludeWF: rawGen.genExcludeWF !== false,
     genAutoPlaceWF: rawGen.genAutoPlaceWF !== false,
     genClearExisting: rawGen.genClearExisting !== false,
+    teacherConfigs,
   };
 
   return {
@@ -276,6 +298,34 @@ export function sanitizeAppState(rawInput: unknown): AppState {
  * Handles standard backup files, raw AppState files, snapshots, or wrapped objects.
  * Strips any potential Prototype Pollution attempts.
  */
+function reconcileLegacyPlanSyncHash(payload: ImportPayload): ImportPayload {
+  const appState = payload.appState;
+  if (!appState) return payload;
+  const currentHash = appState.planSyncHash;
+  if (typeof currentHash === 'string' && currentHash.startsWith(PLAN_SYNC_HASH_PREFIX)) {
+    return payload;
+  }
+  if (hasSchedDataEntries(payload.schedData)) {
+    return {
+      ...payload,
+      appState: {
+        ...appState,
+        planSyncHash: computePlanLessonsHash(appState.planLekcji)
+      }
+    };
+  }
+  if (currentHash) {
+    return {
+      ...payload,
+      appState: {
+        ...appState,
+        planSyncHash: undefined
+      }
+    };
+  }
+  return payload;
+}
+
 export function normalizeImportPayload(rawInput: unknown): ImportPayload {
   const raw = sanitizeProtoPollution(rawInput) as Record<string, unknown> | null;
   if (!raw || typeof raw !== 'object') {
@@ -289,7 +339,7 @@ export function normalizeImportPayload(rawInput: unknown): ImportPayload {
 
   // 1. Standard format or snapshot containing appState
   if (raw.appState && typeof raw.appState === 'object') {
-    return {
+    return reconcileLegacyPlanSyncHash({
       version: typeof raw.version === 'string' ? raw.version : '3.0',
       timestamp: typeof raw.timestamp === 'string' ? raw.timestamp : (typeof raw.createdAt === 'string' ? raw.createdAt : new Date().toISOString()),
       appState: sanitizeAppState(raw.appState),
@@ -297,12 +347,12 @@ export function normalizeImportPayload(rawInput: unknown): ImportPayload {
       archive: Array.isArray(raw.archive) ? (raw.archive as ArchiveEntry[]) : [],
       snapshots: Array.isArray(raw.snapshots) ? (raw.snapshots as SnapshotEntry[]) : [],
       historyLogs: Array.isArray(raw.historyLogs) ? (raw.historyLogs as AppEventLog[]) : []
-    };
+    });
   }
 
   // 2. Direct AppState object (e.g. user exported or saved state directly without wrapper)
   if (raw.school || raw.classes || raw.teachers || raw.planLekcji || raw.dyzury || raw.buildings || raw.floors) {
-    return {
+    return reconcileLegacyPlanSyncHash({
       version: typeof raw.version === 'string' ? raw.version : '3.0',
       timestamp: new Date().toISOString(),
       appState: sanitizeAppState(raw),
@@ -310,7 +360,7 @@ export function normalizeImportPayload(rawInput: unknown): ImportPayload {
       archive: Array.isArray(raw.archive) ? (raw.archive as ArchiveEntry[]) : [],
       snapshots: Array.isArray(raw.snapshots) ? (raw.snapshots as SnapshotEntry[]) : [],
       historyLogs: Array.isArray(raw.historyLogs) ? (raw.historyLogs as AppEventLog[]) : []
-    };
+    });
   }
 
   // 3. Wrapped under data or state
@@ -322,7 +372,7 @@ export function normalizeImportPayload(rawInput: unknown): ImportPayload {
   }
 
   // Wartość domyślna
-  return {
+  return reconcileLegacyPlanSyncHash({
     version: '3.0',
     timestamp: new Date().toISOString(),
     appState: sanitizeAppState(raw),
@@ -330,7 +380,7 @@ export function normalizeImportPayload(rawInput: unknown): ImportPayload {
     archive: [],
     snapshots: [],
     historyLogs: []
-  };
+  });
 }
 
 export function isClassGrade1_3(className: string, year?: number | null): boolean {

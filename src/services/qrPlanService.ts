@@ -8,6 +8,7 @@
 import QRCode from 'qrcode';
 import { AppState, Class, Teacher, ClassRoom } from '../types';
 import { QrItemConfig, QrPrintSheetTemplate, QrTargetType } from '../types/reports';
+import { escapeHtml } from '../utils/sanitizer';
 
 /**
  * Budowanie adresu URL do bezpośredniego widoku mobilnego
@@ -145,6 +146,8 @@ export function generateQrPrintHtml(
 ): string {
   const schoolName = appState.school?.name || appState.planLekcji?.meta?.schoolName || 'SZKOŁA';
   const yearLabel = appState.yearLabel || '';
+  const safeSchoolName = escapeHtml(schoolName);
+  const safeYearLabel = escapeHtml(yearLabel);
 
   let gridClass = 'grid-6';
   if (template === 'cards_12') gridClass = 'grid-12';
@@ -152,17 +155,25 @@ export function generateQrPrintHtml(
   if (template === 'table_summary') gridClass = 'grid-table';
 
   const cardsHtml = items.map(item => {
+    const safeTitle = escapeHtml(item.title);
+    const safeSubtitle = escapeHtml(item.subtitle);
+    const safeTag = escapeHtml(item.tag || '');
+    const safeDoorTag = escapeHtml(item.tag || 'GABINET');
+    const safeDirectLink = escapeHtml((item.targetUrl || '').replace(/^https?:\/\//, ''));
+    const hasValidQr = typeof item.qrDataUrl === 'string' && item.qrDataUrl.startsWith('data:image/png;base64,');
+    const safeQrDataUrl = hasValidQr ? escapeHtml(item.qrDataUrl) : '';
+
     if (template === 'stickers_door') {
       return `
         <div class="door-sticker">
           <div class="door-header">
-            <span class="door-school">${schoolName}</span>
-            <span class="door-tag">${item.tag || 'GABINET'}</span>
+            <span class="door-school">${safeSchoolName}</span>
+            <span class="door-tag">${safeDoorTag}</span>
           </div>
-          <div class="door-title">${item.title}</div>
-          <div class="door-desc">${item.subtitle}</div>
+          <div class="door-title">${safeTitle}</div>
+          <div class="door-desc">${safeSubtitle}</div>
           <div class="qr-box">
-            <img src="${item.qrDataUrl}" alt="${item.title}" class="qr-img" />
+            ${hasValidQr ? `<img src="${safeQrDataUrl}" alt="${safeTitle}" class="qr-img" />` : ''}
           </div>
           <div class="door-footer">
             <span class="scan-cta">📱 Zeskanuj telefonem rozkład sali</span>
@@ -176,12 +187,12 @@ export function generateQrPrintHtml(
       return `
         <div class="card-12">
           <div class="card-12-top">
-            <span class="badge">${item.tag || ''}</span>
-            <span class="sch-micro">${schoolName}</span>
+            <span class="badge">${safeTag}</span>
+            <span class="sch-micro">${safeSchoolName}</span>
           </div>
-          <div class="card-12-title">${item.title}</div>
+          <div class="card-12-title">${safeTitle}</div>
           <div class="card-12-qr">
-            <img src="${item.qrDataUrl}" alt="${item.title}" />
+            ${hasValidQr ? `<img src="${safeQrDataUrl}" alt="${safeTitle}" />` : ''}
           </div>
           <div class="card-12-footer">Zeskanuj plan lekcji</div>
         </div>
@@ -192,14 +203,14 @@ export function generateQrPrintHtml(
     return `
       <div class="card-6">
         <div class="card-header">
-          <div class="school-label">${schoolName}</div>
-          <div class="year-label">${yearLabel}</div>
+          <div class="school-label">${safeSchoolName}</div>
+          <div class="year-label">${safeYearLabel}</div>
         </div>
         <div class="card-body">
           <div class="card-info">
-            <div class="card-tag">${item.tag || ''}</div>
-            <div class="card-title">${item.title}</div>
-            <div class="card-subtitle">${item.subtitle}</div>
+            <div class="card-tag">${safeTag}</div>
+            <div class="card-title">${safeTitle}</div>
+            <div class="card-subtitle">${safeSubtitle}</div>
             <div class="card-instructions">
               <p>📌 <strong>Plan w smartfonie:</strong></p>
               <ul>
@@ -210,8 +221,8 @@ export function generateQrPrintHtml(
             </div>
           </div>
           <div class="card-qr-box">
-            <img src="${item.qrDataUrl}" alt="${item.title}" class="qr-img-large" />
-            <span class="qr-direct-link">${item.targetUrl.replace(/^https?:\/\//, '')}</span>
+            ${hasValidQr ? `<img src="${safeQrDataUrl}" alt="${safeTitle}" class="qr-img-large" />` : ''}
+            <span class="qr-direct-link">${safeDirectLink}</span>
           </div>
         </div>
         <div class="card-footer">
@@ -227,7 +238,7 @@ export function generateQrPrintHtml(
     <html lang="pl">
     <head>
       <meta charset="UTF-8">
-      <title>Karty Kodów QR – ${schoolName}</title>
+      <title>Karty Kodów QR – ${safeSchoolName}</title>
       <style>
         @page {
           size: A4 portrait;

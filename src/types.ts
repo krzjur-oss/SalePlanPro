@@ -445,6 +445,7 @@ export interface GeneratorSettings {
   forceOptionalToExtremes?: boolean;
   optionalSubjectIds?: string[];
   preserveUnlockedManualLessons?: boolean;
+  teacherConfigs?: Record<string, { teacherId: string; role: 'teacher' | 'deputy' | 'director'; maxGaps: number | null; spreadObligation: boolean }>;
 }
 
 export interface AppState {

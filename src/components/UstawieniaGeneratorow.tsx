@@ -47,6 +47,7 @@ export const DEFAULT_GENERATOR_SETTINGS: GeneratorSettings = {
   forceOptionalToExtremes: true,
   optionalSubjectIds: [],
   preserveUnlockedManualLessons: false,
+  teacherConfigs: {},
 };
 
 export default function UstawieniaGeneratorow({ appState, onChangeAppState }: UstawieniaGeneratorowProps) {

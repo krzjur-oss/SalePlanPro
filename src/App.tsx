@@ -37,7 +37,7 @@ import { anonymizeBackupPayload, AnonymizationSummary } from './utils/anonymizat
 import { pruneSnapshots } from './utils/snapshotUtils';
 import { SalePlanLogoMark } from './components/SalePlanLogo';
 import { lazyWithRetry } from './utils/lazyWithRetry';
-import { computePlanLessonsHash } from './utils/planSyncHash';
+import { computePlanLessonsHash, hasSchedDataEntries, PLAN_SYNC_HASH_PREFIX } from './utils/planSyncHash';
 
 const PlanKlas = lazyWithRetry(() => import('./components/PlanKlas'));
 const PlanSal = lazyWithRetry(() => import('./components/PlanSal'));
@@ -605,14 +605,29 @@ export default function App() {
       const isFirstBoot = !storageReadyRef.current && (hydratedRef.current === null);
       if (idbState && (isFirstBoot || dbRev > currentLocalRev)) {
         targetAppState = sortAppState(idbState);
-        setAppState(targetAppState);
-        multiTabStateService.setLocalRevision(dbRev);
 
         const idbSched = await getStorageItem<SchedData>(STORAGE_KEYS.SCHED_DATA);
         if (idbSched) {
           targetSchedData = cleanSchedDataMeta(idbSched);
           setSchedData(targetSchedData);
         }
+
+        if (
+          typeof targetAppState.planSyncHash === 'string' &&
+          targetAppState.planSyncHash.length > 0 &&
+          !targetAppState.planSyncHash.startsWith(PLAN_SYNC_HASH_PREFIX)
+        ) {
+          const hasNonEmptyRooms = idbSched ? hasSchedDataEntries(targetSchedData) : false;
+          targetAppState = {
+            ...targetAppState,
+            planSyncHash: hasNonEmptyRooms
+              ? computePlanLessonsHash(targetAppState.planLekcji)
+              : undefined
+          };
+        }
+
+        setAppState(targetAppState);
+        multiTabStateService.setLocalRevision(dbRev);
       } else {
         // Keep current in-memory state
         targetAppState = stateRef.current.appState;
@@ -1474,7 +1489,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.14.0';
+  const CURRENT_VERSION = '3.15.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -3736,9 +3751,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.14.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.15.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Pełna egzekucja limitów okienek i rozkładu w generatorze, spójne limity i multi-stanowiska w dyżurach, wykrywanie desynchronizacji planu sal oraz reguły klas 1–3.
+                  Trwały zapis ustawień okienek nauczycieli, wielopróbowy generator planu z raportem przekroczeń, zabezpieczenie wydruków QR, wersjonowany hash sal v2 oraz offline-ready build z wendorowanym pakietem Excel.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

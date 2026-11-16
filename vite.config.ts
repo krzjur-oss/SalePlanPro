@@ -61,6 +61,12 @@ export default defineConfig(() => {
         },
         output: {
           manualChunks(id) {
+            if (id.includes('node_modules/xlsx')) {
+              return 'vendor-xlsx';
+            }
+            if (id.includes('node_modules/qrcode')) {
+              return 'vendor-qr';
+            }
             if (id.includes('node_modules/recharts')) {
               return 'vendor-recharts';
             }

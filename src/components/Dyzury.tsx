@@ -24,7 +24,6 @@ import {
   PESupervisionResult 
 } from '../utils/peDuty';
 import { calculateTeacherWorkload } from '../utils/workloadUtils';
-import { isTeacherAvailableAtNum, hasExplicitAvailabilityAtNum } from '../utils/availability';
 import {
   autoAssignDuties,
   buildAllDutyPersonnel,
@@ -2594,6 +2593,7 @@ export default function Dyzury({ appState, onChangeAppState, schedData, onNaviga
         const getCandidateList = (pl: MiejsceDyzuru, prw: number, targetSlotIdx: number) => {
           const connected = pl.connectedRooms || [];
           const candidates = eligibleTeachers.map(t => {
+            // Wg KreatorSzkoly.tsx przerwa nr N następuje po lekcji N i poprzedza lekcję N+1
             const lessonBefore = _getTeacherLesson(t.abbr, activeDay, String(prw));
             const lessonAfter = _getTeacherLesson(t.abbr, activeDay, String(prw + 1));
             

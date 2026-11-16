@@ -196,6 +196,7 @@ export default function EksportIRaporty({
     const html = generateQrPrintHtml(filteredQrItems, printTemplate, appState);
     const printWindow = window.open('', '_blank');
     if (printWindow) {
+      printWindow.opener = null;
       printWindow.document.write(html);
       printWindow.document.close();
     } else {

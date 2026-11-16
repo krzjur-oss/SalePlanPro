@@ -30,11 +30,26 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.15.0',
+      date: '16 listopada 2026',
+      title: 'Wielopróbowy Generator Planu z Raportem Okienek, Trwała Konfiguracja Nauczycieli, Bezpieczeństwo HTML/QR, Hash Synchronizacji v2 i Wendorowany Pakiet Excel',
+      description: 'Wydanie v3.15.0 wzmacnia niezawodność generatora planu lekcji, bezpieczeństwo wydruków oraz jakość kodu i procesu CI/CD. Dodano wielopróbową optymalizację kolejności wiązek (5 deterministycznych prób), ścisłą kontrolę przekroczeń limitu okienek nauczycieli oraz pełną trwałość indywidualnych ustawień teacherConfigs w bazie IndexedDB i plikach eksportu. Wprowadzono sanityzację HTML wszystkich szablonów wydruku (w tym kart QR), wersjonowany skrót synchronizacji sal v2 eliminujący fałszywe alerty przy migracji starszych planów, wendorowany pakiet xlsx dla deterministycznego budowania offline, wydzielone chunki Vite oraz zautomatyzowany budżet użyć typu any w CI.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'feature', text: 'Wielopróbowy generator planu i raport przekroczeń okienek (PlanGenerator.tsx): Dodano do 5 deterministycznych prób kolejności wiązek wybierających plan o największej liczbie ułożonych godzin i najmniejszej sumie okienek; przekroczenia limitu okienek (teacherConfigs[*].maxGaps / maxGapsPerTeacher) są jawnie raportowane i ustawiają success = false.', badgeText: 'Generator 5x' },
+        { type: 'feature', text: 'Trwałość indywidualnych ustawień nauczycieli (teacherConfigs w generatorSettings): Stan ról, limitów okienek i rozkładu jest zapisywany z opóźnieniem (debounce) oraz po generowaniu, a także przechodzi pełną normalizację, walidację Zod i migrację w mergeEngine.', badgeText: 'Trwałość Stanu' },
+        { type: 'security', text: 'Bezpieczeństwo wydruków QR i dokumentów HTML (qrPlanService.ts, EksportIRaporty.tsx): Każde pole tekstowe w szablonie HTML kart QR przechodzi przez escapeHtml(), dozwolone są wyłącznie obrazy data:image/png;base64, a nowo otwarte okna druku ustawiają opener = null.', badgeText: 'Bezpieczeństwo XSS' },
+        { type: 'improvement', text: 'Wersjonowany hash synchronizacji Planu Sal v2 (planSyncHash.ts, mergeEngine.ts, App.tsx): Wyliczanie skrótu pomija zmiany kłódki (locked) i supportTeacherId na pojedynczej lekcji; starsze zapisy bez prefiksu v2: są automatycznie i bez fałszywego baneru przeliczane przy starcie lub imporcie.', badgeText: 'Synchronizacja v2' },
+        { type: 'fix', text: 'Zgodność numeracji przerw w Dyżurach z Kreatorem Szkoły: Potwierdzono i udokumentowano mapowanie przerwa N → po lekcji N oraz poprawiono numerowanie przerw w KreatorSzkoly.tsx przy dodanej godzinie zerowej (0).', badgeText: 'Dyżury & Dzwonki' },
+        { type: 'improvement', text: 'Offline-ready zależności, CI i podział chunków Vite: Wendorowany pakiet vendor/xlsx-0.20.3.tgz (npm ci bez dostępu do zewnętrznego CDN), usunięcie zbędnych uprawnień z metadata.json i bun.lock, wydzielenie chunków vendor-xlsx i vendor-qr w vite.config.ts oraz budżet typu any w ESLint/CI (npm run check:any).', badgeText: 'Build & CI' }
+      ]
+    },
+    {
       version: 'v3.14.0',
       date: '14 listopada 2026',
       title: 'Aktywne Reguły Generatora (Okienka, Rozkład Przedmiotów, Rezerwa Zastępstw), Spójne Limity i Multi-Stanowiska w Dyżurach, Precyzyjne Sale Klas 1–3 i Detekcja Desynchronizacji Planu',
       description: 'Wydanie v3.14.0 domyka pełną spójność algorytmów układania planów, sal i dyżurów. Generator planu realizuje teraz wszystkie suwaki i opcje (limity okienek globalne i indywidualne, rozkład dniowy oraz blokadę >2 lekcji dziennie z jednego przedmiotu, ochronę rezerwy nauczycieli na zastępstwa, zachowanie ręcznych lekcji niezablokowanych i czyszczenie osieroconych blokad). Moduł Dyżurów zyskał jeden kanoniczny kalkulator limitów minutowych (computeTeacherMaxMinutes), obsługę wielu dyżurnych na jednym miejscu (teachersNeeded > 1), weryfikację dyspozycyjności nauczyciela także w dniach prowadzenia lekcji oraz baner wykrywający brak synchronizacji planu sal z planem lekcji. Plan Sal precyzyjnie rozpoznaje klasy 1–3 (isGrade1to3), bezbłędnie przydziela sale bez dedykowanej wychowawczej, deduplikuje grupy międzyoddziałowe i respektuje przypisane pracownie z Etapu 1.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Generator planu – egzekucja limitu okienek i rozkładu zajęć: Implementacja globalnego limitu okienek (maxGapsPerTeacher) i limitów indywidualnych nauczycieli (teacherConfigs[*].maxGaps z opcją „Wg suwaka”), rozkładu etatu (spreadObligation), ochrony wskazanych przedmiotów przed skrajnymi godzinami (avoidExtremesSubjectIds), progu wolnych nauczycieli na zastępstwa (minAvailableSubstitutionTeachersPerSlot) oraz dziennego limitu jednego przedmiotu w klasie (preferowane max 2 lekcje dziennie, twardy limit 3).', badgeText: 'Optymalizator Planu' },
         { type: 'feature', text: 'Opcja „Zachowaj ręczne lekcje niezablokowane”: Nowy przełącznik w Ustawieniach Generatora (preserveUnlockedManualLessons) pozwalający chronić lekcje ułożone ręcznie bez konieczności ich ręcznego kłódkowania; spójne wykrywanie kolizji grup przez groupsOverlap(a, b, schoolGroups) oraz automatyczne usuwanie osieroconych lekcji z nieistniejącym assignmentId.', badgeText: 'Generator & Scalanie' },

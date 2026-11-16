@@ -559,7 +559,7 @@ export default function KreatorSzkoly({
         const currentLesson = hoursList[i];
         const nextLesson = hoursList[i + 1];
         calculatedBreaks.push({
-          num: i + 1,
+          num: currentLesson.num,
           start: currentLesson.end,
           end: nextLesson.start,
           name: `Przerwa po ${currentLesson.num}. lekcji`

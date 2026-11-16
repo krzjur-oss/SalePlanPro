@@ -11,7 +11,7 @@ describe('Dyzury — baner synchronizacji Planu Sal z Planem Lekcji', () => {
     appState.planLekcji.lessons = {
       'c1|0|0': { assignmentId: appState.planLekcji.assignments[0]?.id || 'a1', locked: false }
     };
-    appState.planSyncHash = 'stary_niezgodny_hash';
+    appState.planSyncHash = 'v2:stary_niezgodny_hash';
 
     const schedData = getDemoSchedData();
     const onNavigate = vi.fn();

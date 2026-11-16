@@ -5,6 +5,33 @@ Projekt stosuje konwencję wersjonowania semantycznego (SemVer) oraz standardy d
 
 ---
 
+## [3.15.0] — 2026-11-16
+### 🛡️ Bezpieczeństwo Wydruków QR, Wielopróbowy Generator z Raportem Okienek, Trwałe `teacherConfigs`, Hash Synchronizacji `v2:` oraz Offline-Ready Build
+
+#### Nowości i Usprawnienia:
+*   **Wielopróbowy Generator Planu i Raport Przekroczeń (`PlanGenerator.tsx`)**:
+    *   Dodano do **5 deterministycznych prób** kolejności wiązek w `runPlanGenerationAlgorithm` — generator wybiera wariant o największej liczbie ułożonych lekcji oraz najmniejszej sumie okienek (zachowując identyczną kolejność bazową w pierwszej próbie).
+    *   Po ułożeniu planu system zlicza okienka każdego nauczyciela względem jego limitu (`teacherConfigs[*].maxGaps ?? maxGapsPerTeacher`), raportuje przekroczenia z podaniem skrótu i liczby okienek oraz ustawia `success: false`, gdy wystąpi przekroczenie lub wybór slotu fallback naruszającego limit.
+*   **Trwała Konfiguracja Nauczycieli w Generatorze (`types.ts`, `PlanGenerator.tsx`, `mergeEngine.ts`, `validationSchemas.ts`, `utils.ts`)**:
+    *   Dodano pole `generatorSettings.teacherConfigs` przechowujące indywidualne ustawienia roli, `maxGaps` i `spreadObligation` dla każdego nauczyciela.
+    *   Stan jest automatycznie wczytywany z `appState`, scalany z aktualną listą kadry i zapisywany zarówno po wygenerowaniu planu, jak i z opóźnieniem (debounce) przy każdej zmianie w UI; konfiguracja przechodzi przez import/eksport JSON, migawki i walidację Zod.
+*   **Wersjonowany Hash Synchronizacji Planu Sal `v2:` (`src/utils/planSyncHash.ts`, `mergeEngine.ts`, `App.tsx`)**:
+    *   Skrót `computePlanLessonsHash` pomija teraz przełączanie blokady lekcji (`locked`) oraz `supportTeacherId` na pojedynczej lekcji, reagując na rzeczywiste zmiany slotów, przydziałów, nauczycieli, grup i sal (`assignments`).
+    *   Dodano prefiks wersji `"v2:"`; starsze zapisy bez prefiksu nie wywołują fałszywego baneru desynchronizacji i są cicho przeliczane przy starcie lub wczytaniu stanu, jeśli plan sal zawiera wpisy.
+*   **Inżynieria Wydania, Zależności Offline i CI (`eslint.config.js`, `scripts/check-any-budget.mjs`, `vite.config.ts`, `package.json`)**:
+    *   Wendorowano pakiet `vendor/xlsx-0.20.3.tgz` (`"xlsx": "file:vendor/xlsx-0.20.3.tgz"`), umożliwiając bezbłędne działanie `npm ci` bez dostępu do `cdn.sheetjs.com`, oraz usunięto zbędny `bun.lock` i nieużywane uprawnienia z `metadata.json`.
+    *   Włączono w ESLint reguły `no-undef` (poza plikami TS/TSX), `@typescript-eslint/no-unused-vars` (`warn`, wzorzec `^_`), `prefer-const` (`warn`) i `no-empty` (`allowEmptyCatch`), a w CI dodano skrypt `npm run check:any` pilnujący nieprzekraczalnego, malejącego progu użyć `any`.
+    *   Wydzielono w `vite.config.ts` osobne chunki `vendor-xlsx` oraz `vendor-qr`, redukując rozmiar głównego pakietu `index` poniżej progu ostrzeżeń Vite.
+
+#### Bezpieczeństwo i Poprawki:
+*   **Sanityzacja HTML w Wydrukach QR i Okien Druku (`src/services/qrPlanService.ts`, `src/components/EksportIRaporty.tsx`)**:
+    *   Każda wartość tekstowa w `generateQrPrintHtml` (`schoolName`, `yearLabel`, `item.title`, `item.subtitle`, `item.tag`, `alt`) jest kodowana przez `escapeHtml`, a obrazy QR akceptowane wyłącznie w formacie `data:image/png;base64,`.
+    *   W `handlePrintQrSheets` ustawiono `printWindow.opener = null`.
+*   **Spójność Numeracji Przerw przy Godzinie `0` (`KreatorSzkoly.tsx`, `dutyLimits.ts`, `Dyzury.tsx`)**:
+    *   Potwierdzono w kodzie Kreatora Szkoły konwencję `przerwa N` → po lekcji `N` i poprawiono generowanie numerów przerw w `handleSaveStep1` (`num: currentLesson.num`), aby numeracja przerw była spójna także przy obecnej godzinie `0`.
+
+---
+
 ## [3.14.0] — 2026-11-14
 ### 🚀 Aktywne Reguły Generatora, Spójne Limity i Multi-Stanowiska w Dyżurach, Precyzyjne Sale Klas 1–3 i Kontrola Synchronizacji Planów
 

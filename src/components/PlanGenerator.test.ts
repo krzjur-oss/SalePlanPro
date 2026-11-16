@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { runPlanGenerationAlgorithm, PlanGeneratorOptions } from './PlanGenerator';
+import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
+import { render, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import PlanGenerator, {
+  runPlanGenerationAlgorithm,
+  mergeTeacherConfigsWithTeachers,
+  PlanGeneratorOptions
+} from './PlanGenerator';
 import { AppState, ClassRoom } from '../types';
 
 describe('PlanGenerator - Model zajętości z grupami, parami równoległymi i salami', () => {
@@ -762,5 +768,277 @@ describe('PlanGenerator - Model zajętości z grupami, parami równoległymi i s
     expect(result.placedRegular).toBe(1);
     expect(result.success).toBe(true);
   });
+
+  it('mergeTeacherConfigsWithTeachers inicjalizuje z generatorSettings.teacherConfigs, scala brakujących i pomija nieistniejących nauczycieli', () => {
+    const teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK' },
+      { id: 't2', first: 'Anna', last: 'Nowak', abbr: 'AN' }
+    ];
+
+    const merged = mergeTeacherConfigsWithTeachers(teachers, {
+      t1: { teacherId: 't1', role: 'director', maxGaps: 0, spreadObligation: true },
+      t_deleted: { teacherId: 't_deleted', role: 'deputy', maxGaps: 1, spreadObligation: false }
+    });
+
+    expect(Object.keys(merged)).toEqual(['t1', 't2']);
+    expect(merged.t1).toEqual({
+      teacherId: 't1',
+      role: 'director',
+      maxGaps: 0,
+      spreadObligation: true
+    });
+    expect(merged.t2).toEqual({
+      teacherId: 't2',
+      role: 'teacher',
+      maxGaps: null,
+      spreadObligation: false
+    });
+    expect(merged['t_deleted']).toBeUndefined();
+  });
+
+  it('PlanGenerator zapisuje teacherConfigs przy zmianie (debounce) oraz w onChangeAppState po generowaniu', async () => {
+    const appState = createBaseAppState();
+    appState.planLekcji.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+    appState.planLekcji.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK' },
+      { id: 't2', first: 'Anna', last: 'Nowak', abbr: 'AN' }
+    ];
+    appState.planLekcji.subjects = [{ id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }];
+    appState.planLekcji.assignments = [
+      { id: 'a1', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 1 }
+    ];
+    appState.generatorSettings = {
+      maxGapsPerTeacher: 2,
+      obeyAvailability: true,
+      avoidExtremes: false,
+      avoidExtremesSubjectIds: [],
+      noStudentGaps: true,
+      allowDoubleBlocks: false,
+      includeSpecialNI: false,
+      limitComputerLabs: false,
+      customComputerLabsCount: 1,
+      minAvailableSubstitutionTeachersPerSlot: 0,
+      forceOptionalToExtremes: false,
+      optionalSubjectIds: [],
+      preserveUnlockedManualLessons: false,
+      genPriorityHomerooms: true,
+      genPriorityTeachers: true,
+      genExcludeWF: true,
+      genAutoPlaceWF: true,
+      genClearExisting: true,
+      teacherConfigs: {
+        t1: { teacherId: 't1', role: 'teacher', maxGaps: 2, spreadObligation: false },
+        ghost_teacher: { teacherId: 'ghost_teacher', role: 'director', maxGaps: 0, spreadObligation: true }
+      }
+    };
+
+    const states: AppState[] = [];
+    const onChangeAppState = vi.fn((next: AppState) => {
+      states.push(next);
+    });
+
+    const { container } = render(
+      React.createElement(PlanGenerator, {
+        appState,
+        onChangeAppState,
+        onClose: vi.fn()
+      })
+    );
+
+    const gapSelects = Array.from(container.querySelectorAll('select')).filter((sel) =>
+      Array.from(sel.options).some((opt) => opt.value === 'default')
+    ) as HTMLSelectElement[];
+
+    expect(gapSelects).toHaveLength(2);
+    expect(gapSelects[0].value).toBe('2');
+    expect(gapSelects[1].value).toBe('default');
+
+    // Zmiana dla t1 -> maxGaps: 0 wywołuje zapis z debouncem bez nieistniejącego nauczyciela
+    fireEvent.change(gapSelects[0], { target: { value: '0' } });
+
+    await waitFor(
+      () => {
+        expect(onChangeAppState).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 1500 }
+    );
+
+    const debouncedSaved = states[states.length - 1];
+    expect(debouncedSaved.generatorSettings?.teacherConfigs?.t1?.maxGaps).toBe(0);
+    expect(debouncedSaved.generatorSettings?.teacherConfigs?.t2?.maxGaps).toBeNull();
+    expect(debouncedSaved.generatorSettings?.teacherConfigs?.ghost_teacher).toBeUndefined();
+
+    // Kliknięcie "Rozpocznij automatyczne układanie" zapisuje wynik i aktualne teacherConfigs
+    const runBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Rozpocznij automatyczne układanie')
+    );
+    expect(runBtn).toBeDefined();
+    fireEvent.click(runBtn!);
+
+    await waitFor(
+      () => {
+        expect(onChangeAppState).toHaveBeenCalledTimes(2);
+      },
+      { timeout: 1500 }
+    );
+
+    const postGenSaved = states[states.length - 1];
+    expect(postGenSaved.generatorSettings?.teacherConfigs?.t1?.maxGaps).toBe(0);
+    expect(Object.keys(postGenSaved.planLekcji.lessons)).toHaveLength(1);
+    cleanup();
+  });
+
+  it('wykrywa przekroczenia limitu okienek po generowaniu, raportuje gapExceedances i ostrzeżenia z abbr oraz ustawia success=false', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+    pl.classes = [{ id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] }];
+    pl.teachers = [
+      // Nauczyciel JK dostępny tylko na indeksie 0 i 2 w poniedziałek -> wymuszone 1 okienko przez fallback
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-3'] }
+    ];
+    pl.subjects = [
+      { id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }
+    ];
+    pl.assignments = [
+      { id: 'a1', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 2 }
+    ];
+    pl.lessons = {
+      'c1|0|0': { assignmentId: 'a1', locked: true }
+    };
+
+    const result = runPlanGenerationAlgorithm(appState, {
+      ...defaultOptions,
+      maxGapsPerTeacher: 0,
+      obeyAvailability: true,
+      teacherConfigs: {
+        t1: { teacherId: 't1', role: 'director', maxGaps: 0, spreadObligation: false }
+      }
+    });
+
+    expect(result.placedRegular).toBe(1);
+    expect(result.success).toBe(false);
+    expect(result.gapExceedances).toHaveLength(1);
+    expect(result.gapExceedances[0]).toEqual({
+      teacherId: 't1',
+      abbr: 'JK',
+      gaps: 1,
+      limit: 0
+    });
+    expect(result.warnings.some(w => w.includes('JK') && w.includes('1'))).toBe(true);
+    // Pętla fallback nie wybiera slotu z przekroczeniem limitu okienek bez dopisania ostrzeżenia
+    expect(result.warnings.some(w => w.toLowerCase().includes('przekroczeniem limitu okienek'))).toBe(true);
+  });
+
+  it('w pętli fallback przedkłada slot bez przekroczenia okienek nad slot przekraczający limit okienek', () => {
+    const appState = createBaseAppState();
+    const pl = appState.planLekcji;
+    pl.classes = [
+      { id: 'c1', name: '1A', color: '#3b82f6', groupIds: [] },
+      { id: 'c2', name: '1B', color: '#10b981', groupIds: [] }
+    ];
+    // t1 dostępny pn godz. 1, 2, 3, 4 (indeksy 0, 1, 2, 3)
+    pl.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-2', '0-3', '0-4'] }
+    ];
+    pl.subjects = [
+      { id: 's1', name: 'Matematyka', short: 'MAT', color: '#3b82f6' }
+    ];
+    pl.assignments = [
+      { id: 'a1', classId: 'c1', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 3 },
+      { id: 'a2', classId: 'c2', groupId: null, teacherId: 't1', subjectId: 's1', roomId: null, hoursPerWeek: 1 }
+    ];
+    // Zablokowane dla t1 w c1 na indeksach 0 i 1 -> indeks 2 daje 3. lekcję tego samego przedmiotu w c1 (-8000, ale 0 okienek!),
+    // a c2|0|2 zajmuje t1 tak, że indeks 3 dla c1 tworzyłby okienko gdyby indeks 2 był wolny lub w fallbacku
+    pl.lessons = {
+      'c1|0|0': { assignmentId: 'a1', locked: true },
+      'c1|0|1': { assignmentId: 'a1', locked: true },
+      'c2|0|3': { assignmentId: 'a2', locked: true }
+    };
+
+    // Ostatnia lekcja a1 może trafić na indeks 2 (0 okienek, ale >2 lekcje przedmiotu/dzień => -8000);
+    // gdyby indeks 2 przegrał z czymś przekraczającym limit okienek, powstałoby przekroczenie.
+    const result = runPlanGenerationAlgorithm(appState, {
+      ...defaultOptions,
+      maxGapsPerTeacher: 0,
+      obeyAvailability: true
+    });
+
+    expect(result.placedRegular).toBe(1);
+    expect(result.updatedLessons['c1|0|2']?.assignmentId).toBe('a1');
+    expect(result.gapExceedances).toHaveLength(0);
+    expect(result.success).toBe(true);
+  });
+
+  it('test regresyjny: 8 klas x 6 przedmiotów x 4 h, 6 nauczycieli — placedRegular przy maxGapsPerTeacher=5 >= przy 0 i deterministyczny wynik', () => {
+    const buildLargeScenario = () => {
+      const appState = createBaseAppState();
+      const pl = appState.planLekcji;
+
+      pl.classes = Array.from({ length: 8 }, (_, i) => ({
+        id: `c${i + 1}`,
+        name: `${i + 1}A`,
+        color: '#3b82f6',
+        groupIds: []
+      }));
+
+      pl.subjects = Array.from({ length: 6 }, (_, i) => ({
+        id: `s${i + 1}`,
+        name: `Przedmiot ${i + 1}`,
+        short: `P${i + 1}`,
+        color: '#10b981'
+      }));
+
+      pl.teachers = Array.from({ length: 6 }, (_, i) => ({
+        id: `t${i + 1}`,
+        first: `Nauczyciel`,
+        last: `${i + 1}`,
+        abbr: `N${i + 1}`
+      }));
+
+      pl.assignments = [];
+      for (let c = 0; c < 8; c++) {
+        for (let s = 0; s < 6; s++) {
+          pl.assignments.push({
+            id: `asg_c${c + 1}_s${s + 1}`,
+            classId: `c${c + 1}`,
+            groupId: null,
+            teacherId: `t${s + 1}`,
+            subjectId: `s${s + 1}`,
+            roomId: null,
+            hoursPerWeek: 4
+          });
+        }
+      }
+
+      return appState;
+    };
+
+    const res0 = runPlanGenerationAlgorithm(buildLargeScenario(), {
+      ...defaultOptions,
+      maxGapsPerTeacher: 0,
+      allowDoubleBlocks: true
+    });
+
+    const res5 = runPlanGenerationAlgorithm(buildLargeScenario(), {
+      ...defaultOptions,
+      maxGapsPerTeacher: 5,
+      allowDoubleBlocks: true
+    });
+
+    const res5Repeat = runPlanGenerationAlgorithm(buildLargeScenario(), {
+      ...defaultOptions,
+      maxGapsPerTeacher: 5,
+      allowDoubleBlocks: true
+    });
+
+    expect(res0.totalRegular).toBe(192);
+    expect(res5.totalRegular).toBe(192);
+    expect(res5.placedRegular).toBeGreaterThanOrEqual(res0.placedRegular);
+    expect(res5.conflicts).toHaveLength(0);
+    // Determinizm wielokrotnych prób
+    expect(res5.updatedLessons).toEqual(res5Repeat.updatedLessons);
+  });
 });
+
+
 

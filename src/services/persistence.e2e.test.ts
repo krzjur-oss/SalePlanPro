@@ -842,4 +842,102 @@ describe('Persistence E2E Lifecycle Tests (Cycle: Zapis -> vi.resetModules -> Od
       }
     });
   });
+
+  it('Scenariusz F: generatorSettings.teacherConfigs[t1].maxGaps === 0 jest zapisywane, przechodzi normalizację/walidację i obowiązuje po przeładowaniu', async () => {
+    const { mergeTeacherConfigsWithTeachers } = await import('../components/PlanGenerator');
+    const { persistAppStateAndSchedWithConflictCheck } = await import('./persistence');
+    const { sanitizeAppState } = await import('../utils/mergeEngine');
+    const { validateImportJson } = await import('../utils/validationSchemas');
+
+    const baseState = createSampleAppState('Szkoła TeacherConfigs E2E');
+    baseState.planLekcji.teachers = [
+      { id: 't1', first: 'Jan', last: 'Kowalski', abbr: 'JK', availability: ['0-1', '0-2', '0-3'] }
+    ];
+    baseState.planLekcji.assignments = [
+      { id: 'a1', teacherId: 't1', subjectId: 's1', classId: 'c1', roomId: 'r_101', hoursPerWeek: 2, groupId: null }
+    ];
+    baseState.planLekcji.lessons = {
+      'c1|0|0': { assignmentId: 'a1', locked: true }
+    };
+    const stateToSave: AppState = {
+      ...baseState,
+      generatorSettings: {
+        maxGapsPerTeacher: 5,
+        obeyAvailability: true,
+        avoidExtremes: false,
+        avoidExtremesSubjectIds: [],
+        noStudentGaps: true,
+        allowDoubleBlocks: false,
+        includeSpecialNI: false,
+        limitComputerLabs: false,
+        customComputerLabsCount: 1,
+        minAvailableSubstitutionTeachersPerSlot: 0,
+        forceOptionalToExtremes: false,
+        optionalSubjectIds: [],
+        preserveUnlockedManualLessons: false,
+        genPriorityHomerooms: true,
+        genPriorityTeachers: true,
+        genExcludeWF: true,
+        genAutoPlaceWF: true,
+        genClearExisting: true,
+        teacherConfigs: {
+          t1: { teacherId: 't1', role: 'teacher', maxGaps: 0, spreadObligation: false },
+          nieistniejacy: { teacherId: 'nieistniejacy', role: 'director', maxGaps: 1, spreadObligation: true }
+        }
+      }
+    };
+    const schedData = createSampleSchedData();
+
+    // Weryfikacja schematu importu/eksportu i normalizacji mergeEngine
+    const jsonValidation = validateImportJson(JSON.stringify({ appState: stateToSave, schedData }));
+    expect(jsonValidation.isValid).toBe(true);
+    expect(jsonValidation.data?.appState?.generatorSettings?.teacherConfigs?.t1?.maxGaps).toBe(0);
+
+    const sanitizedState = sanitizeAppState(stateToSave);
+    expect(sanitizedState.generatorSettings?.teacherConfigs?.t1?.maxGaps).toBe(0);
+
+    // Zapis do IndexedDB
+    const saveRes = await persistAppStateAndSchedWithConflictCheck(sanitizedState, schedData, { forceOverwrite: true });
+    expect(saveRes.status).toBe('ok');
+
+    // Przeładowanie aplikacji (vi.resetModules) i odczyt z IndexedDB
+    vi.resetModules();
+
+    const freshPersistence = await import('./persistence');
+    const freshPlanGenerator = await import('../components/PlanGenerator');
+
+    const reloadedState = await freshPersistence.getStorageItem<AppState>(freshPersistence.STORAGE_KEYS.APP_STATE);
+    expect(reloadedState).not.toBeNull();
+    expect(reloadedState?.generatorSettings?.teacherConfigs?.t1?.maxGaps).toBe(0);
+
+    // Inicjalizacja konfiguracji nauczycieli po przeładowaniu scala i pomija usuniętych nauczycieli
+    const initializedConfigs = freshPlanGenerator.mergeTeacherConfigsWithTeachers(
+      reloadedState!.planLekcji.teachers,
+      reloadedState!.generatorSettings?.teacherConfigs
+    );
+    expect(initializedConfigs.t1.maxGaps).toBe(0);
+    expect(initializedConfigs.nieistniejacy).toBeUndefined();
+
+    // Uruchomienie generatora z odtworzoną konfiguracją nadal wymusza maxGaps === 0 dla t1 (brak okienka między lekcją 0 i 1)
+    const genResult = freshPlanGenerator.runPlanGenerationAlgorithm(reloadedState!, {
+      maxGapsPerTeacher: reloadedState!.generatorSettings?.maxGapsPerTeacher ?? 5,
+      obeyAvailability: true,
+      avoidExtremes: false,
+      avoidExtremesSubjectIds: [],
+      noStudentGaps: true,
+      allowDoubleBlocks: false,
+      includeSpecialNI: false,
+      limitComputerLabs: false,
+      customComputerLabsCount: 1,
+      minAvailableSubstitutionTeachersPerSlot: 0,
+      forceOptionalToExtremes: false,
+      optionalSubjectIds: [],
+      preserveUnlockedManualLessons: false,
+      teacherConfigs: initializedConfigs
+    });
+    expect(genResult.success).toBe(true);
+    expect(genResult.updatedLessons['c1|0|2']).toBeUndefined();
+    expect(genResult.updatedLessons['c1|0|1']?.assignmentId).toBe('a1');
+  });
 });
+

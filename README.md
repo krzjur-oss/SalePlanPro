@@ -1,4 +1,4 @@
-# SalePlan Pro v3.14.0 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.15.0 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -61,8 +61,8 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   Zegar czasu rzeczywistego, odliczanie do najbliższego dzwonka oraz dynamiczne ukrywanie okienek.
 
 ### 7. 🤖 Inteligentny Generator Planu Lekcji (`PlanGenerator`)
-*   **Zaawansowany Model Zajętości Grup i Partycji**: Układanie zajęć z pełną zgodnością z `groupsOverlap(a, b, schoolGroups)` dla grup równoległych i międzyoddziałowych.
-*   **Aktywna Optymalizacja Reguł**: Egzekwowanie globalnych i indywidualnych limitów okienek nauczycieli, dziennego limitu przedmiotu w klasie (max 2 lekcje dziennie), ochrony skrajnych godzin, rezerwy wolnych nauczycieli na zastępstwa oraz opcji zachowania ręcznych lekcji niezablokowanych.
+*   **Zaawansowany Model Zajętości Grup i Partycji**: Układanie zajęć z pełną zgodnością z `groupsOverlap(a, b, schoolGroups)` dla grup równoległych i międzyoddziałowych oraz do 5 deterministycznych prób kolejności wiązek optymalizujących obłożenie i sumę okienek.
+*   **Aktywna Optymalizacja Reguł i Trwała Konfiguracja Kadry**: Egzekwowanie globalnych i trwałych indywidualnych limitów okienek nauczycieli (`generatorSettings.teacherConfigs`) z jawnym raportowaniem przekroczeń, dziennego limitu przedmiotu w klasie (max 2 lekcje dziennie), ochrony skrajnych godzin, rezerwy wolnych nauczycieli na zastępstwa oraz opcji zachowania ręcznych lekcji niezablokowanych.
 *   **Zintegrowana Kontrola Końcowa**: Czyszczenie osieroconych lekcji z brakującym przydziałem i weryfikacja ułożonego planu przez silnik detekcji konfliktów `detectConflicts`.
 
 ### 8. 🛡️ Niezawodna Architektura Trwałości i Bezpieczeństwo RODO
@@ -86,7 +86,7 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 | **Walidacja** | **Zod** | Walidacja integralności struktur danych i odporność na uszkodzenia |
 | **Drag & Drop** | **@dnd-kit/core** | Ergonomiczne przeciąganie lekcji i sal |
 | **PWA** | **Service Worker** (Cache-First + Navigation Race) | Praca w trybie offline, instalacja jako aplikacja pulpitu |
-| **Testy** | **Vitest** + **@testing-library/react** + **fake-indexeddb** | Ponad 240 zautomatyzowanych testów jednostkowych i integracyjnych |
+| **Testy** | **Vitest** + **@testing-library/react** + **fake-indexeddb** | Ponad 250 zautomatyzowanych testów jednostkowych i integracyjnych |
 
 ---
 
@@ -107,9 +107,11 @@ npm run dev
 ```
 Aplikacja będzie dostępna pod adresem: `http://localhost:3000`.
 
-### Uruchomienie testów jednostkowych:
+### Uruchomienie testów jednostkowych i kontroli jakości:
 ```bash
 npm test
+npm run lint
+npm run check:any
 ```
 
 ### Budowanie wersji produkcyjnej:

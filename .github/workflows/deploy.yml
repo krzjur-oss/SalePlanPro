@@ -37,6 +37,9 @@ jobs:
       - name: Lint code
         run: npm run lint
 
+      - name: Check explicit any budget
+        run: npm run check:any
+
       - name: Run unit tests
         run: npm test
 

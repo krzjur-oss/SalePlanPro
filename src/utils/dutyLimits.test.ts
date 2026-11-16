@@ -358,4 +358,43 @@ describe('dutyLimits — wspólna kalkulacja limitów i generator dyżurów', ()
     expect(result.harmonogram[getDutySlotKey('p1', 0, 2, 1)]?.teacherAbbr).not.toBe('AV');
     expect(result.harmonogram[getDutySlotKey('p1', 0, 3, 1)]?.teacherAbbr).not.toBe('AV');
   });
+
+  it('nauczyciel dostępny tylko na lekcji 2: dyżur po lekcji 2 (przerwa nr 2) dozwolony, po lekcji 1 (przerwa nr 1) nie', () => {
+    const onlyLesson2Teacher = makeTeacher({
+      id: 't_l2',
+      abbr: 'L2',
+      availability: ['0-2'],
+    });
+
+    const { appState, schedData } = buildTestFixtures({
+      teachers: [onlyLesson2Teacher],
+      daysWithLessons: [0],
+      breaks: [
+        { num: 1, name: 'Przerwa po 1. lekcji', start: '08:45', end: '08:55' },
+        { num: 2, name: 'Przerwa po 2. lekcji', start: '09:40', end: '09:50' },
+      ],
+      settings: { maxPerTeacher: 5, maxMinutesPerTeacher: 60 },
+    });
+
+    // Nauczyciel prowadzi w dniu 0 tylko lekcję 2
+    schedData.y1[0] = {
+      '2': {
+        col1: [{ teacherAbbr: 'L2', subject: 'MAT', className: '4A', classes: ['4A'] }],
+      },
+    };
+
+    const personnel = buildAllDutyPersonnel(appState);
+    const l2Person = personnel.find((p) => p.abbr === 'L2')!;
+
+    expect(
+      isTeacherAvailableForBreak(l2Person, 0, appState.dyzury.przerwy[0], appState, schedData)
+    ).toBe(false);
+    expect(
+      isTeacherAvailableForBreak(l2Person, 0, appState.dyzury.przerwy[1], appState, schedData)
+    ).toBe(true);
+
+    const result = autoAssignDuties(appState, schedData);
+    expect(result.harmonogram[getDutySlotKey('p1', 0, 1, 1)]?.teacherAbbr).toBeUndefined();
+    expect(result.harmonogram[getDutySlotKey('p1', 0, 2, 1)]?.teacherAbbr).toBe('L2');
+  });
 });
