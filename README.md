@@ -1,4 +1,4 @@
-# SalePlan Pro v3.15.0 🗓️🏫 (SchedData Engine)
+# SalePlan Pro v3.16.0 🗓️🏫 (SchedData Engine)
 
 Profesjonalny, bezpieczny i w pełni autonomiczny system do kompleksowego planowania lekcji, optymalnego przydziału sal lekcyjnych oraz układania i walidacji harmonogramów dyżurów nauczycielskich. Zaprojektowany z myślą o polskich szkołach podstawowych i ponadpodstawowych.
 
@@ -56,8 +56,9 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
     *   Panoramiczne zestawienie pracy całej szkoły w jednym arkuszu (dla 25–50 klas lub 40–60 pedagogów).
     *   Wielostronicowy podział na dni (Pn–Pt, każdy dzień na osobnej karcie A3 Poziomo z kompletem godzin).
     *   Auto-dopasowanie rozmiaru czcionek, podział kolumn na części (Część 1 / Część 2), oficjalne skróty z Kreatora oraz metryka podpisu Dyrektora Szkoły.
-*   **📺 Tablica Informacyjna TV / Tryb Rzutnika (Kiosk Mode)**:
-    *   Pełnoekranowy interfejs na telewizory i monitory w holu szkoły lub pokoju nauczycielskim.
+*   **Kompletne Zestawienia Klas, Sal, Nauczycieli i Dyżurów**: Wspólny silnik opisu lekcji (`lessonDisplay`) dla spójnej prezentacji grup, lekcji łączonych międzyklasowo, nauczycieli wspomagających (`(wspom.)`), wychowawców klas oraz pełnych opisów sal i notatek dyżurów.
+*   **📺 Tablica Informacyjna TV / Tryb Rzutnika (Kiosk Mode) i Podgląd Mobilny**:
+    *   Pełnoekranowy interfejs na telewizory i monitory w holu szkoły lub pokoju nauczycielskim z pełną obsługą wieloslotowych dyżurów (`getDutySlotKey`).
     *   Zegar czasu rzeczywistego, odliczanie do najbliższego dzwonka oraz dynamiczne ukrywanie okienek.
 
 ### 7. 🤖 Inteligentny Generator Planu Lekcji (`PlanGenerator`)
@@ -86,7 +87,7 @@ Aplikacja działa w architekturze **Offline-First** jako nowoczesna aplikacja **
 | **Walidacja** | **Zod** | Walidacja integralności struktur danych i odporność na uszkodzenia |
 | **Drag & Drop** | **@dnd-kit/core** | Ergonomiczne przeciąganie lekcji i sal |
 | **PWA** | **Service Worker** (Cache-First + Navigation Race) | Praca w trybie offline, instalacja jako aplikacja pulpitu |
-| **Testy** | **Vitest** + **@testing-library/react** + **fake-indexeddb** | Ponad 250 zautomatyzowanych testów jednostkowych i integracyjnych |
+| **Testy** | **Vitest** + **@testing-library/react** + **fake-indexeddb** | Ponad 270 zautomatyzowanych testów jednostkowych i integracyjnych |
 
 ---
 

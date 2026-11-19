@@ -258,6 +258,7 @@ export interface SchedCell {
   subject: string;
   note?: string;
   locked?: boolean;
+  isHomeroom?: boolean;
   _bridgeMeta?: {
     assignmentId?: string;
     classId?: string;

@@ -6,7 +6,7 @@ import { ESLint } from 'eslint';
  * Maksymalna dopuszczalna liczba wystąpień `@typescript-eslint/no-explicit-any` w `src`.
  * Próg wyłącznie malejący — po zmniejszeniu liczby `any` obniż tę wartość.
  */
-const MAX_ANY_COUNT = 186;
+const MAX_ANY_COUNT = 184;
 
 async function main() {
   const eslint = new ESLint({

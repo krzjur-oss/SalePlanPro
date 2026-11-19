@@ -30,11 +30,27 @@ export default function Changelog() {
 
   const versions: Version[] = [
     {
+      version: 'v3.16.0',
+      date: '19 listopada 2026',
+      title: 'Ujednolicony Opis Lekcji (lessonDisplay), Multi-Slotowe Dyżury we Wszystkich Widokach, Kompletne Wydruki Grup/Wspomagających i Czytelniejsze Siatki Klas oraz Sal',
+      description: 'Wydanie v3.16.0 porządkuje i ujednolica prezentację lekcji oraz dyżurów w całej aplikacji i na wydrukach. Utworzono wspólny moduł src/utils/lessonDisplay.ts z kanoniczną funkcją describeLesson dla Etapu 1 i Etapu 2, przepięto na niego moduł Wydruków oraz uzupełniono wydruki klas, sal i nauczycieli o grupy, zajęcia łączone międzyklasowo, nauczycieli wspomagających i wychowawców klas. Tryb Kiosk, Podgląd Mobilny oraz Wydruki obsługują teraz wszystkie stanowiska wieloslotowych dyżurów (#N) wraz z per-slotową weryfikacją lekcji i podwójnych dyżurów, a Plan Klas i Plan Sal zyskały czytelniejsze skróty nauczycieli, pełne zawijanie notatek oraz wyraźne oznaczanie braku nauczyciela.',
+      badge: 'Najnowsza',
+      changes: [
+        { type: 'improvement', text: 'Wspólny moduł opisu lekcji (src/utils/lessonDisplay.ts): Wydzielono kanoniczną funkcję describeLesson(lessonOrCell, ctx) oraz helpery getSubjectShort / getGroupShort zwracające spójny model (classLabel, groupLabel, leadTeacher, supportTeacher, roomName, linkedWith, note) dla obu etapów planu; moduł Wydruki.tsx został przepięty na nowe API.', badgeText: 'Architektura' },
+        { type: 'fix', text: 'Pełna obsługa wieloslotowych dyżurów w Kiosku, Mobilu i Wydrukach (KioskMode.tsx, MobilePlanViewer.tsx, Wydruki.tsx): Zastąpiono ręcznie składane klucze z separatorem „_” kanonicznym getDutySlotKey dla wszystkich slotów 1..teachersNeeded, dodano plakietki #N przy multi-stanowiskach oraz weryfikację lekcji i podwójnego dyżuru dla każdego slotu osobno.', badgeText: 'Dyżury Multi-Slot' },
+        { type: 'feature', text: 'Kompletne wydruki klas z grupami, wspomagającymi i wychowawcą (Wydruki.tsx): Wydzielono wspólną funkcję getClassPrintItems dla obu kopii wydruku klas w Etapie 1 i 2 (wiele grup w jednej godzinie, [gr1] Przedmiot, „+ SKRÓT (wspom.)”, jednolity format sal „s. {sala}”, lekcje łączone oraz „Wychowawca: …” z homerooms w nagłówku).', badgeText: 'Wydruki Klas' },
+        { type: 'feature', text: 'Rozszerzone wydruki sal i nauczycieli (Wydruki.tsx): getRoomLessons buduje etykiety łączone przez buildAssignmentCombinedClasses z deduplikacją po assignmentId + slot i wyświetla nauczyciela wspomagającego w matrycy HTML sal (z escapeHtml); getTeacherLessons oznacza rolę lead/support z dopiskiem „(wspomaganie)”.', badgeText: 'Wydruki Sal & Kadry' },
+        { type: 'improvement', text: 'Czytelniejsze dyżury i notatki na wydrukach oraz w aplikacji (dutiesPrintHtml.ts, Dyzury.tsx, Wydruki.tsx): Wydruk dyżurów pokazuje notatki entry.note pod dyżurnym (maks. 2 linie, bez ucinania), opisy miejsc (place.desc) i połączone sale („sale: …”) w nagłówku kolumny; plany nauczyciela pokazują d.desc i d.note; Dyzury.tsx wyświetlają notatkę jako tekst w trybie prezentacji i na małych ekranach, a etap2Schedule przechowuje roomName osobno bez nadpisywania note komórki.', badgeText: 'Notatki & Opisy' },
+        { type: 'fix', text: 'Czytelność nauczycieli, notatek i braków obsady w PlanKlas.tsx i PlanSal.tsx: Plan Klas prezentuje skróconą formę „I. Nazwisko (SKRÓT)” bez ucinania skrótu (pełna treść w title); Plan Sal wyświetla ostrzeżenie „Brak nauczyciela” zamiast domyślnego „Wychowawca” (z wyjątkiem oznaczonych zajęć wychowawczych) oraz zawijaną notatkę w osobnej linii bez limitu 80 px.', badgeText: 'Plan Klas & Sal' },
+        { type: 'improvement', text: 'Testy jednostkowe i rygor typowania: Rozszerzono zestaw testów o scenariusze multi-slotowych dyżurów, wydruków klas/sal/nauczycieli, formatowania PlanKlas/PlanSal i describeLesson (35 plików, 277 testów) oraz obniżono próg użyć any w check-any-budget.mjs do 184.', badgeText: 'Jakość & Testy' }
+      ]
+    },
+    {
       version: 'v3.15.0',
       date: '16 listopada 2026',
       title: 'Wielopróbowy Generator Planu z Raportem Okienek, Trwała Konfiguracja Nauczycieli, Bezpieczeństwo HTML/QR, Hash Synchronizacji v2 i Wendorowany Pakiet Excel',
       description: 'Wydanie v3.15.0 wzmacnia niezawodność generatora planu lekcji, bezpieczeństwo wydruków oraz jakość kodu i procesu CI/CD. Dodano wielopróbową optymalizację kolejności wiązek (5 deterministycznych prób), ścisłą kontrolę przekroczeń limitu okienek nauczycieli oraz pełną trwałość indywidualnych ustawień teacherConfigs w bazie IndexedDB i plikach eksportu. Wprowadzono sanityzację HTML wszystkich szablonów wydruku (w tym kart QR), wersjonowany skrót synchronizacji sal v2 eliminujący fałszywe alerty przy migracji starszych planów, wendorowany pakiet xlsx dla deterministycznego budowania offline, wydzielone chunki Vite oraz zautomatyzowany budżet użyć typu any w CI.',
-      badge: 'Najnowsza',
+      badge: 'Stabilna',
       changes: [
         { type: 'feature', text: 'Wielopróbowy generator planu i raport przekroczeń okienek (PlanGenerator.tsx): Dodano do 5 deterministycznych prób kolejności wiązek wybierających plan o największej liczbie ułożonych godzin i najmniejszej sumie okienek; przekroczenia limitu okienek (teacherConfigs[*].maxGaps / maxGapsPerTeacher) są jawnie raportowane i ustawiają success = false.', badgeText: 'Generator 5x' },
         { type: 'feature', text: 'Trwałość indywidualnych ustawień nauczycieli (teacherConfigs w generatorSettings): Stan ról, limitów okienek i rozkładu jest zapisywany z opóźnieniem (debounce) oraz po generowaniu, a także przechodzi pełną normalizację, walidację Zod i migrację w mergeEngine.', badgeText: 'Trwałość Stanu' },

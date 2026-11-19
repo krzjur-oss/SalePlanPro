@@ -1328,7 +1328,20 @@ export default function Dyzury({ appState, onChangeAppState, schedData, onNaviga
                                             </span>
                                             {!isActive && <span className="absolute bottom-1 right-1 text-[8px] opacity-75" title="Brak lekcji na tym korytarzu">💤</span>}
                                             {duty.locked && <span className="absolute top-1 right-1 text-[8px]" title="Zablokowany">🔒</span>}
-                                            {duty.note && <span className="absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>}
+                                            {duty.note && (
+                                              presentationMode ? (
+                                                <span className="block text-[9px] text-slate-600 font-medium leading-tight mt-0.5 line-clamp-2 max-w-[130px]">
+                                                  {duty.note}
+                                                </span>
+                                              ) : (
+                                                <>
+                                                  <span className="hidden md:inline absolute top-1 left-1 text-[8px]" title={duty.note}>📝</span>
+                                                  <span className="md:hidden block text-[9px] text-slate-600 font-medium leading-tight mt-0.5 line-clamp-2 max-w-[130px]">
+                                                    {duty.note}
+                                                  </span>
+                                                </>
+                                              )
+                                            )}
                                           </div>
                                         ) : presentationMode ? (
                                           <div className="h-10 flex items-center justify-center text-slate-300 font-light">—</div>

@@ -5,16 +5,121 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, SpecialStudent } from '../types';
+import { AppState, SchedData, Class, Teacher, Subject, ClassRoom, SchoolGroup, SchedCell, SpecialStudent, PlanDyzuryState } from '../types';
 import { Printer, Calendar, User, MapPin, Shield, Layers, FileText, CheckCircle, X, ExternalLink, HeartHandshake, Sparkles, BookOpen, Clock, Award, FileSpreadsheet, Tv } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey, cleanFloorName as localCleanFloorName } from '../utils';
 import { calculateAdaptationDuties } from '../utils/adaptationDuty';
+import { getDutySlotKey } from '../utils/dutyLimits';
+import { describeLesson, LessonDisplayContext } from '../utils/lessonDisplay';
 import ArkuszWsparciaUcznia from './ArkuszWsparciaUcznia';
 import PlachtaDyrektorska from './PlachtaDyrektorska';
 import KioskMode from './KioskMode';
 import { escapeHtml } from '../utils/sanitizer';
 import { generateDutiesHtml } from '../utils/dutiesPrintHtml';
 export { generateDutiesHtml };
+
+export interface ClassPrintItem {
+  subject: string;
+  groupLabel?: string;
+  teacherAbbr?: string;
+  supportAbbr?: string;
+  roomName?: string;
+  linkedWith?: string;
+}
+
+export interface RoomPrintLessonItem {
+  subject: string;
+  subjectShort: string;
+  className: string;
+  groupName?: string;
+  groupShort?: string;
+  teacherAbbr?: string;
+  supportAbbr?: string;
+  displayText: string;
+}
+
+export function renderRoomMatrixCellHtml(
+  lessonsInRoom: RoomPrintLessonItem[],
+  styles: {
+    clsFontSize: string;
+    grpFontSize: string;
+    subjFontSize: string;
+    tAbbrFontSize: string;
+  }
+): string {
+  if (lessonsInRoom.length === 0) {
+    return '<span style="color: #cbd5e1; font-weight: bold; font-family: monospace;">-</span>';
+  }
+  const { clsFontSize, grpFontSize, subjFontSize, tAbbrFontSize } = styles;
+  return lessonsInRoom.map(it => `
+                  <div style="line-height: 1.15; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin: 1px 0;" title="${escapeHtml(it.displayText)} (${escapeHtml(it.subject)})">
+                    <div style="color: #0f172a; font-weight: 900; font-size: ${clsFontSize}; letter-spacing: -0.01em;">
+                      ${escapeHtml(it.className)}
+                    </div>
+                    ${it.groupShort ? `
+                      <div style="color: #4338ca; font-weight: 800; font-size: ${grpFontSize};">
+                        ${escapeHtml(it.groupShort)}
+                      </div>` : ''}
+                    <div style="color: #1e293b; font-weight: 800; font-size: ${subjFontSize}; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                      ${escapeHtml(it.subjectShort || it.subject)}
+                    </div>
+                    ${it.teacherAbbr ? `
+                      <div style="color: #334155; font-weight: 700; font-family: monospace; font-size: ${tAbbrFontSize};">
+                        ${escapeHtml(it.teacherAbbr)}
+                      </div>` : ''}
+                    ${it.supportAbbr ? `
+                      <div style="color: #b45309; font-weight: 700; font-family: monospace; font-size: ${tAbbrFontSize};">
+                        + ${escapeHtml(it.supportAbbr)} (wspom.)
+                      </div>` : ''}
+                  </div>
+                `).join('<div style="border-top: 1px dashed #cbd5e1; margin: 2px 0; width: 80%;"></div>');
+}
+
+export interface TeacherBreakDutyInfo {
+  placeName: string;
+  floor?: string;
+  desc?: string;
+  note?: string;
+  breakName: string;
+  start: string;
+  end: string;
+  slotIdx: number;
+  totalSlots: number;
+}
+
+export function getTeacherDutiesForBreakFromDyzury(
+  dyzury: PlanDyzuryState | undefined,
+  teacherAbbr: string,
+  dayIdx: number,
+  breakNum: number
+): TeacherBreakDutyInfo[] {
+  if (!dyzury?.harmonogram || !dyzury?.miejsca) return [];
+  const duties: TeacherBreakDutyInfo[] = [];
+  const przerwa = dyzury.przerwy?.find(p => p.num === breakNum);
+
+  dyzury.miejsca.forEach(m => {
+    const needed = Math.max(1, m.teachersNeeded || 1);
+    for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+      const key = getDutySlotKey(m.id, dayIdx, breakNum, slotIdx);
+      const entry = dyzury.harmonogram[key];
+      if (entry && !entry.isUnneeded && entry.teacherAbbr === teacherAbbr) {
+        duties.push({
+          placeName: m.name,
+          floor: m.floor,
+          desc: m.desc,
+          note: entry.note,
+          breakName: przerwa?.name || `Przerwa ${breakNum}`,
+          start: przerwa?.start || '',
+          end: przerwa?.end || '',
+          slotIdx,
+          totalSlots: needed
+        });
+      }
+    }
+  });
+
+  return duties;
+}
 import { Z_INDEX_CLASSES } from '../styles/zIndex';
 import { exportFullSchoolWorkbook } from '../services/excelExportService';
 import { QrCode } from 'lucide-react';
@@ -452,110 +557,27 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
   const roomsMap = useMemo(() => new Map(pl.rooms.map(r => [r.id, r])), [pl.rooms]);
   const groupsMap = useMemo(() => new Map((pl.schoolGroups || []).map(g => [g.id, g])), [pl.schoolGroups]);
 
-  // Formatowanie czytelnego skrótu przedmiotu
-  const getSubjectShort = useCallback((subjectNameOrId: string, subjectObj?: any): string => {
-    if (subjectObj && subjectObj.short && String(subjectObj.short).trim()) {
-      return String(subjectObj.short).trim();
-    }
-    const found = pl.subjects.find(s => s.id === subjectNameOrId || s.name.toLowerCase().trim() === String(subjectNameOrId).toLowerCase().trim());
-    if (found && found.short && found.short.trim()) {
-      return found.short.trim();
-    }
-    const appFound = appState.subjects.find(s => s.id === subjectNameOrId || s.name.toLowerCase().trim() === String(subjectNameOrId).toLowerCase().trim());
-    if (appFound && appFound.short && appFound.short.trim()) {
-      return appFound.short.trim();
-    }
-    const name = found?.name || appFound?.name || subjectNameOrId || '';
-    if (!name) return '';
-    if (name.length <= 4) return name;
-    const lower = name.toLowerCase();
-    if (lower.includes('angielsk')) return 'ang';
-    if (lower.includes('polsk')) return 'pol';
-    if (lower.includes('matemat')) return 'mat';
-    if (lower.includes('fizyk')) return 'fiz';
-    if (lower.includes('chem')) return 'chem';
-    if (lower.includes('biolog')) return 'biol';
-    if (lower.includes('geograf')) return 'geogr';
-    if (lower.includes('histor')) return 'hist';
-    if (lower.includes('informat')) return 'inf';
-    if (lower.includes('fizyczn') || lower.includes('w-f') || lower.includes('wf')) return 'WF';
-    if (lower.includes('relig')) return 'rel';
-    if (lower.includes('muzyk')) return 'muz';
-    if (lower.includes('plastyk')) return 'plas';
-    if (lower.includes('technik')) return 'tech';
-    if (lower.includes('niemieck')) return 'niem';
-    if (lower.includes('hiszpań') || lower.includes('hiszpan')) return 'hiszp';
-    if (lower.includes('francusk')) return 'franc';
-    if (lower.includes('rosyjsk')) return 'ros';
-    if (lower.includes('etyk')) return 'etyka';
-    if (lower.includes('godzina wychowawcza') || lower.includes('zajęcia z wychowawcą')) return 'GW';
-    if (lower.includes('edukacja wczesnoszkolna')) return 'EW';
-    if (lower.includes('edukacja dla bezpieczeństwa')) return 'EDB';
-    if (lower.includes('wiedza o społeczeństwie')) return 'WOS';
-    if (lower.includes('historia i teraźniejszość')) return 'HIT';
-    return name.slice(0, 4);
-  }, [pl.subjects, appState.subjects]);
+  // Formatowanie skrótów i opisów lekcji delegowane do ujednoliconego modułu lessonDisplay
+  const resolveRoomFromColKeyRef = React.useRef<(cKey: string) => string>(() => '');
 
-  // Helper to format group short representation cleanly (e.g. "G1", "G2", "chł", "dz")
-  // Filters out subject descriptors, religion, minority language notes to avoid repetitions in cells
-  const getGroupShort = useCallback((groupIdOrName?: string | null, subjectContext?: string): string => {
-    if (!groupIdOrName) return '';
-    const trimmed = String(groupIdOrName).trim();
-    if (!trimmed) return '';
-    const grpObj = (pl.schoolGroups || []).find(g => g.id === trimmed || g.name.toLowerCase() === trimmed.toLowerCase());
-    const name = grpObj ? grpObj.name.trim() : trimmed;
-
-    // Direct group patterns
-    if (/^g\s*\d+$/i.test(name)) {
-      return name.toUpperCase().replace(/\s+/, '');
-    }
-    const mGrupa = name.match(/^grupa\s*(\d+|[a-zA-Z]+)/i);
-    if (mGrupa) {
-      return `G${mGrupa[1].toUpperCase()}`;
-    }
-    const mGr = name.match(/^gr\.?\s*(\d+|[a-zA-Z]+)/i);
-    if (mGr) {
-      return `G${mGr[1].toUpperCase()}`;
-    }
-    if (/^\d+$/.test(name)) {
-      return `G${name}`;
-    }
-    if (/^1\/2$/i.test(name) || /^gr\.?\s*1\/2$/i.test(name)) return 'G1';
-    if (/^2\/2$/i.test(name) || /^gr\.?\s*2\/2$/i.test(name)) return 'G2';
-    if (name.toLowerCase() === 'chłopcy' || name.toLowerCase() === 'chlopcy') return 'chł';
-    if (name.toLowerCase() === 'dziewczęta' || name.toLowerCase() === 'dziewczeta') return 'dz';
-
-    // Gdy nazwa jest dopiskiem do przedmiotu a nie indeksem grupy
-    const lowerName = name.toLowerCase();
-    if (
-      lowerName.includes('relig') ||
-      lowerName.includes('mniejszoś') ||
-      lowerName.includes('mniejszos') ||
-      lowerName.includes('hiszpań') ||
-      lowerName.includes('hiszpan') ||
-      lowerName.includes('niemieck') ||
-      lowerName.includes('angielsk') ||
-      lowerName.includes('informat') ||
-      lowerName.includes('etyk') ||
-      lowerName.includes('fizyczn') ||
-      lowerName.includes('wf')
-    ) {
-      return '';
-    }
-
-    if (subjectContext) {
-      const sLower = subjectContext.toLowerCase();
-      if (lowerName.includes(sLower) || sLower.includes(lowerName)) {
-        return '';
-      }
-    }
-
-    if (name.length <= 4 && !/^[A-Z0-9]{3,}$/.test(name)) {
-      return name;
-    }
-
-    return '';
-  }, [pl.schoolGroups]);
+  const lessonDisplayCtx = useMemo<LessonDisplayContext>(() => ({
+    appState,
+    planLekcji: pl,
+    classes: pl.classes,
+    teachers: pl.teachers,
+    appTeachers: appState.teachers,
+    subjects: pl.subjects,
+    appSubjects: appState.subjects,
+    rooms: pl.rooms,
+    schoolGroups: pl.schoolGroups,
+    assignments: pl.assignments,
+    classesMap,
+    teachersMap,
+    subjectsMap,
+    roomsMap,
+    groupsMap,
+    resolveRoomFromColKey: (cKey: string) => resolveRoomFromColKeyRef.current(cKey),
+  }), [appState, pl, classesMap, teachersMap, subjectsMap, roomsMap, groupsMap]);
 
   // Resolve hours list
   const hoursList = useMemo(() => {
@@ -614,6 +636,8 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     return '';
   }, [colKeyToRoomMap, appState.floors, pl.rooms]);
 
+  resolveRoomFromColKeyRef.current = resolveRoomFromColKey;
+
   // Sprawdzenie, czy lekcja z SchedData (Etap 2) należy do danej klasy, nauczyciela lub sali
   // schedData structure: yearKey -> dayIdx -> hourKey -> colKey -> SchedCell | SchedCell[]
   const etap2Schedule = useMemo(() => {
@@ -622,9 +646,10 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     
     // We want to turn it into an easily queryable structure:
     // class -> day -> hour -> { subject, teacherAbbr, roomName, isCoaching }
-    const classMap: Record<string, Record<number, Record<string, SchedCell[]>>> = {};
-    const teacherMap: Record<string, Record<number, Record<string, SchedCell[]>>> = {};
-    const roomMap: Record<string, Record<number, Record<string, SchedCell[]>>> = {};
+    type Etap2SchedCell = SchedCell & { roomName?: string };
+    const classMap: Record<string, Record<number, Record<string, Etap2SchedCell[]>>> = {};
+    const teacherMap: Record<string, Record<number, Record<string, Etap2SchedCell[]>>> = {};
+    const roomMap: Record<string, Record<number, Record<string, Etap2SchedCell[]>>> = {};
 
     Object.entries(yearData).forEach(([dayStr, hoursData]: [string, any]) => {
       const dayIdx = parseInt(dayStr, 10);
@@ -635,31 +660,45 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
           cellList.forEach(cell => {
             if (!cell) return;
             // Pobranie rzeczywistej nazwy gabinetu z kolumny sali Planu Sal
-            const actualRoomName = resolveRoomFromColKey(colKeyStr);
+            const actualRoomName = resolveRoomFromColKey(colKeyStr) || undefined;
 
-            // 1. By Class name
-            if (cell.classes && cell.classes.length > 0) {
-              cell.classes.forEach((clsName: string) => {
-                const clsId = pl.classes.find(c => c.name === clsName)?.id || clsName;
-                if (!classMap[clsId]) classMap[clsId] = {};
-                if (!classMap[clsId][dayIdx]) classMap[clsId][dayIdx] = {};
-                if (!classMap[clsId][dayIdx][hourKey]) classMap[clsId][dayIdx][hourKey] = [];
-                
-                classMap[clsId][dayIdx][hourKey].push({
-                  ...cell,
-                  note: actualRoomName // Zapis rzeczywistej nazwy sali w notatce do renderowania widoku
-                });
-              });
-            } else if (cell.className) {
-              const clsId = pl.classes.find(c => c.name === cell.className)?.id || cell.className;
+            const findClassId = (rawName: string): string => {
+              const cleanName = rawName.replace(/\s*\([^)]*\)/g, '').trim() || rawName;
+              return (
+                pl.classes.find(c => c.name === rawName || c.name === cleanName)?.id ||
+                cleanName
+              );
+            };
+
+            const pushToClassMap = (clsId: string) => {
               if (!classMap[clsId]) classMap[clsId] = {};
               if (!classMap[clsId][dayIdx]) classMap[clsId][dayIdx] = {};
               if (!classMap[clsId][dayIdx][hourKey]) classMap[clsId][dayIdx][hourKey] = [];
-              
+
               classMap[clsId][dayIdx][hourKey].push({
                 ...cell,
-                note: actualRoomName
+                roomName: actualRoomName
               });
+            };
+
+            // 1. By Class name (z obsługą zapisu z nawiasem grupy, np. "5A (gr1)" oraz _bridgeMeta.classId)
+            if (cell.classes && cell.classes.length > 0) {
+              const pushedIds = new Set<string>();
+              cell.classes.forEach((clsName: string) => {
+                const clsId = findClassId(clsName);
+                if (!pushedIds.has(clsId)) {
+                  pushedIds.add(clsId);
+                  pushToClassMap(clsId);
+                }
+              });
+            } else if (cell._bridgeMeta?.classId) {
+              pushToClassMap(cell._bridgeMeta.classId);
+              if (cell._bridgeMeta.linkedClassIds) {
+                cell._bridgeMeta.linkedClassIds.forEach((lcId: string) => pushToClassMap(lcId));
+              }
+            } else if (cell.className) {
+              const clsId = findClassId(cell.className);
+              pushToClassMap(clsId);
             }
 
             // 2. By Teacher Abbr
@@ -672,7 +711,7 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
               
               teacherMap[teacherId][dayIdx][hourKey].push({
                 ...cell,
-                note: actualRoomName
+                roomName: actualRoomName
               });
             }
 
@@ -685,7 +724,7 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
               
               roomMap[roomId][dayIdx][hourKey].push({
                 ...cell,
-                note: actualRoomName
+                roomName: actualRoomName
               });
             }
           });
@@ -717,25 +756,15 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     dayIdx: number,
     hourNum: number,
     hourIdx: number
-  ) => {
-    const lessonsInRoom: Array<{ 
-      subject: string; 
-      subjectShort: string; 
-      className: string; 
-      groupName?: string;
-      groupShort?: string;
-      teacherAbbr?: string;
-      displayText: string;
-    }> = [];
+  ): RoomPrintLessonItem[] => {
+    const lessonsInRoom: RoomPrintLessonItem[] = [];
 
     if (scheduleVersion === 'etap1') {
-      const seenAsg = new Set<string>();
+      const seenAsg = new Map<string, RoomPrintLessonItem>();
       Object.entries(pl.lessons).forEach(([key, lesson]) => {
         const parts = key.split('|');
-        const classId = parts[0];
         const dIdx = parseInt(parts[1], 10);
         const hrIdx = parseInt(parts[2], 10);
-        const keyGroupId = parts[3] || null;
 
         if (dIdx === dayIdx && hrIdx === hourIdx) {
           const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
@@ -744,40 +773,40 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
             const isMatch = asg.roomId === col.room.id || 
                             (metaRoom && metaRoom.name.toLowerCase().trim() === col.room.num.toLowerCase().trim());
             if (isMatch) {
-              const uniqueKey = `${asg.id}-${classId}-${asg.groupId || keyGroupId || ''}`;
-              if (seenAsg.has(uniqueKey)) return;
-              seenAsg.add(uniqueKey);
+              const uniqueKey = `${asg.id}|${dayIdx}|${hourIdx}`;
+              const described = describeLesson({ lesson, assignment: asg, lessonKey: key }, lessonDisplayCtx);
+              const supportAbbr = described.supportTeacher?.abbr || undefined;
 
-              const subjObj = subjectsMap.get(asg.subjectId) || pl.subjects.find(s => s.id === asg.subjectId);
-              const subjectName = subjObj?.name || 'Przedmiot';
-              const subjectShort = subjObj?.short || getSubjectShort(asg.subjectId, subjObj);
-
-              let clsName = classesMap.get(classId)?.name || 'Klasa';
-              if (asg.linkedClassIds && asg.linkedClassIds.length > 0) {
-                const linkedNames = asg.linkedClassIds.map(id => classesMap.get(id)?.name).filter(Boolean);
-                clsName = [clsName, ...linkedNames].join('+');
+              if (seenAsg.has(uniqueKey)) {
+                const existing = seenAsg.get(uniqueKey)!;
+                if (!existing.supportAbbr && supportAbbr) {
+                  existing.supportAbbr = supportAbbr;
+                  existing.displayText = [existing.displayText, `+ ${supportAbbr}`].filter(Boolean).join(' ');
+                }
+                return;
               }
-              const cleanClsName = clsName.replace(/\s*\([^)]*\)/g, '').trim() || clsName;
 
-              const rawGroupId = asg.groupId || keyGroupId;
-              const grpObj = rawGroupId ? (pl.schoolGroups.find(g => g.id === rawGroupId) || groupsMap.get(rawGroupId)) : null;
-              const groupName = grpObj ? grpObj.name : rawGroupId || undefined;
-              const groupShort = getGroupShort(groupName, subjectShort || subjectName);
+              const tAbbr = described.leadTeacher?.abbr || '';
+              const partsFormatted = [
+                described.classLabel,
+                described.subjectShort,
+                described.groupShort,
+                tAbbr,
+                supportAbbr ? `+ ${supportAbbr}` : ''
+              ].filter(Boolean);
 
-              const tAbbr = asg.teacherId ? (teachersMap.get(asg.teacherId)?.abbr || '') : '';
-
-              const partsFormatted = [cleanClsName, subjectShort, groupShort, tAbbr].filter(Boolean);
-              const displayText = partsFormatted.join(' ');
-
-              lessonsInRoom.push({
-                subject: subjectName,
-                subjectShort,
-                className: cleanClsName,
-                groupName,
-                groupShort,
+              const item: RoomPrintLessonItem = {
+                subject: described.subjectName,
+                subjectShort: described.subjectShort,
+                className: described.classLabel,
+                groupName: described.groupLabel,
+                groupShort: described.groupShort,
                 teacherAbbr: tAbbr,
-                displayText
-              });
+                supportAbbr,
+                displayText: partsFormatted.join(' ')
+              };
+              seenAsg.set(uniqueKey, item);
+              lessonsInRoom.push(item);
             }
           }
         }
@@ -790,59 +819,26 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
       const slots = Array.isArray(rawCell) ? rawCell : rawCell ? [rawCell] : [];
       slots.forEach(cell => {
         if (!cell) return;
-        const rawClass = cell.className || cell.classes?.join('+') || 'Klasa';
-
-        let cleanClass = rawClass;
-        let embeddedGroupInClass = '';
-        const parenMatch = rawClass.match(/\(([^)]+)\)/);
-        if (parenMatch) {
-          embeddedGroupInClass = parenMatch[1].trim();
-          cleanClass = rawClass.replace(/\s*\([^)]*\)/g, '').trim() || rawClass;
-        }
-
-        const subjObj = (cell._bridgeMeta?.subjectId ? (subjectsMap.get(cell._bridgeMeta.subjectId) || pl.subjects.find(s => s.id === cell._bridgeMeta?.subjectId)) : null) ||
-                        pl.subjects.find(s => s.name.toLowerCase().trim() === (cell.subject || '').toLowerCase().trim());
-        const subjectName = cell.subject || subjObj?.name || 'Przedmiot';
-        const subjectShort = subjObj?.short || getSubjectShort(cell.subject, subjObj);
-
-        let rawGroup = cell._bridgeMeta?.groupId;
-        if (!rawGroup && cell._bridgeMeta?.classId && cell._bridgeMeta?.subjectId) {
-          const matchingAsg = pl.assignments.find(a => 
-            a.classId === cell._bridgeMeta?.classId && 
-            a.subjectId === cell._bridgeMeta?.subjectId &&
-            (!cell._bridgeMeta?.teacherId || a.teacherId === cell._bridgeMeta?.teacherId)
-          );
-          if (matchingAsg?.groupId) {
-            rawGroup = matchingAsg.groupId;
-          }
-        }
-        if (!rawGroup && embeddedGroupInClass) {
-          rawGroup = embeddedGroupInClass;
-        }
-        if (!rawGroup && cell.note) {
-          const noteMatch = cell.note.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2|chłopcy|dziewczęta)\b/i);
-          if (noteMatch) {
-            rawGroup = noteMatch[0];
-          }
-        }
-
-        const grpObj = rawGroup ? (pl.schoolGroups.find(g => g.id === rawGroup) || groupsMap.get(rawGroup)) : null;
-        const groupName = grpObj ? grpObj.name : rawGroup || undefined;
-        const groupShort = getGroupShort(groupName, subjectShort || subjectName);
-
-        const tAbbr = cell.teacherAbbr || '';
-
-        const partsFormatted = [cleanClass, subjectShort, groupShort, tAbbr].filter(Boolean);
-        const displayText = partsFormatted.join(' ');
+        const described = describeLesson(cell, { ...lessonDisplayCtx, colKey: cKey });
+        const tAbbr = described.leadTeacher?.abbr || '';
+        const supportAbbr = described.supportTeacher?.abbr || undefined;
+        const partsFormatted = [
+          described.classLabel,
+          described.subjectShort,
+          described.groupShort,
+          tAbbr,
+          supportAbbr ? `+ ${supportAbbr}` : ''
+        ].filter(Boolean);
 
         lessonsInRoom.push({
-          subject: subjectName,
-          subjectShort,
-          className: cleanClass,
-          groupName,
-          groupShort,
+          subject: described.subjectName,
+          subjectShort: described.subjectShort,
+          className: described.classLabel,
+          groupName: described.groupLabel,
+          groupShort: described.groupShort,
           teacherAbbr: tAbbr,
-          displayText
+          supportAbbr,
+          displayText: partsFormatted.join(' ')
         });
       });
     }
@@ -850,7 +846,7 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     // Deduplicate any repeated identical entries in the same room slot
     const seenLessonKey = new Set<string>();
     return lessonsInRoom.filter(it => {
-      const key = `${it.className}|${it.subjectShort}|${it.groupShort}|${it.teacherAbbr}`;
+      const key = `${it.className}|${it.subjectShort}|${it.groupShort}|${it.teacherAbbr}|${it.supportAbbr || ''}`;
       if (seenLessonKey.has(key)) return false;
       seenLessonKey.add(key);
       return true;
@@ -871,6 +867,7 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
       groupName?: string;
       groupShort?: string;
       roomName?: string;
+      role: 'lead' | 'support';
       displayText: string;
     }> = [];
 
@@ -894,21 +891,8 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
             if (seenAsg.has(uniqueKey)) return;
             seenAsg.add(uniqueKey);
 
-            const subjObj = subjectsMap.get(asg.subjectId) || pl.subjects.find(s => s.id === asg.subjectId);
-            const subjectName = subjObj?.name || 'Przedmiot';
-            const subjectShort = subjObj?.short || getSubjectShort(asg.subjectId, subjObj);
-
-            let clsName = classesMap.get(classId)?.name || 'Klasa';
-            if (asg.linkedClassIds && asg.linkedClassIds.length > 0) {
-              const linkedNames = asg.linkedClassIds.map(id => classesMap.get(id)?.name).filter(Boolean);
-              clsName = [clsName, ...linkedNames].join('+');
-            }
-            const cleanClsName = clsName.replace(/\s*\([^)]*\)/g, '').trim() || clsName;
-
-            const rawGroupId = asg.groupId || keyGroupId;
-            const grpObj = rawGroupId ? (pl.schoolGroups.find(g => g.id === rawGroupId) || groupsMap.get(rawGroupId)) : null;
-            const groupName = grpObj ? grpObj.name : rawGroupId || undefined;
-            const groupShort = getGroupShort(groupName, subjectShort || subjectName);
+            const role: 'lead' | 'support' = asg.teacherId === teacher.id ? 'lead' : 'support';
+            const preDescribed = describeLesson({ lesson, assignment: asg, lessonKey: key }, lessonDisplayCtx);
 
             // Check if Plan Sal (schedData) has the actual room assigned for this lesson/slot
             let actualRoom = '';
@@ -918,8 +902,8 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                 if (!c) return false;
                 const matchesTeacher = c.teacherAbbr === teacher.abbr || c.supportTeacherAbbr === teacher.abbr || c._bridgeMeta?.teacherId === teacher.id;
                 if (!matchesTeacher) return false;
-                const matchesClass = c._bridgeMeta?.classId === classId || c.className?.includes(cleanClsName) || (c.classes && c.classes.includes(cleanClsName));
-                const matchesSubj = !c.subject || c.subject.toLowerCase() === subjectName.toLowerCase() || c._bridgeMeta?.subjectId === asg.subjectId;
+                const matchesClass = c._bridgeMeta?.classId === classId || c.className?.includes(preDescribed.classLabel) || (c.classes && c.classes.includes(preDescribed.classLabel));
+                const matchesSubj = !c.subject || c.subject.toLowerCase() === preDescribed.subjectName.toLowerCase() || c._bridgeMeta?.subjectId === asg.subjectId;
                 return matchesClass || matchesSubj;
               });
               if (match) {
@@ -928,21 +912,26 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
               }
             }
 
-            // If not placed in Plan Sal yet, only then fallback to asg.roomId (suggested room)
-            const metaRoom = asg.roomId ? (roomsMap.get(asg.roomId) || pl.rooms.find(r => r.id === asg.roomId)) : null;
-            const roomName = actualRoom || metaRoom?.name || (asg.roomId ? String(asg.roomId) : '');
+            const described = actualRoom
+              ? describeLesson({ lesson, assignment: asg, lessonKey: key, roomName: actualRoom }, lessonDisplayCtx)
+              : preDescribed;
 
-            const partsFormatted = [subjectName, cleanClsName + (groupShort ? ` (${groupShort})` : ''), roomName ? `s. ${roomName}` : ''].filter(Boolean);
-            const displayText = partsFormatted.join(' • ');
+            const partsFormatted = [
+              described.subjectName,
+              described.classLabel + (described.groupShort ? ` (${described.groupShort})` : ''),
+              role === 'support' ? '(wspomaganie)' : '',
+              described.roomName ? `s. ${described.roomName}` : ''
+            ].filter(Boolean);
 
             lessonsForTeacher.push({
-              subject: subjectName,
-              subjectShort,
-              className: cleanClsName,
-              groupName,
-              groupShort,
-              roomName,
-              displayText
+              subject: described.subjectName,
+              subjectShort: described.subjectShort,
+              className: described.classLabel,
+              groupName: described.groupLabel,
+              groupShort: described.groupShort,
+              roomName: described.roomName || '',
+              role,
+              displayText: partsFormatted.join(' • ')
             });
           }
         }
@@ -957,63 +946,31 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
           if (!cell) return;
           if (cell.teacherAbbr !== teacher.abbr && cell.supportTeacherAbbr !== teacher.abbr && cell._bridgeMeta?.teacherId !== teacher.id) return;
 
-          // Col room resolution: ALWAYS resolve actual room from the Plan Sal room column
-          const roomName = resolveRoomFromColKey(colKey);
+          const isLead = cell.teacherAbbr === teacher.abbr || cell._bridgeMeta?.teacherId === teacher.id;
+          const role: 'lead' | 'support' = isLead ? 'lead' : 'support';
+          const described = describeLesson(cell, { ...lessonDisplayCtx, colKey });
+          const roomName = described.roomName || '';
 
-          const rawClass = cell.className || cell.classes?.join('+') || 'Klasa';
-          let cleanClass = rawClass;
-          let embeddedGroupInClass = '';
-          const parenMatch = rawClass.match(/\(([^)]+)\)/);
-          if (parenMatch) {
-            embeddedGroupInClass = parenMatch[1].trim();
-            cleanClass = rawClass.replace(/\s*\([^)]*\)/g, '').trim() || rawClass;
-          }
-
-          const subjObj = (cell._bridgeMeta?.subjectId ? (subjectsMap.get(cell._bridgeMeta.subjectId) || pl.subjects.find(s => s.id === cell._bridgeMeta?.subjectId)) : null) ||
-                          pl.subjects.find(s => s.name.toLowerCase().trim() === (cell.subject || '').toLowerCase().trim());
-          const subjectName = cell.subject || subjObj?.name || 'Przedmiot';
-          const subjectShort = subjObj?.short || getSubjectShort(cell.subject, subjObj);
-
-          let rawGroup = cell._bridgeMeta?.groupId;
-          if (!rawGroup && cell._bridgeMeta?.classId && cell._bridgeMeta?.subjectId) {
-            const matchingAsg = pl.assignments.find(a => 
-              a.classId === cell._bridgeMeta?.classId && 
-              a.subjectId === cell._bridgeMeta?.subjectId &&
-              (!cell._bridgeMeta?.teacherId || a.teacherId === cell._bridgeMeta?.teacherId)
-            );
-            if (matchingAsg?.groupId) {
-              rawGroup = matchingAsg.groupId;
-            }
-          }
-          if (!rawGroup && embeddedGroupInClass) {
-            rawGroup = embeddedGroupInClass;
-          }
-          if (!rawGroup && cell.note) {
-            const noteMatch = cell.note.match(/\b(G\d+|gr\.?\s*\d+|grupa\s*\d+|1\/2|2\/2|chłopcy|dziewczęta)\b/i);
-            if (noteMatch) {
-              rawGroup = noteMatch[0];
-            }
-          }
-
-          const grpObj = rawGroup ? (pl.schoolGroups.find(g => g.id === rawGroup) || groupsMap.get(rawGroup)) : null;
-          const groupName = grpObj ? grpObj.name : rawGroup || undefined;
-          const groupShort = getGroupShort(groupName, subjectShort || subjectName);
-
-          const slotKey = `${subjectName}-${cleanClass}-${groupShort || ''}-${roomName}`;
+          const slotKey = `${described.subjectName}-${described.classLabel}-${described.groupShort || ''}-${roomName}-${role}`;
           if (seenSlots.has(slotKey)) return;
           seenSlots.add(slotKey);
 
-          const partsFormatted = [subjectName, cleanClass + (groupShort ? ` (${groupShort})` : ''), roomName ? `s. ${roomName}` : ''].filter(Boolean);
-          const displayText = partsFormatted.join(' • ');
+          const partsFormatted = [
+            described.subjectName,
+            described.classLabel + (described.groupShort ? ` (${described.groupShort})` : ''),
+            role === 'support' ? '(wspomaganie)' : '',
+            roomName ? `s. ${roomName}` : ''
+          ].filter(Boolean);
 
           lessonsForTeacher.push({
-            subject: subjectName,
-            subjectShort,
-            className: cleanClass,
-            groupName,
-            groupShort,
+            subject: described.subjectName,
+            subjectShort: described.subjectShort,
+            className: described.classLabel,
+            groupName: described.groupLabel,
+            groupShort: described.groupShort,
             roomName,
-            displayText
+            role,
+            displayText: partsFormatted.join(' • ')
           });
         });
       });
@@ -1022,12 +979,12 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     // Deduplicate any repeated identical entries
     const seenTeacherLessonKey = new Set<string>();
     return lessonsForTeacher.filter(it => {
-      const key = `${it.className}|${it.subjectShort}|${it.groupShort}|${it.roomName}`;
+      const key = `${it.className}|${it.subjectShort}|${it.groupShort}|${it.roomName}|${it.role}`;
       if (seenTeacherLessonKey.has(key)) return false;
       seenTeacherLessonKey.add(key);
       return true;
     });
-  }, [scheduleVersion, appState.yearKey, schedData, pl.lessons, pl.assignments, pl.subjects, pl.schoolGroups, pl.rooms, subjectsMap, classesMap, groupsMap, roomsMap, resolveRoomFromColKey, getGroupShort, getSubjectShort]);
+  }, [scheduleVersion, appState.yearKey, schedData, pl.lessons, pl.assignments, resolveRoomFromColKey, lessonDisplayCtx]);
 
   // Helper to resolve host information (class & teacher) for a classroom column
   const getRoomHostDisplay = useCallback((col: any) => {
@@ -1070,6 +1027,52 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     return host1 || host2 || null;
   }, [appState.homerooms]);
 
+  const getClassHomeroomDisplay = useCallback((cls: Class) => {
+    if (!appState.homerooms || typeof appState.homerooms !== 'object') return null;
+    const normClassName = (val?: string) =>
+      (val || '')
+        .toLowerCase()
+        .trim()
+        .replace(/^(kl\.|klasa)\s*/i, '');
+    const targetName = normClassName(cls.name);
+    if (!targetName) return null;
+
+    const abbrs: string[] = [];
+    const seen = new Set<string>();
+    const addAbbr = (rawAbbr?: string) => {
+      const clean = (rawAbbr || '').trim();
+      if (!clean) return;
+      const upper = clean.toUpperCase();
+      if (seen.has(upper)) return;
+      seen.add(upper);
+      abbrs.push(clean);
+    };
+
+    for (const hr of Object.values(appState.homerooms)) {
+      if (!hr || typeof hr !== 'object') continue;
+      if (normClassName(hr.className) === targetName) {
+        addAbbr(hr.teacherAbbr);
+      }
+      if (normClassName(hr.className2) === targetName) {
+        addAbbr(hr.teacherAbbr2);
+      }
+    }
+
+    if (abbrs.length === 0) return null;
+
+    const allTeachers = (pl.teachers && pl.teachers.length > 0) ? pl.teachers : (appState.teachers || []);
+    const formatted = abbrs.map(abbr => {
+      const found = allTeachers.find(t => t.abbr?.toUpperCase().trim() === abbr.toUpperCase());
+      if (found && (found.first || found.last)) {
+        const fullName = `${found.first || ''} ${found.last || ''}`.trim();
+        return fullName ? `${fullName} (${found.abbr || abbr})` : abbr;
+      }
+      return abbr;
+    });
+
+    return formatted.join(' / ');
+  }, [appState.homerooms, appState.teachers, pl.teachers]);
+
   // Bezpieczny konstruktor listy bieżących lekcji przydzielonych nauczycielowi
   const getTeacherLessonsList = useCallback((teacher: Teacher) => {
     const lessons: Array<{
@@ -1102,29 +1105,68 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     return lessons;
   }, [hoursList, getTeacherLessons]);
 
+  // Helper to get class lessons for print tables across Etap 1 and Etap 2
+  const getClassPrintItems = useCallback((
+    cls: Class,
+    dayIdx: number,
+    hourIdx: number,
+    hourKey: string
+  ): ClassPrintItem[] => {
+    const items: ClassPrintItem[] = [];
+
+    if (scheduleVersion === 'etap1') {
+      const matchingLessons = Object.entries(pl.lessons).filter(([k]) => {
+        const p = k.split('|');
+        return p[0] === cls.id && parseInt(p[1], 10) === dayIdx && parseInt(p[2], 10) === hourIdx;
+      });
+
+      matchingLessons.forEach(([lessonKey, lesson]) => {
+        if (!lesson) return;
+        const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
+        if (!asg) return;
+
+        const described = describeLesson(
+          { lesson, assignment: asg, lessonKey, classId: cls.id },
+          { ...lessonDisplayCtx, targetClassId: cls.id }
+        );
+
+        items.push({
+          subject: described.subjectName,
+          groupLabel: described.groupLabel,
+          teacherAbbr: described.leadTeacher?.abbr,
+          supportAbbr: described.supportTeacher?.abbr,
+          roomName: described.roomName,
+          linkedWith: described.linkedWith
+        });
+      });
+    } else {
+      const clsMapData = etap2Schedule.classes[cls.id] || {};
+      const daySchedules = clsMapData[dayIdx] || {};
+      const hourCells = daySchedules[hourKey] || [];
+
+      hourCells.forEach(cell => {
+        const described = describeLesson(cell, {
+          ...lessonDisplayCtx,
+          targetClassName: cls.name,
+        });
+
+        items.push({
+          subject: described.subjectName,
+          groupLabel: described.groupLabel,
+          teacherAbbr: described.leadTeacher?.abbr,
+          supportAbbr: described.supportTeacher?.abbr,
+          roomName: described.roomName,
+          linkedWith: described.linkedWith
+        });
+      });
+    }
+
+    return items;
+  }, [scheduleVersion, pl.lessons, pl.assignments, etap2Schedule, lessonDisplayCtx]);
+
   // Helper to get teacher duties for a specific break number and day
   const getTeacherDutiesForBreak = (teacherAbbr: string, dayIdx: number, breakNum: number) => {
-    if (!appState.dyzury?.harmonogram || !appState.dyzury?.miejsca) return [];
-    const duties: Array<{ placeName: string; floor?: string; desc?: string; note?: string; breakName: string; start: string; end: string }> = [];
-    
-    const przerwa = appState.dyzury.przerwy?.find(p => p.num === breakNum);
-    
-    appState.dyzury.miejsca.forEach(m => {
-      const key = `${m.id}|${dayIdx}|${breakNum}`;
-      const entry = appState.dyzury.harmonogram[key];
-      if (entry && entry.teacherAbbr === teacherAbbr) {
-        duties.push({
-          placeName: m.name,
-          floor: m.floor,
-          desc: m.desc,
-          note: entry.note,
-          breakName: przerwa?.name || `Przerwa ${breakNum}`,
-          start: przerwa?.start || '',
-          end: przerwa?.end || ''
-        });
-      }
-    });
-    return duties;
+    return getTeacherDutiesForBreakFromDyzury(appState.dyzury, teacherAbbr, dayIdx, breakNum);
   };
 
   const generateRoomsMatrixHtml = () => {
@@ -1183,27 +1225,12 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
             chunkCols.forEach(col => {
               const lessonsInRoom = getRoomLessons(col, dayIdx, hour.num, hIdx);
 
-              let cellContent = '<span style="color: #cbd5e1; font-weight: bold; font-family: monospace;">-</span>';
-              if (lessonsInRoom.length > 0) {
-                cellContent = lessonsInRoom.map(it => `
-                  <div style="line-height: 1.15; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; margin: 1px 0;" title="${escapeHtml(it.displayText)} (${escapeHtml(it.subject)})">
-                    <div style="color: #0f172a; font-weight: 900; font-size: ${clsFontSize}; letter-spacing: -0.01em;">
-                      ${escapeHtml(it.className)}
-                    </div>
-                    ${it.groupShort ? `
-                      <div style="color: #4338ca; font-weight: 800; font-size: ${grpFontSize};">
-                        ${escapeHtml(it.groupShort)}
-                      </div>` : ''}
-                    <div style="color: #1e293b; font-weight: 800; font-size: ${subjFontSize}; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                      ${escapeHtml(it.subjectShort || it.subject)}
-                    </div>
-                    ${it.teacherAbbr ? `
-                      <div style="color: #334155; font-weight: 700; font-family: monospace; font-size: ${tAbbrFontSize};">
-                        ${escapeHtml(it.teacherAbbr)}
-                      </div>` : ''}
-                  </div>
-                `).join('<div style="border-top: 1px dashed #cbd5e1; margin: 2px 0; width: 80%;"></div>');
-              }
+              const cellContent = renderRoomMatrixCellHtml(lessonsInRoom, {
+                clsFontSize,
+                grpFontSize,
+                subjFontSize,
+                tAbbrFontSize
+              });
 
               roomsCellsHtml += `
                 <td style="border: 1px solid #94a3b8; padding: ${tdPadding}; text-align: center; vertical-align: middle; background: #fff; width: calc((100% - 54px) / ${catRoomsCount}); box-sizing: border-box;">
@@ -1962,6 +1989,11 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                                     {it.teacherAbbr}
                                                   </span>
                                                 )}
+                                                {it.supportAbbr && (
+                                                  <span className="text-amber-700 text-[8px] font-mono font-bold">
+                                                    + {it.supportAbbr} (wspom.)
+                                                  </span>
+                                                )}
                                               </div>
                                             ))}
                                           </div>
@@ -2164,6 +2196,7 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
           
           {printType === 'classes' ? (
             classesToPrint.map((cls, idx) => {
+              const homeroomTeacher = getClassHomeroomDisplay(cls);
               return (
                 <div key={cls.id} className={`print-card pb-8 border-b border-slate-200 last:border-0 ${idx < classesToPrint.length - 1 ? 'page-break mb-12' : ''}`}>
                   {/* Class Header */}
@@ -2171,6 +2204,11 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                     <div className="text-left">
                       <h2 className="text-xl font-black text-slate-950">TYGODNIOWY PLAN LEKCJI • KLASA {cls.name}</h2>
                       <p className="text-xs text-slate-500 font-bold uppercase">{appState.school.name} • Plan lekcji</p>
+                      {homeroomTeacher && (
+                        <p className="text-xs text-slate-700 font-bold mt-0.5">
+                          Wychowawca: {homeroomTeacher}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right text-[10px] text-slate-400 font-bold uppercase">
                       Rok szkolny: {appState.yearLabel} • {scheduleVersion === 'etap1' ? 'Wersja Plan Klas' : 'Wersja Plan Sal'}
@@ -2198,44 +2236,7 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                             </td>
 
                             {[0, 1, 2, 3, 4].map(dayIdx => {
-                              let displayItems: Array<{ subject: string; teacherAbbr?: string; roomName?: string }> = [];
-
-                              if (scheduleVersion === 'etap1') {
-                                const matchingLessons = Object.entries(pl.lessons).filter(([k]) => {
-                                  const p = k.split('|');
-                                  return p[0] === cls.id && parseInt(p[1], 10) === dayIdx && parseInt(p[2], 10) === hIdx;
-                                });
-
-                                matchingLessons.forEach(([_, lesson]) => {
-                                  if (lesson) {
-                                    const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                    if (asg) {
-                                      const baseSubject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
-                                      const group = asg.groupId ? pl.schoolGroups?.find(g => g.id === asg.groupId) : null;
-                                      const subject = group ? `[${group.name}] ${baseSubject}` : baseSubject;
-                                      const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                                      const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                                      displayItems.push({
-                                        subject,
-                                        teacherAbbr: teacher?.abbr,
-                                        roomName: room?.name
-                                      });
-                                    }
-                                  }
-                                });
-                              } else {
-                                const clsMapData = etap2Schedule.classes[cls.id] || {};
-                                const daySchedules = clsMapData[dayIdx] || {};
-                                const hourCells = daySchedules[hourKeyStr] || [];
-                                
-                                hourCells.forEach(cell => {
-                                  displayItems.push({
-                                    subject: cell.subject,
-                                    teacherAbbr: cell.teacherAbbr,
-                                    roomName: cell.note
-                                  });
-                                });
-                              }
+                              const displayItems = getClassPrintItems(cls, dayIdx, hIdx, hourKeyStr);
 
                               return (
                                 <td key={dayIdx} className="border border-slate-300 p-2.5 align-middle text-center min-h-[50px] bg-white">
@@ -2243,10 +2244,20 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                     <div className="space-y-1.5">
                                       {displayItems.map((it, dIdx) => (
                                         <div key={dIdx} className="text-[10px] leading-tight">
-                                          <span className="font-black text-slate-900 block tracking-tight text-[10.5px]">{it.subject}</span>
-                                          <div className="flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1">
+                                          <span className="font-black text-slate-900 block tracking-tight text-[10.5px]">
+                                            {it.groupLabel && !it.subject.startsWith(`[${it.groupLabel}]`)
+                                              ? `[${it.groupLabel}] ${it.subject}`
+                                              : it.subject}
+                                          </span>
+                                          {it.linkedWith && (
+                                            <span className="block text-[8.5px] font-semibold text-indigo-700">
+                                              {it.linkedWith}
+                                            </span>
+                                          )}
+                                          <div className="flex flex-wrap items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-extrabold mt-1">
                                             {it.teacherAbbr && <span className="bg-slate-100 border border-slate-200 px-1 rounded">{it.teacherAbbr}</span>}
-                                            {it.roomName && <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded">sala: {it.roomName}</span>}
+                                            {it.supportAbbr && <span className="bg-amber-50 border border-amber-200 text-amber-800 px-1 rounded">+ {it.supportAbbr} (wspom.)</span>}
+                                            {it.roomName && <span className="bg-blue-50 border border-blue-100 text-blue-700 px-1 rounded">s. {it.roomName}</span>}
                                           </div>
                                         </div>
                                       ))}
@@ -2312,8 +2323,12 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                         {duties.map((d, dIdx) => (
                                           <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
                                             <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
-                                            <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                            <span className="font-extrabold text-slate-950 text-[10px]">
+                                              {d.placeName}{d.totalSlots > 1 ? ` #${d.slotIdx}` : ''}
+                                            </span>
                                             {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
+                                            {d.desc && <span className="text-[8px] text-slate-500 font-medium">{d.desc}</span>}
+                                            {d.note && <span className="text-[8px] text-amber-900 font-semibold italic">{d.note}</span>}
                                           </div>
                                         ))}
                                       </div>
@@ -2357,6 +2372,11 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                             <span className="font-black text-slate-900 block tracking-tight text-[11px]">
                                               {it.subject}
                                             </span>
+                                            {it.role === 'support' && (
+                                              <span className="text-[8.5px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1 rounded mt-0.5">
+                                                (wspomaganie)
+                                              </span>
+                                            )}
                                             <div className="flex items-center justify-center gap-1 text-[9.5px] mt-0.5 font-bold text-slate-800">
                                               <span>{it.className}</span>
                                               {it.groupShort && (
@@ -2400,8 +2420,12 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                             {duties.map((d, dIdx) => (
                                               <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
                                                 <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
-                                                <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                                <span className="font-extrabold text-slate-950 text-[10px]">
+                                                  {d.placeName}{d.totalSlots > 1 ? ` #${d.slotIdx}` : ''}
+                                                </span>
                                                 {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
+                                                {d.desc && <span className="text-[8px] text-slate-500 font-medium">{d.desc}</span>}
+                                                {d.note && <span className="text-[8px] text-amber-900 font-semibold italic">{d.note}</span>}
                                               </div>
                                             ))}
                                           </div>
@@ -2460,15 +2484,20 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
     );
   }
 
-  const getLessonDisplay = (lessonsList: any[]) => {
+  const getLessonDisplay = (lessonsList: Array<SchedCell & { roomName?: string }>) => {
     if (!lessonsList || lessonsList.length === 0) return null;
     return lessonsList.map((l, i) => {
-      const cls = l.className || l.classes?.join(', ') || '';
-      const subj = l.subject || '';
-      const room = l.note || ''; // room name stored in note field
+      const described = describeLesson(l, lessonDisplayCtx);
+      const clsText = described.groupLabel && !described.classLabel.includes(described.groupLabel)
+        ? `${described.classLabel} (${described.groupLabel})`
+        : described.classLabel;
+      const details = [
+        clsText ? `kl. ${clsText}` : '',
+        described.roomName ? `s. ${described.roomName}` : ''
+      ].filter(Boolean).join(', ');
       return (
         <div key={i} className="text-[10px] font-semibold text-slate-700 leading-tight">
-          📚 <span className="font-extrabold text-slate-900">{subj}</span> (kl. {cls}, s. {room})
+          📚 <span className="font-extrabold text-slate-900">{described.subjectName}</span>{details ? ` (${details})` : ''}
         </div>
       );
     });
@@ -2973,12 +3002,18 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
         
         {/* ======================= CLASSES RENDERING ======================= */}
         {printType === 'classes' && classesToPrint.map((cls, idx) => {
+          const homeroomTeacher = getClassHomeroomDisplay(cls);
           return (
             <div key={cls.id} className={`print-card pb-6 border-b border-slate-200 last:border-0 ${idx < classesToPrint.length - 1 ? 'page-break' : ''}`}>
               <div className="flex justify-between items-end border-b-2 border-slate-900 pb-2 mb-4">
                 <div>
                   <h2 className="text-xl font-extrabold text-slate-900">PLAN LEKCJI · KLASA {cls.name}</h2>
                   <p className="text-xs text-slate-500 font-semibold uppercase">{appState.school.name} ({appState.yearLabel})</p>
+                  {homeroomTeacher && (
+                    <p className="text-xs text-slate-700 font-bold mt-0.5">
+                      Wychowawca: {homeroomTeacher}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right text-[10px] text-slate-400 font-bold uppercase font-mono">
                   Generowane przez SalePlan Pro · {scheduleVersion === 'etap1' ? 'Wersja Plan Klas' : 'Wersja Plan Sal'}
@@ -3007,46 +3042,7 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                         
                         {/* Day cells 0..4 */}
                         {[0, 1, 2, 3, 4].map(dayIdx => {
-                          let displayItems: Array<{ subject: string; teacherAbbr?: string; roomName?: string }> = [];
-
-                          if (scheduleVersion === 'etap1') {
-                            // Find base Etap 1 lessons
-                            const matchingLessons = Object.entries(pl.lessons).filter(([k]) => {
-                              const p = k.split('|');
-                              return p[0] === cls.id && parseInt(p[1], 10) === dayIdx && parseInt(p[2], 10) === hIdx;
-                            });
-
-                            matchingLessons.forEach(([_, lesson]) => {
-                              if (lesson) {
-                                const asg = pl.assignments.find(a => a.id === lesson.assignmentId);
-                                if (asg) {
-                                  const baseSubject = subjectsMap.get(asg.subjectId)?.name || 'Inny';
-                                  const group = asg.groupId ? pl.schoolGroups?.find(g => g.id === asg.groupId) : null;
-                                  const subject = group ? `[${group.name}] ${baseSubject}` : baseSubject;
-                                  const teacher = asg.teacherId ? teachersMap.get(asg.teacherId) : null;
-                                  const room = asg.roomId ? roomsMap.get(asg.roomId) : null;
-                                  displayItems.push({
-                                    subject,
-                                    teacherAbbr: teacher?.abbr,
-                                    roomName: room?.name
-                                  });
-                                }
-                              }
-                            });
-                          } else {
-                            // Find Etap 2 schedules from compiled map
-                            const clsMapData = etap2Schedule.classes[cls.id] || {};
-                            const daySchedules = clsMapData[dayIdx] || {};
-                            const hourCells = daySchedules[hourKeyStr] || [];
-                            
-                            hourCells.forEach(cell => {
-                              displayItems.push({
-                                subject: cell.subject,
-                                teacherAbbr: cell.teacherAbbr,
-                                roomName: cell.note // In Etap 2 we mapped room to notes
-                              });
-                            });
-                          }
+                          const displayItems = getClassPrintItems(cls, dayIdx, hIdx, hourKeyStr);
 
                           return (
                             <td key={dayIdx} className="border border-slate-300 p-2 align-top text-center min-h-[45px]">
@@ -3054,10 +3050,20 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                 <div className="space-y-1">
                                   {displayItems.map((it, dIdx) => (
                                     <div key={dIdx} className="text-[10px]">
-                                      <span className="font-black text-slate-950 block">{it.subject}</span>
-                                      <div className="flex items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-bold mt-0.5">
+                                      <span className="font-black text-slate-950 block">
+                                        {it.groupLabel && !it.subject.startsWith(`[${it.groupLabel}]`)
+                                          ? `[${it.groupLabel}] ${it.subject}`
+                                          : it.subject}
+                                      </span>
+                                      {it.linkedWith && (
+                                        <span className="block text-[8.5px] font-semibold text-indigo-700">
+                                          {it.linkedWith}
+                                        </span>
+                                      )}
+                                      <div className="flex flex-wrap items-center justify-center gap-1.5 text-[8.5px] text-slate-500 font-bold mt-0.5">
                                         {it.teacherAbbr && <span className="bg-slate-100 border border-slate-200 px-1 rounded">{it.teacherAbbr}</span>}
-                                        {it.roomName && <span className="bg-blue-50/50 border border-blue-100 text-blue-700 px-1 rounded">f. {it.roomName}</span>}
+                                        {it.supportAbbr && <span className="bg-amber-50 border border-amber-200 text-amber-800 px-1 rounded">+ {it.supportAbbr} (wspom.)</span>}
+                                        {it.roomName && <span className="bg-blue-50/50 border border-blue-100 text-blue-700 px-1 rounded">s. {it.roomName}</span>}
                                       </div>
                                     </div>
                                   ))}
@@ -3131,8 +3137,12 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                     {duties.map((d, dIdx) => (
                                       <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
                                         <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
-                                        <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                        <span className="font-extrabold text-slate-950 text-[10px]">
+                                          {d.placeName}{d.totalSlots > 1 ? ` #${d.slotIdx}` : ''}
+                                        </span>
                                         {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
+                                        {d.desc && <span className="text-[8px] text-slate-500 font-medium">{d.desc}</span>}
+                                        {d.note && <span className="text-[8px] text-amber-900 font-semibold italic">{d.note}</span>}
                                       </div>
                                     ))}
                                   </div>
@@ -3178,6 +3188,11 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                         <span className="font-black text-slate-900 block tracking-tight text-[11px]">
                                           {it.subject}
                                         </span>
+                                        {it.role === 'support' && (
+                                          <span className="text-[8.5px] font-extrabold text-amber-800 bg-amber-50 border border-amber-200 px-1 rounded mt-0.5">
+                                            (wspomaganie)
+                                          </span>
+                                        )}
                                         <div className="flex items-center justify-center gap-1 text-[9.5px] mt-0.5 font-bold text-slate-800">
                                           <span>{it.className}</span>
                                           {it.groupShort && (
@@ -3221,8 +3236,12 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                         {duties.map((d, dIdx) => (
                                           <div key={dIdx} className="text-[9.5px] leading-tight flex flex-col items-center justify-center text-center">
                                             <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight">🛡️ Dyżur:</span>
-                                            <span className="font-extrabold text-slate-950 text-[10px]">{d.placeName}</span>
+                                            <span className="font-extrabold text-slate-950 text-[10px]">
+                                              {d.placeName}{d.totalSlots > 1 ? ` #${d.slotIdx}` : ''}
+                                            </span>
                                             {d.floor && <span className="text-[8px] text-slate-600 font-medium">({d.floor})</span>}
+                                            {d.desc && <span className="text-[8px] text-slate-500 font-medium">{d.desc}</span>}
+                                            {d.note && <span className="text-[8px] text-amber-900 font-semibold italic">{d.note}</span>}
                                           </div>
                                         ))}
                                       </div>
@@ -3379,6 +3398,11 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                                             {it.teacherAbbr}
                                                           </span>
                                                         )}
+                                                        {it.supportAbbr && (
+                                                          <span className="text-amber-700 text-[8px] font-mono font-bold">
+                                                            + {it.supportAbbr} (wspom.)
+                                                          </span>
+                                                        )}
                                                       </div>
                                                     ))}
                                                   </div>
@@ -3425,12 +3449,18 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
 
             <div className="space-y-8">
               {[0, 1, 2, 3, 4].map(dayIdx => {
-                const hasAnyDutiesOnThisDay = appState.dyzury.miejsca.some(miejsce =>
-                  appState.dyzury.przerwy.some(przerwa => {
-                    const dutyKey = `${miejsce.id}|${dayIdx}|${przerwa.num}`;
-                    return !!appState.dyzury.harmonogram[dutyKey]?.teacherAbbr;
-                  })
-                );
+                const hasAnyDutiesOnThisDay = appState.dyzury.miejsca.some(miejsce => {
+                  const needed = Math.max(1, miejsce.teachersNeeded || 1);
+                  return appState.dyzury.przerwy.some(przerwa => {
+                    for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+                      const dutyKey = getDutySlotKey(miejsce.id, dayIdx, przerwa.num, slotIdx);
+                      if (appState.dyzury.harmonogram[dutyKey]?.teacherAbbr) {
+                        return true;
+                      }
+                    }
+                    return false;
+                  });
+                });
 
                 return (
                   <div key={dayIdx} className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 break-inside-avoid">
@@ -3450,9 +3480,22 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                               <th className="border border-slate-300 p-2 text-left text-[10px] w-48 bg-slate-50">Godzina / Przerwa</th>
                               {appState.dyzury.miejsca.map(place => (
                                 <th key={place.id} className="border border-slate-300 p-2 text-center text-[10px] min-w-[110px] bg-slate-50">
-                                  <span className="block text-slate-900 font-black">📍 {place.name}</span>
+                                  <span className="block text-slate-900 font-black">
+                                    📍 {place.name}
+                                    {(place.teachersNeeded || 1) > 1 && (
+                                      <span className="text-[8.5px] text-slate-500 font-bold ml-1">({place.teachersNeeded} os.)</span>
+                                    )}
+                                  </span>
                                   {place.floor && (
                                     <span className="block text-[8px] text-slate-500 font-bold uppercase mt-0.5">{place.floor}</span>
+                                  )}
+                                  {place.desc && (
+                                    <span className="block text-[8px] text-slate-500 font-medium normal-case mt-0.5">{place.desc}</span>
+                                  )}
+                                  {place.connectedRooms && place.connectedRooms.length > 0 && (
+                                    <span className="block text-[8px] text-slate-600 font-semibold normal-case mt-0.5">
+                                      sale: {place.connectedRooms.join(', ')}
+                                    </span>
                                   )}
                                 </th>
                               ))}
@@ -3467,37 +3510,63 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                     <span className="block text-slate-400 font-bold mt-0.5">⏱️ {przerwa.start} - {przerwa.end}</span>
                                   </td>
                                   {appState.dyzury.miejsca.map(place => {
-                                    const dutyKey = `${place.id}|${dayIdx}|${przerwa.num}`;
-                                    const entry = appState.dyzury.harmonogram[dutyKey];
-                                    const t = entry?.teacherAbbr 
-                                      ? (appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) || (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr)) 
-                                      : null;
+                                    const needed = Math.max(1, place.teachersNeeded || 1);
+                                    const slotIndices = Array.from({ length: needed }, (_, idx) => idx + 1);
 
                                     return (
                                       <td key={place.id} className="border border-slate-300 p-2 text-center align-middle">
-                                        {entry?.isUnneeded ? (
-                                          <div className="inline-flex flex-col items-center justify-center">
-                                            <span className="bg-slate-100 text-slate-700 border border-slate-300 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
-                                              🚫 Zbędny
-                                            </span>
-                                            {entry.note && (
-                                              <span className="block text-[8px] text-slate-500 font-medium truncate max-w-[90px] mt-0.5" title={entry.note}>
-                                                {entry.note}
-                                              </span>
-                                            )}
-                                          </div>
-                                        ) : entry?.teacherAbbr ? (
-                                          <div className="inline-flex flex-col items-center justify-center">
-                                            <span className="bg-emerald-900 text-white rounded px-2.5 py-1 text-[10px] font-mono font-black shadow-xs tracking-wider uppercase inline-block print:bg-slate-100 print:text-slate-900 print:border print:border-slate-300">
-                                              {entry.teacherAbbr}
-                                            </span>
-                                            <span className="block text-[8.5px] text-slate-400 font-bold truncate max-w-[100px] mt-1 print:text-slate-500">
-                                              {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
-                                            </span>
-                                          </div>
-                                        ) : (
-                                          <span className="text-slate-300 font-bold">-</span>
-                                        )}
+                                        <div className={needed > 1 ? 'space-y-2' : ''}>
+                                          {slotIndices.map(slotIdx => {
+                                            const dutyKey = getDutySlotKey(place.id, dayIdx, przerwa.num, slotIdx);
+                                            const entry = appState.dyzury.harmonogram[dutyKey];
+                                            const t = entry?.teacherAbbr
+                                              ? (appState.teachers?.find(tch => tch.abbr === entry.teacherAbbr) ||
+                                                 pl.teachers.find(tch => tch.abbr === entry.teacherAbbr) ||
+                                                 (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr))
+                                              : null;
+                                            const slotBadge = needed > 1 ? (
+                                              <span className="text-[8px] text-slate-500 font-black mr-1 font-mono">#{slotIdx}</span>
+                                            ) : null;
+
+                                            if (entry?.isUnneeded) {
+                                              return (
+                                                <div key={slotIdx} className="inline-flex flex-col items-center justify-center">
+                                                  <span className="bg-slate-100 text-slate-700 border border-slate-300 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider inline-flex items-center">
+                                                    {slotBadge}🚫 Zbędny
+                                                  </span>
+                                                  {entry.note && (
+                                                    <span className="block text-[8px] text-slate-500 font-medium truncate max-w-[90px] mt-0.5" title={entry.note}>
+                                                      {entry.note}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              );
+                                            }
+                                            if (entry?.teacherAbbr) {
+                                              return (
+                                                <div key={slotIdx} className="flex flex-col items-center justify-center">
+                                                  <span className="bg-emerald-900 text-white rounded px-2.5 py-1 text-[10px] font-mono font-black shadow-xs tracking-wider uppercase inline-flex items-center print:bg-slate-100 print:text-slate-900 print:border print:border-slate-300">
+                                                    {needed > 1 && <span className="text-[8.5px] opacity-80 mr-1">#{slotIdx}</span>}
+                                                    {entry.teacherAbbr}
+                                                  </span>
+                                                  <span className="block text-[8.5px] text-slate-400 font-bold truncate max-w-[100px] mt-1 print:text-slate-500">
+                                                    {t ? `${t.first.slice(0, 1)}. ${t.last}` : 'Dyżur'}
+                                                  </span>
+                                                  {entry.note && (
+                                                    <span className="block text-[8px] text-slate-600 font-medium line-clamp-2 max-w-[110px] mt-0.5 leading-tight" title={entry.note}>
+                                                      {entry.note}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              );
+                                            }
+                                            return (
+                                              <div key={slotIdx} className="text-slate-300 font-bold text-[10px]">
+                                                {needed > 1 ? <><span className="text-[8px] text-slate-400 font-mono mr-0.5">#{slotIdx}</span> —</> : '-'}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
                                       </td>
                                     );
                                   })}
@@ -3663,12 +3732,18 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                   {[0, 1, 2, 3, 4]
                     .filter(idx => dutiesModalDayFilter === 'all' || dutiesModalDayFilter === idx)
                     .map(dayIdx => {
-                      const hasAnyDutiesOnThisDay = appState.dyzury.miejsca.some(miejsce =>
-                        appState.dyzury.przerwy.some(przerwa => {
-                          const dutyKey = `${miejsce.id}|${dayIdx}|${przerwa.num}`;
-                          return !!appState.dyzury.harmonogram[dutyKey]?.teacherAbbr;
-                        })
-                      );
+                      const hasAnyDutiesOnThisDay = appState.dyzury.miejsca.some(miejsce => {
+                        const needed = Math.max(1, miejsce.teachersNeeded || 1);
+                        return appState.dyzury.przerwy.some(przerwa => {
+                          for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+                            const dutyKey = getDutySlotKey(miejsce.id, dayIdx, przerwa.num, slotIdx);
+                            if (appState.dyzury.harmonogram[dutyKey]?.teacherAbbr) {
+                              return true;
+                            }
+                          }
+                          return false;
+                        });
+                      });
 
                       return (
                         <div key={dayIdx} className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 break-inside-avoid shadow-sm">
@@ -3693,9 +3768,22 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                     </th>
                                     {appState.dyzury.miejsca.map(place => (
                                       <th key={place.id} className="p-3 text-center text-[10px] min-w-[200px] bg-slate-50 font-black border-r border-slate-200 last:border-r-0">
-                                        <span className="block text-slate-900 font-black">📍 {place.name}</span>
+                                        <span className="block text-slate-900 font-black">
+                                          📍 {place.name}
+                                          {(place.teachersNeeded || 1) > 1 && (
+                                            <span className="text-[8.5px] text-slate-500 font-bold ml-1">({place.teachersNeeded} os.)</span>
+                                          )}
+                                        </span>
                                         {place.floor && (
                                           <span className="block text-[8px] text-slate-500 font-bold uppercase mt-0.5">{place.floor}</span>
+                                        )}
+                                        {place.desc && (
+                                          <span className="block text-[8px] text-slate-500 font-medium normal-case mt-0.5">{place.desc}</span>
+                                        )}
+                                        {place.connectedRooms && place.connectedRooms.length > 0 && (
+                                          <span className="block text-[8px] text-slate-600 font-semibold normal-case mt-0.5">
+                                            sale: {place.connectedRooms.join(', ')}
+                                          </span>
                                         )}
                                       </th>
                                     ))}
@@ -3710,101 +3798,132 @@ export default function Wydruki({ appState, schedData, onNavigateToTab }: Wydruk
                                           <span className="block text-slate-400 font-bold mt-1">⏱️ {przerwa.start} - {przerwa.end}</span>
                                         </td>
                                         {appState.dyzury.miejsca.map(place => {
-                                          const dutyKey = `${place.id}|${dayIdx}|${przerwa.num}`;
-                                          const entry = appState.dyzury.harmonogram[dutyKey];
-                                          const t = entry?.teacherAbbr 
-                                            ? (appState.teachers.find(tch => tch.abbr === entry.teacherAbbr) || (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr)) 
-                                            : null;
-                                          const teacherId = t?.id || entry?.teacherAbbr || '';
-
-                                          // Resolve SchedData lessons directly before and after
-                                          const dayLessons = teacherId ? (etap2Schedule.teachers[teacherId]?.[dayIdx] || {}) : {};
-                                          const lessonsBefore = teacherId ? (dayLessons[String(przerwa.num)] || []) : [];
-                                          const lessonsAfter = teacherId ? (dayLessons[String(przerwa.num + 1)] || []) : [];
-                                          const hasAnyLessonsOnDay = teacherId ? (Object.values(dayLessons).some(arr => Array.isArray(arr) && arr.length > 0)) : false;
-
-                                          // Collision: double duty
-                                          const otherDutiesSameBreak = appState.dyzury.miejsca
-                                            .filter(m => m.id !== place.id)
-                                            .map(m => {
-                                              const k = `${m.id}|${dayIdx}|${przerwa.num}`;
-                                              return { placeName: m.name, entry: appState.dyzury.harmonogram[k] };
-                                            })
-                                            .filter(d => d.entry?.teacherAbbr === entry?.teacherAbbr);
+                                          const needed = Math.max(1, place.teachersNeeded || 1);
+                                          const slotIndices = Array.from({ length: needed }, (_, idx) => idx + 1);
 
                                           return (
                                             <td key={place.id} className="p-3 text-center align-middle border-r border-slate-200 last:border-r-0">
-                                              {entry?.isUnneeded ? (
-                                                <div className="flex flex-col items-center justify-center py-2">
-                                                  <span className="bg-slate-100 text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
-                                                    🚫 Dyżur zbędny
-                                                  </span>
-                                                  {entry.note ? (
-                                                    <span className="block text-[9px] text-slate-500 font-medium truncate max-w-[140px] mt-1" title={entry.note}>
-                                                      {entry.note}
-                                                    </span>
-                                                  ) : (
-                                                    <span className="block text-[8px] text-slate-400 font-medium mt-0.5">
-                                                      (zwolniony z obsady)
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              ) : entry?.teacherAbbr ? (
-                                                <div className="flex flex-col items-center justify-center space-y-2">
-                                                  {/* Teacher badge */}
-                                                  <div className="inline-flex flex-col items-center justify-center">
-                                                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg px-3 py-1 text-xs font-mono font-black shadow-xs tracking-wider uppercase inline-block">
-                                                      {entry.teacherAbbr}
-                                                    </span>
-                                                    <span className="block text-[9px] text-slate-600 font-bold truncate max-w-[150px] mt-1">
-                                                      {t ? `${t.first} ${t.last}` : 'Dyżur'}
-                                                    </span>
-                                                  </div>
+                                              <div className={needed > 1 ? 'space-y-3 divide-y divide-slate-200/80' : ''}>
+                                                {slotIndices.map(slotIdx => {
+                                                  const dutyKey = getDutySlotKey(place.id, dayIdx, przerwa.num, slotIdx);
+                                                  const entry = appState.dyzury.harmonogram[dutyKey];
+                                                  const t = entry?.teacherAbbr
+                                                    ? (appState.teachers?.find(tch => tch.abbr === entry.teacherAbbr) ||
+                                                       pl.teachers.find(tch => tch.abbr === entry.teacherAbbr) ||
+                                                       (appState.supportStaff || []).find(st => st.abbr === entry.teacherAbbr))
+                                                    : null;
+                                                  const teacherId = t?.id || entry?.teacherAbbr || '';
 
-                                                  {/* Verification Context (Lessons from schedData) */}
-                                                  <div className="w-full mt-2 pt-2 border-t border-slate-100 text-left space-y-1 bg-slate-50/50 p-2 rounded-lg">
-                                                    <div className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Weryfikacja lekcji:</div>
-                                                    
-                                                    {/* Lesson before */}
-                                                    <div className="text-[9px]">
-                                                      <span className="text-slate-400 font-bold">Przed przerwą: </span>
-                                                      {lessonsBefore.length > 0 ? (
-                                                        getLessonDisplay(lessonsBefore)
-                                                      ) : (
-                                                        <span className="text-slate-400 font-medium italic">Brak lekcji</span>
-                                                      )}
-                                                    </div>
+                                                  // Resolve SchedData lessons directly before and after
+                                                  const dayLessons = teacherId ? (etap2Schedule.teachers[teacherId]?.[dayIdx] || {}) : {};
+                                                  const lessonsBefore = teacherId ? (dayLessons[String(przerwa.num)] || []) : [];
+                                                  const lessonsAfter = teacherId ? (dayLessons[String(przerwa.num + 1)] || []) : [];
+                                                  const hasAnyLessonsOnDay = teacherId ? (Object.values(dayLessons).some(arr => Array.isArray(arr) && arr.length > 0)) : false;
 
-                                                    {/* Lesson after */}
-                                                    <div className="text-[9px]">
-                                                      <span className="text-slate-400 font-bold">Po przerwie: </span>
-                                                      {lessonsAfter.length > 0 ? (
-                                                        getLessonDisplay(lessonsAfter)
-                                                      ) : (
-                                                        <span className="text-slate-400 font-medium italic">Brak lekcji</span>
-                                                      )}
-                                                    </div>
-                                                  </div>
+                                                  // Collision: double duty across all places and all slots for this break (excluding current place+slot)
+                                                  const otherDutiesSameBreak: Array<{ placeName: string }> = [];
+                                                  if (entry && !entry.isUnneeded && entry.teacherAbbr) {
+                                                    appState.dyzury.miejsca.forEach(m => {
+                                                      const mNeeded = Math.max(1, m.teachersNeeded || 1);
+                                                      for (let otherSlotIdx = 1; otherSlotIdx <= mNeeded; otherSlotIdx++) {
+                                                        if (m.id === place.id && otherSlotIdx === slotIdx) continue;
+                                                        const k = getDutySlotKey(m.id, dayIdx, przerwa.num, otherSlotIdx);
+                                                        const otherEntry = appState.dyzury.harmonogram[k];
+                                                        if (otherEntry && !otherEntry.isUnneeded && otherEntry.teacherAbbr === entry.teacherAbbr) {
+                                                          otherDutiesSameBreak.push({
+                                                            placeName: mNeeded > 1 ? `${m.name} (#${otherSlotIdx})` : m.name
+                                                          });
+                                                        }
+                                                      }
+                                                    });
+                                                  }
 
-                                                  {/* Warnings/Checks */}
-                                                  {(otherDutiesSameBreak.length > 0 || !hasAnyLessonsOnDay) && (
-                                                    <div className="w-full space-y-1">
-                                                      {otherDutiesSameBreak.length > 0 && (
-                                                        <div className="bg-red-50 text-red-700 border border-red-200 rounded p-1 text-[8.5px] font-bold text-left">
-                                                          🚨 Kolizja: Jednoczesny dyżur w rejonie: {otherDutiesSameBreak.map(d => d.placeName).join(', ')}
+                                                  return (
+                                                    <div key={slotIdx} className={needed > 1 && slotIdx > 1 ? 'pt-2.5' : ''}>
+                                                      {entry?.isUnneeded ? (
+                                                        <div className="flex flex-col items-center justify-center py-2">
+                                                          <span className="bg-slate-100 text-slate-700 border border-slate-300 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1">
+                                                            {needed > 1 && <span className="text-[8.5px] font-mono text-slate-500">#{slotIdx}</span>}
+                                                            🚫 Dyżur zbędny
+                                                          </span>
+                                                          {entry.note ? (
+                                                            <span className="block text-[9px] text-slate-500 font-medium truncate max-w-[140px] mt-1" title={entry.note}>
+                                                              {entry.note}
+                                                            </span>
+                                                          ) : (
+                                                            <span className="block text-[8px] text-slate-400 font-medium mt-0.5">
+                                                              (zwolniony z obsady)
+                                                            </span>
+                                                          )}
                                                         </div>
-                                                      )}
-                                                      {!hasAnyLessonsOnDay && (
-                                                        <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded p-1 text-[8.5px] font-bold text-left">
-                                                          ⚠️ Brak innych lekcji w tym dniu!
+                                                      ) : entry?.teacherAbbr ? (
+                                                        <div className="flex flex-col items-center justify-center space-y-2">
+                                                          {/* Teacher badge */}
+                                                          <div className="inline-flex flex-col items-center justify-center">
+                                                            <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg px-3 py-1 text-xs font-mono font-black shadow-xs tracking-wider uppercase inline-flex items-center gap-1">
+                                                              {needed > 1 && <span className="text-[9.5px] text-emerald-700/80">#{slotIdx}</span>}
+                                                              <span>{entry.teacherAbbr}</span>
+                                                            </span>
+                                                            <span className="block text-[9px] text-slate-600 font-bold truncate max-w-[150px] mt-1">
+                                                              {t ? `${t.first} ${t.last}` : 'Dyżur'}
+                                                            </span>
+                                                            {entry.note && (
+                                                              <span className="block text-[8.5px] text-slate-600 font-medium line-clamp-2 max-w-[150px] mt-0.5 leading-tight" title={entry.note}>
+                                                                {entry.note}
+                                                              </span>
+                                                            )}
+                                                          </div>
+
+                                                          {/* Verification Context (Lessons from schedData) */}
+                                                          <div className="w-full mt-2 pt-2 border-t border-slate-100 text-left space-y-1 bg-slate-50/50 p-2 rounded-lg">
+                                                            <div className="text-[8px] text-slate-400 uppercase font-black tracking-wider mb-1">Weryfikacja lekcji:</div>
+                                                            
+                                                            {/* Lesson before */}
+                                                            <div className="text-[9px]">
+                                                              <span className="text-slate-400 font-bold">Przed przerwą: </span>
+                                                              {lessonsBefore.length > 0 ? (
+                                                                getLessonDisplay(lessonsBefore)
+                                                              ) : (
+                                                                <span className="text-slate-400 font-medium italic">Brak lekcji</span>
+                                                              )}
+                                                            </div>
+
+                                                            {/* Lesson after */}
+                                                            <div className="text-[9px]">
+                                                              <span className="text-slate-400 font-bold">Po przerwie: </span>
+                                                              {lessonsAfter.length > 0 ? (
+                                                                getLessonDisplay(lessonsAfter)
+                                                              ) : (
+                                                                <span className="text-slate-400 font-medium italic">Brak lekcji</span>
+                                                              )}
+                                                            </div>
+                                                          </div>
+
+                                                          {/* Warnings/Checks */}
+                                                          {(otherDutiesSameBreak.length > 0 || !hasAnyLessonsOnDay) && (
+                                                            <div className="w-full space-y-1">
+                                                              {otherDutiesSameBreak.length > 0 && (
+                                                                <div className="bg-red-50 text-red-700 border border-red-200 rounded p-1 text-[8.5px] font-bold text-left">
+                                                                  🚨 Kolizja: Jednoczesny dyżur w rejonie: {otherDutiesSameBreak.map(d => d.placeName).join(', ')}
+                                                                </div>
+                                                              )}
+                                                              {!hasAnyLessonsOnDay && (
+                                                                <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded p-1 text-[8.5px] font-bold text-left">
+                                                                  ⚠️ Brak innych lekcji w tym dniu!
+                                                                </div>
+                                                              )}
+                                                            </div>
+                                                          )}
                                                         </div>
+                                                      ) : (
+                                                        <span className="text-slate-300 font-bold text-[10px]">
+                                                          {needed > 1 ? <><span className="text-[8.5px] text-slate-400 font-mono mr-0.5">#{slotIdx}</span> —</> : '-'}
+                                                        </span>
                                                       )}
                                                     </div>
-                                                  )}
-                                                </div>
-                                              ) : (
-                                                <span className="text-slate-300 font-bold">-</span>
-                                              )}
+                                                  );
+                                                })}
+                                              </div>
                                             </td>
                                           );
                                         })}

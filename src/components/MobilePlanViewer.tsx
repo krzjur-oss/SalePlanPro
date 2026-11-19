@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { AppState, SchedData, Class, Teacher, ClassRoom } from '../types';
+import { AppState, SchedData, Class, Teacher, ClassRoom, PlanDyzuryState } from '../types';
 import { QrTargetType } from '../types/reports';
 import { 
   Calendar, Clock, MapPin, User, ArrowLeft, Share2, 
@@ -14,6 +14,42 @@ import {
   Shield, BookOpen, Layers, Smartphone, RefreshCw
 } from 'lucide-react';
 import { flattenColumns, colKey } from '../utils';
+import { getDutySlotKey } from '../utils/dutyLimits';
+
+export interface MobileTeacherDutyInfo {
+  spotName: string;
+  note?: string;
+  slotIdx: number;
+  totalSlots: number;
+}
+
+export function getMobileTeacherDuty(
+  dyzury: PlanDyzuryState | undefined,
+  teacherAbbr: string,
+  dayIdx: number,
+  breakNum: number
+): MobileTeacherDutyInfo | null {
+  if (!dyzury?.harmonogram || !dyzury?.miejsca) return null;
+  const places = dyzury.miejsca || [];
+  const harmonogram = dyzury.harmonogram || {};
+
+  for (const place of places) {
+    const needed = Math.max(1, place.teachersNeeded || 1);
+    for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+      const dutyKey = getDutySlotKey(place.id, dayIdx, breakNum, slotIdx);
+      const duty = harmonogram[dutyKey];
+      if (duty && !duty.isUnneeded && duty.teacherAbbr === teacherAbbr) {
+        return {
+          spotName: place.name + (place.floor ? ` (${place.floor})` : ''),
+          note: duty.note,
+          slotIdx,
+          totalSlots: needed
+        };
+      }
+    }
+  }
+  return null;
+}
 
 interface MobilePlanViewerProps {
   appState: AppState;
@@ -236,26 +272,13 @@ export default function MobilePlanViewer({
   };
 
   // Dyżur nauczyciela po danej lekcji
-  const getTeacherDuty = (dayIdx: number, hourIdx: number): { spotName: string; note?: string } | null => {
+  const getTeacherDuty = (dayIdx: number, hourIdx: number): MobileTeacherDutyInfo | null => {
     if (targetType !== 'teacher') return null;
     const teacher = teachersMap.get(selectedId);
     if (!teacher) return null;
 
     const breakNum = hourIdx + 1;
-    const places = appState.dyzury?.miejsca || [];
-    const harmonogram = appState.dyzury?.harmonogram || {};
-
-    for (const place of places) {
-      const dutyKey = `${place.id}|${dayIdx}|${breakNum}`;
-      const duty = harmonogram[dutyKey];
-      if (duty && duty.teacherAbbr === teacher.abbr) {
-        return {
-          spotName: place.name + (place.floor ? ` (${place.floor})` : ''),
-          note: duty.note
-        };
-      }
-    }
-    return null;
+    return getMobileTeacherDuty(appState.dyzury, teacher.abbr, dayIdx, breakNum);
   };
 
   const copyDirectLink = () => {
@@ -516,6 +539,11 @@ export default function MobilePlanViewer({
                       <Shield size={14} className="text-amber-400 shrink-0" />
                       <span>
                         Dyżur po {h.num}. lekcji: <strong>{duty.spotName || 'Korytarz'}</strong>
+                        {duty.totalSlots > 1 && (
+                          <span className="ml-1.5 text-[10px] font-mono bg-amber-900/80 border border-amber-500/40 px-1 py-0.5 rounded">
+                            #{duty.slotIdx}
+                          </span>
+                        )}
                       </span>
                     </div>
                   )}

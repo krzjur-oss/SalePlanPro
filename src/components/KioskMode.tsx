@@ -12,7 +12,45 @@ import {
   Eye, EyeOff, Volume2, Edit3, Check, ArrowRight, MessageSquare, RotateCcw
 } from 'lucide-react';
 import { flattenColumns as localFlattenColumns, colKey as localColKey } from '../utils';
+import { getDutySlotKey } from '../utils/dutyLimits';
+import { PlanDyzuryState } from '../types';
 import { Z_INDEX_CLASSES } from '../styles/zIndex';
+
+export interface ActiveKioskDuty {
+  placeName: string;
+  teacherAbbr: string;
+  breakName: string;
+  slotIdx: number;
+  totalSlots: number;
+}
+
+export function getActiveKioskDuties(
+  dyzury: PlanDyzuryState | undefined,
+  dayIdx: number,
+  breakNum: number
+): ActiveKioskDuty[] {
+  if (!dyzury?.harmonogram || !dyzury?.miejsca) return [];
+  const duties: ActiveKioskDuty[] = [];
+
+  dyzury.miejsca.forEach(m => {
+    const needed = Math.max(1, m.teachersNeeded || 1);
+    for (let slotIdx = 1; slotIdx <= needed; slotIdx++) {
+      const key = getDutySlotKey(m.id, dayIdx, breakNum, slotIdx);
+      const entry = dyzury.harmonogram?.[key];
+      if (entry && !entry.isUnneeded && entry.teacherAbbr) {
+        duties.push({
+          placeName: m.name,
+          teacherAbbr: entry.teacherAbbr,
+          breakName: `Po lekcji ${breakNum}`,
+          slotIdx,
+          totalSlots: needed
+        });
+      }
+    }
+  });
+
+  return duties;
+}
 
 export interface KioskModeProps {
   appState: AppState;
@@ -357,25 +395,8 @@ export default function KioskMode({
 
   // Dyżury na żywo na aktualnej przerwie
   const activeDuties = useMemo(() => {
-    if (!appState.dyzury?.harmonogram || !appState.dyzury?.miejsca) return [];
-    const duties: Array<{ placeName: string; teacherAbbr: string; breakName: string }> = [];
-
     const breakNum = bellStatus.currentHour ? bellStatus.currentHour.num : 1;
-    const dIdx = bellStatus.dayIdx;
-
-    appState.dyzury.miejsca.forEach(m => {
-      const key = `${m.id}_${dIdx}_${breakNum}`;
-      const entry = appState.dyzury?.harmonogram?.[key];
-      if (entry && entry.teacherAbbr) {
-        duties.push({
-          placeName: m.name,
-          teacherAbbr: entry.teacherAbbr,
-          breakName: `Po lekcji ${breakNum}`
-        });
-      }
-    });
-
-    return duties;
+    return getActiveKioskDuties(appState.dyzury, bellStatus.dayIdx, breakNum);
   }, [appState.dyzury, bellStatus.dayIdx, bellStatus.currentHour]);
 
   // Referencyjny indeks godziny dla tablicy w holu ("Na żywo")
@@ -1022,10 +1043,19 @@ export default function KioskMode({
                   {activeDuties.length > 0 ? (
                     <div className="space-y-1.5">
                       {activeDuties.map((d, i) => (
-                        <div key={i} className={`flex items-center justify-between text-xs p-2 rounded-xl border ${
+                        <div key={`${d.placeName}-${d.slotIdx}-${i}`} className={`flex items-center justify-between text-xs p-2 rounded-xl border ${
                           isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-amber-50 border-amber-300 shadow-xs'
                         }`}>
-                          <div className={`font-bold truncate pr-2 ${isDark ? 'text-slate-200' : 'text-slate-950'}`}>{d.placeName}</div>
+                          <div className={`font-bold truncate pr-2 flex items-center gap-1.5 ${isDark ? 'text-slate-200' : 'text-slate-950'}`}>
+                            <span className="truncate">{d.placeName}</span>
+                            {d.totalSlots > 1 && (
+                              <span className={`text-[10px] font-mono font-black px-1 py-0.5 rounded border shrink-0 ${
+                                isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-amber-100 text-amber-900 border-amber-300'
+                              }`}>
+                                #{d.slotIdx}
+                              </span>
+                            )}
+                          </div>
                           <span className={`font-mono font-black px-2 py-0.5 rounded shrink-0 border ${
                             isDark ? 'text-amber-300 bg-amber-950/60 border-amber-800' : 'text-amber-950 bg-amber-200 border-amber-400 font-black'
                           }`}>

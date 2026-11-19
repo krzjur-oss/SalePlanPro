@@ -42,7 +42,7 @@ export function generateDutiesHtml(appState: AppState, schedData: SchedData = {}
                 <div style="font-weight: 800; background-color: #f1f5f9; border: 1px dashed #cbd5e1; color: #475569; padding: 3px 6px; border-radius: 6px; font-size: 10px; display: inline-block;">
                   ${slotBadge}🚫 Zbędny
                 </div>
-                ${entry.note ? `<div style="font-size: 8px; color: #64748b; font-weight: 600; margin-top: 2px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${escapeHtml(entry.note)}">${escapeHtml(entry.note)}</div>` : ''}
+                ${entry.note ? `<div style="font-size: 8px; color: #64748b; font-weight: 600; margin-top: 2px; max-width: 120px; margin-left: auto; margin-right: auto; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;" title="${escapeHtml(entry.note)}">${escapeHtml(entry.note)}</div>` : ''}
               </div>
             `);
           } else if (entry?.teacherAbbr) {
@@ -54,6 +54,7 @@ export function generateDutiesHtml(appState: AppState, schedData: SchedData = {}
                 <div style="font-size: 8.5px; color: #64748b; font-weight: bold; margin-top: 3px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: auto; margin-right: auto;" title="${t ? escapeHtml(`${t.first} ${t.last}`) : ''}">
                   ${t ? `${escapeHtml(t.first.slice(0, 1))}. ${escapeHtml(t.last)}` : 'Dyżur'}
                 </div>
+                ${entry.note ? `<div style="font-size: 8px; color: #475569; font-weight: 600; margin-top: 2px; max-width: 120px; margin-left: auto; margin-right: auto; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;" title="${escapeHtml(entry.note)}">${escapeHtml(entry.note)}</div>` : ''}
               </div>
             `);
           } else {
@@ -101,12 +102,19 @@ export function generateDutiesHtml(appState: AppState, schedData: SchedData = {}
             <thead>
               <tr style="background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
                 <th style="border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 11px; font-weight: 900; color: #334155; width: 140px;">PRZERWA / GODZINA</th>
-                ${places.map(place => `
+                ${places.map(place => {
+                  const connectedRoomsText = place.connectedRooms && place.connectedRooms.length > 0
+                    ? `sale: ${place.connectedRooms.join(', ')}`
+                    : '';
+                  return `
                   <th style="border: 1px solid #cbd5e1; padding: 8px 6px; text-align: center; font-size: 10.5px; font-weight: 900; color: #1e293b; background-color: #f8fafc;">
                     <div style="font-weight: 900; text-transform: uppercase; color: #0f172a; font-size: 10.5px;">📍 ${escapeHtml(place.name)}${(place.teachersNeeded || 1) > 1 ? ` <span style="font-size:8.5px;color:#475569;">(${place.teachersNeeded} os.)</span>` : ''}</div>
                     ${place.floor ? `<div style="font-size: 8px; color: #64748b; font-weight: bold; text-transform: uppercase; margin-top: 2px;">${escapeHtml(place.floor)}</div>` : ''}
+                    ${place.desc ? `<div style="font-size: 8px; color: #475569; font-weight: 500; margin-top: 2px;">${escapeHtml(place.desc)}</div>` : ''}
+                    ${connectedRoomsText ? `<div style="font-size: 8px; color: #334155; font-weight: 600; margin-top: 2px;">${escapeHtml(connectedRoomsText)}</div>` : ''}
                   </th>
-                `).join('')}
+                `;
+                }).join('')}
               </tr>
             </thead>
             <tbody>

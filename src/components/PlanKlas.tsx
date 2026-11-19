@@ -3297,8 +3297,11 @@ export default function PlanKlas({
                                               </button>
                                             </div>
                                           </div>
-                                          <div className={`text-[10px] mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
-                                            👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
+                                          <div
+                                            className={`text-[10px] mt-1 font-medium leading-tight break-words ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}
+                                            title={teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : undefined}
+                                          >
+                                            👤 {teacher ? `${teacher.first?.trim() ? `${teacher.first.trim()[0]}. ` : ''}${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
                                           </div>
 
                                           {suppTeacher && (
@@ -3667,8 +3670,11 @@ export default function PlanKlas({
                                                 </button>
                                               </div>
                                             </div>
-                                            <div className={`text-[9.5px] sm:text-[10px] mt-0.5 sm:mt-1 font-medium truncate ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}>
-                                              👤 {teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
+                                            <div
+                                              className={`text-[9.5px] sm:text-[10px] mt-0.5 sm:mt-1 font-medium leading-tight break-words ${isConf ? 'text-red-700 font-bold' : 'text-slate-600'}`}
+                                              title={teacher ? `${teacher.first} ${teacher.last} (${teacher.abbr})` : undefined}
+                                            >
+                                              👤 {teacher ? `${teacher.first?.trim() ? `${teacher.first.trim()[0]}. ` : ''}${teacher.last} (${teacher.abbr})` : 'Nieprzypisany'}
                                             </div>
 
                                             {suppTeacher && (

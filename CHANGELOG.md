@@ -5,6 +5,35 @@ Projekt stosuje konwencję wersjonowania semantycznego (SemVer) oraz standardy d
 
 ---
 
+## [3.16.0] — 2026-11-19
+### 🧩 Ujednolicony Opis Lekcji (`lessonDisplay`), Multi-Slotowe Dyżury we Wszystkich Widokach, Kompletne Wydruki Grup/Wspomagających i Czytelniejsze Siatki Klas/Sal
+
+#### Nowości i Usprawnienia:
+*   **Wspólny Moduł Opisu Lekcji (`src/utils/lessonDisplay.ts`, `Wydruki.tsx`)**:
+    *   Utworzono kanoniczną funkcję `describeLesson(lessonOrCell, ctx)` oraz wspólne helpery `getSubjectShort` i `getGroupShort`, zwracające jednolitą strukturę (`classLabel`, `groupLabel`, `groupShort`, `subjectName`, `subjectShort`, `leadTeacher`, `supportTeacher`, `roomName`, `linkedWith`, `note`) dla Etapu 1 i Etapu 2.
+    *   Moduł `Wydruki.tsx` został przepięty na `describeLesson` (usunięcie duplikacji w funkcjach pobierania lekcji klas, sal i nauczycieli).
+*   **Kompletne Wydruki Klas, Sal i Nauczycieli (`Wydruki.tsx`)**:
+    *   **Wydruk klas (`getClassPrintItems`)**: Wspólna logika dla obu kopii wydruku klas w Etapie 1 i 2 — obsługa wielu grup na tej samej godzinie (`[gr1] Przedmiot`), nauczyciela wspomagającego (`+ SKRÓT (wspom.)`), zajęć łączonych międzyklasowo, ujednoliconego formatu sal `s. {sala}` oraz wiersza **`Wychowawca: …`** (z `appState.homerooms`) w nagłówkach kart klas.
+    *   **Wydruk sal (`getRoomLessons`, `generateRoomsMatrixHtml`)**: Budowanie łączonych etykiet klas przez `buildAssignmentCombinedClasses` (`5A gr1 + 5B gr2`), deduplikacja wpisów po `assignmentId` + slocie oraz wyświetlanie nauczyciela wspomagającego z `escapeHtml`.
+    *   **Plan nauczyciela (`getTeacherLessons`)**: Rozróżnienie roli `'lead' | 'support'` z wyraźnym dopiskiem `(wspomaganie)` w obu wariantach renderowania planu nauczyciela oraz wyświetlanie `d.desc` i `d.note` przy wpisach dyżurów.
+*   **Czytelniejsze Wydruki i Widok Dyżurów (`src/utils/dutiesPrintHtml.ts`, `src/components/Dyzury.tsx`, `src/components/Wydruki.tsx`)**:
+    *   Wydruk dyżurów wyświetla notatkę `entry.note` pod skrótem dyżurnego dla wszystkich wpisów (maks. 2 linie, bez `white-space: nowrap`, z `escapeHtml`), a w nagłówkach kolumn prezentuje opis miejsca (`place.desc`) oraz połączone sale (`sale: 101, 102…`).
+    *   W `Dyzury.tsx` notatki są wyświetlane jako tekst zamiast ikony `📝` w trybie prezentacji oraz na małych ekranach (`md:hidden`).
+    *   W `etap2Schedule` wydzielono osobne pole `roomName`, dzięki czemu `cell.note` nie jest nadpisywane, a `getLessonDisplay` pomija `, s. …`, gdy sala nie została przypisana.
+*   **Jakość Kodu i Testy**:
+    *   Dodano testy dla `lessonDisplay`, multi-slotowych dyżurów w Kiosku/Mobilu/Wydrukach, wydruków z wieloma grupami i wspomagającymi oraz poprawek wyświetlania `PlanKlas`/`PlanSal` (łącznie **35 plików, 277 testów**).
+    *   Obniżono próg budżetu jawnych użyć `any` w `scripts/check-any-budget.mjs` ze `185` do **`184`**.
+
+#### Poprawki:
+*   **Wieloslotowe Dyżury (`KioskMode.tsx`, `Wydruki.tsx`, `MobilePlanViewer.tsx`)**:
+    *   Zastąpiono ręcznie składane klucze dyżurów (w tym błędny separator `_` w trybie Kiosk) kanonicznym `getDutySlotKey(placeId, day, breakNum, slotIdx)` dla wszystkich slotów `1..max(1, teachersNeeded)`.
+    *   Dodano numerację slotów `#N` przy `teachersNeeded > 1`, obsługę wszystkich slotów w `getTeacherDutiesForBreak`, `getTeacherDuty` oraz `hasAnyDutiesOnThisDay`, a także per-slotową weryfikację lekcji i podwójnego dyżuru.
+*   **Czytelność Kadry, Notatek i Braków Obsady (`PlanKlas.tsx`, `PlanSal.tsx`)**:
+    *   W `PlanKlas.tsx` zastąpiono ucinaną (`truncate`) pełną nazwę nauczyciela czytelnym skrótem `{I}. {Nazwisko} (SKRÓT)` z pełnymi danymi w `title`, aby skrót nauczyciela nigdy nie był obcinany.
+    *   W `PlanSal.tsx` komórki bez przypisanego nauczyciela wyświetlają ostrzegawczy komunikat **`Brak nauczyciela`** zamiast domyślnego „Wychowawca” (z wyjątkiem komórek oznaczonych jako zajęcia wychowawcze / `isHomeroom`), a notatka zajęcia jest wyświetlana w osobnej linii z zawijaniem bez limitu szerokości `80 px`.
+
+---
+
 ## [3.15.0] — 2026-11-16
 ### 🛡️ Bezpieczeństwo Wydruków QR, Wielopróbowy Generator z Raportem Okienek, Trwałe `teacherConfigs`, Hash Synchronizacji `v2:` oraz Offline-Ready Build
 

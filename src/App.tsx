@@ -1489,7 +1489,7 @@ export default function App() {
     }
   };
 
-  const CURRENT_VERSION = '3.15.0';
+  const CURRENT_VERSION = '3.16.0';
   const [showVersionToast, setShowVersionToast] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
@@ -3751,9 +3751,9 @@ export default function App() {
                     <X size={15} />
                   </button>
                 </div>
-                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.15.0!</h4>
+                <h4 className="text-xs font-black tracking-tight text-slate-100">SalePlan Pro v3.16.0!</h4>
                 <p className="text-[10.5px] text-slate-400 font-medium leading-relaxed">
-                  Trwały zapis ustawień okienek nauczycieli, wielopróbowy generator planu z raportem przekroczeń, zabezpieczenie wydruków QR, wersjonowany hash sal v2 oraz offline-ready build z wendorowanym pakietem Excel.
+                  Ujednolicony model lekcji (lessonDisplay), pełna obsługa wieloslotowych dyżurów w Kiosku, Mobilu i Wydrukach, kompletne wydruki grup i wspomagających dla klas, sal i nauczycieli oraz czytelniejsze etykiety i notatki w Planie Klas i Sal.
                 </p>
                 <div className="pt-2 flex items-center gap-2">
                   <button

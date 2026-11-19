@@ -50,6 +50,26 @@ function parseClassWithGroup(raw: string): { baseClass: string; groupName: strin
   return results;
 }
 
+export function isWychowawczeCell(slot: Pick<SchedCell, 'subject' | 'note' | 'isHomeroom'>): boolean {
+  if (slot.isHomeroom) return true;
+  const subj = (slot.subject || '').toLowerCase().trim();
+  const note = (slot.note || '').toLowerCase().trim();
+  if (
+    subj === 'gw' ||
+    subj.includes('wychowawc') ||
+    subj.includes('godz. wych') ||
+    subj.includes('godz.wych') ||
+    subj.includes('zajęcia z wych') ||
+    subj.includes('godzina z wych')
+  ) {
+    return true;
+  }
+  if (note.includes('wychowawc') || /\bgw\b/.test(note)) {
+    return true;
+  }
+  return false;
+}
+
 interface PlanSalProps {
   appState: AppState;
   schedData: SchedData;
@@ -97,6 +117,7 @@ export default function PlanSal({
   const [cellSupportTeacher, setCellSupportTeacher] = useState<string>('');
   const [cellSubject, setCellSubject] = useState<string>('');
   const [cellNote, setCellNote] = useState<string>('');
+  const [cellIsHomeroom, setCellIsHomeroom] = useState<boolean>(false);
   const [isCustomClass, setIsCustomClass] = useState<boolean>(false);
   const [isCustomTeacher, setIsCustomTeacher] = useState<boolean>(false);
   const [isCustomSubject, setIsCustomSubject] = useState<boolean>(false);
@@ -1256,6 +1277,7 @@ export default function PlanSal({
     setCellSupportTeacher(initSupportTeacher);
     setCellSubject(initSubject);
     setCellNote(initNote);
+    setCellIsHomeroom(Boolean(cell?.isHomeroom));
 
     // Determine custom flags
     const hLessons = poolLessons.filter(l => l.hourKey === hour);
@@ -1377,6 +1399,7 @@ export default function PlanSal({
       classes: finalClasses,
       subject: cellSubject.trim(),
       note: cellNote.trim(),
+      ...(cellIsHomeroom ? { isHomeroom: true } : {}),
       _bridgeMeta: {
         classId: resolvedClassId,
         groupId: resolvedGroupId,
@@ -2237,13 +2260,29 @@ export default function PlanSal({
                                               <div className="text-[10px] text-slate-500 font-semibold mt-1">{slot.subject}</div>
                                             </div>
                                             <div className="flex flex-col gap-0.5 text-[10px] mt-2 font-medium">
-                                              <div className="flex items-center justify-between">
-                                                <span className={`flex items-center gap-1 ${isSpecificConf ? 'text-red-700 font-bold' : 'text-slate-600 font-semibold'}`}>
-                                                  {isSpecificConf && <AlertTriangle size={10} className="text-red-500 shrink-0" />}
-                                                  <span>👤 {slot.teacherAbbr || 'Wychowawca'}</span>
-                                                </span>
-                                                {slot.note && <span className="text-[9px] italic text-slate-400 truncate max-w-[80px]" title={slot.note}>{slot.note}</span>}
-                                              </div>
+                                              {(() => {
+                                                const hasTeacher = Boolean(slot.teacherAbbr?.trim());
+                                                const isWych = !hasTeacher && isWychowawczeCell(slot);
+                                                return (
+                                                  <div className="flex items-center justify-between">
+                                                    <span className={`flex items-center gap-1 ${
+                                                      isSpecificConf
+                                                        ? 'text-red-700 font-bold'
+                                                        : !hasTeacher && !isWych
+                                                          ? 'text-amber-700 font-bold'
+                                                          : 'text-slate-600 font-semibold'
+                                                    }`}>
+                                                      {isSpecificConf && <AlertTriangle size={10} className="text-red-500 shrink-0" />}
+                                                      <span>👤 {slot.teacherAbbr?.trim() || (isWych ? 'Wychowawca' : 'Brak nauczyciela')}</span>
+                                                    </span>
+                                                  </div>
+                                                );
+                                              })()}
+                                              {slot.note && (
+                                                <div className="text-[9px] italic text-slate-500 break-words whitespace-normal leading-snug" title={slot.note}>
+                                                  {slot.note}
+                                                </div>
+                                              )}
                                               {slot.supportTeacherAbbr && (
                                                 <div className="text-indigo-600 font-semibold flex items-center gap-1">
                                                   <span>👥 {slot.supportTeacherAbbr}</span>
@@ -2691,6 +2730,16 @@ export default function PlanSal({
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs outline-none focus:border-blue-500"
                   />
                 </div>
+
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer select-none pt-1">
+                  <input
+                    type="checkbox"
+                    checked={cellIsHomeroom}
+                    onChange={(e) => setCellIsHomeroom(e.target.checked)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Zajęcia wychowawcze (opieka wychowawcy)</span>
+                </label>
               </div>
               <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                 <button 
